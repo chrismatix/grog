@@ -1,0 +1,10 @@
+{
+  "targets": {
+    "name": "bar",
+    "inputs": ["source.txt"],
+    "deps": "//foo:foo",
+    // TODO can we reference the foo output here with bazel style shell expansion?
+    "cmd": "cat source.txt  ../foo/output.txt && >> output.txt",
+    "outputs": ["output.txt"]
+  }
+}

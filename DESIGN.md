@@ -10,7 +10,7 @@ Instead, grog should be seen as an intermediate solution that helps teams move t
 ## Key Features
 
 - **User Scripting:**  
-  Users can provide declarative configuration files (`BUILD.json`, `BUILD.yaml`, `BUILD.toml`, etc.) for simple projects or executable build files (`BUILD.py`, `BUILD.ts`) when more complex logic is required.
+  Users can provide declarative configuration files (`BUILD.json`, `BUILD.yaml`, `BUILD.toml`, etc.) for simple projects or executable build files (`BUILD.py`, `BUILD.ts`, `BUILD.sh`) when more complex logic is required.
 
 - **Efficient Change Detection:**  
   File inputs are hashed with a fast algorithm (e.g., xxHash) to decide when to rebuild a target.

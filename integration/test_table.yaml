@@ -1,0 +1,4 @@
+cases:
+  - name: no arguments
+    repo: empty
+    fixture: no-args.txt

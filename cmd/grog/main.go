@@ -1,4 +1,4 @@
-package main
+package grog
 
 import (
 	"fmt"
@@ -32,13 +32,15 @@ func init() {
 	// Set default cache directory
 	viper.SetDefault("grog_root", filepath.Join(os.Getenv("HOME"), ".grog"))
 
+	logger := config.GetLogger()
+
 	// Read in config
 	if err := viper.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", viper.ConfigFileUsed())
+		logger.Debugf("Using config file: %s", viper.ConfigFileUsed())
 	}
 }
 
-func main() {
+func Run() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
