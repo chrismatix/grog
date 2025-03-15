@@ -1,14 +1,20 @@
 ifeq ($(update),true)
-UPDATE_FLAG := -update
+UPDATE_FLAG := -update-all
 else
 UPDATE_FLAG :=
+endif
+
+ifneq ($(update),)
+UPDATE_ALL_FLAG := -update=$(update)
+else
+UPDATE_ALL_FLAG :=
 endif
 
 
 test: build-with-coverage
 	@rm -fr .coverdata
 	@mkdir -p .coverdata
-	@gotestsum ./... $(UPDATE_FLAG)
+	@gotestsum ./... $(UPDATE_FLAG) $(UPDATE_ALL_FLAG)
 	@go tool covdata percent -i=.coverdata
 
 check-coverage: test

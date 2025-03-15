@@ -13,7 +13,8 @@ import (
 	"reflect"
 )
 
-var update = flag.Bool("update", false, "update golden files")
+var updateAll = flag.Bool("update-all", false, "update all fixture files")
+var update = flag.String("update", "", "update only the specified fixture file")
 
 var binaryName = "dist/grog"
 
@@ -86,8 +87,12 @@ func TestCliArgs(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if *update {
+			if *updateAll {
 				writeFixture(t, tt.Fixture, output)
+				fmt.Printf("Updated fixture %s\n", tt.Fixture)
+			} else if *update != "" && *update == tt.Fixture {
+				writeFixture(t, tt.Fixture, output)
+				fmt.Printf("Updated fixture %s\n", tt.Fixture)
 			}
 
 			actual := string(output)
