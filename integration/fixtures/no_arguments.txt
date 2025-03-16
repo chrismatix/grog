@@ -8,6 +8,7 @@ Available Commands:
   help        Help about any command
 
 Flags:
-  -h, --help   help for grog
+      --color string   Set color output (y1) (default "auto")
+  -h, --help           help for grog
 
 Use "grog [command] --help" for more information about a command.

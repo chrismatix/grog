@@ -2,6 +2,13 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 16-03-2025
+
+I prefer the way target labels work in Bazel over pants (or earthly) so that's what we're going for.
+Observation: While I think that regular globbing would work for target patterns as well you would have to always quote your paths to prevent shell expansion.
+
+I gave the problem to o3-mini with deep research enabled and it produced a perfect solution on the first try. -C
+
 ## 15-03-2025
 
 Setup, the git workflow, and started working on the cli integration testing. Integration testing will be super helpful here since we can also use the test repos as a sandbox for testing out designs. -C 

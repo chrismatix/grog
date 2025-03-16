@@ -1,4 +1,4 @@
-ifeq ($(update),true)
+ifeq ($(update-all),true)
 UPDATE_FLAG := -update-all
 else
 UPDATE_FLAG :=
@@ -14,7 +14,8 @@ endif
 test: build-with-coverage
 	@rm -fr .coverdata
 	@mkdir -p .coverdata
-	@gotestsum ./... $(UPDATE_FLAG) $(UPDATE_ALL_FLAG)
+	@gotestsum ./pkg/...
+	@gotestsum ./integration/... $(UPDATE_FLAG) $(UPDATE_ALL_FLAG)
 	@go tool covdata percent -i=.coverdata
 
 check-coverage: test

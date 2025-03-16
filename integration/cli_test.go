@@ -20,13 +20,13 @@ var binaryName = "dist/grog"
 
 var binaryPath = ""
 
-func fixturePath(t *testing.T, fixture string) string {
+func fixturePath(t *testing.T, testName string) string {
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatalf("problems recovering caller information")
 	}
 
-	return filepath.Join(filepath.Dir(filename), "fixtures", fixture)
+	return filepath.Join(filepath.Dir(filename), "fixtures", testName+".txt")
 }
 
 func writeFixture(t *testing.T, fixture string, content []byte) {
@@ -39,12 +39,12 @@ func writeFixture(t *testing.T, fixture string, content []byte) {
 	}
 }
 
-func loadFixture(t *testing.T, fixture string) string {
-	content, err := os.ReadFile(fixturePath(t, fixture))
+func loadFixture(t *testing.T, testName string) string {
+	content, err := os.ReadFile(fixturePath(t, testName))
 	if err != nil {
 		t.Fatalf(
 			"could not read fixture %s: %v",
-			fixturePath(t, fixture),
+			fixturePath(t, testName),
 			err)
 	}
 
@@ -55,10 +55,9 @@ type TestTable struct {
 	Cases []TestCase
 }
 type TestCase struct {
-	Name    string   `yaml:"name"`
-	Repo    string   `yaml:"repo"`
-	Args    []string `yaml:"args"`
-	Fixture string   `yaml:"fixture"`
+	Name string   `yaml:"name"`
+	Repo string   `yaml:"repo"`
+	Args []string `yaml:"args"`
 }
 
 func TestCliArgs(t *testing.T) {
@@ -88,16 +87,16 @@ func TestCliArgs(t *testing.T) {
 			}
 
 			if *updateAll {
-				writeFixture(t, tt.Fixture, output)
-				fmt.Printf("Updated fixture %s\n", tt.Fixture)
-			} else if *update != "" && *update == tt.Fixture {
-				writeFixture(t, tt.Fixture, output)
-				fmt.Printf("Updated fixture %s\n", tt.Fixture)
+				writeFixture(t, tt.Name, output)
+				fmt.Printf("Updated fixture %s\n", tt.Name)
+			} else if *update != "" && *update == tt.Name {
+				writeFixture(t, tt.Name, output)
+				fmt.Printf("Updated fixture %s\n", tt.Name)
 			}
 
 			actual := string(output)
 
-			expected := loadFixture(t, tt.Fixture)
+			expected := loadFixture(t, tt.Name)
 
 			if !reflect.DeepEqual(actual, expected) {
 				t.Fatalf("actual = %s, expected = %s", actual, expected)

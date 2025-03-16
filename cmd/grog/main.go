@@ -32,6 +32,13 @@ func init() {
 	// Set default cache directory
 	viper.SetDefault("grog_root", filepath.Join(os.Getenv("HOME"), ".grog"))
 
+	// Add color flag
+	rootCmd.PersistentFlags().String("color", "auto", "Set color output (y1)")
+	err := viper.BindPFlag("color", rootCmd.PersistentFlags().Lookup("color"))
+	if err != nil {
+		panic(err)
+	}
+
 	logger := config.GetLogger()
 
 	// Read in config

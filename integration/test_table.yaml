@@ -1,4 +1,8 @@
 cases:
   - name: no_arguments
     repo: empty
-    fixture: no-args.txt
+  - name: build_all
+    args:
+      - build
+    repo: simple_json
+

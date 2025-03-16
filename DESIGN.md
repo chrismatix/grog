@@ -231,6 +231,12 @@ grog build //path/to/package:target_name
 - **Fileset:** A collection of files as defined by a list of paths and/or wildcards.
 - **Cache:** A directory that stores input file hashes and computation results.
 
+## Command Outputs
+
+**Goal:** Emulate and wherever possible improve on the way Bazel outputs its stages and steps.
+
+- Whenever there is parallel execution happening show what each worker is currently executing
+
 ## Testing
 
 Testing should be heavily centered around integration testing toy repositories as those will also double as documentation and example repositories.

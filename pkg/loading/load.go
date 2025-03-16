@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"github.com/charlievieth/fastwalk"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
+	"grog/pkg/config"
+	"grog/pkg/label"
 	"grog/pkg/model"
 	"io/fs"
-	"os"
 )
 
-func LoadPackages() ([]model.Package, error) {
+func LoadPackages(logger *zap.SugaredLogger) ([]model.Package, error) {
 	workspaceRoot := viper.Get("workspace_root").(string)
 
 	var packages []model.Package
@@ -23,12 +25,22 @@ func LoadPackages() ([]model.Package, error) {
 
 	walkFn := func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s: %v\n", path, err)
+			logger.Warn("%s: %v\n", path, err)
 			return nil // returning the error stops iteration
 		}
 
 		pkg, matched, err := packageLoader.LoadIfMatched(path)
 		if matched && err == nil {
+			packagePath, err := config.GetPathRelativeToWorkspaceRoot(path)
+			if err != nil {
+				return err
+			}
+
+			// attach the TargetLabel to each target in the package
+			for _, t := range pkg.Targets {
+				t.Label = label.TargetLabel{Package: packagePath, Name: t.Name}
+			}
+
 			packages = append(packages, pkg)
 		}
 

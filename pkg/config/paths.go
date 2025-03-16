@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/viper"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // GetWorkspaceCacheDirectory returns the path to the cache directory for the current repo.
@@ -43,4 +44,14 @@ func MustFindWorkspaceRoot() string {
 	}
 
 	panic("grog.toml not found in any parent directory. Is this a grog workspace?")
+}
+
+func GetPathRelativeToWorkspaceRoot(path string) (string, error) {
+	workspaceRoot := viper.Get("workspace_root").(string)
+	// error if path is not under workspace root
+	if !strings.HasPrefix(path, workspaceRoot) {
+		return "", fmt.Errorf("path %s is not under workspace root %s", path, workspaceRoot)
+	}
+
+	return path[len(workspaceRoot)+1:], nil
 }
