@@ -10,3 +10,8 @@ cases:
       - --color=yes
       - build
     repo: simple_json
+  - name: build_foo
+    args:
+      - build
+      -
+    repo: simple_json
