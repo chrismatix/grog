@@ -55,6 +55,7 @@ type TestTable struct {
 	Cases []TestCase
 }
 type TestCase struct {
+	// Names must be unique as they determine the fixture file name
 	Name string   `yaml:"name"`
 	Repo string   `yaml:"repo"`
 	Args []string `yaml:"args"`
@@ -75,6 +76,7 @@ func TestCliArgs(t *testing.T) {
 	}
 
 	tests := testTable.Cases
+	// Assert that test case names are unique
 
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {

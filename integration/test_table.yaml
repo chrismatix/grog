@@ -5,4 +5,8 @@ cases:
     args:
       - build
     repo: simple_json
-
+  - name: build_all_color
+    args:
+      - --color=yes
+      - build
+    repo: simple_json

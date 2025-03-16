@@ -53,7 +53,6 @@ var BuildCmd = &cobra.Command{
 
 		numPackages := len(packages)
 
-		// INFO: Analyzed 11 targets (118 packages loaded, 1894 targets configured).
 		logger.Infof("Analyzed %d targets (%d packages loaded, %d targets configured).", numTargets, numPackages, numTargets)
 	},
 }

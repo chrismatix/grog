@@ -11,7 +11,7 @@ type JSONLoader struct{}
 
 // FileNames returns the supported JSON file extensions.
 func (j JSONLoader) FileNames() []string {
-	return []string{"BUILD.json"}
+	return []string{"BUILD.json", "BUILD.json5"}
 }
 
 // Load reads the file at the specified filePath and unmarshals its content into a model.Package.
