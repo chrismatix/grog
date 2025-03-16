@@ -2,6 +2,8 @@ package loading
 
 import (
 	"encoding/json"
+	"fmt"
+	"grog/pkg/config"
 	"grog/pkg/model"
 	"os"
 )
@@ -11,7 +13,7 @@ type JSONLoader struct{}
 
 // FileNames returns the supported JSON file extensions.
 func (j JSONLoader) FileNames() []string {
-	return []string{"BUILD.json", "BUILD.json5"}
+	return []string{"BUILD.json"}
 }
 
 // Load reads the file at the specified filePath and unmarshals its content into a model.Package.
@@ -29,7 +31,19 @@ func (j JSONLoader) Load(filePath string) (model.Package, error) {
 	decoder := json.NewDecoder(file)
 	err = decoder.Decode(&pkg)
 	if err != nil {
-		return pkg, err
+		relPath, workspaceErr := config.GetPathRelativeToWorkspaceRoot(
+			filePath)
+		if workspaceErr == nil {
+			return pkg, fmt.Errorf(
+				"failed to decode JSON file %s: %w",
+				relPath,
+				err)
+		}
+
+		return pkg, fmt.Errorf(
+			"failed to decode JSON file %s: %w",
+			filePath,
+			err)
 	}
 
 	return pkg, nil

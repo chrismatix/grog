@@ -85,6 +85,7 @@ func TestCliArgs(t *testing.T) {
 			output, err := runBinary(tt.Args, binaryCwd)
 
 			if err != nil {
+				fmt.Printf("Command ouput: %s\n", output)
 				t.Fatal(err)
 			}
 
@@ -137,6 +138,10 @@ func runBinary(args []string, repoPath string) ([]byte, error) {
 		return nil, err
 	}
 	cmd.Env = append(os.Environ(), "GOCOVERDIR="+coverDir)
+
+	// Uncomment to enable debug logging
+	// TODO move to makefile flag
+	// cmd.Env = append(cmd.Env, "LOG_LEVEL=debug")
 	cmd.Dir = repoPath
 	return cmd.CombinedOutput()
 }

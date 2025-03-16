@@ -23,10 +23,19 @@ func GetLogger() *zap.SugaredLogger {
 		logLevel = "info"
 	}
 
+	// Define a custom encoder config
+	encoderConfig := zap.NewDevelopmentEncoderConfig()
+	encoderConfig.TimeKey = ""   // Disable time encoding
+	encoderConfig.CallerKey = "" // Disable caller encoding
+	encoderConfig.EncodeLevel = CustomLevelEncoder
+
 	var level zapcore.Level
 	switch strings.ToLower(logLevel) {
 	case "debug":
 		level = zap.DebugLevel
+		// In debug mode, we want to see the caller
+		encoderConfig.CallerKey = "C"
+		encoderConfig.EncodeCaller = zapcore.FullCallerEncoder
 	case "info":
 		level = zap.InfoLevel
 	case "warn":
@@ -42,19 +51,11 @@ func GetLogger() *zap.SugaredLogger {
 	// do not use structured logging by default
 	cfg.Encoding = "console"
 
-	// always log to stdout
 	cfg.OutputPaths = []string{
 		logPath,
-		"stdout",
 	}
 
 	cfg.Level = zap.NewAtomicLevelAt(level)
-
-	// Define a custom encoder config
-	encoderConfig := zap.NewDevelopmentEncoderConfig()
-	encoderConfig.TimeKey = ""   // Disable time encoding
-	encoderConfig.CallerKey = "" // Disable caller encoding
-	encoderConfig.EncodeLevel = CustomLevelEncoder
 
 	// Implement the color option
 	MustApplyColorSetting()

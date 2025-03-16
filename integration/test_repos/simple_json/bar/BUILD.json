@@ -1,0 +1,11 @@
+{
+  "targets": [
+    {
+      "name": "bar",
+      "inputs": ["source.txt"],
+      "deps": ["//foo:foo"],
+      "cmd": "cat source.txt  ../foo/output.txt && >> output.txt",
+      "outputs": ["output.txt"]
+    }
+  ]
+}

@@ -1,7 +1,6 @@
 package loading
 
 import (
-	"fmt"
 	"github.com/charlievieth/fastwalk"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -25,12 +24,16 @@ func LoadPackages(logger *zap.SugaredLogger) ([]model.Package, error) {
 
 	walkFn := func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			logger.Warn("%s: %v\n", path, err)
-			return nil // returning the error stops iteration
+			// TODO do we want to collect all loading errors first? Seems like a better dev-ex
+			return err // returning the error stops iteration
 		}
 
-		pkg, matched, err := packageLoader.LoadIfMatched(path)
-		if matched && err == nil {
+		pkg, matched, err := packageLoader.LoadIfMatched(path, d.Name())
+		if err != nil {
+			return err
+		}
+
+		if matched {
 			packagePath, err := config.GetPathRelativeToWorkspaceRoot(path)
 			if err != nil {
 				return err
@@ -44,11 +47,11 @@ func LoadPackages(logger *zap.SugaredLogger) ([]model.Package, error) {
 			packages = append(packages, pkg)
 		}
 
-		return err
+		return nil
 	}
 
 	if err := fastwalk.Walk(&conf, workspaceRoot, walkFn); err != nil {
-		return nil, fmt.Errorf("%s: %v\n", workspaceRoot, err)
+		return nil, err
 	}
 
 	return packages, nil

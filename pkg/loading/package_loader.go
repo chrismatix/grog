@@ -28,10 +28,10 @@ func NewPackageLoader() *PackageLoader {
 }
 
 // LoadIfMatched loads the package from the specified file name if it matches any of the supported file names.
-func (p *PackageLoader) LoadIfMatched(fileName string) (model.Package, bool, error) {
+func (p *PackageLoader) LoadIfMatched(filePath string, fileName string) (model.Package, bool, error) {
 	for _, loader := range p.loaders {
 		if slices.Contains(loader.FileNames(), fileName) {
-			pkg, err := loader.Load(fileName)
+			pkg, err := loader.Load(filePath)
 			return pkg, true, err
 		}
 	}

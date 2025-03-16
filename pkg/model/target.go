@@ -8,8 +8,8 @@ type Target struct {
 	Label label.TargetLabel `json:"-"`
 
 	Name    string   `json:"name"`
-	Deps    []string `json:"deps"`
-	Inputs  []string `json:"inputs"`
-	Outputs []string `json:"outputs"`
 	Command string   `json:"cmd"`
+	Deps    []string `json:"deps,omitempty"`
+	Inputs  []string `json:"inputs,omitempty"`
+	Outputs []string `json:"outputs,omitempty"`
 }
