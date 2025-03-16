@@ -1,2 +1,2 @@
-[32mINFO[0m:	Analyzed 0 targets (0 packages loaded, 0 targets configured).
-[32mINFO[0m:	Analyzed 0 targets (0 packages loaded, 0 targets configured).
+INFO:	Analyzed 0 targets (0 packages loaded, 0 targets configured).
+INFO:	Analyzed 0 targets (0 packages loaded, 0 targets configured).

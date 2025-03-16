@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"github.com/fatih/color"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -55,6 +56,9 @@ func GetLogger() *zap.SugaredLogger {
 	encoderConfig.CallerKey = "" // Disable caller encoding
 	encoderConfig.EncodeLevel = CustomLevelEncoder
 
+	// Implement the color option
+	MustApplyColorSetting()
+
 	cfg.EncoderConfig = encoderConfig
 
 	logger, err := cfg.Build()
@@ -63,6 +67,19 @@ func GetLogger() *zap.SugaredLogger {
 	}
 
 	return logger.Sugar()
+}
+
+func MustApplyColorSetting() {
+	colorSetting := viper.GetString("color")
+	if colorSetting == "yes" {
+		color.NoColor = false
+	} else if colorSetting == "no" {
+		color.NoColor = true
+		// No need to explicitly handle "auto" as the color package will
+		// automatically detect if it is a TTY or not.
+	} else if colorSetting != "auto" {
+		panic("invalid color setting: " + colorSetting + ", must be one of: yes, no, auto")
+	}
 }
 
 // NewTestLogger logger for test usage
@@ -100,17 +117,23 @@ func NewTestLogger() *zap.SugaredLogger {
 // CustomLevelEncoder matches the way bazel outputs its log levels
 func CustomLevelEncoder(level zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {
 	var levelText string
+
+	cyan := color.New(color.FgCyan).SprintFunc()
+	green := color.New(color.FgGreen).SprintFunc()
+	yellow := color.New(color.FgYellow).SprintFunc()
+	red := color.New(color.FgRed).SprintFunc()
+
 	switch level {
 	case zapcore.DebugLevel:
-		levelText = "\x1b[36mDEBUG\x1b[0m" // Cyan
+		levelText = cyan("DEBUG") // Cyan
 	case zapcore.InfoLevel:
-		levelText = "\x1b[32mINFO\x1b[0m" // Green
+		levelText = green("INFO") // Green
 	case zapcore.WarnLevel:
-		levelText = "\x1b[33mWARN\x1b[0m" // Yellow
+		levelText = yellow("WARN") // Yellow
 	case zapcore.ErrorLevel:
-		levelText = "\x1b[31mERROR\x1b[0m" // Red
+		levelText = red("ERROR") // Red
 	case zapcore.FatalLevel:
-		levelText = "\x1b[31mFATAL\x1b[0m" // Red
+		levelText = red("FATAL") // Red
 	default:
 		levelText = "UNKNOWN"
 	}

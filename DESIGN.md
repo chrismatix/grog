@@ -9,36 +9,35 @@ Instead, grog should be seen as an intermediate solution that helps teams move t
 
 ## Key Features
 
-- **User Scripting:**  
+- **User Scripting:**
   Users can provide declarative configuration files (`BUILD.json`, `BUILD.yaml`, `BUILD.toml`, etc.) for simple projects or executable build files (`BUILD.py`, `BUILD.ts`, `BUILD.sh`) when more complex logic is required.
 
-- **Efficient Change Detection:**  
+- **Efficient Change Detection:**
   File inputs are hashed with a fast algorithm (e.g., xxHash) to decide when to rebuild a target.
 
-- **Dependency Graph:**  
+- **Dependency Graph:**
   Build targets are organized in a directed acyclic graph (DAG). The system validates dependencies, detects unresolved references, and ensures a proper execution order.
 
-- **Parallel Execution:**  
+- **Parallel Execution:**
   The build graph is executed in parallel. Independent targets are run concurrently while respecting dependency constraints.
 
-- **Pluggable Caching:**  
+- **Pluggable Caching:**
   A filesystem abstraction enables local caching (e.g., in a `.grog_cache` directory) with the potential to add remote caching later.
 
-- **Configurable Failure Handling:**  
+- **Configurable Failure Handling:**
   Users can choose between fail-fast (stop on first error) or keep-going (continue with independent targets) modes.
 
-- **CLI Commands:**  
+- **CLI Commands:**
   The prototype supports two primary commands:
-    - `grog build`: Loads the build configuration, analyzes the dependency graph, and executes build targets.
-    - `grog clean`: Removes build outputs and clears caches.
-
+  - `grog build`: Loads the build configuration, analyzes the dependency graph, and executes build targets.
+  - `grog clean`: Removes build outputs and clears caches.
 
 ## Design Goals
 
 - **User Experience**
-    The _only_ reason for ever choosing Grog over Bazel or Pants is that it should be easier to get started with. Therefore, usability in terms of API design and documentation is key.
+  The _only_ reason for ever choosing Grog over Bazel or Pants is that it should be easier to get started with. Therefore, usability in terms of API design and documentation is key.
 
-- **Performance:**  
+- **Performance:**
   Only run build steps that changed. Cache aggressively. Parallelize everything that can be parallelized.
 
 ## Data Model
@@ -78,12 +77,11 @@ type Package struct {
 }
 ```
 
-
 ## BUILD files
 
 Each user `BUILD` files defines the targets of a package. There are three _proposed_ ways of allowing users to write `BUILD` files. What they all have is in common is that they need to produce a text representation that can be parsed to the `Package` struct.
 
-**TODO:** What to do when there are multiple build files? Gut feel is to throw an error. 
+**TODO:** What to do when there are multiple build files? Gut feel is to throw an error.
 
 ### Static BUILD files
 
@@ -147,7 +145,7 @@ Example Makefile:
 ```Makefile
 # @grog
 # name: grog_build_app
-# deps: 
+# deps:
 # - //proto:build
 # inputs:
 # - src/**/*.js
@@ -159,9 +157,8 @@ build_app:
 	npm run build
 ```
 
-
 Everything after the `# @grog` comment and before the actual build step is interpreted as Grog metadata.
-When running `grog build //:grog_build_app` grog will now to invoke the `build_app` command using `make`, but only if the dependencies changed or the outputs are missing.  
+When running `grog build //:grog_build_app` grog will now to invoke the `build_app` command using `make`, but only if the dependencies changed or the outputs are missing.
 
 ## Execution Phases
 
@@ -169,7 +166,7 @@ The build process is divided into three distinct phases:
 
 #### 1. **Loading Phase**
 
-**Objective:**  
+**Objective:**
 Load all targets from the repository.
 
 **Process:**
@@ -180,7 +177,7 @@ Load all targets from the repository.
 
 #### 2. **Analysis Phase**
 
-**Objective:**  
+**Objective:**
 Build and validate the dependency graph.
 
 **Process:**
@@ -190,10 +187,9 @@ Build and validate the dependency graph.
 - Check for cycles and inconsistencies.
 - Produce a topologically sorted list of targets to enforce proper build order.
 
-
 #### 3. **Execution Phase**
 
-**Objective:**  
+**Objective:**
 Execute build targets with maximum parallelism.
 
 **Process:**
@@ -210,7 +206,7 @@ Execute build targets with maximum parallelism.
 
 Target labels should be as close as possible to how they work in [Bazel](https://bazel.build/tutorials/cpp-labels).
 
-E.g. target dependencies can be referenced like so:
+E.g. targets can be referenced like so:
 
 ```shell
 grog build //path/to/package:target_name
@@ -255,4 +251,4 @@ To update a single fixture, look up its name in the test table and then run `mak
 Related projects that might be relevant:
 
 - Open Tofu for its dag execution
-- [esbuild](https://esbuild.github.io/api/#watch) for file watching 
+- [esbuild](https://esbuild.github.io/api/#watch) for file watching
