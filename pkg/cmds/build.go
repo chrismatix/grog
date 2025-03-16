@@ -35,8 +35,9 @@ var BuildCmd = &cobra.Command{
 			}
 		}
 
-		numTargets := 0
+		matchedTargets := 0
 		targets := []model.Target{}
+		// Filter targets based on the input target pattern
 		for _, pkg := range packages {
 			for _, target := range pkg.Targets {
 				if hasTargetPattern {
@@ -48,11 +49,11 @@ var BuildCmd = &cobra.Command{
 					targets = append(targets, target)
 				}
 			}
-			numTargets += len(pkg.Targets)
+			matchedTargets += len(pkg.Targets)
 		}
 
 		numPackages := len(packages)
 
-		logger.Infof("Analyzed %d targets (%d packages loaded, %d targets configured).", numTargets, numPackages, numTargets)
+		logger.Infof("Analyzed %d targets (%d packages loaded, %d targets configured).", matchedTargets, numPackages, matchedTargets)
 	},
 }

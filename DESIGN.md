@@ -91,14 +91,14 @@ Example `BUILD.json`:
 
 ```json
 {
-  "targets": [
-    {
-      "name": "foo",
+  "targets": {
+    "foo": {
+      "cmd": ""
       "deps": ["bar"],
       "inputs": ["foo.txt", "src/**/*.txt"],
       "outputs": ["foo.out"]
     }
-  ]
+  }
 }
 ```
 
