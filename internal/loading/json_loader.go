@@ -3,8 +3,8 @@ package loading
 import (
 	"encoding/json"
 	"fmt"
-	"grog/pkg/config"
-	"grog/pkg/model"
+	"grog/internal/config"
+	"grog/internal/model"
 	"os"
 )
 

@@ -3,20 +3,19 @@ package loading
 import (
 	"github.com/charlievieth/fastwalk"
 	"github.com/spf13/viper"
-	"go.uber.org/zap"
-	"grog/pkg/config"
-	"grog/pkg/label"
-	"grog/pkg/model"
+	"grog/internal/config"
+	"grog/internal/label"
+	"grog/internal/model"
 	"io/fs"
 )
 
-func LoadPackages(logger *zap.SugaredLogger) ([]model.Package, error) {
+func LoadPackages() ([]model.Package, error) {
 	workspaceRoot := viper.Get("workspace_root").(string)
 
 	var packages []model.Package
 
-	// Follow links if the "-L" flag is provided
 	conf := fastwalk.Config{
+		// Don't follow symlinks
 		Follow: false,
 	}
 
@@ -25,6 +24,7 @@ func LoadPackages(logger *zap.SugaredLogger) ([]model.Package, error) {
 	walkFn := func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			// TODO do we want to collect all loading errors first? Seems like a better dev-ex
+			// Idea: collect errors like so: https://github.com/hashicorp/go-multierror
 			return err // returning the error stops iteration
 		}
 

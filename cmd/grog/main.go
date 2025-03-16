@@ -2,8 +2,8 @@ package grog
 
 import (
 	"fmt"
-	"grog/pkg/cmds"
-	"grog/pkg/config"
+	"grog/internal/cmds"
+	"grog/internal/config"
 	"os"
 	"path/filepath"
 

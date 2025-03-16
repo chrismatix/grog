@@ -1,6 +1,6 @@
 package model
 
-import "grog/pkg/label"
+import "grog/internal/label"
 
 // Target defines a build step.
 type Target struct {

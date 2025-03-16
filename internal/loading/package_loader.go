@@ -1,7 +1,7 @@
 package loading
 
 import (
-	"grog/pkg/model"
+	"grog/internal/model"
 	"slices"
 )
 

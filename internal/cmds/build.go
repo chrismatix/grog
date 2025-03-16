@@ -2,10 +2,10 @@ package cmds
 
 import (
 	"github.com/spf13/cobra"
-	"grog/pkg/config"
-	"grog/pkg/label"
-	"grog/pkg/loading"
-	"grog/pkg/model"
+	"grog/internal/config"
+	"grog/internal/label"
+	"grog/internal/loading"
+	"grog/internal/model"
 )
 
 var BuildCmd = &cobra.Command{
@@ -16,7 +16,7 @@ var BuildCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		logger := config.GetLogger()
 
-		packages, err := loading.LoadPackages(logger)
+		packages, err := loading.LoadPackages()
 		if err != nil {
 			logger.Fatalf(
 				"could not load packages: %v",

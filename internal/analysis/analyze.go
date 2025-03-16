@@ -2,7 +2,7 @@ package analysis
 
 import (
 	"fmt"
-	"grog/pkg/model"
+	"grog/internal/model"
 )
 
 func BuildGraphAndAnalyze(targets []model.Target) (model.Graph, error) {
