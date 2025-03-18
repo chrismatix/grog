@@ -10,11 +10,13 @@ else
 UPDATE_ALL_FLAG :=
 endif
 
+unit-test:
+	@gotestsum ./internal/...
 
 test: build-with-coverage
 	@rm -fr .coverdata
 	@mkdir -p .coverdata
-	@gotestsum ./pkg/...
+	@gotestsum ./internal/...
 	@gotestsum ./integration/... $(UPDATE_FLAG) $(UPDATE_ALL_FLAG)
 	@go tool covdata percent -i=.coverdata
 

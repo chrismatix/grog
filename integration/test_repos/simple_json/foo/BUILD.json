@@ -1,10 +1,9 @@
 {
-  "targets": [
-    {
-      "name": "foo",
+  "targets": {
+    "foo": {
       "inputs": ["source.txt"],
       "cmd": "cat source.txt && echo 'World!' >> output.txt",
       "outputs": ["output.txt"]
     }
-  ]
+  }
 }

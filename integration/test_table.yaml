@@ -13,5 +13,5 @@ cases:
   - name: build_foo
     args:
       - build
-      -
+      - //foo
     repo: simple_json

@@ -55,3 +55,13 @@ func GetPathRelativeToWorkspaceRoot(path string) (string, error) {
 
 	return path[len(workspaceRoot)+1:], nil
 }
+
+func GetPackagePath(path string) (string, error) {
+	relativePath, err := GetPathRelativeToWorkspaceRoot(path)
+	if err != nil {
+		return "", err
+	}
+	// get dir and remove the last slash
+	dirPath := filepath.Dir(relativePath)
+	return strings.TrimSuffix(dirPath, "/"), nil
+}

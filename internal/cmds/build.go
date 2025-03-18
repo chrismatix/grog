@@ -36,20 +36,22 @@ var BuildCmd = &cobra.Command{
 		}
 
 		matchedTargets := 0
-		targets := []model.Target{}
+		targets := []*model.Target{}
+
 		// Filter targets based on the input target pattern
 		for _, pkg := range packages {
 			for _, target := range pkg.Targets {
 				if hasTargetPattern {
 					if targetPattern.Matches(target.Label) {
 						targets = append(targets, target)
+						matchedTargets += len(pkg.Targets)
 					}
 				} else {
 					// No target pattern: add all targets
 					targets = append(targets, target)
+					matchedTargets += len(pkg.Targets)
 				}
 			}
-			matchedTargets += len(pkg.Targets)
 		}
 
 		numPackages := len(packages)

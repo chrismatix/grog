@@ -46,5 +46,11 @@ func (j JSONLoader) Load(filePath string) (model.Package, error) {
 			err)
 	}
 
+	// Iterate over the targets and set the Name field.
+	for targetName, target := range pkg.Targets {
+		target.Name = targetName
+		pkg.Targets[targetName] = target // Update the target in the map
+	}
+
 	return pkg, nil
 }

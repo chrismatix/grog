@@ -38,13 +38,17 @@ func ParseTargetPattern(pattern string) (TargetPattern, error) {
 			return TargetPattern{}, fmt.Errorf("invalid pattern %q: unexpected characters after '...'", pattern)
 		}
 	} else {
-		// No "..." present: expect an exact package with a colon.
+		// No "..." present: expect an exact package with an optional colon.
 		colonIdx := strings.Index(body, ":")
 		if colonIdx == -1 {
-			return TargetPattern{}, fmt.Errorf("invalid pattern %q: missing ':' or '...'", pattern)
+			// Shorthand: "//foo" is equivalent to "//foo:foo"
+			prefix = body
+			targetPat = body[strings.LastIndex(body, "/")+1:]
+		} else {
+			prefix = body[:colonIdx]
+			targetPat = body[colonIdx+1:]
 		}
-		prefix = body[:colonIdx]
-		targetPat = body[colonIdx+1:]
+
 		if targetPat == "" {
 			return TargetPattern{}, fmt.Errorf("invalid pattern %q: target pattern is empty", pattern)
 		}

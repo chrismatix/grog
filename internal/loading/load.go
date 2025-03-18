@@ -34,7 +34,7 @@ func LoadPackages() ([]model.Package, error) {
 		}
 
 		if matched {
-			packagePath, err := config.GetPathRelativeToWorkspaceRoot(path)
+			packagePath, err := config.GetPackagePath(path)
 			if err != nil {
 				return err
 			}

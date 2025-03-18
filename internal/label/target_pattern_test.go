@@ -71,4 +71,16 @@ func TestTargetPatternMatching(t *testing.T) {
 	if !patExact.Matches(tl("//foo:bar")) {
 		t.Error("Pattern //foo:bar should match //foo:bar exactly")
 	}
+
+	// Pattern with short-hand notation: "//foo"
+	patShortHandExact, err := ParseTargetPattern("//foo")
+	if err != nil {
+		t.Fatalf("Failed to parse pattern: %v", err)
+	}
+	if !patShortHandExact.Matches(tl("//foo:foo")) {
+		t.Error("Pattern //foo should match //foo:foo exactly")
+	}
+	if patShortHandExact.Matches(tl("//foo:bar")) {
+		t.Error("Pattern //foo should not match //foo:bar")
+	}
 }

@@ -2,6 +2,23 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 17-03-2025
+
+After having a first read of the OpenTofu dag code I felt a bit disheartened at the task ahead of me since it is a lot of work. However, after more reading and rubber-ducking I have made some observations:
+
+- For parallel tasks we need a worker pool to A) limit concurrency and B) be able to get the nice live updating progress view that `docker pull` and `bazel build` do. Limiting concurrency is important since user build commands might be very cpu intensive and running more of them than there are cores on a machine will slow the program down.
+- OpenTofu's [dag walk](https://github.com/opentofu/opentofu/blob/b1f5cb2588fd04002977405839e495a75ab13a70/internal/dag/walk.go#L150) heavily leans into goroutines and I should just use the same design:
+  - Given a graph create a map with a value for each vertex that tracks three channels: done channel to signal vertex completion, cancel channel to signal vertex goroutine to exit, and a map of `deps` channels that the vertex can use to learn when to start running its task.
+  - The dag walker will then start a goroutine for each vertex and wait for all of them to finish.
+  - When a vertex executes it runs a callback that we supply to the walker.
+  - In our case the callback will submit a build task to the worker pool and wait for it to execute.
+
+Even though I want to build the worker pool first since it's more fun, I think the graph part is more on the critical part and might also determine the final API design of the worker pool, so I will start with that one first.
+
+Otherwise, no coding progress today, but lots of conceptual understanding.
+
+-C
+
 ## 16-03-2025
 
 I prefer the way target labels work in Bazel over pants (or earthly) so that's what we're going for.

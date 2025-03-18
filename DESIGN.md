@@ -93,7 +93,7 @@ Example `BUILD.json`:
 {
   "targets": {
     "foo": {
-      "cmd": ""
+      "cmd": "echo 'Hello world' > foo.out",
       "deps": ["bar"],
       "inputs": ["foo.txt", "src/**/*.txt"],
       "outputs": ["foo.out"]
