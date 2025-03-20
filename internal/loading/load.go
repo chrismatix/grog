@@ -1,6 +1,7 @@
 package loading
 
 import (
+	"fmt"
 	"github.com/charlievieth/fastwalk"
 	"github.com/spf13/viper"
 	"grog/internal/config"
@@ -9,10 +10,10 @@ import (
 	"io/fs"
 )
 
-func LoadPackages() ([]model.Package, error) {
+func LoadPackages() ([]*model.Package, error) {
 	workspaceRoot := viper.Get("workspace_root").(string)
 
-	var packages []model.Package
+	var packages []*model.Package
 
 	conf := fastwalk.Config{
 		// Don't follow symlinks
@@ -28,7 +29,7 @@ func LoadPackages() ([]model.Package, error) {
 			return err // returning the error stops iteration
 		}
 
-		pkg, matched, err := packageLoader.LoadIfMatched(path, d.Name())
+		pkgDto, matched, err := packageLoader.LoadIfMatched(path, d.Name())
 		if err != nil {
 			return err
 		}
@@ -39,9 +40,9 @@ func LoadPackages() ([]model.Package, error) {
 				return err
 			}
 
-			// attach the TargetLabel to each target in the package
-			for _, t := range pkg.Targets {
-				t.Label = label.TargetLabel{Package: packagePath, Name: t.Name}
+			pkg, err := getEnrichedPackage(packagePath, pkgDto)
+			if err != nil {
+				return err
 			}
 
 			packages = append(packages, pkg)
@@ -55,4 +56,36 @@ func LoadPackages() ([]model.Package, error) {
 	}
 
 	return packages, nil
+}
+
+func getEnrichedPackage(packagePath string, pkg PackageDTO) (*model.Package, error) {
+	targets := make(map[label.TargetLabel]*model.Target)
+	for targetName, target := range pkg.Targets {
+		var deps []label.TargetLabel
+		for _, dep := range target.Deps {
+			depLabel, err := label.ParseTargetLabel(dep)
+			if err != nil {
+				return nil, err
+			}
+			deps = append(deps, depLabel)
+		}
+
+		targetLabel := label.TargetLabel{Package: packagePath, Name: targetName}
+		if _, ok := targets[targetLabel]; ok {
+			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", targetName, pkg.SourceFilePath)
+		}
+
+		targets[targetLabel] = &model.Target{
+			Label:   targetLabel,
+			Command: target.Command,
+			Deps:    deps,
+			Inputs:  target.Inputs,
+			Outputs: target.Outputs,
+		}
+	}
+
+	return &model.Package{
+		SourceFilePath: pkg.SourceFilePath,
+		Targets:        targets,
+	}, nil
 }

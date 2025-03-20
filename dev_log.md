@@ -2,6 +2,23 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 19-03-2025
+
+I anticipated that this would have to be done but now is as good as time as ever. Spending some time on refactoring the target/package model so we have a separate struct for unmarshalling loader outputs and one for internal usage. This is useful since we want to internally use a more enriched struct.
+
+One open question: When selecting targets should we:
+
+1. Mark all the selected targets (and dependents) for a run, or
+2. Return a subgraph that only includes targets that we want to run
+
+Gut feel says that either decision locks us in for some interesting constraints down the road. Luca and I agree to go for `1.` for now, the first principle being that it "destroys" less information (the rest of the graph) for downstream processing.
+
+-C
+
+## 18-03-2025
+
+Changing the package schema to a dict rather than a list broke the targeting. Also target patterns had not yet supported shorthands. Fixed both issues and added a minimal graph implementation.
+
 ## 17-03-2025
 
 After having a first read of the OpenTofu dag code I felt a bit disheartened at the task ahead of me since it is a lot of work. However, after more reading and rubber-ducking I have made some observations:

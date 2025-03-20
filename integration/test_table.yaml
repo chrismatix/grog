@@ -15,3 +15,10 @@ cases:
       - build
       - //foo
     repo: simple_json
+
+  # This should select foo as well
+  - name: build_bar
+    args:
+      - build
+      - //bar
+    repo: simple_json

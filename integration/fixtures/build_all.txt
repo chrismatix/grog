@@ -1,1 +1,1 @@
-INFO:	Analyzed 2 targets (2 packages loaded, 2 targets configured).
+INFO:	Selected all targets (2 packages loaded, 2 targets configured).

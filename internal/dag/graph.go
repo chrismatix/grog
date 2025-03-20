@@ -2,6 +2,7 @@ package dag
 
 import (
 	"errors"
+	"grog/internal/label"
 	"grog/internal/model"
 )
 
@@ -116,4 +117,37 @@ func (g *DirectedTargetGraph) HasCycle() bool {
 	}
 
 	return false // No cycle detected in the entire graph
+}
+
+// SelectTargets sets targets as selected and returns the number of selected targets.
+func (g *DirectedTargetGraph) SelectTargets(pattern label.TargetPattern) int {
+	selectedCount := 0
+	for _, target := range g.vertices {
+		if pattern.Matches(target.Label) {
+			target.IsSelected = true
+			selectedCount++
+			selectedCount += g.selectAllAncestors(target)
+		}
+	}
+
+	return selectedCount
+}
+
+// selectAllAncestors recursively selects all ancestors of the given target
+// and returns the number of selected targets.
+func (g *DirectedTargetGraph) selectAllAncestors(target *model.Target) int {
+	selectedCount := 0
+	for _, ancestor := range g.inEdges[target] {
+		ancestor.IsSelected = true
+		selectedCount++
+		selectedCount += g.selectAllAncestors(ancestor)
+	}
+	return selectedCount
+}
+
+// SelectAllTargets selects all targets in the graphs
+func (g *DirectedTargetGraph) SelectAllTargets() {
+	for _, target := range g.vertices {
+		target.IsSelected = true
+	}
 }

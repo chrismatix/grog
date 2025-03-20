@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"grog/internal/config"
-	"grog/internal/model"
 	"os"
 )
 
@@ -17,8 +16,8 @@ func (j JSONLoader) FileNames() []string {
 }
 
 // Load reads the file at the specified filePath and unmarshals its content into a model.Package.
-func (j JSONLoader) Load(filePath string) (model.Package, error) {
-	var pkg model.Package
+func (j JSONLoader) Load(filePath string) (PackageDTO, error) {
+	var pkg PackageDTO
 
 	// Open the file.
 	file, err := os.Open(filePath)
@@ -44,12 +43,6 @@ func (j JSONLoader) Load(filePath string) (model.Package, error) {
 			"failed to decode JSON file %s: %w",
 			filePath,
 			err)
-	}
-
-	// Iterate over the targets and set the Name field.
-	for targetName, target := range pkg.Targets {
-		target.Name = targetName
-		pkg.Targets[targetName] = target // Update the target in the map
 	}
 
 	return pkg, nil

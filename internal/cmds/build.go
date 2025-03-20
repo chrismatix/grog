@@ -2,6 +2,7 @@ package cmds
 
 import (
 	"github.com/spf13/cobra"
+	"grog/internal/analysis"
 	"grog/internal/config"
 	"grog/internal/label"
 	"grog/internal/loading"
@@ -23,39 +24,30 @@ var BuildCmd = &cobra.Command{
 				err)
 		}
 
-		targetPattern := label.TargetPattern{}
-		hasTargetPattern := false
-		if len(args) > 0 {
-			hasTargetPattern = true
-			targetPattern, err = label.ParseTargetPattern(args[0])
-			if err != nil {
-				logger.Fatalf(
-					"could not parse target pattern: %v",
-					err)
-			}
-		}
-
-		matchedTargets := 0
-		targets := []*model.Target{}
-
-		// Filter targets based on the input target pattern
-		for _, pkg := range packages {
-			for _, target := range pkg.Targets {
-				if hasTargetPattern {
-					if targetPattern.Matches(target.Label) {
-						targets = append(targets, target)
-						matchedTargets += len(pkg.Targets)
-					}
-				} else {
-					// No target pattern: add all targets
-					targets = append(targets, target)
-					matchedTargets += len(pkg.Targets)
-				}
-			}
-		}
-
 		numPackages := len(packages)
+		targets, err := model.TargetMapFromPackages(packages)
+		if err != nil {
+			logger.Fatalf("could not create target map: %v", err)
+		}
 
-		logger.Infof("Analyzed %d targets (%d packages loaded, %d targets configured).", matchedTargets, numPackages, matchedTargets)
+		graph, err := analysis.BuildGraphAndAnalyze(targets)
+		if err != nil {
+			logger.Fatalf("could not build graph: %v", err)
+		}
+
+		if len(args) > 0 {
+			targetPattern, err := label.ParseTargetPattern(args[0])
+			if err != nil {
+				logger.Fatalf("could not parse target pattern: %v", err)
+			}
+
+			selectedCount := graph.SelectTargets(targetPattern)
+			logger.Infof("Selected %d targets (%d packages loaded, %d targets configured).", selectedCount, numPackages, len(targets))
+		} else {
+			// No target pattern: build all targets
+			graph.SelectAllTargets()
+			logger.Infof("Selected all targets (%d packages loaded, %d targets configured).", numPackages, len(targets))
+		}
+
 	},
 }

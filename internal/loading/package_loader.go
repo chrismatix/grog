@@ -1,7 +1,6 @@
 package loading
 
 import (
-	"grog/internal/model"
 	"slices"
 )
 
@@ -10,7 +9,7 @@ type Loader interface {
 	// FileNames returns the supported file names for this loader
 	FileNames() []string
 	// Load reads the file at the specified filePath and unmarshals its content into a model.Package
-	Load(filePath string) (model.Package, error)
+	Load(filePath string) (PackageDTO, error)
 }
 
 // PackageLoader facade that delegates to the correct loader based on the pattern
@@ -28,7 +27,7 @@ func NewPackageLoader() *PackageLoader {
 }
 
 // LoadIfMatched loads the package from the specified file name if it matches any of the supported file names.
-func (p *PackageLoader) LoadIfMatched(filePath string, fileName string) (model.Package, bool, error) {
+func (p *PackageLoader) LoadIfMatched(filePath string, fileName string) (PackageDTO, bool, error) {
 	for _, loader := range p.loaders {
 		if slices.Contains(loader.FileNames(), fileName) {
 			pkg, err := loader.Load(filePath)
@@ -36,5 +35,5 @@ func (p *PackageLoader) LoadIfMatched(filePath string, fileName string) (model.P
 		}
 	}
 
-	return model.Package{}, false, nil
+	return PackageDTO{}, false, nil
 }

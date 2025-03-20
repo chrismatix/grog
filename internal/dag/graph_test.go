@@ -1,6 +1,7 @@
 package dag
 
 import (
+	"grog/internal/label"
 	"grog/internal/model"
 	"reflect"
 	"testing"
@@ -8,8 +9,8 @@ import (
 
 func TestDirectedTargetGraph_AddVertex(t *testing.T) {
 	graph := NewDirectedGraph()
-	target1 := &model.Target{Name: "target1"}
-	target2 := &model.Target{Name: "target2"}
+	target1 := &model.Target{Label: label.TargetLabel{Name: "target1"}}
+	target2 := &model.Target{Label: label.TargetLabel{Name: "target2"}}
 
 	graph.AddVertex(target1)
 	// add idempotently
@@ -24,9 +25,9 @@ func TestDirectedTargetGraph_AddVertex(t *testing.T) {
 
 func TestDirectedTargetGraph_AddEdge(t *testing.T) {
 	graph := NewDirectedGraph()
-	target1 := &model.Target{Name: "target1"}
-	target2 := &model.Target{Name: "target2"}
-	target3 := &model.Target{Name: "target3"}
+	target1 := &model.Target{Label: label.TargetLabel{Name: "target1"}}
+	target2 := &model.Target{Label: label.TargetLabel{Name: "target2"}}
+	target3 := &model.Target{Label: label.TargetLabel{Name: "target3"}}
 
 	graph.AddVertex(target1)
 	graph.AddVertex(target2)
@@ -67,9 +68,9 @@ func TestDirectedTargetGraph_AddEdge(t *testing.T) {
 
 func TestDirectedTargetGraph_GetInEdges(t *testing.T) {
 	graph := NewDirectedGraph()
-	target1 := &model.Target{Name: "target1"}
-	target2 := &model.Target{Name: "target2"}
-	target3 := &model.Target{Name: "target3"}
+	target1 := &model.Target{Label: label.TargetLabel{Name: "target1"}}
+	target2 := &model.Target{Label: label.TargetLabel{Name: "target2"}}
+	target3 := &model.Target{Label: label.TargetLabel{Name: "target3"}}
 
 	graph.AddVertex(target1)
 	graph.AddVertex(target2)
@@ -88,7 +89,7 @@ func TestDirectedTargetGraph_GetInEdges(t *testing.T) {
 		t.Errorf("GetInEdges returned incorrect inEdges. Expected %v, got %v", expectedInEdges, inEdges)
 	}
 
-	_, err = graph.GetInEdges(&model.Target{Name: "nonExistent"})
+	_, err = graph.GetInEdges(&model.Target{Label: label.TargetLabel{Name: "nonExistent"}})
 	if err == nil {
 		t.Errorf("GetInEdges should have returned an error for non-existent vertex")
 	}
@@ -96,9 +97,9 @@ func TestDirectedTargetGraph_GetInEdges(t *testing.T) {
 
 func TestDirectedTargetGraph_GetOutEdges(t *testing.T) {
 	graph := NewDirectedGraph()
-	target1 := &model.Target{Name: "target1"}
-	target2 := &model.Target{Name: "target2"}
-	target3 := &model.Target{Name: "target3"}
+	target1 := &model.Target{Label: label.TargetLabel{Name: "target1"}}
+	target2 := &model.Target{Label: label.TargetLabel{Name: "target2"}}
+	target3 := &model.Target{Label: label.TargetLabel{Name: "target3"}}
 
 	graph.AddVertex(target1)
 	graph.AddVertex(target2)
@@ -117,7 +118,7 @@ func TestDirectedTargetGraph_GetOutEdges(t *testing.T) {
 		t.Errorf("GetOutEdges returned incorrect outEdges. Expected %v, got %v", expectedOutEdges, outEdges)
 	}
 
-	_, err = graph.GetOutEdges(&model.Target{Name: "nonExistent"})
+	_, err = graph.GetOutEdges(&model.Target{Label: label.TargetLabel{Name: "nonExistent"}})
 	if err == nil {
 		t.Errorf("GetOutEdges should have returned an error for non-existent vertex")
 	}
@@ -125,8 +126,8 @@ func TestDirectedTargetGraph_GetOutEdges(t *testing.T) {
 
 func TestDirectedTargetGraph_hasVertex(t *testing.T) {
 	graph := NewDirectedGraph()
-	target1 := &model.Target{Name: "target1"}
-	target2 := &model.Target{Name: "target2"}
+	target1 := &model.Target{Label: label.TargetLabel{Name: "target1"}}
+	target2 := &model.Target{Label: label.TargetLabel{Name: "target2"}}
 
 	graph.AddVertex(target1)
 
@@ -141,9 +142,9 @@ func TestDirectedTargetGraph_hasVertex(t *testing.T) {
 
 func TestDirectedTargetGraph_HasCycle(t *testing.T) {
 	graph := NewDirectedGraph()
-	target1 := &model.Target{Name: "target1"}
-	target2 := &model.Target{Name: "target2"}
-	target3 := &model.Target{Name: "target3"}
+	target1 := &model.Target{Label: label.TargetLabel{Name: "target1"}}
+	target2 := &model.Target{Label: label.TargetLabel{Name: "target2"}}
+	target3 := &model.Target{Label: label.TargetLabel{Name: "target3"}}
 
 	graph.AddVertex(target1)
 	graph.AddVertex(target2)
@@ -168,9 +169,9 @@ func TestDirectedTargetGraph_HasCycle(t *testing.T) {
 
 	// Check if there is a cycle
 	graph = NewDirectedGraph()
-	target1 = &model.Target{Name: "target1"}
-	target2 = &model.Target{Name: "target2"}
-	target3 = &model.Target{Name: "target3"}
+	target1 = &model.Target{Label: label.TargetLabel{Name: "target1"}}
+	target2 = &model.Target{Label: label.TargetLabel{Name: "target2"}}
+	target3 = &model.Target{Label: label.TargetLabel{Name: "target3"}}
 
 	graph.AddVertex(target1)
 	graph.AddVertex(target2)
