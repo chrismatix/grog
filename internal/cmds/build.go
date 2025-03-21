@@ -1,12 +1,21 @@
 package cmds
 
 import (
+	"context"
+	"errors"
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"grog/internal/analysis"
 	"grog/internal/config"
+	"grog/internal/execution"
 	"grog/internal/label"
 	"grog/internal/loading"
 	"grog/internal/model"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
 )
 
 var BuildCmd = &cobra.Command{
@@ -49,5 +58,53 @@ var BuildCmd = &cobra.Command{
 			logger.Infof("Selected all targets (%d packages loaded, %d targets configured).", numPackages, len(targets))
 		}
 
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		// Listen for SIGTERM or SIGINT to cancel the context
+		signalChan := make(chan os.Signal, 1)
+		signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
+		go func() {
+			select {
+			case <-signalChan:
+				cancel()
+			case <-ctx.Done():
+			}
+		}()
+
+		failFast := viper.GetBool("fail_fast")
+		err, completionMap := execution.Execute(ctx, graph, failFast)
+		if err != nil {
+			graph.LogGraphJSON(logger)
+			logger.Errorf("execution failed: %v", err)
+			// exit
+			os.Exit(1)
+		}
+
+		buildErrors := completionMap.GetErrors()
+		successes := completionMap.GetSuccesses()
+		if len(buildErrors) > 0 {
+			logger.Errorf("Build failed. %d targets completed, %d failed:", len(successes), len(buildErrors))
+			for target, completion := range completionMap {
+				if completion.IsSuccess {
+					continue
+				}
+
+				var executionError *execution.CommandError
+				color.Red("---------------------------------")
+				if completion.Err == nil {
+					logger.Errorf("Target %s failed with no error", target.Label)
+				} else if errors.As(completion.Err, &executionError) {
+					logger.Errorf("Target %s failed with exit code %d:\n%s", target.Label,
+						executionError.ExitCode, strings.TrimSpace(executionError.Output))
+				} else {
+					logger.Errorf("Target %s failed: %v", target.Label, completion.Err)
+				}
+			}
+			os.Exit(1)
+		} else {
+			logger.Infof("Build completed successfully. %d targets completed.", len(successes))
+			os.Exit(0)
+		}
 	},
 }

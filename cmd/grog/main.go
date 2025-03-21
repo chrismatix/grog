@@ -1,7 +1,6 @@
 package grog
 
 import (
-	"fmt"
 	"grog/internal/cmds"
 	"grog/internal/config"
 	"os"
@@ -49,7 +48,6 @@ func init() {
 
 func Run() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
 		os.Exit(1)
 	}
 }

@@ -10,8 +10,8 @@ import (
 type WalkCallback func(ctx context.Context, target model.Target) error
 
 type Completion struct {
-	isSuccess bool
-	err       error
+	IsSuccess bool
+	Err       error
 }
 
 type vertexInfo struct {
@@ -23,6 +23,28 @@ type vertexInfo struct {
 	cancel chan struct{}
 }
 
+type CompletionMap map[*model.Target]Completion
+
+func (c CompletionMap) GetErrors() []error {
+	var errorList []error
+	for _, completion := range c {
+		if !completion.IsSuccess {
+			errorList = append(errorList, completion.Err)
+		}
+	}
+	return errorList
+}
+
+func (c CompletionMap) GetSuccesses() []*model.Target {
+	var successList []*model.Target
+	for target, completion := range c {
+		if completion.IsSuccess {
+			successList = append(successList, target)
+		}
+	}
+	return successList
+}
+
 // Walker walks the graph in topological order.
 // It makes no attempt at being externally thread safe.
 type Walker struct {
@@ -30,7 +52,7 @@ type Walker struct {
 	walkCb        WalkCallback
 	vertexInfoMap map[*model.Target]*vertexInfo
 	// Keep track of which targets have been completed
-	completions map[*model.Target]Completion
+	completions CompletionMap
 
 	// Options
 	failFast bool
@@ -64,9 +86,9 @@ Procedure:
 
 The main goroutine will then wait for all the goroutines to finish.
 */
-func (w *Walker) Walk(ctx context.Context) error {
+func (w *Walker) Walk(ctx context.Context) (error, CompletionMap) {
 	if w.walkCb == nil {
-		return errors.New("walk callback is nil")
+		return errors.New("walk callback is nil"), nil
 	}
 
 	// populate info map
@@ -81,8 +103,9 @@ func (w *Walker) Walk(ctx context.Context) error {
 			cancel: cancelCh,
 		}
 
+		w.wait.Add(1)
 		// start a fanout channel for each vertex
-		go w.onCompletionWorker(ctx, vertex, doneCh)
+		go w.onCompletionWorker(ctx, vertex, doneCh, cancelCh)
 	}
 
 	// start all routines
@@ -107,16 +130,28 @@ func (w *Walker) Walk(ctx context.Context) error {
 
 	select {
 	case <-done:
-		return nil
+		return nil, w.completions
 	case <-ctx.Done():
-		return ctx.Err()
+		w.cancelAll()
+		return ctx.Err(), w.completions
 	}
 }
 
-func (w *Walker) onCompletionWorker(ctx context.Context, target *model.Target, doneCh chan Completion) {
+func (w *Walker) onCompletionWorker(
+	ctx context.Context,
+	target *model.Target,
+	doneCh chan Completion,
+	cancelCh chan struct{},
+) {
+	// always decrement wait group
+	defer w.wait.Done()
 	select {
+	case <-cancelCh:
+		// close this worker when the vertex routine is cancelled (e.g. due to failFast)
+		return
 	case completion := <-doneCh:
 		w.onComplete(target, completion)
+		return
 	case <-ctx.Done():
 		return
 	}
@@ -133,14 +168,14 @@ func (w *Walker) onComplete(target *model.Target, completion Completion) {
 	// Mark target as done
 	w.completions[target] = completion
 
-	if !completion.isSuccess {
+	if !completion.IsSuccess {
 		// If failFast is true, cancel the entire walk
 		if w.failFast {
 			w.cancelAll()
 		} else {
 			// Cancel *all* descendants if the target failed
 			for _, dep := range w.graph.GetDescendants(target) {
-				w.vertexInfoMap[dep].cancel <- struct{}{}
+				close(w.vertexInfoMap[dep].cancel)
 			}
 		}
 		return
@@ -168,7 +203,7 @@ func (w *Walker) onComplete(target *model.Target, completion Completion) {
 func (w *Walker) cancelAll() {
 	for _, vertex := range w.graph.vertices {
 		go func(v *model.Target) {
-			w.vertexInfoMap[v].cancel <- struct{}{}
+			close(w.vertexInfoMap[v].cancel)
 		}(vertex)
 	}
 }
@@ -193,9 +228,10 @@ func (w *Walker) vertexRoutine(
 		// call the callback
 		err := w.walkCb(ctx, target)
 		if err != nil {
-			info.done <- Completion{isSuccess: false, err: err}
-			return
+			info.done <- Completion{IsSuccess: false, Err: err}
+		} else {
+			info.done <- Completion{IsSuccess: true, Err: nil}
 		}
-		info.done <- Completion{isSuccess: true, err: nil}
+		return
 	}
 }

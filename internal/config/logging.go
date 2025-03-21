@@ -50,6 +50,10 @@ func GetLogger() *zap.SugaredLogger {
 	cfg := zap.NewProductionConfig()
 	// do not use structured logging by default
 	cfg.Encoding = "console"
+	cfg.DisableStacktrace = true
+	if level == zap.DebugLevel {
+		cfg.DisableStacktrace = false
+	}
 
 	cfg.OutputPaths = []string{
 		logPath,

@@ -31,6 +31,10 @@ build-with-coverage:
 	@go build -cover -o dist/grog
 
 run:
-	go run main.go
+	go run main.go $(MAKECMDGOALS)
+
+run-repo: build
+	@cd integration/test_repos/$(path) && ../../dist/grog $(MAKECMDGOALS)
+
 
 .DEFAULT_GOAL := build
