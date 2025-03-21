@@ -2,6 +2,21 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 21-03-2025
+
+Today is the day. After ironing out some concurrency issues and typos I got the program to run the first successful build on the `simple_json` test repository:
+
+```
+➜  grog  git:(main) ./run.sh integration/test_repos/simple_json build //...
+INFO:   Selected 2 targets (2 packages loaded, 2 targets configured).
+INFO:   Elapsed time: 0.019s
+INFO:   Build completed successfully. 2 targets completed.
+```
+
+It took only about a week to get there which is pretty fast for a side project, but I am now realizing that this is only about 10% of work required before I can open-source this. Next big steps will be the Bazel style logging and adding caching.
+
+-C
+
 ## 20-03-2025
 
 Finished target selection using the graph (by traversing dependants). Next on my list is actually building the graph execution algorithm. In parallel, I am looking into the worker pool that should run and output tasks bazel style:
@@ -70,15 +85,21 @@ Next up is the actual protein of the program: Building the graph and executing i
 
 ## 15-03-2025
 
-Setup, the git workflow, and started working on the cli integration testing. Integration testing will be super helpful here since we can also use the test repos as a sandbox for testing out designs. -C
+Setup, the git workflow, and started working on the cli integration testing. Integration testing will be super helpful here since we can also use the test repos as a sandbox for testing out designs.
+
+-C
 
 ## 14-03-2025
 
 Set up the grog `DESIGN.md` to organize my thoughts a bit.
-Most notable success is infecting/radicalizing Luca with this idea which brings a flood of good ideas and the promise of a very strong contributor. -C
+Most notable success is infecting/radicalizing Luca with this idea which brings a flood of good ideas and the promise of a very strong contributor.
+
+-C
 
 ## 13-03-2025
 
 Last night, I finally had the idea to make the idea for all of this work which is to have the BUILD files be user executables (or plain data files).
 I could not sleep, because I was so excited at the idea and because I could picture every aspect of how this would work.
-Today I scoped out a simple program structure based on the loading, analysis, and execution phase in bazel. -C
+Today I scoped out a simple program structure based on the loading, analysis, and execution phase in bazel.
+
+-C
