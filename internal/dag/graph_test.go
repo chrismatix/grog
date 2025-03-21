@@ -184,3 +184,63 @@ func TestDirectedTargetGraph_HasCycle(t *testing.T) {
 		t.Errorf("HasCycle should have returned false for a graph without a cycle")
 	}
 }
+
+func TestDirectedTargetGraph_GetDescendants(t *testing.T) {
+	graph := NewDirectedGraph()
+
+	// Create test targets
+	target1 := &model.Target{Label: label.TargetLabel{Name: "target1"}}
+	target2 := &model.Target{Label: label.TargetLabel{Name: "target2"}}
+	target3 := &model.Target{Label: label.TargetLabel{Name: "target3"}}
+	target4 := &model.Target{Label: label.TargetLabel{Name: "target4"}}
+	target5 := &model.Target{Label: label.TargetLabel{Name: "target5"}}
+
+	// Add vertices
+	graph.AddVertex(target1)
+	graph.AddVertex(target2)
+	graph.AddVertex(target3)
+	graph.AddVertex(target4)
+	graph.AddVertex(target5)
+
+	// Create a graph structure:
+	// target1 -> target2 -> target4
+	//       \-> target3 -> target5
+	graph.AddEdge(target1, target2)
+	graph.AddEdge(target1, target3)
+	graph.AddEdge(target2, target4)
+	graph.AddEdge(target3, target5)
+
+	// Test case 1: target1 should have all other targets as descendants
+	descendants1 := graph.GetDescendants(target1)
+	expectedDescendants1 := []*model.Target{target2, target4, target3, target5}
+
+	// We need to check that all expected descendants are in the actual descendants list
+	// Order might vary, so we'll use a map to check for presence
+	if len(descendants1) != len(expectedDescendants1) {
+		t.Errorf("GetDescendants for target1 returned wrong number of descendants. Expected %d, got %d",
+			len(expectedDescendants1), len(descendants1))
+	}
+
+	descendantMap := make(map[string]bool)
+	for _, d := range descendants1 {
+		descendantMap[d.Label.Name] = true
+	}
+
+	for _, expected := range expectedDescendants1 {
+		if !descendantMap[expected.Label.Name] {
+			t.Errorf("Expected descendant %s not found in result", expected.Label.Name)
+		}
+	}
+
+	// Test case 2: target2 should have only target4 as descendant
+	descendants2 := graph.GetDescendants(target2)
+	if len(descendants2) != 1 || descendants2[0] != target4 {
+		t.Errorf("GetDescendants for target2 returned incorrect result. Expected [target4], got %v", descendants2)
+	}
+
+	// Test case 3: target4 should have no descendants
+	descendants4 := graph.GetDescendants(target4)
+	if len(descendants4) != 0 {
+		t.Errorf("GetDescendants for target4 should return empty slice, got %v", descendants4)
+	}
+}

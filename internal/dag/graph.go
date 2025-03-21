@@ -2,6 +2,7 @@ package dag
 
 import (
 	"errors"
+	"fmt"
 	"grog/internal/label"
 	"grog/internal/model"
 )
@@ -42,7 +43,7 @@ func (g *DirectedTargetGraph) AddVertex(target *model.Target) {
 // AddEdge adds a directed edge between two vertices.
 func (g *DirectedTargetGraph) AddEdge(from, to *model.Target) error {
 	if from == to {
-		return errors.New("cannot add self-loop")
+		return fmt.Errorf("cannot add self-loop for target %s", from.Label)
 	}
 	if !g.hasVertex(from) || !g.hasVertex(to) {
 		return errors.New("both vertices must exist in the graph")
@@ -68,6 +69,20 @@ func (g *DirectedTargetGraph) GetOutEdges(target *model.Target) ([]*model.Target
 		return nil, errors.New("vertex not found")
 	}
 	return g.outEdges[target], nil
+}
+
+// GetDescendants returns a list of vertices that are descendants of the given vertex.
+// Recurses via the outEdges of each vertex.
+func (g *DirectedTargetGraph) GetDescendants(target *model.Target) []*model.Target {
+	var descendants []*model.Target
+	for _, descendant := range g.outEdges[target] {
+		descendants = append(descendants, descendant)
+
+		// Recurse
+		recursiveDescendants := g.GetDescendants(descendant)
+		descendants = append(descendants, recursiveDescendants...)
+	}
+	return descendants
 }
 
 // hasVertex checks whether a vertex exists in the graph.

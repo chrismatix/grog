@@ -2,6 +2,23 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 20-03-2025
+
+Finished target selection using the graph (by traversing dependants). Next on my list is actually building the graph execution algorithm. In parallel, I am looking into the worker pool that should run and output tasks bazel style:
+
+```
+[12 / 38] 2 actions running
+    Starting build: //lib/python/logs 1s
+    Running cmd "gradlew long argument list..." 5s
+```
+
+I hope this does not become a distraction, but it's its own fun little sub problem.
+
+Working on the dag walker proved to be about as tricky as expected. The opentofu implementation supports lots of stuff that we do not need at the moment so I decided to take the basic idea of one routine per vertex and start from scratch.
+The crux of the entire solution is communicating that a vertex is complete to its immediate dependants. Further we need to differentiate between erroring and whether we want to fail fast or keep nodes running.
+
+-C
+
 ## 19-03-2025
 
 I anticipated that this would have to be done but now is as good as time as ever. Spending some time on refactoring the target/package model so we have a separate struct for unmarshalling loader outputs and one for internal usage. This is useful since we want to internally use a more enriched struct.
@@ -18,6 +35,8 @@ Gut feel says that either decision locks us in for some interesting constraints 
 ## 18-03-2025
 
 Changing the package schema to a dict rather than a list broke the targeting. Also target patterns had not yet supported shorthands. Fixed both issues and added a minimal graph implementation.
+
+-C
 
 ## 17-03-2025
 
