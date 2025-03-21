@@ -16,6 +16,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 )
 
 var BuildCmd = &cobra.Command{
@@ -24,6 +25,7 @@ var BuildCmd = &cobra.Command{
 	Long:  `Loads the build configuration, checks which targets need to be rebuilt based on file hashes, builds the dependency graph, and executes targets.`,
 	Args:  cobra.MaximumNArgs(1), // Optional argument for target pattern
 	Run: func(cmd *cobra.Command, args []string) {
+		startTime := time.Now()
 		logger := config.GetLogger()
 
 		packages, err := loading.LoadPackages()
@@ -74,6 +76,10 @@ var BuildCmd = &cobra.Command{
 
 		failFast := viper.GetBool("fail_fast")
 		err, completionMap := execution.Execute(ctx, graph, failFast)
+
+		elapsedTime := time.Since(startTime).Seconds()
+		logger.Infof("Elapsed time: %.3fs", elapsedTime)
+
 		if err != nil {
 			graph.LogGraphJSON(logger)
 			logger.Errorf("execution failed: %v", err)
@@ -104,7 +110,8 @@ var BuildCmd = &cobra.Command{
 			os.Exit(1)
 		} else {
 			logger.Infof("Build completed successfully. %d targets completed.", len(successes))
-			os.Exit(0)
 		}
+
+		os.Exit(0)
 	},
 }

@@ -25,7 +25,7 @@ func Execute(ctx context.Context, graph *dag.DirectedTargetGraph, failFast bool)
 	walkCallback := func(ctx context.Context, target model.Target) error {
 		executionPath := config.GetPatAbsoluteToWorkspaceRoot(target.Label.Package)
 
-		cmd := exec.Command("sh", target.Command)
+		cmd := exec.Command("sh", "-c", target.Command)
 		cmd.Dir = executionPath
 		output, err := cmd.CombinedOutput()
 

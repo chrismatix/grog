@@ -31,7 +31,7 @@ func buildGraph(targets model.TargetMap) (*dag.DirectedTargetGraph, error) {
 		for _, depLabel := range target.Deps {
 			dep := targets[depLabel]
 
-			err := graph.AddEdge(target, dep)
+			err := graph.AddEdge(dep, target)
 			if err != nil {
 				return &dag.DirectedTargetGraph{}, err
 			}
