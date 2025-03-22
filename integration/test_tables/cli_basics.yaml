@@ -1,0 +1,9 @@
+name: cli basics
+cases:
+  - name: no_arguments_message
+    repo: empty
+  - name: build_all_color
+    args:
+      - --color=yes
+      - build
+    repo: simple_json

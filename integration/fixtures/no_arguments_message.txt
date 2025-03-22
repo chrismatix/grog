@@ -2,10 +2,11 @@ Usage:
   grog [command]
 
 Available Commands:
-  build       Loads the build configuration and executes targets
+  build       Loads the user configuration and executes build targets
   clean       Removes build outputs and clears the cache
   completion  Generate the autocompletion script for the specified shell
   help        Help about any command
+  test        Loads the user configuration and executes test targets
 
 Flags:
       --color string   Set color output (y1) (default "auto")

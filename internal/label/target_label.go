@@ -14,11 +14,23 @@ type TargetLabel struct {
 }
 
 // ParseTargetLabel parses a Bazel target label.
-// It accepts both explicit labels ("//pkg:target") and shorthand labels ("//pkg"),
-// where the target name is inferred as the last element of the package path.
-func ParseTargetLabel(label string) (TargetLabel, error) {
+// It accepts both explicit labels ("//pkg:target"), shorthand labels ("//pkg"),
+// and relative labels (":target") for the current package.
+func ParseTargetLabel(packagePath, label string) (TargetLabel, error) {
+	if strings.HasPrefix(label, ":") {
+		// Relative label: use the current package path with the given target name.
+		if packagePath == "" {
+			return TargetLabel{}, fmt.Errorf("invalid relative label %q: current package path is empty", label)
+		}
+		targetName := label[1:]
+		if targetName == "" {
+			return TargetLabel{}, fmt.Errorf("invalid relative label %q: target name is empty", label)
+		}
+		return TargetLabel{Package: packagePath, Name: targetName}, nil
+	}
+
 	if !strings.HasPrefix(label, "//") {
-		return TargetLabel{}, fmt.Errorf("invalid label %q: must start with \"//\"", label)
+		return TargetLabel{}, fmt.Errorf("invalid label %q: must start with \"//\" or \":\"", label)
 	}
 	body := label[2:]
 	colonIndex := strings.Index(body, ":")
@@ -44,4 +56,8 @@ func ParseTargetLabel(label string) (TargetLabel, error) {
 // String returns the canonical form "//pkg:target".
 func (t TargetLabel) String() string {
 	return "//" + t.Package + ":" + t.Name
+}
+
+func (t TargetLabel) IsTest() bool {
+	return strings.HasSuffix(t.Name, "_test")
 }

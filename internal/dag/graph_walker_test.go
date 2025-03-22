@@ -10,7 +10,7 @@ import (
 )
 
 func GetTarget(name string) *model.Target {
-	return &model.Target{Label: label.TargetLabel{Name: name}}
+	return &model.Target{Label: label.TargetLabel{Name: name}, IsSelected: true}
 }
 
 func TestWalkerBasic(t *testing.T) {

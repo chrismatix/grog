@@ -1,3 +1,4 @@
+name: cli basics
 cases:
   - name: no_arguments
     repo: empty
@@ -21,4 +22,13 @@ cases:
     args:
       - build
       - //bar
+    repo: simple_json
+
+  # -------------------------
+  # Test testing dependencies
+  #
+  - name: test_bar_should_build_deps
+    args:
+      - test
+      - //bar:bar_test
     repo: simple_json

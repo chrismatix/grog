@@ -63,7 +63,7 @@ func getEnrichedPackage(packagePath string, pkg PackageDTO) (*model.Package, err
 	for targetName, target := range pkg.Targets {
 		var deps []label.TargetLabel
 		for _, dep := range target.Deps {
-			depLabel, err := label.ParseTargetLabel(dep)
+			depLabel, err := label.ParseTargetLabel(packagePath, dep)
 			if err != nil {
 				return nil, err
 			}

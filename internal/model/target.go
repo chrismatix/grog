@@ -17,3 +17,7 @@ type Target struct {
 	// Whether, or not the file inputs changed
 	InputsChanged bool
 }
+
+func (t *Target) IsTest() bool {
+	return t.Label.IsTest()
+}

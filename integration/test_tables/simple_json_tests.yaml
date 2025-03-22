@@ -1,0 +1,12 @@
+name: Simple json test dependencies
+cases:
+  - name: test_bar_should_build_deps
+    args:
+      - test
+      - //bar:bar_test
+    repo: simple_json
+  - name: test_foo_does_not_build_targets
+    args:
+      - test
+      - //foo:foo_test
+    repo: simple_json

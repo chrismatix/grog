@@ -82,7 +82,10 @@ Procedure:
 - For each routine there is a fanout worker that listens for its doneCh
 - When it receives a doneCh it marks the worker as completed
 - The onCompletionWorker then checks for each *dependant* if all their dependencies are satisfied
-- If that is the case we send a message to the dependant's readyCh
+- If that is the case we send a message to the dependant's readyCh to start them
+
+Note: We do not start routines for targets that are not selected. Therefore,
+we need to check if descendants exist before starting/cancelling them
 
 The main goroutine will then wait for all the goroutines to finish.
 */
@@ -93,6 +96,11 @@ func (w *Walker) Walk(ctx context.Context) (error, CompletionMap) {
 
 	// populate info map
 	for _, vertex := range w.graph.vertices {
+		if !vertex.IsSelected {
+			// skip unselected targets
+			continue
+		}
+
 		doneCh := make(chan Completion)
 		readyCh := make(chan struct{})
 		cancelCh := make(chan struct{})
@@ -106,18 +114,14 @@ func (w *Walker) Walk(ctx context.Context) (error, CompletionMap) {
 		w.wait.Add(1)
 		// start a fanout channel for each vertex
 		go w.onCompletionWorker(ctx, vertex, doneCh, cancelCh)
-	}
 
-	// start all routines
-	for _, vertex := range w.graph.vertices {
 		w.wait.Add(1)
+		// start all routines
 		go w.vertexRoutine(*vertex, *w.vertexInfoMap[vertex])
-	}
 
-	// start all routines with no dependencies immediately
-	for _, vertex := range w.graph.vertices {
+		// start all routines with no dependencies immediately
 		if len(w.graph.inEdges[vertex]) == 0 {
-			w.vertexInfoMap[vertex].ready <- struct{}{}
+			w.startTarget(vertex)
 		}
 	}
 
@@ -157,6 +161,20 @@ func (w *Walker) onCompletionWorker(
 	}
 }
 
+// cancelTarget cancels a target if it is present in the graph (not idempotent!)
+func (w *Walker) cancelTarget(target *model.Target) {
+	if info, ok := w.vertexInfoMap[target]; ok {
+		close(info.cancel)
+	}
+}
+
+// startTarget sends a ready message to a target if it is present in the graph (not idempotent!)
+func (w *Walker) startTarget(target *model.Target) {
+	if info, ok := w.vertexInfoMap[target]; ok {
+		info.ready <- struct{}{}
+	}
+}
+
 // onComplete called when a vertex is done
 // - fans out ready messages to dependants (if their deps are satisfied)
 // - in case of failure, cancels all dependants (or the entire walk if failFast=true)
@@ -175,7 +193,7 @@ func (w *Walker) onComplete(target *model.Target, completion Completion) {
 		} else {
 			// Cancel *all* descendants if the target failed
 			for _, dep := range w.graph.GetDescendants(target) {
-				close(w.vertexInfoMap[dep].cancel)
+				w.cancelTarget(dep)
 			}
 		}
 		return
@@ -195,7 +213,7 @@ func (w *Walker) onComplete(target *model.Target, completion Completion) {
 
 		// If yes, send ready message to dependant
 		if depsDone {
-			w.vertexInfoMap[dependant].ready <- struct{}{}
+			w.startTarget(dependant)
 		}
 	}
 }

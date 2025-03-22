@@ -4,6 +4,11 @@
       "inputs": ["source.txt"],
       "cmd": "cat source.txt && echo 'World!' > output.txt",
       "outputs": ["output.txt"]
+    },
+    "foo_test": {
+      "inputs": ["source.txt"],
+      "cmd": "cat source.txt",
+      "outputs": []
     }
   }
 }

@@ -4,20 +4,23 @@ import "testing"
 
 func TestParseAndStringTargetLabel(t *testing.T) {
 	cases := []struct {
-		input    string
-		wantPkg  string
-		wantName string
+		input       string
+		packagePath string
+		wantPkg     string
+		wantName    string
 	}{
-		{"//foo:bar", "foo", "bar"},
-		{"//foo/bar:baz", "foo/bar", "baz"},
-		{"//:root", "", "root"},
+		{"//foo:bar", "", "foo", "bar"},
+		{"//foo/bar:baz", "", "foo/bar", "baz"},
+		{"//:root", "", "", "root"},
 		// Shorthand: "//foo" should become "//foo:foo"
-		{"//foo", "foo", "foo"},
+		{"//foo", "", "foo", "foo"},
 		// Shorthand: "//foo/bar" should become "//foo/bar:bar"
-		{"//foo/bar", "foo/bar", "bar"},
+		{"//foo/bar", "", "foo/bar", "bar"},
+		// Relative
+		{":relative", "current/pkg", "current/pkg", "relative"},
 	}
 	for _, c := range cases {
-		tl, err := ParseTargetLabel(c.input)
+		tl, err := ParseTargetLabel(c.packagePath, c.input)
 		if err != nil {
 			t.Errorf("ParseTargetLabel(%q) error = %v, want no error", c.input, err)
 			continue
@@ -35,15 +38,19 @@ func TestParseAndStringTargetLabel(t *testing.T) {
 	}
 
 	// Test invalid shorthand: only "//" should fail.
-	invalid := []string{
-		"foo:bar",  // missing "//"
-		"/foo:bar", // missing one "/"
-		"//",       // shorthand with empty package
-		"//:",      // explicit but empty target name
+	invalid := []struct {
+		input       string
+		packagePath string
+	}{
+		{"foo:bar", ""},  // missing "//"
+		{"/foo:bar", ""}, // missing one "/"
+		{"//", ""},       // shorthand with empty package
+		{"//:", ""},      // explicit but empty target name
+		{":missing", ""}, //relative with empty package path
 	}
 	for _, inp := range invalid {
-		if _, err := ParseTargetLabel(inp); err == nil {
-			t.Errorf("ParseTargetLabel(%q) should have failed, but got no error", inp)
+		if _, err := ParseTargetLabel(inp.packagePath, inp.input); err == nil {
+			t.Errorf("ParseTargetLabel(%q) should have failed, but got no error", inp.input)
 		}
 	}
 }

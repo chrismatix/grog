@@ -185,7 +185,10 @@ Build and validate the dependency graph.
 - Convert the list of targets into a dependency graph.
 - Validate that all dependency references are resolved.
 - Check for cycles and inconsistencies.
-- Produce a topologically sorted list of targets to enforce proper build order.
+- For selected targets:
+  - Resolve globs (disallow directories!)
+  - Compute number of files (fast invalidate if mismatch)
+  - Fast hash all inputs and store result on target (only write when the target has been completed)
 
 #### 3. **Execution Phase**
 

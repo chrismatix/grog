@@ -5,7 +5,7 @@ import "testing"
 func TestTargetPatternMatching(t *testing.T) {
 	// Helper to parse a TargetLabel for tests.
 	tl := func(label string) TargetLabel {
-		tlabel, err := ParseTargetLabel(label)
+		tlabel, err := ParseTargetLabel("", label)
 		if err != nil {
 			t.Fatalf("Failed to parse test label %q: %v", label, err)
 		}

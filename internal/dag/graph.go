@@ -137,10 +137,11 @@ func (g *DirectedTargetGraph) HasCycle() bool {
 }
 
 // SelectTargets sets targets as selected and returns the number of selected targets.
-func (g *DirectedTargetGraph) SelectTargets(pattern label.TargetPattern) int {
+func (g *DirectedTargetGraph) SelectTargets(pattern label.TargetPattern, isTest bool) int {
 	selectedCount := 0
 	for _, target := range g.vertices {
-		if pattern.Matches(target.Label) {
+		// Match pattern and test flag
+		if pattern.Matches(target.Label) && (isTest == target.IsTest()) {
 			target.IsSelected = true
 			selectedCount++
 			selectedCount += g.selectAllAncestors(target)

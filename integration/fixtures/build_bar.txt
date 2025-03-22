@@ -1,3 +1,0 @@
-INFO:	Selected 2 targets (2 packages loaded, 2 targets configured).
-INFO:	Elapsed time: 0.008s
-INFO:	Build completed successfully. 2 targets completed.

@@ -52,6 +52,7 @@ func loadFixture(t *testing.T, testName string) string {
 }
 
 type TestTable struct {
+	Name  string `yaml:"name"`
 	Cases []TestCase
 }
 type TestCase struct {
@@ -63,46 +64,70 @@ type TestCase struct {
 
 func TestCliArgs(t *testing.T) {
 
-	// Unmarshal the test cases from test_table.yaml
-	data, err := os.ReadFile("integration/test_table.yaml")
+	// Read all .yaml files from the cases/ directory
+	files, err := filepath.Glob("integration/test_tables/*.yaml")
 	if err != nil {
-		t.Fatalf("could not read integration/test_table.yaml: %v", err)
+		t.Fatalf("could not read cases directory: %v", err)
 	}
 
-	var testTable TestTable
-	err = yaml.Unmarshal(data, &testTable)
-	if err != nil {
-		t.Fatalf("could not unmarshal integration/test_table.yaml: %v", err)
+	var testTables []TestTable
+	for _, file := range files {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("could not read %s: %v", file, err)
+		}
+
+		var testTable TestTable
+		err = yaml.Unmarshal(data, &testTable)
+		if err != nil {
+			t.Fatalf("could not unmarshal %s: %v", file, err)
+		}
+
+		testTables = append(testTables, testTable)
 	}
 
-	tests := testTable.Cases
-	// Assert that test case names are unique
+	if len(testTables) == 0 {
+		t.Fatalf("no test tables found")
+	}
 
-	for _, tt := range tests {
+	for _, tt := range testTables {
 		t.Run(tt.Name, func(t *testing.T) {
 
-			binaryCwd := filepath.Join("./integration/test_repos", tt.Repo)
-			output, err := runBinary(tt.Args, binaryCwd)
+			testCaseNames := make(map[string]bool)
+			for _, tc := range tt.Cases {
 
-			if err != nil {
-				fmt.Printf("Command ouput: %s\n", output)
-				t.Fatal(err)
-			}
+				// Check for duplicate test case names
+				if _, ok := testCaseNames[tc.Name]; ok {
+					t.Fatalf("duplicate test case name in table %s: %s", tt.Name, tc.Name)
+				}
+				testCaseNames[tc.Name] = true
 
-			if *updateAll {
-				writeFixture(t, tt.Name, output)
-				fmt.Printf("Updated fixture %s\n", tt.Name)
-			} else if *update != "" && *update == tt.Name {
-				writeFixture(t, tt.Name, output)
-				fmt.Printf("Updated fixture %s\n", tt.Name)
-			}
+				t.Run(tc.Name, func(t *testing.T) {
 
-			actual := string(output)
+					binaryCwd := filepath.Join("./integration/test_repos", tc.Repo)
+					output, err := runBinary(tc.Args, binaryCwd)
 
-			expected := loadFixture(t, tt.Name)
+					if err != nil {
+						fmt.Printf("Command ouput: %s\n", output)
+						t.Fatal(err)
+					}
 
-			if !reflect.DeepEqual(actual, expected) {
-				t.Fatalf("actual = %s, expected = %s", actual, expected)
+					if *updateAll {
+						writeFixture(t, tc.Name, output)
+						fmt.Printf("Updated fixture %s\n", tc.Name)
+					} else if *update != "" && *update == tc.Name {
+						writeFixture(t, tc.Name, output)
+						fmt.Printf("Updated fixture %s\n", tc.Name)
+					}
+
+					actual := string(output)
+
+					expected := loadFixture(t, tc.Name)
+
+					if !reflect.DeepEqual(actual, expected) {
+						t.Fatalf("actual = %s, expected = %s", actual, expected)
+					}
+				})
 			}
 		})
 	}

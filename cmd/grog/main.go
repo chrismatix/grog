@@ -3,6 +3,7 @@ package grog
 import (
 	"grog/internal/cmds"
 	"grog/internal/config"
+	"grog/internal/logging"
 	"os"
 	"path/filepath"
 
@@ -17,6 +18,7 @@ var rootCmd = &cobra.Command{
 func init() {
 	// Add commands
 	rootCmd.AddCommand(cmds.BuildCmd)
+	rootCmd.AddCommand(cmds.TestCmd)
 	rootCmd.AddCommand(cmds.CleanCmd)
 
 	// Set up Viper
@@ -38,7 +40,7 @@ func init() {
 		panic(err)
 	}
 
-	logger := config.GetLogger()
+	logger := logging.GetLogger()
 
 	// Read in config
 	if err := viper.ReadInConfig(); err == nil {
