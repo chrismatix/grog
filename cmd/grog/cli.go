@@ -3,7 +3,7 @@ package grog
 import (
 	"grog/internal/cmds"
 	"grog/internal/config"
-	"grog/internal/logging"
+	"grog/internal/console"
 	"os"
 	"path/filepath"
 
@@ -40,7 +40,7 @@ func init() {
 		panic(err)
 	}
 
-	logger := logging.GetLogger()
+	logger := console.GetLogger()
 
 	// Read in config
 	if err := viper.ReadInConfig(); err == nil {

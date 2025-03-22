@@ -1,4 +1,4 @@
-package logging
+package console
 
 import (
 	"fmt"
@@ -44,7 +44,7 @@ func GetLogger() *zap.SugaredLogger {
 		level = zap.ErrorLevel
 	default:
 		level = zap.InfoLevel
-		fmt.Println("Invalid log level, defaulting to info")
+		fmt.Println("Invalid log Level, defaulting to info")
 	}
 
 	cfg := zap.NewProductionConfig()
@@ -121,26 +121,5 @@ func NewTestLogger() *zap.SugaredLogger {
 
 // CustomLevelEncoder matches the way bazel outputs its log levels
 func CustomLevelEncoder(level zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {
-	var levelText string
-
-	cyan := color.New(color.FgCyan).SprintFunc()
-	green := color.New(color.FgGreen).SprintFunc()
-	yellow := color.New(color.FgYellow).SprintFunc()
-	red := color.New(color.FgRed).SprintFunc()
-
-	switch level {
-	case zapcore.DebugLevel:
-		levelText = cyan("DEBUG") // Cyan
-	case zapcore.InfoLevel:
-		levelText = green("INFO") // Green
-	case zapcore.WarnLevel:
-		levelText = yellow("WARN") // Yellow
-	case zapcore.ErrorLevel:
-		levelText = red("ERROR") // Red
-	case zapcore.FatalLevel:
-		levelText = red("FATAL") // Red
-	default:
-		levelText = "UNKNOWN"
-	}
-	enc.AppendString(levelText + ":")
+	enc.AppendString(getMesagePrefix(level))
 }

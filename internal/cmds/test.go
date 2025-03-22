@@ -2,8 +2,8 @@ package cmds
 
 import (
 	"github.com/spf13/cobra"
+	"grog/internal/console"
 	"grog/internal/label"
-	"grog/internal/logging"
 )
 
 var TestCmd = &cobra.Command{
@@ -12,7 +12,7 @@ var TestCmd = &cobra.Command{
 	Long:  `Loads the user configuration, checks which targets need to be rebuilt based on file hashes, builds the dependency graph, and executes targets.`,
 	Args:  cobra.MaximumNArgs(1), // Optional argument for target pattern
 	Run: func(cmd *cobra.Command, args []string) {
-		logger := logging.GetLogger()
+		logger := console.GetLogger()
 		if len(args) > 0 {
 			targetPattern, err := label.ParseTargetPattern(args[0])
 			if err != nil {

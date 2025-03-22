@@ -1,3 +1,2 @@
 INFO:	Selected 3 targets (2 packages loaded, 4 targets configured).
-INFO:	Elapsed time: 0.016s
 INFO:	Build completed successfully. 3 targets completed.

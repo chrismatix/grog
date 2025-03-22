@@ -2,6 +2,22 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 22-03-2025
+
+Chill day in Hanoi so time to do some house cleaning before going for bigger tasks again:
+
+- Add test targeting
+- Fix: Only actually build targets that were selected
+- Testing: Split into multiple test tables
+- Word pluralization (it does make the code more ugly to the point that I wonder if it is even worth it)
+
+I also gave bubbletea a try for doing the fancy bazel output rendering and ... it was embarrassingly easy.
+You can even disable input completely so that we can keep handling `sigterm` outside of the tea program.
+
+Also added a first version for the worker pool and how it could interact with the progress UI.
+
+-C
+
 ## 21-03-2025
 
 Today is the day. After ironing out some concurrency issues and typos I got the program to run the first successful build on the `simple_json` test repository:
@@ -98,7 +114,7 @@ Most notable success is infecting/radicalizing Luca with this idea which brings 
 
 ## 13-03-2025
 
-Last night, I finally had the idea to make the idea for all of this work which is to have the BUILD files be user executables (or plain data files).
+Last night, I finally had the eureka moment to make all of this work which is to have the BUILD files be user executables (or plain data files).
 I could not sleep, because I was so excited at the idea and because I could picture every aspect of how this would work.
 Today I scoped out a simple program structure based on the loading, analysis, and execution phase in bazel.
 

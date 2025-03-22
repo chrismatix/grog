@@ -125,7 +125,7 @@ func TestCliArgs(t *testing.T) {
 					expected := loadFixture(t, tc.Name)
 
 					if !reflect.DeepEqual(actual, expected) {
-						t.Fatalf("actual = %s, expected = %s", actual, expected)
+						t.Fatalf("actual:\n%s\nexpected:\n%s", actual, expected)
 					}
 				})
 			}
@@ -163,6 +163,7 @@ func runBinary(args []string, repoPath string) ([]byte, error) {
 		return nil, err
 	}
 	cmd.Env = append(os.Environ(), "GOCOVERDIR="+coverDir)
+	cmd.Env = append(cmd.Env, "DISABLE_TIME_LOGGING=true")
 
 	// Uncomment to enable debug logging
 	// TODO move to makefile flag

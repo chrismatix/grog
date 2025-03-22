@@ -29,6 +29,13 @@ func LoadPackages() ([]*model.Package, error) {
 			return err // returning the error stops iteration
 		}
 
+		// TODO Apparently, d can be nil for some reason
+		if d == nil {
+			return fmt.Errorf(
+				"d is nil for path %s",
+				path)
+		}
+
 		pkgDto, matched, err := packageLoader.LoadIfMatched(path, d.Name())
 		if err != nil {
 			return err
