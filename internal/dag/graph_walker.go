@@ -3,6 +3,7 @@ package dag
 import (
 	"context"
 	"errors"
+	"grog/internal/console"
 	"grog/internal/model"
 	"sync"
 )
@@ -58,8 +59,11 @@ type Walker struct {
 	failFast bool
 
 	// Concurrency
+	// doneMutex protects completions
 	doneMutex sync.Mutex
-	wait      sync.WaitGroup
+	// vertexMutex protects vertexInfoMap
+	vertexMutex sync.Mutex
+	wait        sync.WaitGroup
 }
 
 func NewWalker(graph *DirectedTargetGraph, walkFunc WalkCallback, failFast bool) *Walker {
@@ -89,7 +93,11 @@ we need to check if descendants exist before starting/cancelling them
 
 The main goroutine will then wait for all the goroutines to finish.
 */
-func (w *Walker) Walk(ctx context.Context) (error, CompletionMap) {
+func (w *Walker) Walk(
+	ctx context.Context,
+) (error, CompletionMap) {
+	logger := console.GetLogger(ctx)
+
 	if w.walkCb == nil {
 		return errors.New("walk callback is nil"), nil
 	}
@@ -136,6 +144,9 @@ func (w *Walker) Walk(ctx context.Context) (error, CompletionMap) {
 	case <-done:
 		return nil, w.completions
 	case <-ctx.Done():
+		logger.Debugf(
+			"context cancelled, cancelling all workers",
+		)
 		w.cancelAll()
 		return ctx.Err(), w.completions
 	}
@@ -163,6 +174,8 @@ func (w *Walker) onCompletionWorker(
 
 // cancelTarget cancels a target if it is present in the graph (not idempotent!)
 func (w *Walker) cancelTarget(target *model.Target) {
+	w.vertexMutex.Lock()
+	defer w.vertexMutex.Unlock()
 	if info, ok := w.vertexInfoMap[target]; ok {
 		close(info.cancel)
 	}
@@ -170,6 +183,8 @@ func (w *Walker) cancelTarget(target *model.Target) {
 
 // startTarget sends a ready message to a target if it is present in the graph (not idempotent!)
 func (w *Walker) startTarget(target *model.Target) {
+	w.vertexMutex.Lock()
+	defer w.vertexMutex.Unlock()
 	if info, ok := w.vertexInfoMap[target]; ok {
 		info.ready <- struct{}{}
 	}
@@ -221,7 +236,7 @@ func (w *Walker) onComplete(target *model.Target, completion Completion) {
 func (w *Walker) cancelAll() {
 	for _, vertex := range w.graph.vertices {
 		go func(v *model.Target) {
-			close(w.vertexInfoMap[v].cancel)
+			w.cancelTarget(v)
 		}(vertex)
 	}
 }

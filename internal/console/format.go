@@ -29,7 +29,7 @@ func FCountPkg(count int) string {
 	return FCount(count, "package")
 }
 
-func getMesagePrefix(level zapcore.Level) string {
+func getMessagePrefix(level zapcore.Level) string {
 	var levelText string
 
 	cyan := color.New(color.FgCyan).SprintFunc()

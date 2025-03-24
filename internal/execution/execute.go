@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/viper"
 	"grog/internal/config"
 	"grog/internal/console"
@@ -24,14 +25,25 @@ func (e *CommandError) Error() string {
 	return fmt.Sprintf("target %s failed with exit code %d: %s", e.TargetLabel, e.ExitCode, e.Output)
 }
 
-func Execute(ctx context.Context, graph *dag.DirectedTargetGraph, failFast bool) (error, dag.CompletionMap) {
+func Execute(
+	ctx context.Context,
+	graph *dag.DirectedTargetGraph,
+	failFast bool,
+) (error, dag.CompletionMap) {
 	numWorkers := viper.GetInt("num_workers")
+	logger := console.GetLogger(ctx)
 
 	p, msgCh := console.StartTaskUI(ctx)
-	defer p.ReleaseTerminal()
+	defer func(p *tea.Program) {
+		err := p.ReleaseTerminal()
+		if err != nil {
+			logger.Errorf("error releasing terminal: %v", err)
+		}
+	}(p)
 	defer p.Quit()
 
 	workerPool := worker.NewPool(numWorkers, msgCh)
+	workerPool.StartWorkers(ctx)
 
 	// walkCallback will be called at max parallelism by the graph walker
 	walkCallback := func(ctx context.Context, target model.Target) error {
@@ -41,6 +53,7 @@ func Execute(ctx context.Context, graph *dag.DirectedTargetGraph, failFast bool)
 		taskFunc := func(update worker.StatusFunc, log worker.LogFunc) error {
 			cmd := exec.Command("sh", "-c", target.Command)
 			cmd.Dir = executionPath
+			update(fmt.Sprintf("running \"%s\"", target.CommandEllipsis()))
 			output, err := cmd.CombinedOutput()
 
 			if err != nil {

@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"sort"
 	"time"
 )
 
@@ -24,13 +25,13 @@ type HeaderMsg string
 // TaskState reflects the current State of a task for display
 type TaskState struct {
 	Status       string
-	StartedAtSec int
+	StartedAtSec int64
 }
 
 type TaskStateMap map[int]TaskState
 
 type TaskStateMsg struct {
-	State map[int]TaskState
+	State TaskStateMap
 }
 
 func StartTaskUI(ctx context.Context) (*tea.Program, chan tea.Msg) {
@@ -136,15 +137,22 @@ func (m model) View() string {
 	s := ""
 	// log accumulated log messages
 	for _, logMsg := range m.logs {
-		s += getMesagePrefix(logMsg.Level) + " " + logMsg.Msg + "\n"
+		s += getMessagePrefix(logMsg.Level) + " " + logMsg.Msg + "\n"
 	}
 
 	// Render header
 	s += m.header + "\n"
+
 	// Render tasks in order.
-	for i := 0; i < len(m.tasks); i++ {
+	// tasks may be sparse so we need to sort the task ids and then loop
+	keys := make([]int, 0, len(m.tasks))
+	for k := range m.tasks {
+		keys = append(keys, k)
+	}
+	sort.Ints(keys)
+	for _, i := range keys {
 		if status, ok := m.tasks[i]; ok {
-			timePassed := int(time.Since(time.Unix(int64(status.StartedAtSec), 0)).Seconds())
+			timePassed := int(time.Since(time.Unix(status.StartedAtSec, 0)).Seconds())
 			s += fmt.Sprintf("    %s %ds\n", status.Status, timePassed)
 		}
 	}

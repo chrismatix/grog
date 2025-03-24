@@ -40,10 +40,22 @@ func init() {
 		panic(err)
 	}
 
-	logger := console.GetLogger()
+	// Add debug flag
+	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
+	err = viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
+	if err != nil {
+		panic(err)
+	}
+
+	// Set log_level based on debug flag
+	if viper.GetBool("debug") {
+		viper.Set("log_level", "debug")
+	}
+
+	logger := console.InitLogger()
 
 	// Read in config
-	if err := viper.ReadInConfig(); err == nil {
+	if err = viper.ReadInConfig(); err == nil {
 		logger.Debugf("Using config file: %s", viper.ConfigFileUsed())
 	}
 }

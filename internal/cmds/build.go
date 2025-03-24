@@ -25,7 +25,7 @@ var BuildCmd = &cobra.Command{
 	Long:  `Loads the user configuration, checks which targets need to be rebuilt based on file hashes, builds the dependency graph, and executes targets.`,
 	Args:  cobra.MaximumNArgs(1), // Optional argument for target pattern
 	Run: func(cmd *cobra.Command, args []string) {
-		logger := console.GetLogger()
+		logger := console.InitLogger()
 		if len(args) > 0 {
 			targetPattern, err := label.ParseTargetPattern(args[0])
 			if err != nil {
@@ -49,7 +49,7 @@ var BuildCmd = &cobra.Command{
 // runBuild runs the build/test command with the given target pattern
 func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest bool) {
 	startTime := time.Now()
-	logger := console.GetLogger()
+	logger := console.InitLogger()
 
 	packages, err := loading.LoadPackages()
 	if err != nil {
@@ -82,6 +82,7 @@ func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest b
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	ctx = console.SetLogger(ctx, logger)
 	defer cancel()
 
 	// Listen for SIGTERM or SIGINT to cancel the context
@@ -126,8 +127,11 @@ func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest b
 			if completion.Err == nil {
 				logger.Errorf("Target %s failed with no error", target.Label)
 			} else if errors.As(completion.Err, &executionError) {
-				logger.Errorf("Target %s failed with exit code %d:\n%s", target.Label,
-					executionError.ExitCode, strings.TrimSpace(executionError.Output))
+				logger.Errorf("Target %s failed with exit code %d:\ncmd: \"%s\"\n%s",
+					target.Label,
+					executionError.ExitCode,
+					target.Command,
+					strings.TrimSpace(executionError.Output))
 			} else {
 				logger.Errorf("Target %s failed: %v", target.Label, completion.Err)
 			}

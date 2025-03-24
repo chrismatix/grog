@@ -1,10 +1,12 @@
 package worker
 
 import (
+	"context"
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fatih/color"
 	"go.uber.org/zap/zapcore"
+	"grog/internal/config"
 	"grog/internal/console"
 	"runtime"
 	"sync"
@@ -38,6 +40,10 @@ type Pool struct {
 	nextTaskId     int
 	completedTasks int
 	mu             sync.Mutex
+
+	// closed is set to true when the pool is shut down.
+	// Used to prevent sending messages on the closed msgCh
+	closed bool
 }
 
 func NewPool(maxWorkers int, msgCh chan tea.Msg) *Pool {
@@ -50,42 +56,58 @@ func NewPool(maxWorkers int, msgCh chan tea.Msg) *Pool {
 		msgCh:      msgCh,
 		taskState:  make(console.TaskStateMap),
 	}
-	wp.startWorkers()
 	return wp
 }
 
-func (wp *Pool) startWorkers() {
+func (wp *Pool) StartWorkers(ctx context.Context) {
 	for i := 0; i < wp.maxWorkers; i++ {
 		workerId := i + 1
-		go wp.worker(workerId)
+		go wp.worker(ctx, workerId)
 	}
 }
 
-func (wp *Pool) worker(workerId int) {
-	for j := range wp.jobCh {
-		wp.setTaskState(workerId, fmt.Sprintf("Task %d: Running (worker %d)", j.id+1, workerId))
-		// Run the task, passing a callback to update progress.
-		err := j.task(func(status string) {
-			wp.setTaskState(workerId, fmt.Sprintf("Task %d: %s (worker %d)", j.id+1, status, workerId))
-		}, func(msg string, level zapcore.Level) {
-			// You might want to send log messages to the UI as well.
-			// wp.msgCh <- console.LogMessage{Message: msg, Level: level}
-			fmt.Printf("Log: %s (Level: %v)\n", msg, level) //TEMP
-		})
+func (wp *Pool) worker(ctx context.Context, workerId int) {
+	isDebug := config.IsDebug()
 
-		if j.result != nil {
-			j.result <- err // Send the result to the channel
-			close(j.result) // Close the channel after sending the result
+	for {
+		select {
+		case <-ctx.Done():
+			wp.closed = true
+			console.GetLogger(ctx).Debugf("Worker %d context cancelled, exiting", workerId)
+			return
+		case j, ok := <-wp.jobCh:
+			if !ok {
+				// Channel closed, exit worker
+				return
+			}
+			wp.setTaskState(workerId, fmt.Sprintf("Starting task %d on worker %d", j.id+1, workerId))
+			// Run the task, passing a callback to update progress.
+			err := j.task(func(status string) {
+				taskStatus := status
+				if isDebug {
+					taskStatus = fmt.Sprintf("%s (worker %d)", status, workerId)
+				}
+				wp.setTaskState(workerId, taskStatus)
+			}, func(msg string, level zapcore.Level) {
+				wp.msgCh <- console.LogMsg{Msg: msg, Level: level}
+			})
+
+			if j.result != nil {
+				j.result <- err // Send the result to the channel
+				close(j.result) // Close the channel after sending the result
+			}
+			wp.completeTask(workerId)
 		}
-		wp.completeTask(workerId)
 	}
 }
 
 // setTaskState updates the task state from a worker
 func (wp *Pool) setTaskState(workerId int, status string) {
+	wp.mu.Lock()
+	defer wp.mu.Unlock()
 	state, ok := wp.taskState[workerId]
 	if !ok {
-		wp.taskState[workerId] = console.TaskState{Status: status, StartedAtSec: time.Now().Second()}
+		wp.taskState[workerId] = console.TaskState{Status: status, StartedAtSec: time.Now().Unix()}
 		wp.flushState()
 		return
 	}
@@ -97,6 +119,8 @@ func (wp *Pool) setTaskState(workerId int, status string) {
 
 // setTaskState updates the task state from a worker
 func (wp *Pool) completeTask(workerId int) {
+	wp.mu.Lock()
+	defer wp.mu.Unlock()
 	delete(wp.taskState, workerId)
 	wp.completedTasks++
 	wp.flushState()
@@ -104,12 +128,17 @@ func (wp *Pool) completeTask(workerId int) {
 
 // flushState sends the current task state to the UI.
 func (wp *Pool) flushState() {
+	if wp.closed {
+		return
+	}
 	green := color.New(color.FgGreen).SprintFunc()
 	// Write the current task state
-	wp.msgCh <- wp.taskState
-	totalTasks := wp.nextTaskId - 1
+	wp.msgCh <- console.TaskStateMsg{State: wp.taskState}
+	totalTasks := wp.nextTaskId
 	actionsRunning := len(wp.taskState)
-	wp.msgCh <- console.HeaderMsg(green(fmt.Sprintf("[%d/%d] %s running", wp.completedTasks, totalTasks, console.FCount(actionsRunning, "action"))))
+	wp.msgCh <- console.HeaderMsg(green(
+		fmt.Sprintf("[%d/%d]", wp.completedTasks, totalTasks)) +
+		fmt.Sprintf(" %s running", console.FCount(actionsRunning, "action")))
 }
 
 func (wp *Pool) NumWorkers() int {

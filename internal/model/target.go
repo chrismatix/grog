@@ -18,6 +18,13 @@ type Target struct {
 	InputsChanged bool
 }
 
+func (t *Target) CommandEllipsis() string {
+	if len(t.Command) > 70 {
+		return t.Command[:67] + "..."
+	}
+	return t.Command
+}
+
 func (t *Target) IsTest() bool {
 	return t.Label.IsTest()
 }

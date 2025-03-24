@@ -1,0 +1,11 @@
+{
+  "targets": {
+    "format_test": {
+      "cmd": "uv run pytest",
+      "inputs": [
+        "format/**/*.py",
+        "tests/**/*.py"
+      ]
+    }
+  }
+}

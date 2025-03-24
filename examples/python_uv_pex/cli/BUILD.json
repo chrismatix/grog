@@ -1,0 +1,12 @@
+{
+  "targets": {
+    "cli_pex": {
+      "cmd": "cd .. && ./scripts/build_pex.sh cli",
+      "inputs": ["cli/**/*.py"]
+    },
+    "cli_test": {
+      "cmd": "uv run pytest",
+      "inputs": ["cli/**/*.py", "tests/**/*.py"]
+    }
+  }
+}

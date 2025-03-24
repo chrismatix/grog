@@ -1,0 +1,12 @@
+{
+  "targets": {
+    "server_pex": {
+      "cmd": "cd .. && ./scripts/build_pex.sh server",
+      "inputs": ["server/**/*.py"]
+    },
+    "server_test": {
+      "cmd": "uv run pytest",
+      "inputs": ["server/**/*.py", "tests/**/*.py"]
+    }
+  }
+}

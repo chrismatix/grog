@@ -1,6 +1,7 @@
 package console
 
 import (
+	"context"
 	"fmt"
 	"github.com/fatih/color"
 	"github.com/spf13/viper"
@@ -9,9 +10,8 @@ import (
 	"strings"
 )
 
-// GetLogger returns a logger
-func GetLogger() *zap.SugaredLogger {
-	// startup check: initialize logger
+// InitLogger returns a ne logger
+func InitLogger() *zap.SugaredLogger {
 	logPath := viper.GetString("log_output_path")
 	if logPath == "" {
 		// default to stdout
@@ -28,6 +28,7 @@ func GetLogger() *zap.SugaredLogger {
 	encoderConfig.TimeKey = ""   // Disable time encoding
 	encoderConfig.CallerKey = "" // Disable caller encoding
 	encoderConfig.EncodeLevel = CustomLevelEncoder
+	encoderConfig.ConsoleSeparator = " "
 
 	var level zapcore.Level
 	switch strings.ToLower(logLevel) {
@@ -72,6 +73,23 @@ func GetLogger() *zap.SugaredLogger {
 	}
 
 	return logger.Sugar()
+}
+
+func SetLogger(ctx context.Context, logger *zap.SugaredLogger) context.Context {
+	if storedLogger, ok := ctx.Value("logger").(*zap.SugaredLogger); ok {
+		if storedLogger == logger {
+			return ctx
+		}
+	}
+
+	return context.WithValue(ctx, "logger", logger)
+}
+
+func GetLogger(ctx context.Context) *zap.SugaredLogger {
+	if logger, ok := ctx.Value("logger").(*zap.SugaredLogger); ok {
+		return logger
+	}
+	return InitLogger()
 }
 
 func MustApplyColorSetting() {
@@ -121,5 +139,5 @@ func NewTestLogger() *zap.SugaredLogger {
 
 // CustomLevelEncoder matches the way bazel outputs its log levels
 func CustomLevelEncoder(level zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {
-	enc.AppendString(getMesagePrefix(level))
+	enc.AppendString(getMessagePrefix(level))
 }
