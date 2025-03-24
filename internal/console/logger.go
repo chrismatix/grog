@@ -100,8 +100,6 @@ func MustApplyColorSetting() {
 		color.NoColor = true
 		// No need to explicitly handle "auto" as the color package will
 		// automatically detect if it is a TTY or not.
-	} else if colorSetting != "auto" {
-		panic("invalid color setting: " + colorSetting + ", must be one of: yes, no, auto")
 	}
 }
 

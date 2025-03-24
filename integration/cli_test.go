@@ -57,9 +57,10 @@ type TestTable struct {
 }
 type TestCase struct {
 	// Names must be unique as they determine the fixture file name
-	Name string   `yaml:"name"`
-	Repo string   `yaml:"repo"`
-	Args []string `yaml:"args"`
+	Name       string   `yaml:"name"`
+	Repo       string   `yaml:"repo"`
+	Args       []string `yaml:"args"`
+	ExpectFail bool     `yaml:"expect_fail"`
 }
 
 func TestCliArgs(t *testing.T) {
@@ -107,7 +108,7 @@ func TestCliArgs(t *testing.T) {
 					binaryCwd := filepath.Join("./integration/test_repos", tc.Repo)
 					output, err := runBinary(tc.Args, binaryCwd)
 
-					if err != nil {
+					if err != nil && !tc.ExpectFail {
 						fmt.Printf("Command ouput: %s\n", output)
 						t.Fatal(err)
 					}

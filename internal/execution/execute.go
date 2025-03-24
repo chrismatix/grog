@@ -53,7 +53,7 @@ func Execute(
 		taskFunc := func(update worker.StatusFunc, log worker.LogFunc) error {
 			cmd := exec.Command("sh", "-c", target.Command)
 			cmd.Dir = executionPath
-			update(fmt.Sprintf("running \"%s\"", target.CommandEllipsis()))
+			update(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis()))
 			output, err := cmd.CombinedOutput()
 
 			if err != nil {

@@ -1,2 +1,2 @@
-INFO:	Selected 1 target (2 packages loaded, 4 targets configured).
-INFO:	Build completed successfully. 1 target completed.
+INFO: Selected 1 target (2 packages loaded, 4 targets configured).
+INFO: Build completed successfully. 1 target completed.

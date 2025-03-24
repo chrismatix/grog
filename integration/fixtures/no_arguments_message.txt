@@ -9,7 +9,8 @@ Available Commands:
   test        Loads the user configuration and executes test targets
 
 Flags:
-      --color string   Set color output (y1) (default "auto")
+      --color string   Set color output (yes, no, or auto) (default "auto")
+      --debug          Enable debug logging
   -h, --help           help for grog
 
 Use "grog [command] --help" for more information about a command.

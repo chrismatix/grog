@@ -71,6 +71,10 @@ func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest b
 
 	if hasTargetPattern {
 		selectedCount := graph.SelectTargets(targetPattern, isTest)
+		if selectedCount == 0 {
+			logger.Fatalf("could not find any targets matching %s", targetPattern.String())
+		}
+
 		logger.Infof("Selected %s (%s loaded, %s configured).",
 			console.FCountTargets(selectedCount),
 			console.FCountPkg(numPackages),

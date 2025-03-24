@@ -34,11 +34,12 @@ func init() {
 	viper.SetDefault("grog_root", filepath.Join(os.Getenv("HOME"), ".grog"))
 
 	// Add color flag
-	rootCmd.PersistentFlags().String("color", "auto", "Set color output (y1)")
+	rootCmd.PersistentFlags().String("color", "auto", "Set color output (yes, no, or auto)")
 	err := viper.BindPFlag("color", rootCmd.PersistentFlags().Lookup("color"))
 	if err != nil {
 		panic(err)
 	}
+	viper.SetDefault("color", "auto")
 
 	// Add debug flag
 	rootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
