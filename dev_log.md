@@ -2,6 +2,15 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 24-03-2025
+
+Added the uv python pex example repository from my blog post and used it to find and fix lots of bugs. I should definitely add more of these since they tell me a lot about things that are missing/not working.
+
+Open design questions:
+
+- There are lots of options that we can pass to a command (environ, cwd, etc.). Should we make `cmd` a nested field, a polymorphic field that supports both.
+  - Probably add a separate field `cmd_options`. It's explicit, simple, and easy to maintain.
+
 ## 22-03-2025
 
 Chill day in Hanoi so time to do some house cleaning before going for bigger tasks again:
