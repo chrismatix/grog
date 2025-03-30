@@ -2,6 +2,31 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 30-03-2025
+
+Think I have a first version of the cache layout that I am happy with and which should be easy to implement.
+In my head I was trying to complicate this too much by adding shortcuts that would save us hashing time (premature optimization etc.).
+The current layout looks like so:
+
+```
+.
+└── path/
+    └── to /
+        └── target/
+            ├── # hash of the input state of the target
+            ├── # prefix __grog so that we can easily call out overlaps with user namings
+            └── __grog_target_name_fb4fcab.../ # Target Cache Folder
+                ├── __grog_ok # 1byte file in case there are no outputs
+                ├── output_name_1.jar
+                └── output_name_2.jar
+```
+
+Started coding on this a bit.
+
+## 29-03-2025
+
+Finally, had a bit of spare time again to continue working on grog. First order of business is figuring out how to do caching which is surprisingly tricky for a number of reasons (see `DESIGN.md`)
+
 ## 24-03-2025
 
 Added the uv python pex example repository from my blog post and used it to find and fix lots of bugs. I should definitely add more of these since they tell me a lot about things that are missing/not working.

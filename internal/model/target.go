@@ -16,6 +16,16 @@ type Target struct {
 	IsSelected bool
 	// Whether, or not the file inputs changed
 	InputsChanged bool
+
+	// Hashes used for detecting cache hits
+	// Loaded* refers to what we found in the cache vs what we computed
+	// Hash the Deps, Inputs, Outputs, and Command
+	CachedDefinitionHash   string
+	ComputedDefinitionHash string
+
+	// Hash the actual contents of Inputs
+	CachedInputContentHash   string
+	ComputedInputContentHash string
 }
 
 func (t *Target) CommandEllipsis() string {

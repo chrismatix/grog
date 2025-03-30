@@ -1,10 +1,9 @@
 # TODOs
 
 - [ ] Add more debug statements
-- [ ] Setup worker pool with bazel style printer
 - [ ] Plan and implement caching
+- [ ] add file globbing for inputs
 - [ ] Analysis: Warn on empty deps and files (target will re-run on every execution)
-- [ ] Analysis: Figure out caching
 - [ ] Loading: Figure out a way to better relate why unmarshaling a json config failed -> Use json schema!
 - [ ] Loading: Add Makefile support
 - [ ] Loading: Add yaml support

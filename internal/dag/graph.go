@@ -32,6 +32,10 @@ func NewDirectedGraph() *DirectedTargetGraph {
 	}
 }
 
+func (g *DirectedTargetGraph) GetVertices() []*model.Target {
+	return g.vertices
+}
+
 // AddVertex idempotently adds a new vertex to the graph.
 func (g *DirectedTargetGraph) AddVertex(target *model.Target) {
 	for _, vertex := range g.vertices {

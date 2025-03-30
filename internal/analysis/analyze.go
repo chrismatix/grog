@@ -6,6 +6,7 @@ import (
 	"grog/internal/model"
 )
 
+// BuildGraphAndAnalyze builds a directed graph of targets and analyzes it.
 func BuildGraphAndAnalyze(targets model.TargetMap) (*dag.DirectedTargetGraph, error) {
 	g, err := buildGraph(targets)
 	if err != nil {

@@ -205,6 +205,35 @@ Execute build targets with maximum parallelism.
 
 ---
 
+## Caching
+
+A core feature of grog is that it knows when a target does not need to be run, because it already successfully did so for the same inputs.
+The questions for the cache system are what to cache, and how to lay it out in the default filesystem cache.
+
+Let's start with **constraints:**
+
+- The same cache should work across branches and implementation states. **Implication:** We cannot have a constant cache key for a target but instead need to store multiple depending on the current state of the input.
+- The layout should be mappable to common cloud storage providers.
+- For each target input combination we need to have a directory that stores output artifacts and potentially more.
+  - We want to store the outputs so that in case of a remote cache-hit grog can download the outputs to the user's machine
+
+Here is a potential cache layout for an example target `//path/to/package:target_name`:
+
+```
+.
+└── path/
+    └── to /
+        └── target/
+            ├── # hash of the input state of the target
+            ├── # prefix __grog so that we can easily call out overlaps with user namings
+            └── __grog_target_name_fb4fcab.../ # Target Cache Folder
+                ├── __grog_ok # 1byte file in case there are no outputs
+                ├── output_name_1.jar
+                └── output_name_2.jar
+```
+
+**Problem:** A user would have to intentionally mess this up but technically one could create a folder inside the `path/to/target/` that has the same name as the target cache.
+
 ## Target Labels
 
 Target labels should be as close as possible to how they work in [Bazel](https://bazel.build/tutorials/cpp-labels).

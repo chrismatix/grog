@@ -11,12 +11,13 @@ import (
 
 // GetWorkspaceCacheDirectory returns the path to the cache directory for the current repo.
 // Like Bazel we hash the repo path and use that as directory within $GROG_CACHE_DIR
-func GetWorkspaceCacheDirectory(repoUrl string) string {
-	cacheDir := viper.GetString("cache_dir")
+// Unlike Bazel we only use the first 16 characters of the hash and add a readable portion
+// to make it easier to identify the cache directory.
+func GetWorkspaceCacheDirectory(cacheDir, workspaceDir string) string {
+	repoHash := fmt.Sprintf("%x", sha256.Sum256([]byte(workspaceDir)))[:16]
 
-	repoHash := fmt.Sprintf("%x", sha256.Sum256([]byte(repoUrl)))
-
-	return fmt.Sprintf("%s/%s", cacheDir, repoHash)
+	workspaceName := filepath.Base(workspaceDir)
+	return fmt.Sprintf("%s/%s-%s", cacheDir, repoHash, workspaceName)
 }
 
 // MustFindWorkspaceRoot searches for the repository root by looking for "grog.toml"
