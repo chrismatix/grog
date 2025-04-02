@@ -18,7 +18,7 @@ unit-test:
 # https://dustinspecker.com/posts/go-combined-unit-integration-code-coverage/
 test: build-with-coverage
 	@rm -fr .coverdata
-	@mkdir -p .coverdata/{unit,integration}
+	@mkdir -p .coverdata/unit .coverdata/integration
 	@gotestsum -- -cover ./internal/... -test.gocoverdir="$$(pwd)/.coverdata/unit"
 	@gotestsum ./integration/... $(UPDATE_FLAG) $(UPDATE_ALL_FLAG)
 	@go tool covdata percent -i=.coverdata/integration,.coverdata/unit
