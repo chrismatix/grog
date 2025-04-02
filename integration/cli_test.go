@@ -179,5 +179,5 @@ func getCoverDir() (string, error) {
 		return "", fmt.Errorf("problems recovering caller information")
 	}
 
-	return filepath.Join(filepath.Dir(filename), "../.coverdata"), nil
+	return filepath.Join(filepath.Dir(filename), "../.coverdata/integration"), nil
 }

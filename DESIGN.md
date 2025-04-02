@@ -108,6 +108,8 @@ Example `BUILD.json`:
 
 Grog does not care what language executable build files are written in as long as this is true. Therefore, they may start with a shebang. Additionally, it will be important to provide helper libraries in certain languages to make the generation of the structured output easier.
 
+**Idea:** Those helper libraries may communicate via socket with grog so that we don't even need to reserve stdout.
+
 ```python
 #!/usr/bin/env python
 import grog
@@ -151,7 +153,7 @@ Example Makefile:
 # - src/**/*.js
 # - assets/**/*.scss
 # outputs:
-# - dist/app.bundle.js
+# - dist/*.js
 # - dist/styles.bundle.css
 build_app:
 	npm run build

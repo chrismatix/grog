@@ -2,6 +2,28 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 02-04-2025
+
+Here is an open question about output files where we cannot imitate bazel's behavior:
+If we discover that output files exist in the cache, but not in the user repository fs we should load them from the cache.
+That part is pretty obvious, I think, because that's how you would share cache between machines (or branches)
+
+But what should we do if given the current inputs the cache exists, but the output files are different from what the user has locally?
+
+Example: You have a rule that produces a jar to `dist/fat.jar`, and you have such a file locally, but given your current inputs grog finds a file in the cache that is different. Should grog:
+A) error out unless a flag like `--overwrite-outputs` is specified
+B) silently overwrite them with the cached results
+C) actually load cached output files into the user repository. grog should only check that the output files exist.
+
+This scenario can occur when:
+
+- The build is non-deterministic (or the user has a different environment). This can frequently happen since unlike Bazel grog makes no effort at achieving full build determinism.
+- The user switches branches and has not run grog yet, but someone else has for that input set.
+
+C) makes grog pretty useless, since without it, you cannot share build outputs between machines.
+B) could make people extremely mad if it goes sideways.
+A) seems quite annoying if this occurs too frequently.
+
 ## 30-03-2025
 
 Think I have a first version of the cache layout that I am happy with and which should be easy to implement.

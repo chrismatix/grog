@@ -36,6 +36,17 @@ func (g *DirectedTargetGraph) GetVertices() []*model.Target {
 	return g.vertices
 }
 
+func (g *DirectedTargetGraph) GetSelectedVertices() []*model.Target {
+	// Filter selected vertices and return them
+	var selectedVertices []*model.Target
+	for _, vertex := range g.vertices {
+		if vertex.IsSelected {
+			selectedVertices = append(selectedVertices, vertex)
+		}
+	}
+	return selectedVertices
+}
+
 // AddVertex idempotently adds a new vertex to the graph.
 func (g *DirectedTargetGraph) AddVertex(target *model.Target) {
 	for _, vertex := range g.vertices {

@@ -162,6 +162,33 @@ func (wp *Pool) Run(task TaskFunc) error {
 	return err
 }
 
+func (wp *Pool) RunAll(tasks []TaskFunc) error {
+	var wg sync.WaitGroup
+	errCh := make(chan error, len(tasks))
+
+	for _, task := range tasks {
+		wg.Add(1)
+		go func(t TaskFunc) {
+			defer wg.Done()
+			if err := wp.Run(t); err != nil {
+				errCh <- err
+			}
+		}(task)
+	}
+
+	wg.Wait()
+	close(errCh)
+
+	// Return the first error if any
+	for err := range errCh {
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (wp *Pool) Shutdown() {
 	close(wp.jobCh)
 }

@@ -24,3 +24,8 @@ jobs:
 
       - name: Build and test
         run: make test
+
+      - name: Go Coverage Badge # Pass the `coverage.out` output to this action
+        uses: tj-actions/coverage-badge-go@v2
+        with:
+          filename: .coverdata/coverage.out
