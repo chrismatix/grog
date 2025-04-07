@@ -103,38 +103,6 @@ func MustApplyColorSetting() {
 	}
 }
 
-// NewTestLogger logger for test usage
-func NewTestLogger() *zap.SugaredLogger {
-	cfg := zap.NewProductionConfig()
-	cfg.Encoding = "console"
-
-	debug := viper.GetBool("debug")
-	var logLevel = zap.InfoLevel
-	if debug {
-		logLevel = zap.DebugLevel
-	}
-
-	// always log to stdout
-	cfg.OutputPaths = []string{
-		"stdout",
-	}
-
-	cfg.Level = zap.NewAtomicLevelAt(logLevel)
-
-	// Define a custom encoder config
-	encoderConfig := zap.NewDevelopmentEncoderConfig()
-	encoderConfig.EncodeLevel = CustomLevelEncoder
-
-	cfg.EncoderConfig = encoderConfig
-
-	logger, err := cfg.Build()
-	if err != nil {
-		panic(err)
-	}
-
-	return logger.Sugar()
-}
-
 // CustomLevelEncoder matches the way bazel outputs its log levels
 func CustomLevelEncoder(level zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {
 	enc.AppendString(getMessagePrefix(level))

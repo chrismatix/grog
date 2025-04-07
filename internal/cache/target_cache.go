@@ -2,44 +2,41 @@ package cache
 
 import (
 	"fmt"
-	"grog/internal/label"
+	"grog/internal/model"
 )
 
 // existsFileKey is the key used to store the existence of a target in the cache
-// (useful so when there are no outputs to verify)
+// (useful when there are no outputs to verify, but we want to keep the directory)
 const existsFileKey = "__grog_exists__"
 
 type TargetCache struct {
-	target    label.TargetLabel
-	inputHash string
-	cache     Cache
+	cache Cache
 }
 
 func NewTargetCache(
-	target label.TargetLabel,
-	inputHash string,
 	cache Cache,
 ) *TargetCache {
-	return &TargetCache{target: target, inputHash: inputHash, cache: cache}
+	return &TargetCache{cache: cache}
 }
 
 // cachePath returns the path in the cache where the target cache data is stored
 // -> {targetPackagePath}/{targetName}_cache_{targetInputHash}
-func (tc *TargetCache) cachePath() string {
+func (tc *TargetCache) cachePath(target model.Target) string {
 	return fmt.Sprintf(
 		"%s/%s_cache_%s",
-		tc.target.Package,
-		tc.target.Name,
-		tc.inputHash)
+		target.Label.Package,
+		target.Label.Name,
+		target.ChangeHash)
 }
 
-func (tc *TargetCache) Exists(Outputs []string) bool {
+func (tc *TargetCache) HashCacheHit(target model.Target) bool {
 	// check all specified outputs exist in the cache
-	for _, output := range Outputs {
-		if !tc.cache.Exists(tc.cachePath(), output) {
+	for _, output := range target.Outputs {
+		if !tc.cache.Exists(tc.cachePath(target), output) {
 			return false
 		}
 	}
 
-	return tc.cache.Exists(tc.cachePath(), existsFileKey)
+	// check that the existsFileKey is present in the cache
+	return tc.cache.Exists(tc.cachePath(target), existsFileKey)
 }

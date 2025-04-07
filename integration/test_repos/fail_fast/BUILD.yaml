@@ -1,0 +1,9 @@
+targets:
+  target_1:
+    cmd: "exit 1"
+  target_2:
+    cmd: ""
+    deps:
+      - :target_1
+  target_3:
+    cmd: "echo 'this should run with fail fast false'"

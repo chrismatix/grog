@@ -2,9 +2,34 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 06-04-2025
+
+Have made a couple of realizations and revisions to those realizations in the past two days:
+
+- Outputs needs to reach across packages to be useful
+- That means outputs and inputs can intersect (but not within target)
+  - This in turn means that we need to hash inputs after the ancestor target was completed
+  - Which in turn means that we do cache lookups as we execute
+
+Put a lot of work into `target_constraints` which I think will need its own doc page.
+Originally I set out to do caching, but I keep starting new things.
+So after this I will sit down and finish the first working version for caching.
+
+-C
+
+## 03-04-2025
+
+Had a valuable design review meeting with Luca:
+
+- W.r.t. to how to handle output fetching: It's a non-issue. Users must be aware that everything that they define in outputs is fair game for grog to override.
+- There is some specific test setup that I can use for testing golang concurrency
+- We should enforce that all package path definitions are relative!
+
+-C
+
 ## 02-04-2025
 
-Here is an open question about output files where we cannot imitate bazel's behavior:
+Here is an open question about output files where we cannot imitate Bazel's behavior:
 If we discover that output files exist in the cache, but not in the user repository fs we should load them from the cache.
 That part is pretty obvious, I think, because that's how you would share cache between machines (or branches)
 

@@ -14,18 +14,18 @@ type Target struct {
 
 	// Whether this target is selected for execution.
 	IsSelected bool
-	// Whether, or not the file inputs changed
-	InputsChanged bool
 
-	// Hashes used for detecting cache hits
-	// Loaded* refers to what we found in the cache vs what we computed
-	// Hash the Deps, Inputs, Outputs, and Command
-	CachedDefinitionHash   string
-	ComputedDefinitionHash string
+	// ChangeHash is the combined hash of the target definition and its input files
+	ChangeHash  string
+	HasCacheHit bool
+}
 
-	// Hash the actual contents of Inputs
-	CachedInputContentHash   string
-	ComputedInputContentHash string
+func (t *Target) GetDepsString() []string {
+	stringDeps := make([]string, len(t.Deps))
+	for i, dep := range t.Deps {
+		stringDeps[i] = dep.String()
+	}
+	return stringDeps
 }
 
 func (t *Target) CommandEllipsis() string {

@@ -1,10 +1,12 @@
 # Grog Build System – Active Design Document
 
+**grog** is the build tool for the [grug](https://grugbrain.dev/) brained developer.
+
 ## Overview
 
 **grog** is an ergonomic build system inspired by tools like Pants and Bazel. It emphasizes simplicity by letting users declare build targets with file dependencies and commands. When an input file changes, grog re-executes the affected build steps and caches results to avoid unnecessary rebuilds. Unlike some build systems, grog remains agnostic to the actual build execution and focuses solely on incremental runs, parallel execution, and caching.
 
-**grog** is **not** and does not aim to replace Bazel et al. as it does intentionally not address hard problems like build isolation, toolchains, cross-platform builds, etc.
+**grog** is **not** and does not aim to replace Bazel et al. as it does intentionally not address hard problems like build isolation, toolchains, cross-platform builds, etc (yet ;).
 Instead, grog should be seen as an intermediate solution that helps teams move towards a coherent mono-repo approach by efficiently gluing together their existing build tooling using a very simple interface.
 
 ## Key Features
@@ -109,6 +111,7 @@ Example `BUILD.json`:
 Grog does not care what language executable build files are written in as long as this is true. Therefore, they may start with a shebang. Additionally, it will be important to provide helper libraries in certain languages to make the generation of the structured output easier.
 
 **Idea:** Those helper libraries may communicate via socket with grog so that we don't even need to reserve stdout.
+-> msgpack zero-mq?
 
 ```python
 #!/usr/bin/env python
@@ -235,6 +238,16 @@ Here is a potential cache layout for an example target `//path/to/package:target
 ```
 
 **Problem:** A user would have to intentionally mess this up but technically one could create a folder inside the `path/to/target/` that has the same name as the target cache.
+-> Use `__grog` as an internal prefix and warn if it exists in the file path.
+
+## Outputs
+
+While inputs _must_ be relative to the package folder outputs can write anywhere in the repository root.
+This is important to support use cases like "This tool generates a markdown file to our docs folder".
+The implication of this is that outputs of one target can overlap with the inputs of another.
+This is ok as long as there is an actual dependency and if not we need to warn the user about it since it could lead to inconsistent build behavior.
+
+Question: Should we also show warnings when targets overwrite each other's outputs?
 
 ## Target Labels
 

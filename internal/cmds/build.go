@@ -64,6 +64,10 @@ func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest b
 		logger.Fatalf("could not create target map: %v", err)
 	}
 
+	errs := analysis.CheckTargetConstraints(logger, targets)
+	if len(errs) > 0 {
+		logger.Fatalf("Found issues with your configuration: \n%s", console.FormatErrors(errs))
+	}
 	graph, err := analysis.BuildGraphAndAnalyze(targets)
 	if err != nil {
 		logger.Fatalf("could not build graph: %v", err)

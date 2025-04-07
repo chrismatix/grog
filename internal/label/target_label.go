@@ -9,19 +9,16 @@ import (
 // It supports shorthand notation "//package/path" which is equivalent to "//package/path:basename",
 // where "basename" is the last element of the package path.
 type TargetLabel struct {
-	Package string // e.g. "package/path" (can be non-empty; for root package, it may be empty)
+	Package string // e.g. "package/path" (for root package, it may be empty)
 	Name    string // e.g. "target"
 }
 
-// ParseTargetLabel parses a Bazel target label.
+// ParseTargetLabel parses a Bazel-style target label.
 // It accepts both explicit labels ("//pkg:target"), shorthand labels ("//pkg"),
-// and relative labels (":target") for the current package.
+// and relative labels (":target") for the current packagePath.
 func ParseTargetLabel(packagePath, label string) (TargetLabel, error) {
 	if strings.HasPrefix(label, ":") {
 		// Relative label: use the current package path with the given target name.
-		if packagePath == "" {
-			return TargetLabel{}, fmt.Errorf("invalid relative label %q: current package path is empty", label)
-		}
 		targetName := label[1:]
 		if targetName == "" {
 			return TargetLabel{}, fmt.Errorf("invalid relative label %q: target name is empty", label)
@@ -51,6 +48,11 @@ func ParseTargetLabel(packagePath, label string) (TargetLabel, error) {
 		}
 	}
 	return TargetLabel{Package: pkg, Name: name}, nil
+}
+
+// TL is a convenience shorthand for tests
+func TL(packagePath, label string) TargetLabel {
+	return TargetLabel{Package: packagePath, Name: label}
 }
 
 // String returns the canonical form "//pkg:target".
