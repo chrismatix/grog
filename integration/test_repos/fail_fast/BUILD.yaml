@@ -6,4 +6,4 @@ targets:
     deps:
       - :target_1
   target_3:
-    cmd: "echo 'this should run with fail fast false'"
+    cmd: "sleep 0.1 && echo 'this should run with --fail-fast=false'"

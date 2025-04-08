@@ -1,21 +1,21 @@
 package loading
 
 import (
-	"encoding/json"
 	"fmt"
+	"gopkg.in/yaml.v3"
 	"os"
 )
 
-// JsonLoader implements the Loader interface for JSON files.
-type JsonLoader struct{}
+// YamlLoader implements the Loader interface for JSON files.
+type YamlLoader struct{}
 
 // FileNames returns the supported JSON file extensions.
-func (j JsonLoader) FileNames() []string {
-	return []string{"BUILD.json"}
+func (j YamlLoader) FileNames() []string {
+	return []string{"BUILD.yaml", "BUILD.yml"}
 }
 
 // Load reads the file at the specified filePath and unmarshals its content into a model.Package.
-func (j JsonLoader) Load(filePath string) (PackageDTO, error) {
+func (j YamlLoader) Load(filePath string) (PackageDTO, error) {
 	var pkg PackageDTO
 
 	// Open the file.
@@ -26,7 +26,7 @@ func (j JsonLoader) Load(filePath string) (PackageDTO, error) {
 	defer file.Close()
 
 	// Decode JSON content.
-	decoder := json.NewDecoder(file)
+	decoder := yaml.NewDecoder(file)
 	err = decoder.Decode(&pkg)
 	if err != nil {
 		return pkg, fmt.Errorf(

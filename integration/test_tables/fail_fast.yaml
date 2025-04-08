@@ -1,15 +1,16 @@
 name: fail fast tests
 cases:
-  # This should finish target 2 even though target 1 failed
+  # This should finish target 3 even though target 1 failed
   - name: no_fail_fast
     args:
       - build
-      - //foo
-    repo: simple_json
+      - //...
+    repo: fail_fast
 
-  # This should error immediately
+  # This should error immediately and not run target 3
   - name: build_bar_should_also_build_foo
     args:
       - build
-      - //bar
-    repo: simple_json
+      - --fail-fast
+      - //...
+    repo: fail_fast

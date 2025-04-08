@@ -1,7 +1,22 @@
 package main
 
-import "grog/cmd/grog"
+import (
+	"fmt"
+	"grog/internal/cmd"
+	"os"
+)
+
+// Provisioned by ldflags
+var (
+	version   string
+	commit    string
+	buildDate string
+)
 
 func main() {
-	grog.Run()
+	cmd.Stamp(version, commit, buildDate)
+	if err := cmd.RootCmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 }

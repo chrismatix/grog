@@ -1,1 +1,8 @@
 # We don't use grog to build grog yet, but having this file prevents the command from erroring
+fail_fast = true
+
+[warnings]
+unused_variables = true
+array_example = [
+    "foo",
+]

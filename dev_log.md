@@ -2,6 +2,14 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 07-04-2025
+
+Finished the major work on checking paths and added the yaml loader which literally only took a minute.
+Now onwards with finishing caching!
+Just kidding; realized that now is the best time to actually figure out how to load all configs from `grog.toml` and merge with the command flags.
+
+-C
+
 ## 06-04-2025
 
 Have made a couple of realizations and revisions to those realizations in the past two days:

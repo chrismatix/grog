@@ -26,6 +26,7 @@ var BuildCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1), // Optional argument for target pattern
 	Run: func(cmd *cobra.Command, args []string) {
 		logger := console.InitLogger()
+
 		if len(args) > 0 {
 			targetPattern, err := label.ParseTargetPattern(args[0])
 			if err != nil {

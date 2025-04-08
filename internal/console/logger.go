@@ -2,7 +2,6 @@ package console
 
 import (
 	"context"
-	"fmt"
 	"github.com/fatih/color"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -10,7 +9,7 @@ import (
 	"strings"
 )
 
-// InitLogger returns a ne logger
+// InitLogger returns a new logger
 func InitLogger() *zap.SugaredLogger {
 	logPath := viper.GetString("log_output_path")
 	if logPath == "" {
@@ -45,7 +44,6 @@ func InitLogger() *zap.SugaredLogger {
 		level = zap.ErrorLevel
 	default:
 		level = zap.InfoLevel
-		fmt.Println("Invalid log Level, defaulting to info")
 	}
 
 	cfg := zap.NewProductionConfig()

@@ -21,7 +21,8 @@ type PackageLoader struct {
 func NewPackageLoader() *PackageLoader {
 	return &PackageLoader{
 		loaders: []Loader{
-			JSONLoader{},
+			JsonLoader{},
+			YamlLoader{},
 		},
 	}
 }
