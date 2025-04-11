@@ -28,7 +28,7 @@ func TestWalkerBasic(t *testing.T) {
 	var executionOrder []label.TargetLabel
 	var mu sync.Mutex
 
-	walkFunc := func(ctx context.Context, target model.Target) error {
+	walkFunc := func(ctx context.Context, target *model.Target) error {
 		mu.Lock()
 		defer mu.Unlock()
 		executionOrder = append(executionOrder, target.Label)
@@ -88,7 +88,7 @@ func TestWalkerLinearDependency(t *testing.T) {
 	var executionOrder []label.TargetLabel
 	var mu sync.Mutex
 
-	walkFunc := func(ctx context.Context, target model.Target) error {
+	walkFunc := func(ctx context.Context, target *model.Target) error {
 		mu.Lock()
 		defer mu.Unlock()
 		executionOrder = append(executionOrder, target.Label)
@@ -168,7 +168,7 @@ func TestWalkerDiamondDependency(t *testing.T) {
 	var executedTargets []label.TargetLabel
 	var mu sync.Mutex
 
-	walkFunc := func(ctx context.Context, target model.Target) error {
+	walkFunc := func(ctx context.Context, target *model.Target) error {
 		mu.Lock()
 		defer mu.Unlock()
 		executedTargets = append(executedTargets, target.Label)
@@ -241,7 +241,7 @@ func TestWalkerFailFast(t *testing.T) {
 	_ = graph.AddEdge(target2, target1)
 
 	// walkFunc that fails for target2
-	walkFunc := func(ctx context.Context, target model.Target) error {
+	walkFunc := func(ctx context.Context, target *model.Target) error {
 		if target.Label.Name == "target2" {
 			return errors.New("failed to execute target2")
 		}
@@ -305,7 +305,7 @@ func TestWalkerNonFailFast(t *testing.T) {
 	_ = graph.AddEdge(target3, target4)
 
 	// walkFunc that fails for target2
-	walkFunc := func(ctx context.Context, target model.Target) error {
+	walkFunc := func(ctx context.Context, target *model.Target) error {
 		if target.Label.Name == "target1" {
 			return errors.New("failed to execute target1")
 		}

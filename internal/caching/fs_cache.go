@@ -1,6 +1,8 @@
-package cache
+package caching
 
 import (
+	"go.uber.org/zap"
+	"grog/internal/config"
 	"os"
 	"path/filepath"
 	"sync"
@@ -12,15 +14,24 @@ type FileSystemCache struct {
 	mutex   sync.RWMutex
 }
 
-// NewFileSystemCache creates a new cache with the specified root directory
-func NewFileSystemCache(rootDir string) (*FileSystemCache, error) {
+func (c *FileSystemCache) TypeName() string {
+	return "fs"
+}
+
+// NewFileSystemCache creates a new cache using the configured cache directory
+func NewFileSystemCache(logger *zap.SugaredLogger) (*FileSystemCache, error) {
+	grogRoot := config.Global.GrogRoot
+	workspaceDir := config.Global.WorkspaceRoot
+	workspaceCacheDir := config.GetWorkspaceCacheDirectory(grogRoot, workspaceDir)
+
 	// Ensure the root directory exists
-	if err := os.MkdirAll(rootDir, 0755); err != nil {
+	if err := os.MkdirAll(workspaceCacheDir, 0755); err != nil {
 		return nil, err
 	}
 
+	logger.Debugf("Instantiated fs cache at: %s", workspaceCacheDir)
 	return &FileSystemCache{
-		rootDir: rootDir,
+		rootDir: workspaceCacheDir,
 		mutex:   sync.RWMutex{},
 	}, nil
 }

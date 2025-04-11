@@ -1,4 +1,4 @@
-package main
+package hashing
 
 import (
 	"fmt"
@@ -28,14 +28,14 @@ func HashFile(filePath string) (string, error) {
 
 // HashFiles computes a combined xxhash hash for multiple files relative to packagePath
 // Sorts the array to ensure consistent outputs.
-func HashFiles(packagePath string, fileList []string) (string, error) {
+func HashFiles(absolutePackagePath string, fileList []string) (string, error) {
 	combinedHasher := xxhash.New()
 	// Ensure consistent ordering.
 	sort.Strings(fileList)
 
 	for _, file := range fileList {
 		// Create the full file path.
-		fullPath := filepath.Join(packagePath, file)
+		fullPath := filepath.Join(absolutePackagePath, file)
 		f, err := os.Open(fullPath)
 		if err != nil {
 			return "", err

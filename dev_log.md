@@ -2,6 +2,16 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 11-04-2025
+
+Back in the saddle, engaged and rested.
+Finally getting into the file system caching while fixing lots of small configuration issues on the way.
+Also hitting all the deadlocks the way an unsupervised toddler hits coffee table corners.
+
+Noticed that remote caching should work the same way as in Bazel where the remote cache is only used to populate the local cache which will from then on be used.
+
+-C
+
 ## 09-04-2025
 
 Added a graph command to make debugging the loaded data easier.

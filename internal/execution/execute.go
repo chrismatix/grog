@@ -6,9 +6,11 @@ import (
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/viper"
+	"grog/internal/caching"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/dag"
+	"grog/internal/hashing"
 	"grog/internal/label"
 	"grog/internal/model"
 	"grog/internal/worker"
@@ -27,28 +29,31 @@ func (e *CommandError) Error() string {
 
 func Execute(
 	ctx context.Context,
+	cache caching.Cache,
 	graph *dag.DirectedTargetGraph,
 	failFast bool,
 ) (error, dag.CompletionMap) {
 	numWorkers := viper.GetInt("num_workers")
 	logger := console.GetLogger(ctx)
 
-	p, msgCh := console.StartTaskUI(ctx)
+	program, msgCh := console.StartTaskUI(ctx)
 	defer func(p *tea.Program) {
 		err := p.ReleaseTerminal()
 		if err != nil {
 			logger.Errorf("error releasing terminal: %v", err)
 		}
-	}(p)
-	defer p.Quit()
+	}(program)
+	defer program.Quit()
 
 	workerPool := worker.NewPool(numWorkers, msgCh)
 	workerPool.StartWorkers(ctx)
 
+	targetCache := caching.NewTargetCache(cache)
+
 	// walkCallback will be called at max parallelism by the graph walker
-	walkCallback := func(ctx context.Context, target model.Target) error {
+	walkCallback := func(ctx context.Context, target *model.Target) error {
 		// taskFunc will be run in the worker pool
-		taskFunc := GetTaskFunc(target)
+		taskFunc := GetTaskFunc(targetCache, target)
 
 		// awaits execution of taskFunc
 		return workerPool.Run(taskFunc)
@@ -58,26 +63,66 @@ func Execute(
 	return walker.Walk(ctx)
 }
 
-func GetTaskFunc(target model.Target) worker.TaskFunc {
+func GetTaskFunc(targetCache *caching.TargetCache, target *model.Target) worker.TaskFunc {
 	return func(update worker.StatusFunc, log worker.LogFunc) error {
-		executionPath := config.GetPathAbsoluteToWorkspaceRoot(target.Label.Package)
-
-		cmd := exec.Command("sh", "-c", target.Command)
-		cmd.Dir = executionPath
-		update(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis()))
-		output, err := cmd.CombinedOutput()
-
+		changeHash, err := hashing.GetTargetChangeHash(*target)
 		if err != nil {
-			var exitError *exec.ExitError
-			if errors.As(err, &exitError) {
-				return &CommandError{
-					TargetLabel: target.Label,
-					ExitCode:    exitError.ExitCode(),
-					Output:      string(output),
-				}
+			return err
+		}
+		target.ChangeHash = changeHash
+
+		hasCacheHit := targetCache.HasCacheHit(*target)
+		target.HasCacheHit = hasCacheHit
+
+		if hasCacheHit {
+			if len(target.Outputs) > 0 {
+				update(fmt.Sprintf("%s: cache hit (%s). fetching...", target.Label, targetCache.GetCache().TypeName()))
+			} else {
+				update(fmt.Sprintf("%s: cache hit (%s).", target.Label, targetCache.GetCache().TypeName()))
 			}
-			return fmt.Errorf("target %s failed: %w - output: %s", target.Label, err, string(output))
+
+			// TODO load outputs
+			return nil
+		}
+
+		update(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis()))
+		err = executeTarget(target)
+		if err != nil {
+			return err
+		}
+
+		// Write outputs to the cache:
+		update(fmt.Sprintf("%s: cache hit (%s). fetching ", target.Label, targetCache.GetCache().TypeName()))
+		err = targetCache.WriteOutputs(*target)
+		if err != nil {
+			return fmt.Errorf("build completed but failed to write outputs to cache for target %s: %w", target.Label, err)
 		}
 		return nil
 	}
+}
+
+func downloadCachedOutputs(target *model.Target) error {
+	return nil
+}
+
+func executeTarget(target *model.Target) error {
+	executionPath := config.GetPathAbsoluteToWorkspaceRoot(target.Label.Package)
+
+	cmd := exec.Command("sh", "-c", target.Command)
+	cmd.Dir = executionPath
+
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		var exitError *exec.ExitError
+		if errors.As(err, &exitError) {
+			return &CommandError{
+				TargetLabel: target.Label,
+				ExitCode:    exitError.ExitCode(),
+				Output:      string(output),
+			}
+		}
+		return fmt.Errorf("target %s failed: %w - output: %s", target.Label, err, string(output))
+	}
+	return nil
 }

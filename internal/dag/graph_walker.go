@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-type WalkCallback func(ctx context.Context, target model.Target) error
+type WalkCallback func(ctx context.Context, target *model.Target) error
 
 type Completion struct {
 	IsSuccess bool
@@ -128,7 +128,7 @@ func (w *Walker) Walk(
 
 		w.wait.Add(1)
 		// start all routines
-		go w.vertexRoutine(*vertex, w.vertexInfoMap[vertex])
+		go w.vertexRoutine(vertex, w.vertexInfoMap[vertex])
 
 		// start all routines with no dependencies immediately
 		if len(w.graph.inEdges[vertex]) == 0 {
@@ -194,7 +194,9 @@ func (w *Walker) startTarget(target *model.Target) {
 	w.vertexMutex.Lock()
 	defer w.vertexMutex.Unlock()
 	if info, ok := w.vertexInfoMap[target]; ok {
-		info.ready <- struct{}{}
+		go func() {
+			info.ready <- struct{}{}
+		}()
 	}
 }
 
@@ -256,7 +258,7 @@ func (w *Walker) cancelAll() {
 }
 
 func (w *Walker) vertexRoutine(
-	target model.Target,
+	target *model.Target,
 	info *vertexInfo,
 ) {
 	// always decrement wait group

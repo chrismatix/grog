@@ -4,8 +4,9 @@
   - Hash the input target (definition and files)
   - Add a target cache that wraps the base cache
   - For each target check that the outputs exists
+- [ ] The TargetCache should warn when a target is overwriting another's outputs
 - [ ] add file globbing for inputs
-- [ ] Loading: Figure out a way to better relate why unmarshaling a json config failed -> Use json schema!
+- [ ] Loading: Figure out a way to better relate why unmarshalling a json config failed -> Use json schema!
 - [ ] Loading: Add Makefile support
 - [ ] Loading: Add executable support
 - [ ] Loading: Add python

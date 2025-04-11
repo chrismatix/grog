@@ -1,12 +1,12 @@
-package cache
+package caching
 
-import (
-	"github.com/spf13/viper"
-	"grog/internal/config"
-)
+import "go.uber.org/zap"
 
 // Cache represents an interface for a file system-based cache.
 type Cache interface {
+	// TypeName returns the name of the cache type.
+	TypeName() string
+
 	// Get retrieves a cached file as a byte slice by its key.
 	// It returns the file content and a boolean indicating whether the key exists in the cache.
 	Get(path string, key string) ([]byte, bool)
@@ -26,10 +26,6 @@ type Cache interface {
 	Clear() error
 }
 
-func GetCache() (Cache, error) {
-	cacheDir := viper.GetString("cache_dir")
-	workspaceDir := viper.GetString("workspace_root")
-	workspaceCacheDir := config.GetWorkspaceCacheDirectory(cacheDir, workspaceDir)
-
-	return NewFileSystemCache(workspaceCacheDir)
+func GetCache(logger *zap.SugaredLogger) (Cache, error) {
+	return NewFileSystemCache(logger)
 }

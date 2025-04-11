@@ -1,8 +1,9 @@
-package main
+package hashing
 
 import (
 	"fmt"
 	"github.com/cespare/xxhash/v2"
+	"grog/internal/config"
 	"grog/internal/model"
 	"slices"
 	"strings"
@@ -10,8 +11,14 @@ import (
 
 // GetTargetChangeHash computes the hash that tells us if a target has changed.
 func GetTargetChangeHash(target model.Target) (string, error) {
+	targetDefinitionHash, err := hashTargetDefinition(target)
+	if err != nil {
+		return "", err
+	}
+	absolutePackagePath := config.GetPathAbsoluteToWorkspaceRoot(target.Label.Package)
+	inputContentHash, err := HashFiles(absolutePackagePath, target.Inputs)
 
-	return hashTargetDefinition(target)
+	return fmt.Sprintf("%s_%s", targetDefinitionHash, inputContentHash), nil
 }
 
 // hashTargetDefinition computes the xxhash hash of a single file.

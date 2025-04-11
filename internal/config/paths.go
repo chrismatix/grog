@@ -13,11 +13,12 @@ import (
 // Like Bazel we hash the repo path and use that as directory within $GROG_CACHE_DIR
 // Unlike Bazel we only use the first 16 characters of the hash and add a readable portion
 // to make it easier to identify the cache directory.
-func GetWorkspaceCacheDirectory(cacheDir, workspaceDir string) string {
+func GetWorkspaceCacheDirectory(grogRoot, workspaceDir string) string {
 	repoHash := fmt.Sprintf("%x", sha256.Sum256([]byte(workspaceDir)))[:16]
 
 	workspaceName := filepath.Base(workspaceDir)
-	return fmt.Sprintf("%s/%s-%s", cacheDir, repoHash, workspaceName)
+	workspaceCacheFolder := fmt.Sprintf("%s-%s", repoHash, workspaceName)
+	return filepath.Join(grogRoot, "cache", workspaceCacheFolder)
 }
 
 // MustFindWorkspaceRoot searches for the repository root by looking for "grog.toml"
