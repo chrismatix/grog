@@ -47,28 +47,8 @@ func Execute(
 
 	// walkCallback will be called at max parallelism by the graph walker
 	walkCallback := func(ctx context.Context, target model.Target) error {
-		executionPath := config.GetPatAbsoluteToWorkspaceRoot(target.Label.Package)
-
 		// taskFunc will be run in the worker pool
-		taskFunc := func(update worker.StatusFunc, log worker.LogFunc) error {
-			cmd := exec.Command("sh", "-c", target.Command)
-			cmd.Dir = executionPath
-			update(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis()))
-			output, err := cmd.CombinedOutput()
-
-			if err != nil {
-				var exitError *exec.ExitError
-				if errors.As(err, &exitError) {
-					return &CommandError{
-						TargetLabel: target.Label,
-						ExitCode:    exitError.ExitCode(),
-						Output:      string(output),
-					}
-				}
-				return fmt.Errorf("target %s failed: %w - output: %s", target.Label, err, string(output))
-			}
-			return nil
-		}
+		taskFunc := GetTaskFunc(target)
 
 		// awaits execution of taskFunc
 		return workerPool.Run(taskFunc)
@@ -76,4 +56,28 @@ func Execute(
 
 	walker := dag.NewWalker(graph, walkCallback, failFast)
 	return walker.Walk(ctx)
+}
+
+func GetTaskFunc(target model.Target) worker.TaskFunc {
+	return func(update worker.StatusFunc, log worker.LogFunc) error {
+		executionPath := config.GetPathAbsoluteToWorkspaceRoot(target.Label.Package)
+
+		cmd := exec.Command("sh", "-c", target.Command)
+		cmd.Dir = executionPath
+		update(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis()))
+		output, err := cmd.CombinedOutput()
+
+		if err != nil {
+			var exitError *exec.ExitError
+			if errors.As(err, &exitError) {
+				return &CommandError{
+					TargetLabel: target.Label,
+					ExitCode:    exitError.ExitCode(),
+					Output:      string(output),
+				}
+			}
+			return fmt.Errorf("target %s failed: %w - output: %s", target.Label, err, string(output))
+		}
+		return nil
+	}
 }

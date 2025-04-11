@@ -57,7 +57,7 @@ func GetPathRelativeToWorkspaceRoot(path string) (string, error) {
 	return path[len(workspaceRoot)+1:], nil
 }
 
-func GetPatAbsoluteToWorkspaceRoot(path string) string {
+func GetPathAbsoluteToWorkspaceRoot(path string) string {
 	workspaceRoot := viper.Get("workspace_root").(string)
 
 	return filepath.Join(workspaceRoot, path)

@@ -128,7 +128,7 @@ func (w *Walker) Walk(
 
 		w.wait.Add(1)
 		// start all routines
-		go w.vertexRoutine(*vertex, *w.vertexInfoMap[vertex])
+		go w.vertexRoutine(*vertex, w.vertexInfoMap[vertex])
 
 		// start all routines with no dependencies immediately
 		if len(w.graph.inEdges[vertex]) == 0 {
@@ -257,7 +257,7 @@ func (w *Walker) cancelAll() {
 
 func (w *Walker) vertexRoutine(
 	target model.Target,
-	info vertexInfo,
+	info *vertexInfo,
 ) {
 	// always decrement wait group
 	defer w.wait.Done()
@@ -277,7 +277,6 @@ func (w *Walker) vertexRoutine(
 			go func() {
 				info.done <- Completion{IsSuccess: false, Err: err}
 			}()
-
 		} else {
 			go func() {
 				info.done <- Completion{IsSuccess: true, Err: nil}
