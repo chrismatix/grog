@@ -61,10 +61,28 @@ func (tc *TargetCache) HasCacheHit(target model.Target) bool {
 	return tc.cache.Exists(tc.cachePath(target), existsFileKey)
 }
 
-// LoadOutputs checks if all outputs of a target are present in the cache.
-//func (tc *TargetCache) LoadOutputs(target model.Target) error {
-//
-//}
+// LoadOutputs loads all outputs from the cache and fails if they do not exist
+// (existence should be checked before calling this function)
+func (tc *TargetCache) LoadOutputs(target model.Target) error {
+	for _, output := range target.Outputs {
+		// read output from file
+		absOutputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output))
+		content, exists := tc.cache.Get(tc.cachePath(target), hashing.HashString(output))
+		if !exists {
+			return fmt.Errorf("output %s for target %s does not exist in %s cache",
+				output,
+				target.Label,
+				tc.cache.TypeName())
+		}
+
+		// TODO should we store the file permissions as-well somehow?
+		if err := os.WriteFile(absOutputPath, content, 0644); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
 
 // WriteOutputs Writes a target's outputs to the cache.
 func (tc *TargetCache) WriteOutputs(target model.Target) error {
@@ -73,14 +91,13 @@ func (tc *TargetCache) WriteOutputs(target model.Target) error {
 		absOutputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output))
 		outputContent, err := os.ReadFile(absOutputPath)
 		if err != nil {
-			return err
+			return fmt.Errorf("declared output %s for target %s does not exist (%w)", output, target.Label, err)
 		}
-		fmt.Println(output)
-		fmt.Println(outputContent)
 		if err = tc.cache.Set(tc.cachePath(target), hashing.HashString(output), outputContent); err != nil {
 			return err
 		}
 	}
 
-	return nil
+	// write existsFileKey to cache
+	return tc.cache.Set(tc.cachePath(target), existsFileKey, []byte{})
 }

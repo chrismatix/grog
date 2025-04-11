@@ -3,8 +3,8 @@
     "bar": {
       "inputs": ["source.txt"],
       "deps": ["//foo:foo"],
-      "cmd": "cat source.txt ../foo/output.txt > output.txt",
-      "outputs": ["output.txt"]
+      "cmd": "cat source.txt ../foo/output.txt > output.txt && cat source.txt ../foo/output.txt > ../bar_output.txt",
+      "outputs": ["output.txt", "../bar_output.txt"]
     },
     "bar_test": {
       "inputs": ["source.txt"],

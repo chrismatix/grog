@@ -9,16 +9,15 @@ import (
 	"strings"
 )
 
-// GetWorkspaceCacheDirectory returns the path to the cache directory for the current repo.
-// Like Bazel we hash the repo path and use that as directory within $GROG_CACHE_DIR
+// GetWorkspaceCacheDirectoryName returns name of the cache directory for the current repo.
+// Like Bazel we hash the repo path and use that as directory within $GROG_ROOT/cache
 // Unlike Bazel we only use the first 16 characters of the hash and add a readable portion
-// to make it easier to identify the cache directory.
-func GetWorkspaceCacheDirectory(grogRoot, workspaceDir string) string {
+// to make it easier to identify.
+func GetWorkspaceCacheDirectoryName(workspaceDir string) string {
 	repoHash := fmt.Sprintf("%x", sha256.Sum256([]byte(workspaceDir)))[:16]
 
 	workspaceName := filepath.Base(workspaceDir)
-	workspaceCacheFolder := fmt.Sprintf("%s-%s", repoHash, workspaceName)
-	return filepath.Join(grogRoot, "cache", workspaceCacheFolder)
+	return fmt.Sprintf("%s-%s", repoHash, workspaceName)
 }
 
 // MustFindWorkspaceRoot searches for the repository root by looking for "grog.toml"

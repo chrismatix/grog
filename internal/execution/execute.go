@@ -77,12 +77,11 @@ func GetTaskFunc(targetCache *caching.TargetCache, target *model.Target) worker.
 		if hasCacheHit {
 			if len(target.Outputs) > 0 {
 				update(fmt.Sprintf("%s: cache hit (%s). fetching...", target.Label, targetCache.GetCache().TypeName()))
+				return downloadCachedOutputs(targetCache, target)
 			} else {
 				update(fmt.Sprintf("%s: cache hit (%s).", target.Label, targetCache.GetCache().TypeName()))
+				return nil
 			}
-
-			// TODO load outputs
-			return nil
 		}
 
 		update(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis()))
@@ -95,13 +94,17 @@ func GetTaskFunc(targetCache *caching.TargetCache, target *model.Target) worker.
 		update(fmt.Sprintf("%s: cache hit (%s). fetching ", target.Label, targetCache.GetCache().TypeName()))
 		err = targetCache.WriteOutputs(*target)
 		if err != nil {
-			return fmt.Errorf("build completed but failed to write outputs to cache for target %s: %w", target.Label, err)
+			return fmt.Errorf("build completed but failed to write outputs to cache for target %s:\n%w", target.Label, err)
 		}
 		return nil
 	}
 }
 
-func downloadCachedOutputs(target *model.Target) error {
+func downloadCachedOutputs(targetCache *caching.TargetCache, target *model.Target) error {
+	err := targetCache.LoadOutputs(*target)
+	if err != nil {
+		return fmt.Errorf("build completed but failed to read outputs from cache for target %s: %w", target.Label, err)
+	}
 	return nil
 }
 

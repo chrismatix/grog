@@ -56,34 +56,35 @@ func init() {
 	// Set default cache directory
 	viper.SetDefault("grog_root", filepath.Join(os.Getenv("HOME"), ".grog"))
 
-	// Add color flag
+	// Options:
+	// color
 	RootCmd.PersistentFlags().String("color", "auto", "Set color output (yes, no, or auto)")
 	err := viper.BindPFlag("color", RootCmd.PersistentFlags().Lookup("color"))
-	if err != nil {
-		panic(err)
-	}
 	viper.SetDefault("color", "auto")
 
-	// Add debug flag
+	// debug
 	RootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
 	err = viper.BindPFlag("debug", RootCmd.PersistentFlags().Lookup("debug"))
-	if err != nil {
-		panic(err)
-	}
 
-	// Add fail_fast flag to BuildCmd
+	// fail_fast
 	RootCmd.PersistentFlags().Bool("fail-fast", false, "Fail fast on first error")
 	err = viper.BindPFlag("fail_fast", RootCmd.PersistentFlags().Lookup("fail-fast"))
-	if err != nil {
-		panic(err)
-	}
+
+	// enable_caching
+	RootCmd.PersistentFlags().Bool("enable-caching", true, "Enable caching")
+	err = viper.BindPFlag("enable_caching", RootCmd.PersistentFlags().Lookup("enable-caching"))
+	viper.SetDefault("enable_caching", true)
 
 	// Register subcommands
 	RootCmd.AddCommand(cmds.BuildCmd)
 	RootCmd.AddCommand(cmds.TestCmd)
-	RootCmd.AddCommand(cmds.CleanCmd)
+	RootCmd.AddCommand(cmds.GetCleanCmd())
 	RootCmd.AddCommand(cmds.VersionCmd)
 	RootCmd.AddCommand(cmds.GraphCmd)
+
+	if err != nil {
+		panic(err)
+	}
 }
 
 func initConfig() error {

@@ -22,8 +22,8 @@ type Cache interface {
 	// Exists checks if a file exists in the cache with the given key.
 	Exists(path string, key string) bool
 
-	// Clear removes all files from the cache.
-	Clear() error
+	// Clear removes all files from the workspace cache and optionally purges the cache directory.
+	Clear(expunge bool) error
 }
 
 func GetCache(logger *zap.SugaredLogger) (Cache, error) {

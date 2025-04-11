@@ -64,7 +64,6 @@ type TestCase struct {
 }
 
 func TestCliArgs(t *testing.T) {
-
 	// Read all .yaml files from the cases/ directory
 	files, err := filepath.Glob("integration/test_tables/*.yaml")
 	if err != nil {
@@ -91,6 +90,10 @@ func TestCliArgs(t *testing.T) {
 		t.Fatalf("no test tables found")
 	}
 
+	if err = clearTestRepoCache(testTables); err != nil {
+		t.Fatalf("could not clear test repo cache: %v", err)
+	}
+
 	for _, tt := range testTables {
 		t.Run(tt.Name, func(t *testing.T) {
 
@@ -104,9 +107,17 @@ func TestCliArgs(t *testing.T) {
 				testCaseNames[tc.Name] = true
 
 				t.Run(tc.Name, func(t *testing.T) {
+					// Clear repository cache
+					output, err := runBinary([]string{"clean"}, tc.Repo)
+					if err != nil {
+						t.Fatalf(
+							"could not run `grog clean` on repo %s: %v\nCommand output: %s",
+							tc.Repo,
+							err,
+							output)
+					}
 
-					binaryCwd := filepath.Join("./integration/test_repos", tc.Repo)
-					output, err := runBinary(tc.Args, binaryCwd)
+					output, err = runBinary(tc.Args, tc.Repo)
 
 					if err != nil && !tc.ExpectFail {
 						fmt.Printf("Command ouput: %s\n", output)
@@ -152,6 +163,8 @@ func TestMain(m *testing.M) {
 }
 
 func runBinary(args []string, repoPath string) ([]byte, error) {
+	repoPath = filepath.Join("./integration/test_repos", repoPath)
+
 	// Debug print the command invocation
 	fmt.Printf("Running command: %s %v in directory: %s\n", binaryPath, args, repoPath)
 
@@ -180,4 +193,26 @@ func getCoverDir() (string, error) {
 	}
 
 	return filepath.Join(filepath.Dir(filename), "../.coverdata/integration"), nil
+}
+
+// clearTestRepoCache runs `grog clean` on each repo defined in the test tables
+func clearTestRepoCache(testTables []TestTable) error {
+	var clearedRepos = make(map[string]bool)
+	for _, tt := range testTables {
+		for _, tc := range tt.Cases {
+			if !clearedRepos[tc.Repo] {
+				output, err := runBinary([]string{"clean"}, tc.Repo)
+				if err != nil {
+					return fmt.Errorf(
+						"could not run `grog clean` on repo %s: %v\nCommand output: %s",
+						tc.Repo,
+						err,
+						output)
+				}
+
+				clearedRepos[tc.Repo] = true
+			}
+		}
+	}
+	return nil
 }

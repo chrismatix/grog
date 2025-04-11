@@ -109,6 +109,9 @@ func (g *DirectedTargetGraph) GetDescendants(target *model.Target) []*model.Targ
 
 // hasVertex checks whether a vertex exists in the graph.
 func (g *DirectedTargetGraph) hasVertex(target *model.Target) bool {
+	if target == nil {
+		return false
+	}
 	return g.vertices[target.Label] != nil
 }
 
