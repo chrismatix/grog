@@ -114,7 +114,7 @@ func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest b
 		logger.Fatalf("could not instantiate cache: %v", err)
 	}
 
-	err, completionMap := execution.Execute(ctx, cache, graph, failFast)
+	cacheHits, completionMap, err := execution.Execute(ctx, cache, graph, failFast)
 
 	elapsedTime := time.Since(startTime).Seconds()
 	// Mostly used to keep our test fixtures deterministic
@@ -126,14 +126,17 @@ func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest b
 	if err != nil {
 		graph.LogGraphJSON(logger)
 		logger.Errorf("execution failed: %v", err)
-		// exit
 		os.Exit(1)
 	}
 
 	buildErrors := completionMap.GetErrors()
-	successes := completionMap.GetSuccesses()
+	successCount := completionMap.SuccessCount()
 	if len(buildErrors) > 0 {
-		logger.Errorf("Build failed. %s completed, %d failed:", console.FCountTargets(len(successes)), len(buildErrors))
+		logger.Errorf("Build failed. %s completed (%d cached), %d failed:",
+			console.FCountTargets(successCount),
+			cacheHits,
+			len(buildErrors))
+
 		for target, completion := range completionMap {
 			if completion.IsSuccess {
 				continue
@@ -156,6 +159,8 @@ func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest b
 		os.Exit(1)
 	}
 
-	logger.Infof("Build completed successfully. %s completed.", console.FCountTargets(len(successes)))
+	logger.Infof("Build completed successfully. %s completed (%d cached).",
+		console.FCountTargets(successCount),
+		cacheHits)
 	os.Exit(0)
 }

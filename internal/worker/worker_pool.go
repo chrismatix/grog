@@ -16,20 +16,25 @@ import (
 type LogFunc func(msg string, level zapcore.Level)
 type StatusFunc func(status string)
 
-// TaskFunc is a task submitted to the pool. It gets an update callback.
-type TaskFunc func(update StatusFunc, log LogFunc) error
-
-type job struct {
-	id     int
-	task   TaskFunc
-	result chan error // Channel to return the result
+type TaskResult[T any] struct {
+	Return T
+	Error  error
 }
 
-// Pool runs tasks with a fixed number of workers,
+// TaskFunc is a task submitted to the pool. It gets an update callback.
+type TaskFunc[T any] func(update StatusFunc, log LogFunc) (T, error)
+
+type job[T any] struct {
+	id     int
+	task   TaskFunc[T]
+	result chan TaskResult[T]
+}
+
+// Pool runs tasks that return T with a fixed number of workers,
 // reporting progress to the tea UI
-type Pool struct {
+type Pool[T any] struct {
 	maxWorkers int
-	jobCh      chan job
+	jobCh      chan job[T]
 
 	// msgCh is used to send status updates to the UI.
 	msgCh chan tea.Msg
@@ -46,27 +51,27 @@ type Pool struct {
 	closed bool
 }
 
-func NewPool(maxWorkers int, msgCh chan tea.Msg) *Pool {
+func NewPool[T any](maxWorkers int, msgCh chan tea.Msg) *Pool[T] {
 	if maxWorkers < 1 {
 		maxWorkers = runtime.NumCPU()
 	}
-	wp := &Pool{
+	wp := &Pool[T]{
 		maxWorkers: maxWorkers,
-		jobCh:      make(chan job),
+		jobCh:      make(chan job[T]),
 		msgCh:      msgCh,
 		taskState:  make(console.TaskStateMap),
 	}
 	return wp
 }
 
-func (wp *Pool) StartWorkers(ctx context.Context) {
+func (wp *Pool[T]) StartWorkers(ctx context.Context) {
 	for i := 0; i < wp.maxWorkers; i++ {
 		workerId := i + 1
 		go wp.worker(ctx, workerId)
 	}
 }
 
-func (wp *Pool) worker(ctx context.Context, workerId int) {
+func (wp *Pool[T]) worker(ctx context.Context, workerId int) {
 	isDebug := config.IsDebug()
 
 	for {
@@ -82,7 +87,7 @@ func (wp *Pool) worker(ctx context.Context, workerId int) {
 			}
 			wp.setTaskState(workerId, fmt.Sprintf("Starting task %d on worker %d", j.id+1, workerId))
 			// Run the task, passing a callback to update progress.
-			err := j.task(func(status string) {
+			result, err := j.task(func(status string) {
 				taskStatus := status
 				if isDebug {
 					taskStatus = fmt.Sprintf("%s (worker %d)", status, workerId)
@@ -93,7 +98,10 @@ func (wp *Pool) worker(ctx context.Context, workerId int) {
 			})
 
 			if j.result != nil {
-				j.result <- err // Send the result to the channel
+				j.result <- TaskResult[T]{
+					Return: result,
+					Error:  err,
+				}
 				close(j.result) // Close the channel after sending the result
 			}
 			wp.completeTask(workerId)
@@ -102,7 +110,7 @@ func (wp *Pool) worker(ctx context.Context, workerId int) {
 }
 
 // setTaskState updates the task state from a worker
-func (wp *Pool) setTaskState(workerId int, status string) {
+func (wp *Pool[T]) setTaskState(workerId int, status string) {
 	wp.mu.Lock()
 	defer wp.mu.Unlock()
 	state, ok := wp.taskState[workerId]
@@ -118,7 +126,7 @@ func (wp *Pool) setTaskState(workerId int, status string) {
 }
 
 // setTaskState updates the task state from a worker
-func (wp *Pool) completeTask(workerId int) {
+func (wp *Pool[T]) completeTask(workerId int) {
 	wp.mu.Lock()
 	defer wp.mu.Unlock()
 	delete(wp.taskState, workerId)
@@ -127,7 +135,7 @@ func (wp *Pool) completeTask(workerId int) {
 }
 
 // flushState sends the current task state to the UI.
-func (wp *Pool) flushState() {
+func (wp *Pool[T]) flushState() {
 	if wp.closed {
 		return
 	}
@@ -141,54 +149,27 @@ func (wp *Pool) flushState() {
 		fmt.Sprintf(" %s running", console.FCount(actionsRunning, "action")))
 }
 
-func (wp *Pool) NumWorkers() int {
+func (wp *Pool[T]) NumWorkers() int {
 	return wp.maxWorkers
 }
 
-func (wp *Pool) Run(task TaskFunc) error {
+func (wp *Pool[T]) Run(task TaskFunc[T]) (T, error) {
 	wp.mu.Lock()
 	taskId := wp.nextTaskId
 	wp.nextTaskId++
 	wp.mu.Unlock()
 
 	// Create a channel to receive the result from the worker.
-	resultCh := make(chan error, 1)
+	resultCh := make(chan TaskResult[T], 1)
 
 	// Enqueue the task with the result channel.
-	wp.jobCh <- job{id: taskId, task: task, result: resultCh}
+	wp.jobCh <- job[T]{id: taskId, task: task, result: resultCh}
 
 	// Wait for the result.
-	err := <-resultCh
-	return err
+	result := <-resultCh
+	return result.Return, result.Error
 }
 
-func (wp *Pool) RunAll(tasks []TaskFunc) error {
-	var wg sync.WaitGroup
-	errCh := make(chan error, len(tasks))
-
-	for _, task := range tasks {
-		wg.Add(1)
-		go func(t TaskFunc) {
-			defer wg.Done()
-			if err := wp.Run(t); err != nil {
-				errCh <- err
-			}
-		}(task)
-	}
-
-	wg.Wait()
-	close(errCh)
-
-	// Return the first error if any
-	for err := range errCh {
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (wp *Pool) Shutdown() {
+func (wp *Pool[T]) Shutdown() {
 	close(wp.jobCh)
 }

@@ -38,7 +38,7 @@ func TestWalkerBasic(t *testing.T) {
 	walker := NewWalker(graph, walkFunc, true)
 
 	ctx := context.Background()
-	err, completionMap := walker.Walk(ctx)
+	completionMap, err := walker.Walk(ctx)
 
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -98,7 +98,7 @@ func TestWalkerLinearDependency(t *testing.T) {
 	walker := NewWalker(graph, walkFunc, true)
 
 	ctx := context.Background()
-	err, completionMap := walker.Walk(ctx)
+	completionMap, err := walker.Walk(ctx)
 
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -178,7 +178,7 @@ func TestWalkerDiamondDependency(t *testing.T) {
 	walker := NewWalker(graph, walkFunc, true)
 
 	ctx := context.Background()
-	err, completionMap := walker.Walk(ctx)
+	completionMap, err := walker.Walk(ctx)
 
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -255,7 +255,7 @@ func TestWalkerFailFast(t *testing.T) {
 	walker := NewWalker(graph, walkFunc, true) // failFast = true
 
 	ctx := context.Background()
-	err, completionMap := walker.Walk(ctx)
+	completionMap, err := walker.Walk(ctx)
 
 	if err != nil {
 		t.Fatalf("Returned error should not be nil, got %v", err)
@@ -315,7 +315,7 @@ func TestWalkerNonFailFast(t *testing.T) {
 	walker := NewWalker(graph, walkFunc, false) // failFast = false
 
 	ctx := context.Background()
-	err, completionMap := walker.Walk(ctx)
+	completionMap, err := walker.Walk(ctx)
 
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -355,7 +355,7 @@ func TestWalkerEdgeCases(t *testing.T) {
 		// Pass nil walk function
 		walker := NewWalker(graph, nil, true)
 
-		err, _ := walker.Walk(context.Background())
+		_, err := walker.Walk(context.Background())
 		if err == nil {
 			t.Errorf("Expected error, got nil")
 		}

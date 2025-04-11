@@ -27,12 +27,13 @@ func (e *CommandError) Error() string {
 	return fmt.Sprintf("target %s failed with exit code %d: %s", e.TargetLabel, e.ExitCode, e.Output)
 }
 
+// Execute executes the targets in the given graph
 func Execute(
 	ctx context.Context,
 	cache caching.Cache,
 	graph *dag.DirectedTargetGraph,
 	failFast bool,
-) (error, dag.CompletionMap) {
+) (int, dag.CompletionMap, error) {
 	numWorkers := viper.GetInt("num_workers")
 	logger := console.GetLogger(ctx)
 
@@ -45,10 +46,11 @@ func Execute(
 	}(program)
 	defer program.Quit()
 
-	workerPool := worker.NewPool(numWorkers, msgCh)
+	workerPool := worker.NewPool[bool](numWorkers, msgCh)
 	workerPool.StartWorkers(ctx)
 
 	targetCache := caching.NewTargetCache(cache)
+	cacheHits := 0
 
 	// walkCallback will be called at max parallelism by the graph walker
 	walkCallback := func(ctx context.Context, target *model.Target) error {
@@ -56,18 +58,24 @@ func Execute(
 		taskFunc := GetTaskFunc(targetCache, target)
 
 		// awaits execution of taskFunc
-		return workerPool.Run(taskFunc)
+		cacheHit, err := workerPool.Run(taskFunc)
+		if cacheHit && err == nil {
+			cacheHits++
+		}
+		return err
 	}
 
 	walker := dag.NewWalker(graph, walkCallback, failFast)
-	return walker.Walk(ctx)
+	completionMap, err := walker.Walk(ctx)
+	return cacheHits, completionMap, err
 }
 
-func GetTaskFunc(targetCache *caching.TargetCache, target *model.Target) worker.TaskFunc {
-	return func(update worker.StatusFunc, log worker.LogFunc) error {
+func GetTaskFunc(targetCache *caching.TargetCache, target *model.Target) worker.TaskFunc[bool] {
+	// taskFunc will run in the worker pool and return a bool indicating whether the target was cached
+	return func(update worker.StatusFunc, log worker.LogFunc) (bool, error) {
 		changeHash, err := hashing.GetTargetChangeHash(*target)
 		if err != nil {
-			return err
+			return false, err
 		}
 		target.ChangeHash = changeHash
 
@@ -77,26 +85,26 @@ func GetTaskFunc(targetCache *caching.TargetCache, target *model.Target) worker.
 		if hasCacheHit {
 			if len(target.Outputs) > 0 {
 				update(fmt.Sprintf("%s: cache hit (%s). fetching...", target.Label, targetCache.GetCache().TypeName()))
-				return downloadCachedOutputs(targetCache, target)
+				return true, downloadCachedOutputs(targetCache, target)
 			} else {
 				update(fmt.Sprintf("%s: cache hit (%s).", target.Label, targetCache.GetCache().TypeName()))
-				return nil
+				return false, nil
 			}
 		}
 
 		update(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis()))
 		err = executeTarget(target)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		// Write outputs to the cache:
 		update(fmt.Sprintf("%s: cache hit (%s). fetching ", target.Label, targetCache.GetCache().TypeName()))
 		err = targetCache.WriteOutputs(*target)
 		if err != nil {
-			return fmt.Errorf("build completed but failed to write outputs to cache for target %s:\n%w", target.Label, err)
+			return false, fmt.Errorf("build completed but failed to write outputs to cache for target %s:\n%w", target.Label, err)
 		}
-		return nil
+		return false, nil
 	}
 }
 

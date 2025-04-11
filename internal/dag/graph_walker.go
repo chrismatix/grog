@@ -8,6 +8,7 @@ import (
 	"sync"
 )
 
+// WalkCallback is called for each target and should return true if the target was cached
 type WalkCallback func(ctx context.Context, target *model.Target) error
 
 type Completion struct {
@@ -36,21 +37,22 @@ func (c CompletionMap) GetErrors() []error {
 	return errorList
 }
 
-func (c CompletionMap) GetSuccesses() []*model.Target {
-	var successList []*model.Target
-	for target, completion := range c {
+// SuccessCount returns the number of successful targets and the number of cache hits
+func (c CompletionMap) SuccessCount() int {
+	successCount := 0
+	for _, completion := range c {
 		if completion.IsSuccess {
-			successList = append(successList, target)
+			successCount++
 		}
 	}
-	return successList
+	return successCount
 }
 
 // Walker walks the graph in topological order.
-// It makes no attempt at being externally thread safe.
+// Not thread-safe.
 type Walker struct {
 	graph         *DirectedTargetGraph
-	walkCb        WalkCallback
+	walkCallback  WalkCallback
 	vertexInfoMap map[*model.Target]*vertexInfo
 	// Keep track of which targets have been completed
 	completions CompletionMap
@@ -72,7 +74,7 @@ type Walker struct {
 func NewWalker(graph *DirectedTargetGraph, walkFunc WalkCallback, failFast bool) *Walker {
 	return &Walker{
 		graph:         graph,
-		walkCb:        walkFunc,
+		walkCallback:  walkFunc,
 		vertexInfoMap: map[*model.Target]*vertexInfo{},
 		completions:   map[*model.Target]Completion{},
 		failFast:      failFast,
@@ -82,27 +84,29 @@ func NewWalker(graph *DirectedTargetGraph, walkFunc WalkCallback, failFast bool)
 /*
 Walk For each vertex generate an info payload containing
 - a done channel
+- a cancel channel
 - a start channel
 
 Procedure:
 - Start all routines that do not have dependencies
-- For each routine there is a fanout worker that listens for its doneCh
+- For each routine there is a fanout onCompletionWorker that listens for its doneCh
 - When it receives a doneCh it marks the worker as completed
 - The onCompletionWorker then checks for each *dependant* if all their dependencies are satisfied
 - If that is the case we send a message to the dependant's readyCh to start them
+- In case of failure we cancel them and in case of failFast we cancel all outstanding targets
 
 Note: We do not start routines for targets that are not selected. Therefore,
 we need to check if descendants exist before starting/cancelling them
 
-The main goroutine will then wait for all the goroutines to finish.
+Walk will then wait for all the goroutines to finish.
 */
 func (w *Walker) Walk(
 	ctx context.Context,
-) (error, CompletionMap) {
+) (CompletionMap, error) {
 	logger := console.GetLogger(ctx)
 
-	if w.walkCb == nil {
-		return errors.New("walk callback is nil"), nil
+	if w.walkCallback == nil {
+		return nil, errors.New("walk callback is nil")
 	}
 
 	// populate info map
@@ -145,13 +149,13 @@ func (w *Walker) Walk(
 
 	select {
 	case <-done:
-		return nil, w.completions
+		return w.completions, nil
 	case <-ctx.Done():
 		logger.Debugf(
 			"context cancelled, cancelling all workers",
 		)
 		w.cancelAll()
-		return ctx.Err(), w.completions
+		return w.completions, ctx.Err()
 	}
 }
 
@@ -274,9 +278,10 @@ func (w *Walker) vertexRoutine(
 		return
 	case <-info.ready:
 		// call the callback
-		err := w.walkCb(ctx, target)
+		err := w.walkCallback(ctx, target)
 		if err != nil {
 			go func() {
+				// don't account for cache hits in errors
 				info.done <- Completion{IsSuccess: false, Err: err}
 			}()
 		} else {

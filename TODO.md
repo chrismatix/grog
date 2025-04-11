@@ -4,6 +4,7 @@
   - Hash the input target (definition and files)
   - Add a target cache that wraps the base cache
   - For each target check that the outputs exists
+- [ ] Log cached vs non-cached targets in build completion
 - [ ] The TargetCache should warn when a target is overwriting another's outputs
 - [ ] add file globbing for inputs
 - [ ] Loading: Figure out a way to better relate why unmarshalling a json config failed -> Use json schema!
