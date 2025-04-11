@@ -13,7 +13,7 @@ import (
 // It is used to represent the dependency graph of a project.
 // In order to assert that it does not contain cycles, you can call hasCycle()
 type DirectedTargetGraph struct {
-	vertices []*model.Target
+	vertices model.TargetMap
 
 	// outEdges maps a vertex to its list of outgoing vertices,
 	// representing the directed outEdges in the graph.
@@ -26,13 +26,21 @@ type DirectedTargetGraph struct {
 // NewDirectedGraph creates and initializes a new directed graph.
 func NewDirectedGraph() *DirectedTargetGraph {
 	return &DirectedTargetGraph{
-		vertices: []*model.Target{},
+		vertices: make(model.TargetMap),
 		outEdges: make(map[*model.Target][]*model.Target),
 		inEdges:  make(map[*model.Target][]*model.Target),
 	}
 }
 
-func (g *DirectedTargetGraph) GetVertices() []*model.Target {
+func NewDirectedGraphFromVertices(targetMap model.TargetMap) *DirectedTargetGraph {
+	return &DirectedTargetGraph{
+		vertices: targetMap,
+		outEdges: make(map[*model.Target][]*model.Target),
+		inEdges:  make(map[*model.Target][]*model.Target),
+	}
+}
+
+func (g *DirectedTargetGraph) GetVertices() model.TargetMap {
 	return g.vertices
 }
 
@@ -49,12 +57,9 @@ func (g *DirectedTargetGraph) GetSelectedVertices() []*model.Target {
 
 // AddVertex idempotently adds a new vertex to the graph.
 func (g *DirectedTargetGraph) AddVertex(target *model.Target) {
-	for _, vertex := range g.vertices {
-		if vertex == target {
-			return
-		}
+	if !g.hasVertex(target) {
+		g.vertices[target.Label] = target
 	}
-	g.vertices = append(g.vertices, target)
 }
 
 // AddEdge adds a directed edge between two vertices.
@@ -104,12 +109,7 @@ func (g *DirectedTargetGraph) GetDescendants(target *model.Target) []*model.Targ
 
 // hasVertex checks whether a vertex exists in the graph.
 func (g *DirectedTargetGraph) hasVertex(target *model.Target) bool {
-	for _, vertex := range g.vertices {
-		if vertex == target {
-			return true
-		}
-	}
-	return false
+	return g.vertices[target.Label] != nil
 }
 
 // HasCycle detects if the directed graph has a cycle using Depth-First Search (DFS).
@@ -120,9 +120,9 @@ func (g *DirectedTargetGraph) hasVertex(target *model.Target) bool {
 func (g *DirectedTargetGraph) HasCycle() bool {
 	visited := make(map[*model.Target]int) // 0: unvisited, 1: visiting, 2: visited
 
-	var dfs func(target *model.Target) bool
+	var depthFirstSearch func(target *model.Target) bool
 
-	dfs = func(target *model.Target) bool {
+	depthFirstSearch = func(target *model.Target) bool {
 		visited[target] = 1 // Mark as visiting
 
 		for _, neighbor := range g.outEdges[target] {
@@ -130,7 +130,7 @@ func (g *DirectedTargetGraph) HasCycle() bool {
 				return true // Cycle detected
 			}
 			if visited[neighbor] == 0 {
-				if dfs(neighbor) {
+				if depthFirstSearch(neighbor) {
 					return true // Cycle detected in descendant
 				}
 			}
@@ -142,7 +142,7 @@ func (g *DirectedTargetGraph) HasCycle() bool {
 
 	for _, vertex := range g.vertices {
 		if visited[vertex] == 0 {
-			if dfs(vertex) {
+			if depthFirstSearch(vertex) {
 				return true // Cycle detected starting from this vertex
 			}
 		}
@@ -153,13 +153,19 @@ func (g *DirectedTargetGraph) HasCycle() bool {
 
 // SelectTargets sets targets as selected and returns the number of selected targets.
 func (g *DirectedTargetGraph) SelectTargets(pattern label.TargetPattern, isTest bool) int {
-	selectedCount := 0
 	for _, target := range g.vertices {
 		// Match pattern and test flag
 		if pattern.Matches(target.Label) && (isTest == target.IsTest()) {
 			target.IsSelected = true
+			g.selectAllAncestors(target)
+		}
+	}
+
+	// Doing it all in one loop would be faster, but this is easier to reason about
+	selectedCount := 0
+	for _, target := range g.vertices {
+		if target.IsSelected {
 			selectedCount++
-			selectedCount += g.selectAllAncestors(target)
 		}
 	}
 
@@ -168,18 +174,11 @@ func (g *DirectedTargetGraph) SelectTargets(pattern label.TargetPattern, isTest 
 
 // selectAllAncestors recursively selects all ancestors of the given target
 // and returns the number of selected targets.
-func (g *DirectedTargetGraph) selectAllAncestors(target *model.Target) int {
-	selectedCount := 0
+func (g *DirectedTargetGraph) selectAllAncestors(target *model.Target) {
 	for _, ancestor := range g.inEdges[target] {
-		if ancestor.IsSelected {
-			// Already selected, skip
-			continue
-		}
 		ancestor.IsSelected = true
-		selectedCount++
-		selectedCount += g.selectAllAncestors(ancestor)
+		g.selectAllAncestors(ancestor)
 	}
-	return selectedCount
 }
 
 // SelectAllTargets selects all targets in the graphs
@@ -237,4 +236,29 @@ func (g *DirectedTargetGraph) LogGraphJSON(logger *zap.SugaredLogger) {
 		return
 	}
 	logger.Debugf("graph: %s", jsonStr)
+}
+
+// GraphJSON is a helper struct for JSON serialization
+type GraphJSON struct {
+	Vertices []*model.Target     `json:"vertices"`
+	Edges    map[string][]string `json:"edges"` // from label to label
+}
+
+// MarshalJSON serializes the graph to JSON
+func (g *DirectedTargetGraph) MarshalJSON() ([]byte, error) {
+	graphJSON := GraphJSON{
+		Vertices: g.vertices.TargetsAlphabetically(),
+		Edges:    map[string][]string{},
+	}
+
+	for from, toList := range g.outEdges {
+		fromLabel := from.Label
+		var toLabels []string
+		for _, to := range toList {
+			toLabels = append(toLabels, to.Label.String())
+		}
+		graphJSON.Edges[fromLabel.String()] = toLabels
+	}
+
+	return json.Marshal(graphJSON)
 }

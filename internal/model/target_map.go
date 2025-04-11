@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"grog/internal/label"
+	"sort"
 )
 
 // TargetMap A map of targets by label
@@ -21,4 +22,16 @@ func TargetMapFromPackages(packages []*Package) (TargetMap, error) {
 		}
 	}
 	return targets, nil
+}
+
+// TargetsAlphabetically returns the targets in alphabetical order
+func (m TargetMap) TargetsAlphabetically() []*Target {
+	var targets []*Target
+	for _, target := range m {
+		targets = append(targets, target)
+	}
+	sort.Slice(targets, func(i, j int) bool {
+		return targets[i].Label.String() < targets[j].Label.String()
+	})
+	return targets
 }

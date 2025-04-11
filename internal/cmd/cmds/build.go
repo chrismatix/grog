@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"grog/internal/analysis"
+	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/execution"
 	"grog/internal/label"
@@ -105,7 +106,7 @@ func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest b
 		}
 	}()
 
-	failFast := viper.GetBool("fail_fast")
+	failFast := config.Global.FailFast
 	err, completionMap := execution.Execute(ctx, graph, failFast)
 
 	elapsedTime := time.Since(startTime).Seconds()

@@ -7,6 +7,7 @@ import (
 	"grog/internal/model"
 	"sync"
 	"testing"
+	"time"
 )
 
 func GetTarget(name string) *model.Target {
@@ -229,16 +230,24 @@ func TestWalkerFailFast(t *testing.T) {
 
 	target1 := GetTarget("target1")
 	target2 := GetTarget("target2")
+	target3 := GetTarget("target3")
 
 	graph.AddVertex(target1)
 	graph.AddVertex(target2)
+	graph.AddVertex(target3)
 
+	// target1 depends on target2
+	// target3 is independent
 	_ = graph.AddEdge(target2, target1)
 
 	// walkFunc that fails for target2
 	walkFunc := func(ctx context.Context, target model.Target) error {
 		if target.Label.Name == "target2" {
 			return errors.New("failed to execute target2")
+		}
+		if target.Label.Name == "target3" {
+			// sleep a bit to ensure that the target will be cancelled in flight
+			time.Sleep(200 * time.Millisecond)
 		}
 		return nil
 	}
@@ -270,8 +279,10 @@ func TestWalkerFailFast(t *testing.T) {
 		t.Errorf("target1 should not have been processed")
 	}
 
-	if len(completionMap) != 1 {
-		t.Errorf("Expected 1 targets in completion map, got %d", len(completionMap))
+	// target3 should not have completed
+	completion, ok := completionMap[target3]
+	if ok && completion.IsSuccess {
+		t.Errorf("target3 should not have completed successfully")
 	}
 }
 

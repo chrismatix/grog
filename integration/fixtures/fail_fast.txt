@@ -1,0 +1,8 @@
+WARN: target //:target_1 has no inputs or dependencies causing it to re-run every time.
+WARN: target //:target_3 has no inputs or dependencies causing it to re-run every time.
+INFO: Selected 3 targets (1 package loaded, 3 targets configured).
+ERROR: Build failed. 0 targets completed, 1 failed:
+---------------------------------
+ERROR: Target //:target_1 failed with exit code 1:
+cmd: "echo 'failed' && exit 1"
+failed

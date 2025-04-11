@@ -1,16 +1,23 @@
 name: fail fast tests
 cases:
+  - name: fail_fast_graph
+    args:
+      - graph
+    repo: fail_fast
+
   # This should finish target 3 even though target 1 failed
   - name: no_fail_fast
     args:
       - build
       - //...
     repo: fail_fast
+    expect_fail: true
 
   # This should error immediately and not run target 3
-  - name: build_bar_should_also_build_foo
+  - name: fail_fast
     args:
       - build
       - --fail-fast
       - //...
     repo: fail_fast
+    expect_fail: true

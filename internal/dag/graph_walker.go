@@ -58,6 +58,9 @@ type Walker struct {
 	// Options
 	failFast bool
 
+	// Set to true if failFast was triggered
+	failFastTriggered bool
+
 	// Concurrency
 	// doneMutex protects completions
 	doneMutex sync.Mutex
@@ -176,6 +179,11 @@ func (w *Walker) onCompletionWorker(
 func (w *Walker) cancelTarget(target *model.Target) {
 	w.vertexMutex.Lock()
 	defer w.vertexMutex.Unlock()
+	// skip if already cancelled/completed
+	if _, ok := w.completions[target]; ok {
+		return
+	}
+	// cancel the vertex routine
 	if info, ok := w.vertexInfoMap[target]; ok {
 		close(info.cancel)
 	}
@@ -201,9 +209,15 @@ func (w *Walker) onComplete(target *model.Target, completion Completion) {
 	// Mark target as done
 	w.completions[target] = completion
 
+	if w.failFastTriggered {
+		// If failFast was triggered, we assume everything is being cancelled already
+		return
+	}
+
 	if !completion.IsSuccess {
 		// If failFast is true, cancel the entire walk
 		if w.failFast {
+			w.failFastTriggered = true
 			w.cancelAll()
 		} else {
 			// Cancel *all* descendants if the target failed
@@ -255,15 +269,19 @@ func (w *Walker) vertexRoutine(
 	// listen to all events
 	select {
 	case <-info.cancel:
-		// this will also cancel the walkCb
 		return
 	case <-info.ready:
 		// call the callback
 		err := w.walkCb(ctx, target)
 		if err != nil {
-			info.done <- Completion{IsSuccess: false, Err: err}
+			go func() {
+				info.done <- Completion{IsSuccess: false, Err: err}
+			}()
+
 		} else {
-			info.done <- Completion{IsSuccess: true, Err: nil}
+			go func() {
+				info.done <- Completion{IsSuccess: true, Err: nil}
+			}()
 		}
 		return
 	}

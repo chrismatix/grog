@@ -5,12 +5,16 @@ Available Commands:
   build       Loads the user configuration and executes build targets
   clean       Removes build outputs and clears the cache
   completion  Generate the autocompletion script for the specified shell
+  graph       Outputs the target dependency graph
   help        Help about any command
   test        Loads the user configuration and executes test targets
+  version     Print the version info
 
 Flags:
       --color string   Set color output (yes, no, or auto) (default "auto")
       --debug          Enable debug logging
+      --fail-fast      Fail fast on first error
   -h, --help           help for grog
+  -v, --version        version for grog
 
 Use "grog [command] --help" for more information about a command.

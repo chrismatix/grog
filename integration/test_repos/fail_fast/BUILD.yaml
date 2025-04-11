@@ -1,6 +1,6 @@
 targets:
   target_1:
-    cmd: "exit 1"
+    cmd: "echo 'failed' && exit 1"
   target_2:
     cmd: ""
     deps:

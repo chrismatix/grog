@@ -65,10 +65,12 @@ func LoadPackages() ([]*model.Package, error) {
 	return packages, nil
 }
 
+// getEnrichedPackage adds the package path to the target labels and returns the enriched package
 func getEnrichedPackage(packagePath string, pkg PackageDTO) (*model.Package, error) {
 	targets := make(map[label.TargetLabel]*model.Target)
 	for targetName, target := range pkg.Targets {
 		var deps []label.TargetLabel
+		// parse labels
 		for _, dep := range target.Deps {
 			depLabel, err := label.ParseTargetLabel(packagePath, dep)
 			if err != nil {
@@ -77,6 +79,10 @@ func getEnrichedPackage(packagePath string, pkg PackageDTO) (*model.Package, err
 			deps = append(deps, depLabel)
 		}
 
+		// root package should be understood as ""
+		if packagePath == "." {
+			packagePath = ""
+		}
 		targetLabel := label.TargetLabel{Package: packagePath, Name: targetName}
 		if _, ok := targets[targetLabel]; ok {
 			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", targetName, pkg.SourceFilePath)

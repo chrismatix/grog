@@ -13,6 +13,8 @@ func TestParseAndStringTargetLabel(t *testing.T) {
 		{"//foo/bar:baz", "", "foo/bar", "baz"},
 		{"//:root", "", "", "root"},
 		{":root", "", "", "root"},
+		{":root", ".", "", "root"},
+		{"//:root", ".", "", "root"},
 		// Shorthand: "//foo" should become "//foo:foo"
 		{"//foo", "", "foo", "foo"},
 		// Shorthand: "//foo/bar" should become "//foo/bar:bar"

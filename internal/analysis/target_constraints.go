@@ -15,15 +15,16 @@ import (
 We need to check the following four constraints for the paths defined by each target:
 1. all inputs must be relative to the package path
 2. all outputs point to files within the repository
-3. warn if a target's inputs intersect with another target's outputs without them explicitly depending on each other
-4. error if a target's inputs intersect with itself
+TODO 3. warn if a target's inputs intersect with another target's outputs without them explicitly depending on each other
+TODO 4. error if a target's inputs intersect with its own outputs
 
 */
 
 // CheckTargetConstraints checks that the paths defined by each target are valid
 // logs any warnings on the way
 func CheckTargetConstraints(logger *zap.SugaredLogger, targetMap model.TargetMap) (errs []error) {
-	for _, target := range targetMap {
+	// iterate over targets in alphabetical order for consistent logging
+	for _, target := range targetMap.TargetsAlphabetically() {
 		// warn if target has no inputs (re-runs every time)
 		if len(target.Inputs) == 0 && len(target.Deps) == 0 {
 			logger.Warnf("target %s has no inputs or dependencies causing it to re-run every time.", target.Label)

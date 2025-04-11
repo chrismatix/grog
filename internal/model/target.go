@@ -5,19 +5,19 @@ import "grog/internal/label"
 // Target defines a build step that depends on Deps (other targets)
 // and Inputs (files) and produces Outputs.
 type Target struct {
-	Label label.TargetLabel
+	Label label.TargetLabel `json:"label"`
 
-	Command string
-	Deps    []label.TargetLabel
-	Inputs  []string
-	Outputs []string
+	Command string              `json:"cmd"`
+	Deps    []label.TargetLabel `json:"deps,omitempty"`
+	Inputs  []string            `json:"inputs,omitempty"`
+	Outputs []string            `json:"outputs,omitempty"`
 
 	// Whether this target is selected for execution.
-	IsSelected bool
+	IsSelected bool `json:"is_selected,omitempty"`
 
 	// ChangeHash is the combined hash of the target definition and its input files
-	ChangeHash  string
-	HasCacheHit bool
+	ChangeHash  string `json:"change_hash,omitempty"`
+	HasCacheHit bool   `json:"has_cache_hit,omitempty"`
 }
 
 func (t *Target) GetDepsString() []string {

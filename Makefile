@@ -43,7 +43,7 @@ LD_FLAGS = -ldflags "\
 	-X 'main.buildDate=$(DATE)'"
 
 build:
-	go build -o dist/grog $(LD_FLAGS)
+	@go build -o dist/grog $(LD_FLAGS)
 
 build-with-coverage:
 	@go build -cover -o dist/grog $(LD_FLAGS)
@@ -59,7 +59,7 @@ release: clean
 
 	# MacOS
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build $(LD_FLAGS) -o dist/grog-darwin-amd64
-	CGO_ENABLED=0 GOOS=darwin GOARCH=aarch64 go build $(LD_FLAGS) -o dist/grog-darwin-amd64
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build $(LD_FLAGS) -o dist/grog-darwin-arm64
 	@echo "Release build completed."
 
 # Clean built binaries

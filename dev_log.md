@@ -2,6 +2,22 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 09-04-2025
+
+Added a graph command to make debugging the loaded data easier.
+Also discovered that fail fast was highly susceptible to deadlocks.
+Really looking forward to [synctest](https://go.dev/blog/synctest) being officially released.
+
+-C
+
+## 08-04-2025
+
+Got around to implementing a better structure for the root command which will allow us to parse the `grog.toml` to a global struct.
+I think it's fine, as long as I try to reference only in higher level functions and force all the lower level ones to expose their parameters.
+Also added a version command that receives build stamps using ld flags.
+
+-C
+
 ## 07-04-2025
 
 Finished the major work on checking paths and added the yaml loader which literally only took a minute.

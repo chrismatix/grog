@@ -9,6 +9,7 @@ import (
 	"grog/internal/console"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 var RootCmd = &cobra.Command{
@@ -45,9 +46,10 @@ func init() {
 	// Set up Viper
 	viper.SetConfigName("grog")
 	viper.SetConfigType("toml")
-	viper.AddConfigPath(".")           // search in current directory
-	viper.AddConfigPath("$HOME/.grog") // optionally look for config in the home directory
-	viper.AutomaticEnv()               // read in environment variables that match
+	viper.AddConfigPath(".")                               // search in current directory
+	viper.AddConfigPath("$HOME/.grog")                     // optionally look for config in the home directory
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_")) // allow FLAG-NAME to map to ENV VAR_NAME
+	viper.AutomaticEnv()                                   // read in environment variables that match
 
 	viper.Set("workspace_root", config.MustFindWorkspaceRoot())
 
@@ -70,8 +72,8 @@ func init() {
 	}
 
 	// Add fail_fast flag to BuildCmd
-	RootCmd.PersistentFlags().Bool("fail_fast", false, "Fail fast on first error")
-	err = viper.BindPFlag("fail_fast", RootCmd.PersistentFlags().Lookup("fail_fast"))
+	RootCmd.PersistentFlags().Bool("fail-fast", false, "Fail fast on first error")
+	err = viper.BindPFlag("fail_fast", RootCmd.PersistentFlags().Lookup("fail-fast"))
 	if err != nil {
 		panic(err)
 	}
@@ -81,13 +83,7 @@ func init() {
 	RootCmd.AddCommand(cmds.TestCmd)
 	RootCmd.AddCommand(cmds.CleanCmd)
 	RootCmd.AddCommand(cmds.VersionCmd)
-
-	logger := console.InitLogger()
-
-	// Read in config
-	if err = viper.ReadInConfig(); err == nil {
-		logger.Debugf("Using config file: %s", viper.ConfigFileUsed())
-	}
+	RootCmd.AddCommand(cmds.GraphCmd)
 }
 
 func initConfig() error {
@@ -100,9 +96,13 @@ func initConfig() error {
 	viper.SetDefault("fail_fast", false)
 
 	// Read config
-	if err := viper.ReadInConfig(); err == nil {
-		fmt.Printf("Using config: %s\n", viper.ConfigFileUsed())
+	logger := console.InitLogger()
+
+	// Read in config
+	if err := viper.ReadInConfig(); err != nil {
+		return err
 	}
+	logger.Debugf("Using config file: %s", viper.ConfigFileUsed())
 
 	// Merge all config sources into struct
 	if err := viper.Unmarshal(&config.Global); err != nil {

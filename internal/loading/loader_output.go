@@ -3,10 +3,10 @@ package loading
 // TargetDTO is used for deserializing a target in a loader.
 // The target that we use internally is in model.Target.
 type TargetDTO struct {
-	Command string   `json:"cmd"`
-	Deps    []string `json:"deps,omitempty"`
-	Inputs  []string `json:"inputs,omitempty"`
-	Outputs []string `json:"outputs,omitempty"`
+	Command string   `json:"cmd" yaml:"cmd"`
+	Deps    []string `json:"deps,omitempty" yaml:"deps,omitempty"`
+	Inputs  []string `json:"inputs,omitempty" yaml:"inputs,omitempty"`
+	Outputs []string `json:"outputs,omitempty" yaml:"outputs,omitempty"`
 }
 
 // PackageDTO is used for deserializing a package in a loader.

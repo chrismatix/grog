@@ -242,12 +242,33 @@ Here is a potential cache layout for an example target `//path/to/package:target
 
 ## Outputs
 
+> An **output** is a single artifact that is produced by the build command whose existence we track and restore from the cache when needed.
+
 While inputs _must_ be relative to the package folder outputs can write anywhere in the repository root.
 This is important to support use cases like "This tool generates a markdown file to our docs folder".
 The implication of this is that outputs of one target can overlap with the inputs of another.
 This is ok as long as there is an actual dependency and if not we need to warn the user about it since it could lead to inconsistent build behavior.
 
-Question: Should we also show warnings when targets overwrite each other's outputs?
+**Question**: Should we also show warnings when targets overwrite each other's outputs?
+
+These and all other target related constraints are implemented and tracked in `target_constraints.go`
+
+### Docker outputs
+
+Docker images are a very common output of builds and as such we need to be able to track them in the cache.
+We could make outputs extensible like so:
+
+```yaml
+targets:
+  foo:
+    cmd: "some command"
+    outputs:
+      - ../output.txt
+      # Local or with repository
+      - docker://some-docker-tag
+      - s3://some-s3-uri
+      - ...
+```
 
 ## Target Labels
 

@@ -9,15 +9,21 @@ import (
 // It supports shorthand notation "//package/path" which is equivalent to "//package/path:basename",
 // where "basename" is the last element of the package path.
 type TargetLabel struct {
-	Package string // e.g. "package/path" (for root package, it may be empty)
-	Name    string // e.g. "target"
+	Package string `json:"package"` // e.g. "package/path" (for root package, it may be empty)
+	Name    string `json:"name"`    // e.g. "target"
 }
 
-// ParseTargetLabel parses a Bazel-style target label.
+// ParseTargetLabel parses a Bazel-style target label relative to the given packagePath.
 // It accepts both explicit labels ("//pkg:target"), shorthand labels ("//pkg"),
 // and relative labels (":target") for the current packagePath.
+// I.e. "path", ":target" -> "//path:target"
 func ParseTargetLabel(packagePath, label string) (TargetLabel, error) {
 	if strings.HasPrefix(label, ":") {
+		if packagePath == "." {
+			// For the root package we omit the .
+			packagePath = ""
+		}
+
 		// Relative label: use the current package path with the given target name.
 		targetName := label[1:]
 		if targetName == "" {
