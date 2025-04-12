@@ -19,15 +19,15 @@ unit-test:
 # https://github.com/tj-actions/coverage-badge-go
 # https://dustinspecker.com/posts/go-combined-unit-integration-code-coverage/
 test: build-with-coverage
-	@rm -fr .coverdata
-	@mkdir -p .coverdata/unit .coverdata/integration
-	@gotestsum -- -cover ./internal/... -test.gocoverdir="$$(pwd)/.coverdata/unit"
+	@rm -fr coverdata
+	@mkdir -p coverdata/unit coverdata/integration
+	@gotestsum -- -cover ./internal/... -test.gocoverdir="$$(pwd)/coverdata/unit"
 	@gotestsum ./integration/... $(UPDATE_FLAG) $(UPDATE_ALL_FLAG)
-	@go tool covdata percent -i=.coverdata/integration,.coverdata/unit
-	@go tool covdata textfmt -i=.coverdata/integration,.coverdata/unit -o .coverdata/coverage.out
+	@go tool covdata percent -i=coverdata/integration,coverdata/unit
+	@go tool covdata textfmt -i=coverdata/integration,coverdata/unit -o coverdata/coverage.out
 
 check-coverage: test
-	@go tool covdata textfmt -i=.coverdata/integration,.coverdata/unit -o .coverdata/profile.txt
+	@go tool covdata textfmt -i=coverdata/integration,coverdata/unit -o coverdata/profile.txt
 	@go tool cover -html=profile.txt
 
 

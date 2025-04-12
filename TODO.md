@@ -13,5 +13,6 @@ Actually we do need to track caching in the graph walker since it needs to check
 - [ ] Loading: Add executable support
 - [ ] Loading: Add python
 - [ ] Loading: Add typescript support
+- [ ] Logging: Create a diagnotics module that we attach to the context and that - on failure - will always write all the diagnostics to the grog root
 - [ ] Docs: Kick-ass README
 - [ ] Tests: Use the new synctest package to better test the execution semantic

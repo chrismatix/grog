@@ -31,7 +31,7 @@ jobs:
       - name: Go Coverage Badge
         uses: tj-actions/coverage-badge-go@v3
         with:
-          filename: .coverdata/coverage.out
+          filename: coverdata/coverage.out
 
       - name: Verify Changed files
         uses: tj-actions/verify-changed-files@v16

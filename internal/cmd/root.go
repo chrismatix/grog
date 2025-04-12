@@ -65,7 +65,7 @@ func init() {
 	// debug
 	RootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
 	err = viper.BindPFlag("debug", RootCmd.PersistentFlags().Lookup("debug"))
-	RootCmd.PersistentFlags().CountP("verbose", "v", "Set verbosity level")
+	RootCmd.PersistentFlags().CountP("verbose", "v", "Set verbosity level (-v, -vv)")
 	err = viper.BindPFlag("verbose", RootCmd.PersistentFlags().Lookup("verbose"))
 
 	// fail_fast
@@ -94,7 +94,8 @@ func initConfig() error {
 	switch viper.GetInt("verbose") {
 	case 1:
 		viper.Set("log_level", "debug")
-		// we can add another even more verbose log level here if necessary
+	case 2:
+		viper.Set("log_level", "trace")
 	}
 
 	if viper.GetBool("debug") {
@@ -104,6 +105,7 @@ func initConfig() error {
 
 	// Set defaults here
 	viper.SetDefault("fail_fast", false)
+	viper.SetDefault("log_level", "info")
 
 	// Read config
 	logger := console.InitLogger()

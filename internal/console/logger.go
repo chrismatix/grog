@@ -22,6 +22,10 @@ func InitLogger() *zap.SugaredLogger {
 		logLevel = "info"
 	}
 
+	cfg := zap.NewProductionConfig()
+
+	cfg.DisableStacktrace = true
+	cfg.DisableCaller = true
 	// Define a custom encoder config
 	encoderConfig := zap.NewDevelopmentEncoderConfig()
 	encoderConfig.TimeKey = ""   // Disable time encoding
@@ -31,11 +35,15 @@ func InitLogger() *zap.SugaredLogger {
 
 	var level zapcore.Level
 	switch strings.ToLower(logLevel) {
-	case "debug":
+	case "trace":
 		level = zap.DebugLevel
-		// In debug mode, we want to see the caller
+		// Trace mode is debug + caller
+		cfg.DisableStacktrace = false
+		cfg.DisableCaller = false
 		encoderConfig.CallerKey = "C"
 		encoderConfig.EncodeCaller = zapcore.FullCallerEncoder
+	case "debug":
+		level = zap.DebugLevel
 	case "info":
 		level = zap.InfoLevel
 	case "warn":
@@ -46,13 +54,8 @@ func InitLogger() *zap.SugaredLogger {
 		level = zap.InfoLevel
 	}
 
-	cfg := zap.NewProductionConfig()
 	// do not use structured logging by default
 	cfg.Encoding = "console"
-	cfg.DisableStacktrace = true
-	if level == zap.DebugLevel {
-		cfg.DisableStacktrace = false
-	}
 
 	cfg.OutputPaths = []string{
 		logPath,

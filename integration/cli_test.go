@@ -192,7 +192,7 @@ func getCoverDir() (string, error) {
 		return "", fmt.Errorf("problems recovering caller information")
 	}
 
-	return filepath.Join(filepath.Dir(filename), "../.coverdata/integration"), nil
+	return filepath.Join(filepath.Dir(filename), "../coverdata/integration"), nil
 }
 
 // clearTestRepoCache runs `grog clean` on each repo defined in the test tables

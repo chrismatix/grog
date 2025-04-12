@@ -10,6 +10,7 @@ type WorkspaceConfig struct {
 	GrogRoot      string `mapstructure:"grog_root"`
 	WorkspaceRoot string `mapstructure:"workspace_root"`
 	FailFast      bool   `mapstructure:"fail_fast"`
+	LogLevel      string `mapstructure:"log_level"`
 }
 
 var Global WorkspaceConfig

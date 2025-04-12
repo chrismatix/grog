@@ -2,9 +2,22 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 12-04-2025
+
+Got the first working version of caching and also ensured that when cache misses invalidate dependant caches.
+Now that we have a first working version of caching I feel like the time is right to move onto the Makefile parsing as it's a core devex feature.
+
+**Open question**: We currently disallow target inputs to escape the package path since that seems like a clear anti-pattern as that is covered by dependencies.
+However, what about child packages?
+Should it be possible to just resolve to have a build file at the root that globs an entire directory and listens for changes?
+
+-> If there is no good reason to disallow it, I think it should be permitted
+
+-C
+
 ## 11-04-2025
 
-Back in the saddle, engaged and rested.
+Back in the saddle, engaged ( ;) ) and rested.
 Finally getting into the file system caching while fixing lots of small configuration issues on the way.
 Also hitting all the deadlocks the way an unsupervised toddler hits coffee table corners.
 

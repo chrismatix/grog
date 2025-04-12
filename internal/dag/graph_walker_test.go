@@ -7,6 +7,7 @@ import (
 	"grog/internal/model"
 	"sync"
 	"testing"
+	"time"
 )
 
 func GetTarget(name string) *model.Target {
@@ -245,6 +246,7 @@ func TestWalkerFailFast(t *testing.T) {
 		if target.Label.Name == "target3" {
 			// wait for target2 to complete to simulate a task that would take longer than target2
 			<-target2Chan
+			time.Sleep(10 * time.Millisecond)
 			return false, nil
 		}
 		return false, nil

@@ -16,7 +16,7 @@ Flags:
       --enable-caching   Enable caching (default true)
       --fail-fast        Fail fast on first error
   -h, --help             help for grog
-  -v, --verbose count    Set verbosity level
+  -v, --verbose count    Set verbosity level (-v, -vv)
       --version          version for grog
 
 Use "grog [command] --help" for more information about a command.
