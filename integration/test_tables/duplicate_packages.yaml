@@ -1,0 +1,7 @@
+name: duplicate_package_definitions
+cases:
+  - name: duplicate_package_definition
+    args:
+      - build
+    repo: duplicate_package_definition
+    expect_fail: true

@@ -26,7 +26,7 @@ func (m MakefileLoader) Load(filePath string) (PackageDTO, bool, error) {
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
-	parser := newMakefileParser(scanner, filePath)
+	parser := newMakefileParser(scanner)
 	packageDto, targetsFound, err := parser.parse()
 	if err != nil {
 		return packageDto, targetsFound, fmt.Errorf(
@@ -45,12 +45,11 @@ type makefileParser struct {
 }
 
 // newMakefileParser creates a new parser for the given scanner and file path.
-func newMakefileParser(scanner *bufio.Scanner, filePath string) *makefileParser {
+func newMakefileParser(scanner *bufio.Scanner) *makefileParser {
 	return &makefileParser{
 		scanner: scanner,
 		pkg: PackageDTO{
-			SourceFilePath: filePath,
-			Targets:        make(map[string]*TargetDTO),
+			Targets: make(map[string]*TargetDTO),
 		},
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"grog/internal/label"
 	"grog/internal/model"
 	"io/fs"
+	"sync"
 )
 
 func LoadPackages(logger *zap.SugaredLogger) ([]*model.Package, error) {
@@ -22,6 +23,12 @@ func LoadPackages(logger *zap.SugaredLogger) ([]*model.Package, error) {
 	}
 
 	packageLoader := NewPackageLoader(logger)
+
+	// Keep track of loaded package paths to error out when there is a collision
+	// e.g. when a user defines both BUILD.json and BUILD.py in the same directory
+	// packagePath -> sourceFilePath
+	loadedPackagePaths := make(map[string]string)
+	loadedMu := &sync.Mutex{}
 
 	walkFn := func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -53,6 +60,19 @@ func LoadPackages(logger *zap.SugaredLogger) ([]*model.Package, error) {
 				return err
 			}
 
+			// Check for duplicate package definitions
+			loadedMu.Lock()
+			if loadedPackageFile, ok := loadedPackagePaths[packagePath]; ok {
+				loadedMu.Unlock()
+				return fmt.Errorf("found conflicting package definitions at package path: %s\n- %s\n- %s",
+					packagePath,
+					config.MustGetPathRelativeToWorkspaceRoot(loadedPackageFile),
+					config.MustGetPathRelativeToWorkspaceRoot(pkg.SourceFilePath),
+				)
+			}
+			loadedPackagePaths[packagePath] = pkgDto.SourceFilePath
+			loadedMu.Unlock()
+
 			packages = append(packages, pkg)
 		}
 
@@ -66,7 +86,10 @@ func LoadPackages(logger *zap.SugaredLogger) ([]*model.Package, error) {
 	return packages, nil
 }
 
-// getEnrichedPackage adds the package path to the target labels and returns the enriched package
+// getEnrichedPackage enriches the parsing dto with the following information
+// - adds the package path to the target labels
+// - resolves the globs in the inputs and outputs
+// - parses the deps into target labels
 func getEnrichedPackage(packagePath string, pkg PackageDTO) (*model.Package, error) {
 	targets := make(map[label.TargetLabel]*model.Target)
 	for targetName, target := range pkg.Targets {

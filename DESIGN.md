@@ -267,8 +267,11 @@ targets:
       # Local or with repository
       - docker://some-docker-tag
       - s3://some-s3-uri
+      - some_dir/
       - ...
 ```
+
+**Idea:** If we are already implementing custom output handlers we could also add a special handler for directories!
 
 ## Target Labels
 

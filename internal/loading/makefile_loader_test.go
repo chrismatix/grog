@@ -172,7 +172,7 @@ target_empty:
 		t.Run(tc.name, func(t *testing.T) {
 			// Create a new scanner from the input string.
 			scanner := newScannerFromString(tc.input)
-			parser := newMakefileParser(scanner, "dummy_file")
+			parser := newMakefileParser(scanner)
 			pkg, targetsFound, err := parser.parse()
 			if tc.shouldError {
 				if err == nil {

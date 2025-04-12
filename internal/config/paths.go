@@ -3,7 +3,6 @@ package config
 import (
 	"crypto/sha256"
 	"fmt"
-	"github.com/spf13/viper"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,7 +47,7 @@ func MustFindWorkspaceRoot() string {
 }
 
 func GetPathRelativeToWorkspaceRoot(path string) (string, error) {
-	workspaceRoot := viper.Get("workspace_root").(string)
+	workspaceRoot := Global.WorkspaceRoot
 	// error if path is not under workspace root
 	if !strings.HasPrefix(path, workspaceRoot) {
 		return "", fmt.Errorf("path %s is not under workspace root %s", path, workspaceRoot)
@@ -57,9 +56,16 @@ func GetPathRelativeToWorkspaceRoot(path string) (string, error) {
 	return path[len(workspaceRoot)+1:], nil
 }
 
-func GetPathAbsoluteToWorkspaceRoot(path string) string {
-	workspaceRoot := viper.Get("workspace_root").(string)
+func MustGetPathRelativeToWorkspaceRoot(path string) string {
+	relativePath, err := GetPathRelativeToWorkspaceRoot(path)
+	if err != nil {
+		panic(err)
+	}
+	return relativePath
+}
 
+func GetPathAbsoluteToWorkspaceRoot(path string) string {
+	workspaceRoot := Global.WorkspaceRoot
 	return filepath.Join(workspaceRoot, path)
 }
 

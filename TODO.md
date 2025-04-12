@@ -2,13 +2,12 @@
 
 Actually we do need to track caching in the graph walker since it needs to check if dependencies were cached and propagate that
 
-- [ ] Loading: Add Makefile support
+- [ ] add file globbing for inputs
 - [ ] Only replace outputs when they have changed -> Will require tracking hashes in a separate, small file
 - [ ] Add s3 caching option
+- [ ] Add gcs caching option
 - [ ] Add docker outputs
-- [ ] Log cached vs non-cached targets in build completion
 - [ ] The TargetCache should warn when a target is overwriting another's outputs
-- [ ] add file globbing for inputs
 - [ ] Loading: Figure out a way to better relate why unmarshalling a json config failed -> Use json schema!
 - [ ] Loading: Add executable support
 - [ ] Loading: Add python
@@ -16,3 +15,4 @@ Actually we do need to track caching in the graph walker since it needs to check
 - [ ] Logging: Create a diagnotics module that we attach to the context and that - on failure - will always write all the diagnostics to the grog root
 - [ ] Docs: Kick-ass README
 - [ ] Tests: Use the new synctest package to better test the execution semantic
+- [ ] Execution: Warn if one or more of the input files specified for a target do not exist

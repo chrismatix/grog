@@ -37,7 +37,9 @@ func (p *PackageLoader) LoadIfMatched(filePath string, fileName string) (Package
 	for _, loader := range p.loaders {
 		if slices.Contains(loader.FileNames(), fileName) {
 			p.logger.Debugf("Loading package from %s using loader %s", filePath, loader)
-			return loader.Load(filePath)
+			pkgDto, matched, err := loader.Load(filePath)
+			pkgDto.SourceFilePath = filePath
+			return pkgDto, matched, err
 		}
 	}
 
