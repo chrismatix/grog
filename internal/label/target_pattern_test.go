@@ -40,12 +40,16 @@ func TestTargetPatternMatching(t *testing.T) {
 	}
 
 	// Pattern: all targets in entire repo ("//...")
-	patAll, err := ParseTargetPattern("//...")
+	patternAll, err := ParseTargetPattern("//...")
 	if err != nil {
 		t.Fatalf("Failed to parse pattern: %v", err)
 	}
-	if !patAll.Matches(tl("//foo:bar")) || !patAll.Matches(tl("//foo/bar:baz")) {
+	if !patternAll.Matches(tl("//foo:bar")) || !patternAll.Matches(tl("//foo/bar:baz")) {
 		t.Error("//... should match any target in any package")
+	}
+
+	if patternAll.String() != "//..." {
+		t.Errorf("PatternAll.String() should be \"//...\", got %q", patternAll.String())
 	}
 
 	// Pattern with specific target filter: "//foo/...:lib" matches only targets named "lib"

@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"github.com/charlievieth/fastwalk"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 	"grog/internal/config"
 	"grog/internal/label"
 	"grog/internal/model"
 	"io/fs"
 )
 
-func LoadPackages() ([]*model.Package, error) {
+func LoadPackages(logger *zap.SugaredLogger) ([]*model.Package, error) {
 	workspaceRoot := viper.Get("workspace_root").(string)
 
 	var packages []*model.Package
@@ -20,7 +21,7 @@ func LoadPackages() ([]*model.Package, error) {
 		Follow: false,
 	}
 
-	packageLoader := NewPackageLoader()
+	packageLoader := NewPackageLoader(logger)
 
 	walkFn := func(path string, d fs.DirEntry, err error) error {
 		if err != nil {

@@ -3,7 +3,7 @@
 Actually we do need to track caching in the graph walker since it needs to check if dependencies were cached and propagate that
 
 - [ ] Loading: Add Makefile support
-- [ ] Only replace
+- [ ] Only replace outputs when they have changed -> Will require tracking hashes in a separate, small file
 - [ ] Add s3 caching option
 - [ ] Add docker outputs
 - [ ] Log cached vs non-cached targets in build completion

@@ -19,7 +19,7 @@ func ParseTargetPattern(pattern string) (TargetPattern, error) {
 		return TargetPattern{}, fmt.Errorf("invalid pattern %q: must start with \"//\"", pattern)
 	}
 	body := pattern[2:]
-	var prefix, targetPat string
+	var prefix, targetPattern string
 	recursive := false
 
 	// Look for the "..." wildcard.
@@ -29,8 +29,8 @@ func ParseTargetPattern(pattern string) (TargetPattern, error) {
 		prefix = body[:idx]
 		// If there is a target filter after "..."
 		if len(body) > idx+3 && body[idx+3] == ':' {
-			targetPat = body[idx+4:]
-			if targetPat == "" {
+			targetPattern = body[idx+4:]
+			if targetPattern == "" {
 				return TargetPattern{}, fmt.Errorf("invalid pattern %q: target pattern after ':' is empty", pattern)
 			}
 		} else if len(body) > idx+3 {
@@ -43,13 +43,13 @@ func ParseTargetPattern(pattern string) (TargetPattern, error) {
 		if colonIdx == -1 {
 			// Shorthand: "//foo" is equivalent to "//foo:foo"
 			prefix = body
-			targetPat = body[strings.LastIndex(body, "/")+1:]
+			targetPattern = body[strings.LastIndex(body, "/")+1:]
 		} else {
 			prefix = body[:colonIdx]
-			targetPat = body[colonIdx+1:]
+			targetPattern = body[colonIdx+1:]
 		}
 
-		if targetPat == "" {
+		if targetPattern == "" {
 			return TargetPattern{}, fmt.Errorf("invalid pattern %q: target pattern is empty", pattern)
 		}
 	}
@@ -58,7 +58,7 @@ func ParseTargetPattern(pattern string) (TargetPattern, error) {
 	if len(prefix) > 0 && prefix[len(prefix)-1] == '/' {
 		prefix = prefix[:len(prefix)-1]
 	}
-	return TargetPattern{prefix: prefix, targetPattern: targetPat, recursive: recursive}, nil
+	return TargetPattern{prefix: prefix, targetPattern: targetPattern, recursive: recursive}, nil
 }
 
 // Matches returns true if the given TargetLabel matches the pattern.
@@ -93,7 +93,12 @@ func (p TargetPattern) Matches(t TargetLabel) bool {
 func (p TargetPattern) String() string {
 	base := "//" + p.prefix
 	if p.recursive {
-		base += "/..."
+		if p.prefix != "" {
+			base += "/..."
+		} else {
+			// For root wild-cards
+			base += "..."
+		}
 	}
 	if p.targetPattern != "" {
 		base += ":" + p.targetPattern

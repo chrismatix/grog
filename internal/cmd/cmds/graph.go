@@ -19,7 +19,7 @@ var GraphCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		logger := console.InitLogger()
 
-		packages, err := loading.LoadPackages()
+		packages, err := loading.LoadPackages(logger)
 		if err != nil {
 			logger.Fatalf(
 				"could not load packages: %v",

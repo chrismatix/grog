@@ -54,7 +54,7 @@ func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest b
 	startTime := time.Now()
 	logger := console.InitLogger()
 
-	packages, err := loading.LoadPackages()
+	packages, err := loading.LoadPackages(logger)
 	if err != nil {
 		logger.Fatalf(
 			"could not load packages: %v",

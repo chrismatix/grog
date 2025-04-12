@@ -15,13 +15,13 @@ func (j YamlLoader) FileNames() []string {
 }
 
 // Load reads the file at the specified filePath and unmarshals its content into a model.Package.
-func (j YamlLoader) Load(filePath string) (PackageDTO, error) {
+func (j YamlLoader) Load(filePath string) (PackageDTO, bool, error) {
 	var pkg PackageDTO
 
 	// Open the file.
 	file, err := os.Open(filePath)
 	if err != nil {
-		return pkg, err
+		return pkg, false, err
 	}
 	defer file.Close()
 
@@ -29,11 +29,11 @@ func (j YamlLoader) Load(filePath string) (PackageDTO, error) {
 	decoder := yaml.NewDecoder(file)
 	err = decoder.Decode(&pkg)
 	if err != nil {
-		return pkg, fmt.Errorf(
+		return pkg, true, fmt.Errorf(
 			"failed to decode JSON file %s: %w",
 			filePath,
 			err)
 	}
 
-	return pkg, nil
+	return pkg, true, nil
 }
