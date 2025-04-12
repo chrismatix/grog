@@ -34,6 +34,8 @@ type job[T any] struct {
 // reporting progress to the tea UI
 type Pool[T any] struct {
 	maxWorkers int
+	// totalTasks total number of tasks to run (0 for unlimited)
+	totalTasks int
 	jobCh      chan job[T]
 
 	// msgCh is used to send status updates to the UI.
@@ -51,17 +53,17 @@ type Pool[T any] struct {
 	closed bool
 }
 
-func NewPool[T any](maxWorkers int, msgCh chan tea.Msg) *Pool[T] {
+func NewPool[T any](maxWorkers int, msgCh chan tea.Msg, totalTasks int) *Pool[T] {
 	if maxWorkers < 1 {
 		maxWorkers = runtime.NumCPU()
 	}
-	wp := &Pool[T]{
+	return &Pool[T]{
 		maxWorkers: maxWorkers,
+		totalTasks: totalTasks,
 		jobCh:      make(chan job[T]),
 		msgCh:      msgCh,
 		taskState:  make(console.TaskStateMap),
 	}
-	return wp
 }
 
 func (wp *Pool[T]) StartWorkers(ctx context.Context) {
@@ -143,6 +145,10 @@ func (wp *Pool[T]) flushState() {
 	// Write the current task state
 	wp.msgCh <- console.TaskStateMsg{State: wp.taskState}
 	totalTasks := wp.nextTaskId
+	if wp.totalTasks > 0 {
+		totalTasks = wp.totalTasks
+	}
+
 	actionsRunning := len(wp.taskState)
 	wp.msgCh <- console.HeaderMsg(green(
 		fmt.Sprintf("[%d/%d]", wp.completedTasks, totalTasks)) +

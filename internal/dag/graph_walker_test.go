@@ -7,7 +7,6 @@ import (
 	"grog/internal/model"
 	"sync"
 	"testing"
-	"time"
 )
 
 func GetTarget(name string) *model.Target {
@@ -16,10 +15,10 @@ func GetTarget(name string) *model.Target {
 
 func TestWalkerBasic(t *testing.T) {
 	// Create a simple graph with no dependencies
-	graph := NewDirectedGraph()
-
 	target1 := GetTarget("target1")
 	target2 := GetTarget("target2")
+
+	graph := NewDirectedGraphFromTargets(target1, target2)
 
 	graph.AddVertex(target1)
 	graph.AddVertex(target2)
@@ -28,11 +27,11 @@ func TestWalkerBasic(t *testing.T) {
 	var executionOrder []label.TargetLabel
 	var mu sync.Mutex
 
-	walkFunc := func(ctx context.Context, target *model.Target) error {
+	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (bool, error) {
 		mu.Lock()
 		defer mu.Unlock()
 		executionOrder = append(executionOrder, target.Label)
-		return nil
+		return false, nil
 	}
 
 	walker := NewWalker(graph, walkFunc, true)
@@ -70,15 +69,14 @@ func TestWalkerBasic(t *testing.T) {
 
 func TestWalkerLinearDependency(t *testing.T) {
 	// Create a graph with linear dependencies: target1 -> target2 -> target3
-	graph := NewDirectedGraph()
-
 	target1 := GetTarget("target1")
 	target2 := GetTarget("target2")
 	target3 := GetTarget("target3")
 
-	graph.AddVertex(target1)
-	graph.AddVertex(target2)
-	graph.AddVertex(target3)
+	graph := NewDirectedGraphFromTargets(
+		target1,
+		target2,
+		target3)
 
 	// target1 depends on target2, target2 depends on target3
 	_ = graph.AddEdge(target2, target1) // target1 has target2 as dependency
@@ -88,11 +86,11 @@ func TestWalkerLinearDependency(t *testing.T) {
 	var executionOrder []label.TargetLabel
 	var mu sync.Mutex
 
-	walkFunc := func(ctx context.Context, target *model.Target) error {
+	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (bool, error) {
 		mu.Lock()
 		defer mu.Unlock()
 		executionOrder = append(executionOrder, target.Label)
-		return nil
+		return false, nil
 	}
 
 	walker := NewWalker(graph, walkFunc, true)
@@ -147,17 +145,16 @@ func TestWalkerDiamondDependency(t *testing.T) {
 	//    target2     target3
 	//         \      /
 	//          target4
-	graph := NewDirectedGraph()
-
 	target1 := GetTarget("target1")
 	target2 := GetTarget("target2")
 	target3 := GetTarget("target3")
 	target4 := GetTarget("target4")
 
-	graph.AddVertex(target1)
-	graph.AddVertex(target2)
-	graph.AddVertex(target3)
-	graph.AddVertex(target4)
+	graph := NewDirectedGraphFromTargets(
+		target1,
+		target2,
+		target3,
+		target4)
 
 	_ = graph.AddEdge(target2, target1)
 	_ = graph.AddEdge(target3, target1)
@@ -168,11 +165,11 @@ func TestWalkerDiamondDependency(t *testing.T) {
 	var executedTargets []label.TargetLabel
 	var mu sync.Mutex
 
-	walkFunc := func(ctx context.Context, target *model.Target) error {
+	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (bool, error) {
 		mu.Lock()
 		defer mu.Unlock()
 		executedTargets = append(executedTargets, target.Label)
-		return nil
+		return false, nil
 	}
 
 	walker := NewWalker(graph, walkFunc, true)
@@ -225,31 +222,32 @@ func TestWalkerDiamondDependency(t *testing.T) {
 }
 
 func TestWalkerFailFast(t *testing.T) {
-	// Create a graph with a dependency that will fail
-	graph := NewDirectedGraph()
-
 	target1 := GetTarget("target1")
 	target2 := GetTarget("target2")
 	target3 := GetTarget("target3")
 
-	graph.AddVertex(target1)
-	graph.AddVertex(target2)
-	graph.AddVertex(target3)
+	// Create a graph with a dependency that will fail
+	graph := NewDirectedGraphFromTargets(target1, target2, target3)
 
 	// target1 depends on target2
 	// target3 is independent
 	_ = graph.AddEdge(target2, target1)
+	target2Chan := make(chan bool)
 
 	// walkFunc that fails for target2
-	walkFunc := func(ctx context.Context, target *model.Target) error {
+	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (bool, error) {
 		if target.Label.Name == "target2" {
-			return errors.New("failed to execute target2")
+			go func() {
+				target2Chan <- true
+			}()
+			return false, errors.New("failed to execute target2")
 		}
 		if target.Label.Name == "target3" {
-			// sleep a bit to ensure that the target will be cancelled in flight
-			time.Sleep(200 * time.Millisecond)
+			// wait for target2 to complete to simulate a task that would take longer than target2
+			<-target2Chan
+			return false, nil
 		}
-		return nil
+		return false, nil
 	}
 
 	walker := NewWalker(graph, walkFunc, true) // failFast = true
@@ -288,12 +286,12 @@ func TestWalkerFailFast(t *testing.T) {
 
 func TestWalkerNonFailFast(t *testing.T) {
 	// Create a graph with a dependency that will fail
-	graph := NewDirectedGraph()
-
 	target1 := GetTarget("target1")
 	target2 := GetTarget("target2")
 	target3 := GetTarget("target3")
 	target4 := GetTarget("target4")
+
+	graph := NewDirectedGraphFromTargets(target1, target2, target3, target4)
 
 	graph.AddVertex(target1)
 	graph.AddVertex(target2)
@@ -305,11 +303,11 @@ func TestWalkerNonFailFast(t *testing.T) {
 	_ = graph.AddEdge(target3, target4)
 
 	// walkFunc that fails for target2
-	walkFunc := func(ctx context.Context, target *model.Target) error {
+	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (bool, error) {
 		if target.Label.Name == "target1" {
-			return errors.New("failed to execute target1")
+			return false, errors.New("failed to execute target1")
 		}
-		return nil
+		return false, nil
 	}
 
 	walker := NewWalker(graph, walkFunc, false) // failFast = false
@@ -347,10 +345,7 @@ func TestWalkerNonFailFast(t *testing.T) {
 func TestWalkerEdgeCases(t *testing.T) {
 	t.Run("NilWalkFunction", func(t *testing.T) {
 		// Test with a nil walk function
-		graph := NewDirectedGraph()
-
-		targetA := GetTarget("A")
-		graph.AddVertex(targetA)
+		graph := NewDirectedGraphFromTargets(GetTarget("A"))
 
 		// Pass nil walk function
 		walker := NewWalker(graph, nil, true)

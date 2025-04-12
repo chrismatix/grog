@@ -32,9 +32,18 @@ func NewDirectedGraph() *DirectedTargetGraph {
 	}
 }
 
-func NewDirectedGraphFromVertices(targetMap model.TargetMap) *DirectedTargetGraph {
+func NewDirectedGraphFromMap(targetMap model.TargetMap) *DirectedTargetGraph {
 	return &DirectedTargetGraph{
 		vertices: targetMap,
+		outEdges: make(map[*model.Target][]*model.Target),
+		inEdges:  make(map[*model.Target][]*model.Target),
+	}
+}
+
+// NewDirectedGraphFromTargets Useful for testing
+func NewDirectedGraphFromTargets(targets ...*model.Target) *DirectedTargetGraph {
+	return &DirectedTargetGraph{
+		vertices: model.TargetMapFromTargets(targets...),
 		outEdges: make(map[*model.Target][]*model.Target),
 		inEdges:  make(map[*model.Target][]*model.Target),
 	}

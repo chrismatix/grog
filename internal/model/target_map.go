@@ -24,6 +24,14 @@ func TargetMapFromPackages(packages []*Package) (TargetMap, error) {
 	return targets, nil
 }
 
+func TargetMapFromTargets(targets ...*Target) TargetMap {
+	targetMap := make(TargetMap)
+	for _, target := range targets {
+		targetMap[target.Label] = target
+	}
+	return targetMap
+}
+
 // TargetsAlphabetically returns the targets in alphabetical order
 func (m TargetMap) TargetsAlphabetically() []*Target {
 	var targets []*Target

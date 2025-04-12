@@ -9,43 +9,22 @@ import (
 )
 
 // WalkCallback is called for each target and should return true if the target was cached
-type WalkCallback func(ctx context.Context, target *model.Target) error
+// depsCached is true if all dependencies were cached or if there were no dependencies
+type WalkCallback func(ctx context.Context, target *model.Target, depsCached bool) (bool, error)
 
 type Completion struct {
-	IsSuccess bool
-	Err       error
+	IsSuccess   bool
+	HasCacheHit bool
+	Err         error
 }
 
 type vertexInfo struct {
 	// vertex routine sends this when it's done
 	done chan Completion
 	// vertex routine receives this when it's ready
-	ready chan struct{}
+	ready chan bool // sends depsCached
 	// vertex routine receives this when it is supposed to stop
 	cancel chan struct{}
-}
-
-type CompletionMap map[*model.Target]Completion
-
-func (c CompletionMap) GetErrors() []error {
-	var errorList []error
-	for _, completion := range c {
-		if !completion.IsSuccess {
-			errorList = append(errorList, completion.Err)
-		}
-	}
-	return errorList
-}
-
-// SuccessCount returns the number of successful targets and the number of cache hits
-func (c CompletionMap) SuccessCount() int {
-	successCount := 0
-	for _, completion := range c {
-		if completion.IsSuccess {
-			successCount++
-		}
-	}
-	return successCount
 }
 
 // Walker walks the graph in topological order.
@@ -117,7 +96,7 @@ func (w *Walker) Walk(
 		}
 
 		doneCh := make(chan Completion)
-		readyCh := make(chan struct{})
+		readyCh := make(chan bool)
 		cancelCh := make(chan struct{})
 
 		w.vertexInfoMap[vertex] = &vertexInfo{
@@ -136,7 +115,7 @@ func (w *Walker) Walk(
 
 		// start all routines with no dependencies immediately
 		if len(w.graph.inEdges[vertex]) == 0 {
-			w.startTarget(vertex)
+			w.startTarget(vertex, true)
 		}
 	}
 
@@ -194,12 +173,12 @@ func (w *Walker) cancelTarget(target *model.Target) {
 }
 
 // startTarget sends a ready message to a target if it is present in the graph (not idempotent!)
-func (w *Walker) startTarget(target *model.Target) {
+func (w *Walker) startTarget(target *model.Target, depsCached bool) {
 	w.vertexMutex.Lock()
 	defer w.vertexMutex.Unlock()
 	if info, ok := w.vertexInfoMap[target]; ok {
 		go func() {
-			info.ready <- struct{}{}
+			info.ready <- depsCached
 		}()
 	}
 }
@@ -240,15 +219,20 @@ func (w *Walker) onComplete(target *model.Target, completion Completion) {
 
 		// Check if dependant deps are satisfied
 		depsDone := true
+		depsCached := true
 		for _, dep := range w.graph.inEdges[dependant] {
-			if _, ok := w.completions[dep]; !ok {
+			depCompletion, ok := w.completions[dep]
+			if !ok || !depCompletion.IsSuccess {
 				depsDone = false
+			}
+			if !depCompletion.HasCacheHit {
+				depsCached = false
 			}
 		}
 
 		// If yes, send ready message to dependant
 		if depsDone {
-			w.startTarget(dependant)
+			w.startTarget(dependant, depsCached)
 		}
 	}
 }
@@ -276,9 +260,9 @@ func (w *Walker) vertexRoutine(
 	select {
 	case <-info.cancel:
 		return
-	case <-info.ready:
+	case depsCached := <-info.ready:
 		// call the callback
-		err := w.walkCallback(ctx, target)
+		cached, err := w.walkCallback(ctx, target, depsCached)
 		if err != nil {
 			go func() {
 				// don't account for cache hits in errors
@@ -286,7 +270,7 @@ func (w *Walker) vertexRoutine(
 			}()
 		} else {
 			go func() {
-				info.done <- Completion{IsSuccess: true, Err: nil}
+				info.done <- Completion{IsSuccess: true, Err: nil, HasCacheHit: depsCached && cached}
 			}()
 		}
 		return

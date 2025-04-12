@@ -21,7 +21,7 @@ func BuildGraphAndAnalyze(targets model.TargetMap) (*dag.DirectedTargetGraph, er
 }
 
 func buildGraph(targets model.TargetMap) (*dag.DirectedTargetGraph, error) {
-	graph := dag.NewDirectedGraphFromVertices(targets)
+	graph := dag.NewDirectedGraphFromMap(targets)
 
 	// Add edges defined by dependencies
 	for _, target := range targets {

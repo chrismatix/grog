@@ -27,13 +27,13 @@ func (e *CommandError) Error() string {
 	return fmt.Sprintf("target %s failed with exit code %d: %s", e.TargetLabel, e.ExitCode, e.Output)
 }
 
-// Execute executes the targets in the given graph
+// Execute executes the targets in the given graph and returns the completion map
 func Execute(
 	ctx context.Context,
 	cache caching.Cache,
 	graph *dag.DirectedTargetGraph,
 	failFast bool,
-) (int, dag.CompletionMap, error) {
+) (dag.CompletionMap, error) {
 	numWorkers := viper.GetInt("num_workers")
 	logger := console.GetLogger(ctx)
 
@@ -46,31 +46,27 @@ func Execute(
 	}(program)
 	defer program.Quit()
 
-	workerPool := worker.NewPool[bool](numWorkers, msgCh)
+	selectedTargetCount := len(graph.GetSelectedVertices())
+	workerPool := worker.NewPool[bool](numWorkers, msgCh, selectedTargetCount)
 	workerPool.StartWorkers(ctx)
 
 	targetCache := caching.NewTargetCache(cache)
-	cacheHits := 0
 
 	// walkCallback will be called at max parallelism by the graph walker
-	walkCallback := func(ctx context.Context, target *model.Target) error {
+	walkCallback := func(ctx context.Context, target *model.Target, depsCached bool) (bool, error) {
 		// taskFunc will be run in the worker pool
-		taskFunc := GetTaskFunc(targetCache, target)
+		taskFunc := GetTaskFunc(targetCache, target, depsCached)
 
 		// awaits execution of taskFunc
-		cacheHit, err := workerPool.Run(taskFunc)
-		if cacheHit && err == nil {
-			cacheHits++
-		}
-		return err
+		return workerPool.Run(taskFunc)
 	}
 
 	walker := dag.NewWalker(graph, walkCallback, failFast)
 	completionMap, err := walker.Walk(ctx)
-	return cacheHits, completionMap, err
+	return completionMap, err
 }
 
-func GetTaskFunc(targetCache *caching.TargetCache, target *model.Target) worker.TaskFunc[bool] {
+func GetTaskFunc(targetCache *caching.TargetCache, target *model.Target, depsCached bool) worker.TaskFunc[bool] {
 	// taskFunc will run in the worker pool and return a bool indicating whether the target was cached
 	return func(update worker.StatusFunc, log worker.LogFunc) (bool, error) {
 		changeHash, err := hashing.GetTargetChangeHash(*target)
@@ -82,13 +78,15 @@ func GetTaskFunc(targetCache *caching.TargetCache, target *model.Target) worker.
 		hasCacheHit := targetCache.HasCacheHit(*target)
 		target.HasCacheHit = hasCacheHit
 
-		if hasCacheHit {
+		// If either the inputs or the deps have changed we need to re-execute the target
+		// depsCached is also true when there are no deps
+		if hasCacheHit && depsCached {
 			if len(target.Outputs) > 0 {
 				update(fmt.Sprintf("%s: cache hit (%s). fetching...", target.Label, targetCache.GetCache().TypeName()))
 				return true, downloadCachedOutputs(targetCache, target)
 			} else {
 				update(fmt.Sprintf("%s: cache hit (%s).", target.Label, targetCache.GetCache().TypeName()))
-				return false, nil
+				return true, nil
 			}
 		}
 

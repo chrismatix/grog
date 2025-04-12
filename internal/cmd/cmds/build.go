@@ -114,7 +114,7 @@ func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest b
 		logger.Fatalf("could not instantiate cache: %v", err)
 	}
 
-	cacheHits, completionMap, err := execution.Execute(ctx, cache, graph, failFast)
+	completionMap, err := execution.Execute(ctx, cache, graph, failFast)
 
 	elapsedTime := time.Since(startTime).Seconds()
 	// Mostly used to keep our test fixtures deterministic
@@ -130,7 +130,7 @@ func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest b
 	}
 
 	buildErrors := completionMap.GetErrors()
-	successCount := completionMap.SuccessCount()
+	successCount, cacheHits := completionMap.SuccessCount()
 	if len(buildErrors) > 0 {
 		logger.Errorf("Build failed. %s completed (%d cached), %d failed:",
 			console.FCountTargets(successCount),
