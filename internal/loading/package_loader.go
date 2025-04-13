@@ -24,6 +24,7 @@ type PackageLoader struct {
 func NewPackageLoader(logger *zap.SugaredLogger) *PackageLoader {
 	return &PackageLoader{
 		logger: logger,
+		// register loaders here
 		loaders: []Loader{
 			JsonLoader{},
 			YamlLoader{},

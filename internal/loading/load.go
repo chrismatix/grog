@@ -2,6 +2,7 @@ package loading
 
 import (
 	"fmt"
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/charlievieth/fastwalk"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -9,6 +10,8 @@ import (
 	"grog/internal/label"
 	"grog/internal/model"
 	"io/fs"
+	"os"
+	"strings"
 	"sync"
 )
 
@@ -88,7 +91,7 @@ func LoadPackages(logger *zap.SugaredLogger) ([]*model.Package, error) {
 
 // getEnrichedPackage enriches the parsing dto with the following information
 // - adds the package path to the target labels
-// - resolves the globs in the inputs and outputs
+// - resolves the globs in the inputs TODO
 // - parses the deps into target labels
 func getEnrichedPackage(packagePath string, pkg PackageDTO) (*model.Package, error) {
 	targets := make(map[label.TargetLabel]*model.Target)
@@ -112,11 +115,16 @@ func getEnrichedPackage(packagePath string, pkg PackageDTO) (*model.Package, err
 			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", targetName, pkg.SourceFilePath)
 		}
 
+		resolvedInputs, err := resolveInputs(packagePath, target.Inputs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve inputs for target %s: %w", targetLabel, err)
+		}
+
 		targets[targetLabel] = &model.Target{
 			Label:   targetLabel,
 			Command: target.Command,
 			Deps:    deps,
-			Inputs:  target.Inputs,
+			Inputs:  resolvedInputs,
 			Outputs: target.Outputs,
 		}
 	}
@@ -125,4 +133,28 @@ func getEnrichedPackage(packagePath string, pkg PackageDTO) (*model.Package, err
 		SourceFilePath: pkg.SourceFilePath,
 		Targets:        targets,
 	}, nil
+}
+
+func resolveInputs(absolutePackagePath string, inputs []string) ([]string, error) {
+	var resolvedInputs []string
+	fsys := os.DirFS(absolutePackagePath)
+
+	for _, input := range inputs {
+		if !strings.Contains(input, "*") {
+			// Nothing to resolve
+			resolvedInputs = append(resolvedInputs, input)
+			continue
+		}
+
+		// Match files using doublestar
+		matches, err := doublestar.Glob(fsys, input)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve glob pattern %s: %w", input, err)
+		}
+
+		// Append matched files to the resolvedInputs
+		resolvedInputs = append(resolvedInputs, matches...)
+	}
+
+	return resolvedInputs, nil
 }
