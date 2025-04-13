@@ -1,5 +1,5 @@
 ---
-title: Get Started
+title: Getting Started
 description: Take your first steps to running your builds with Grog.
 ---
 
