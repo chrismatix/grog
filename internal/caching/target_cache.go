@@ -91,7 +91,7 @@ func (tc *TargetCache) WriteOutputs(target model.Target) error {
 		absOutputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output))
 		outputContent, err := os.ReadFile(absOutputPath)
 		if err != nil {
-			return fmt.Errorf("declared output %s for target %s does not exist (%w)", output, target.Label, err)
+			return fmt.Errorf("declared output %s for target %s was not created (%w)", output, target.Label, err)
 		}
 		if err = tc.cache.Set(tc.cachePath(target), hashing.HashString(output), outputContent); err != nil {
 			return err

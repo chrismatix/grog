@@ -39,16 +39,9 @@ func writeFixture(t *testing.T, fixture string, content []byte) {
 	}
 }
 
-func loadFixture(t *testing.T, testName string) string {
+func loadFixture(t *testing.T, testName string) (string, error) {
 	content, err := os.ReadFile(fixturePath(t, testName))
-	if err != nil {
-		t.Fatalf(
-			"could not read fixture %s: %v",
-			fixturePath(t, testName),
-			err)
-	}
-
-	return string(content)
+	return string(content), err
 }
 
 type TestTable struct {
@@ -131,7 +124,10 @@ func TestCliArgs(t *testing.T) {
 
 					actual := string(output)
 
-					expected := loadFixture(t, tc.Name)
+					expected, err := loadFixture(t, tc.Name)
+					if err != nil {
+						t.Fatalf("could not load fixture %s: %v\ncommand output:%s", tc.Name, err, actual)
+					}
 
 					if !reflect.DeepEqual(actual, expected) {
 						t.Fatalf("actual:\n%s\nexpected:\n%s", actual, expected)

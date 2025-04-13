@@ -2,6 +2,16 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 13-04-2025
+
+Added input file globbing and realized that output file globbing would be very impractical:
+When restoring from the cache we would have to list the target cache directory and find all things that _would_ match the glob.
+Instead, we could treat directory outputs the way we are planning to treat docker outputs:
+
+- Require users to add a trailing slash `/` to mark an output as a directory output
+- Add a special output handler for directories:
+  - If the output directory was created zip it and store the zip file in the cache
+
 ## 12-04-2025
 
 Got the first working version of caching and also ensured that when cache misses invalidate dependant caches.

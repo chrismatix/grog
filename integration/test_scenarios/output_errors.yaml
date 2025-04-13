@@ -1,0 +1,10 @@
+name: Output Errors
+# These tests can share a repository since we can isolate the errors
+# at build time per target
+repo: output_errors
+cases:
+  - name: output_not_created
+    args:
+      - build
+      - //:output_not_created
+    expect_fail: true
