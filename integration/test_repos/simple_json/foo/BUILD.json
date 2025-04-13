@@ -1,13 +1,13 @@
 {
   "targets": {
     "foo": {
-      "inputs": ["source.txt"],
-      "cmd": "cat source.txt && echo 'World!' > output.txt",
+      "inputs": ["src/*.txt"],
+      "cmd": "cat src/source_1.txt src/source_2.txt > output.txt",
       "outputs": ["output.txt"]
     },
     "foo_test": {
-      "inputs": ["source.txt"],
-      "cmd": "cat source.txt",
+      "inputs": ["src/*.txt"],
+      "cmd": "cat src/source_1.txt",
       "outputs": []
     }
   }

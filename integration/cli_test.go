@@ -53,19 +53,19 @@ func loadFixture(t *testing.T, testName string) string {
 
 type TestTable struct {
 	Name  string `yaml:"name"`
+	Repo  string `yaml:"repo"`
 	Cases []TestCase
 }
 type TestCase struct {
 	// Names must be unique as they determine the fixture file name
 	Name       string   `yaml:"name"`
-	Repo       string   `yaml:"repo"`
 	Args       []string `yaml:"args"`
 	ExpectFail bool     `yaml:"expect_fail"`
 }
 
 func TestCliArgs(t *testing.T) {
 	// Read all .yaml files from the cases/ directory
-	files, err := filepath.Glob("integration/test_tables/*.yaml")
+	files, err := filepath.Glob("integration/test_scenarios/*.yaml")
 	if err != nil {
 		t.Fatalf("could not read cases directory: %v", err)
 	}
@@ -90,12 +90,18 @@ func TestCliArgs(t *testing.T) {
 		t.Fatalf("no test tables found")
 	}
 
-	if err = clearTestRepoCache(testTables); err != nil {
-		t.Fatalf("could not clear test repo cache: %v", err)
-	}
-
 	for _, tt := range testTables {
 		t.Run(tt.Name, func(t *testing.T) {
+
+			// Clear repository cache
+			output, err := runBinary([]string{"clean"}, tt.Repo)
+			if err != nil {
+				t.Fatalf(
+					"could not run `grog clean` on repo %s: %v\nCommand output: %s",
+					tt.Repo,
+					err,
+					output)
+			}
 
 			testCaseNames := make(map[string]bool)
 			for _, tc := range tt.Cases {
@@ -107,17 +113,8 @@ func TestCliArgs(t *testing.T) {
 				testCaseNames[tc.Name] = true
 
 				t.Run(tc.Name, func(t *testing.T) {
-					// Clear repository cache
-					output, err := runBinary([]string{"clean"}, tc.Repo)
-					if err != nil {
-						t.Fatalf(
-							"could not run `grog clean` on repo %s: %v\nCommand output: %s",
-							tc.Repo,
-							err,
-							output)
-					}
 
-					output, err = runBinary(tc.Args, tc.Repo)
+					output, err = runBinary(tc.Args, tt.Repo)
 
 					if err != nil && !tc.ExpectFail {
 						fmt.Printf("Command ouput: %s\n", output)
@@ -193,26 +190,4 @@ func getCoverDir() (string, error) {
 	}
 
 	return filepath.Join(filepath.Dir(filename), "../coverdata/integration"), nil
-}
-
-// clearTestRepoCache runs `grog clean` on each repo defined in the test tables
-func clearTestRepoCache(testTables []TestTable) error {
-	var clearedRepos = make(map[string]bool)
-	for _, tt := range testTables {
-		for _, tc := range tt.Cases {
-			if !clearedRepos[tc.Repo] {
-				output, err := runBinary([]string{"clean"}, tc.Repo)
-				if err != nil {
-					return fmt.Errorf(
-						"could not run `grog clean` on repo %s: %v\nCommand output: %s",
-						tc.Repo,
-						err,
-						output)
-				}
-
-				clearedRepos[tc.Repo] = true
-			}
-		}
-	}
-	return nil
 }

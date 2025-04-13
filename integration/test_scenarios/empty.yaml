@@ -1,0 +1,4 @@
+name: empty repo
+repo: empty
+cases:
+  - name: no_arguments_message

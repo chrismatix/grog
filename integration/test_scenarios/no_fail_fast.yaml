@@ -1,0 +1,13 @@
+name: no fail fast tests
+repo: fail_fast
+cases:
+  - name: fail_fast_graph
+    args:
+      - graph
+
+  # This should finish target 3 even though target 1 failed
+  - name: no_fail_fast
+    args:
+      - build
+      - //...
+    expect_fail: true

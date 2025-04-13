@@ -1,16 +1,13 @@
 name: cli basics
+repo: simple_json
 cases:
-  - name: no_arguments_message
-    repo: empty
   - name: build_all_color
     args:
       - --color=yes
       - build
-    repo: simple_json
   - name: target_pattern_not_matched
     args:
       - --color=yes
       - build
       - //unknown_target
-    repo: simple_json
     expect_fail: true

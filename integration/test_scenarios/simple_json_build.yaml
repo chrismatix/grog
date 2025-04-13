@@ -1,15 +1,14 @@
 name: simple json builds
+repo: simple_json
 cases:
   # This should only build foo
   - name: build_only_foo
     args:
       - build
       - //foo
-    repo: simple_json
 
   # This should select foo as well
   - name: build_bar_should_also_build_foo
     args:
       - build
       - //bar
-    repo: simple_json
