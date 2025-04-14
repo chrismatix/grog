@@ -43,15 +43,17 @@ func Stamp(version string, commit string, buildDate string) {
 func init() {
 	cobra.OnInitialize()
 
+	// Find the current workspace root
+	workspaceRoot := config.MustFindWorkspaceRoot()
+	viper.Set("workspace_root", workspaceRoot)
+
 	// Set up Viper
 	viper.SetConfigName("grog")
 	viper.SetConfigType("toml")
-	viper.AddConfigPath(".")                               // search in current directory
+	viper.AddConfigPath(workspaceRoot)                     // search in workspace root
 	viper.AddConfigPath("$HOME/.grog")                     // optionally look for config in the home directory
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_")) // allow FLAG-NAME to map to ENV VAR_NAME
 	viper.AutomaticEnv()                                   // read in environment variables that match
-
-	viper.Set("workspace_root", config.MustFindWorkspaceRoot())
 
 	// Set default cache directory
 	viper.SetDefault("grog_root", filepath.Join(os.Getenv("HOME"), ".grog"))

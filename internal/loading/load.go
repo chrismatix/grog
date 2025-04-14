@@ -58,7 +58,7 @@ func LoadPackages(logger *zap.SugaredLogger) ([]*model.Package, error) {
 				return err
 			}
 
-			pkg, err := getEnrichedPackage(packagePath, pkgDto)
+			pkg, err := getEnrichedPackage(logger, packagePath, pkgDto)
 			if err != nil {
 				return err
 			}
@@ -93,8 +93,10 @@ func LoadPackages(logger *zap.SugaredLogger) ([]*model.Package, error) {
 // - adds the package path to the target labels
 // - resolves the globs in the inputs TODO
 // - parses the deps into target labels
-func getEnrichedPackage(packagePath string, pkg PackageDTO) (*model.Package, error) {
+func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg PackageDTO) (*model.Package, error) {
 	targets := make(map[label.TargetLabel]*model.Target)
+	absolutePackagePath := config.GetPathAbsoluteToWorkspaceRoot(packagePath)
+
 	for targetName, target := range pkg.Targets {
 		var deps []label.TargetLabel
 		// parse labels
@@ -115,7 +117,7 @@ func getEnrichedPackage(packagePath string, pkg PackageDTO) (*model.Package, err
 			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", targetName, pkg.SourceFilePath)
 		}
 
-		resolvedInputs, err := resolveInputs(packagePath, target.Inputs)
+		resolvedInputs, err := resolveInputs(logger, absolutePackagePath, target.Inputs)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve inputs for target %s: %w", targetLabel, err)
 		}
@@ -135,7 +137,11 @@ func getEnrichedPackage(packagePath string, pkg PackageDTO) (*model.Package, err
 	}, nil
 }
 
-func resolveInputs(absolutePackagePath string, inputs []string) ([]string, error) {
+func resolveInputs(
+	logger *zap.SugaredLogger,
+	absolutePackagePath string,
+	inputs []string,
+) ([]string, error) {
 	var resolvedInputs []string
 	fsys := os.DirFS(absolutePackagePath)
 
@@ -151,6 +157,7 @@ func resolveInputs(absolutePackagePath string, inputs []string) ([]string, error
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve glob pattern %s: %w", input, err)
 		}
+		logger.Debugf("Resolved glob pattern %s in %s to %v", input, absolutePackagePath, matches)
 
 		// Append matched files to the resolvedInputs
 		resolvedInputs = append(resolvedInputs, matches...)

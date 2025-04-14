@@ -129,10 +129,17 @@ func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest b
 		os.Exit(1)
 	}
 
+	// small helper for logging
+	goal := "Build"
+	if isTest {
+		goal = "Test"
+	}
+
 	buildErrors := completionMap.GetErrors()
 	successCount, cacheHits := completionMap.SuccessCount()
 	if len(buildErrors) > 0 {
-		logger.Errorf("Build failed. %s completed (%d cached), %d failed:",
+		logger.Errorf("%s failed. %s completed (%d cached), %d failed:",
+			goal,
 			console.FCountTargets(successCount),
 			cacheHits,
 			len(buildErrors))
@@ -159,7 +166,8 @@ func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest b
 		os.Exit(1)
 	}
 
-	logger.Infof("Build completed successfully. %s completed (%d cached).",
+	logger.Infof("%s completed successfully. %s completed (%d cached).",
+		goal,
 		console.FCountTargets(successCount),
 		cacheHits)
 	os.Exit(0)

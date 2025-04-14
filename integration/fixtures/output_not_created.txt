@@ -3,4 +3,4 @@ INFO: Selected 1 target (1 package loaded, 1 target configured).
 ERROR: Build failed. 0 targets completed (0 cached), 1 failed:
 ---------------------------------
 ERROR: Target //:output_not_created failed: build completed but failed to write outputs to cache for target //:output_not_created:
-declared output does_not_get_created.txt for target //:output_not_created was not created (open /Users/christophproschel/codingprojects/grog/integration/test_repos/output_errors/does_not_get_created.txt: no such file or directory)
+declared output does_not_get_created.txt for target //:output_not_created was not created

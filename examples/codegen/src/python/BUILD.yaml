@@ -1,0 +1,21 @@
+targets:
+  venv:
+    inputs:
+      - requirements.txt
+    deps:
+      - //src/protobuf:codegen_pip
+    cmd: |
+      rm -rf .venv
+      python -m venv .venv
+      source .venv/bin/activate
+      pip install -r requirements.txt
+
+  python_test:
+    inputs:
+      - "*.py"
+    deps:
+      - //src/protobuf:codegen
+      - :venv
+    cmd: |
+      source .venv/bin/activate
+      pytest

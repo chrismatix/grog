@@ -273,6 +273,8 @@ targets:
 
 **Idea:** If we are already implementing custom output handlers we could also add a special handler for directories!
 
+In order to cache docker images users provide
+
 ## Target Labels
 
 Target labels should be as close as possible to how they work in [Bazel](https://bazel.build/tutorials/cpp-labels).

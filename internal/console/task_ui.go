@@ -5,19 +5,13 @@ import (
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/mattn/go-isatty"
-	"go.uber.org/zap/zapcore"
 	"io"
 	"log"
 	"os"
 	"sort"
+	"sync"
 	"time"
 )
-
-// LogMsg is any log statement from the task that is not a Status update
-type LogMsg struct {
-	Msg   string
-	Level zapcore.Level
-}
 
 // HeaderMsg What to display in the header
 type HeaderMsg string
@@ -77,8 +71,6 @@ func StartTaskUI(ctx context.Context) (*tea.Program, chan tea.Msg) {
 type model struct {
 	// the header message to keep updating
 	header string
-	// Any additional logs to keep collecting on top
-	logs []LogMsg
 	// The tasks to keep updating
 	tasks map[int]TaskState
 	// The current tick (used for time display)
@@ -86,19 +78,21 @@ type model struct {
 
 	// Message channel for sending updates.
 	msgCh chan tea.Msg
+
+	// Mutex for the tasks map
+	tasksMutex sync.RWMutex
 }
 
-func initialModel(msgCh chan tea.Msg) model {
-	return model{
+func initialModel(msgCh chan tea.Msg) *model {
+	return &model{
 		header: "",
-		logs:   make([]LogMsg, 0),
 		tasks:  make(map[int]TaskState),
 		msgCh:  msgCh,
 		tick:   time.Now().Second(),
 	}
 }
 
-func (m model) Init() tea.Cmd {
+func (m *model) Init() tea.Cmd {
 	// Start listening for messages and tick every second.
 	return tea.Batch(listenForMsg(m.msgCh), tickEvery())
 }
@@ -117,14 +111,14 @@ func tickEvery() tea.Cmd {
 	})
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch castMsg := msg.(type) {
-	case LogMsg:
-		m.logs = append(m.logs, castMsg)
 	case HeaderMsg:
 		m.header = string(castMsg)
 	case TaskStateMsg:
+		m.tasksMutex.Lock()
 		m.tasks = castMsg.State
+		m.tasksMutex.Unlock()
 	case TickMsg:
 		m.tick++
 		return m, tickEvery()
@@ -133,12 +127,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, listenForMsg(m.msgCh)
 }
 
-func (m model) View() string {
+func (m *model) View() string {
 	s := ""
-	// log accumulated log messages
-	for _, logMsg := range m.logs {
-		s += getMessagePrefix(logMsg.Level) + " " + logMsg.Msg + "\n"
-	}
 
 	// Render header
 	s += m.header + "\n"
@@ -146,6 +136,8 @@ func (m model) View() string {
 	// Render tasks in order.
 	// tasks may be sparse so we need to sort the task ids and then loop
 	keys := make([]int, 0, len(m.tasks))
+	m.tasksMutex.RLock()
+	defer m.tasksMutex.RUnlock()
 	for k := range m.tasks {
 		keys = append(keys, k)
 	}

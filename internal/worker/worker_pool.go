@@ -5,7 +5,6 @@ import (
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fatih/color"
-	"go.uber.org/zap/zapcore"
 	"grog/internal/config"
 	"grog/internal/console"
 	"runtime"
@@ -13,7 +12,6 @@ import (
 	"time"
 )
 
-type LogFunc func(msg string, level zapcore.Level)
 type StatusFunc func(status string)
 
 type TaskResult[T any] struct {
@@ -22,7 +20,7 @@ type TaskResult[T any] struct {
 }
 
 // TaskFunc is a task submitted to the pool. It gets an update callback.
-type TaskFunc[T any] func(update StatusFunc, log LogFunc) (T, error)
+type TaskFunc[T any] func(update StatusFunc) (T, error)
 
 type job[T any] struct {
 	id     int
@@ -95,8 +93,6 @@ func (wp *Pool[T]) worker(ctx context.Context, workerId int) {
 					taskStatus = fmt.Sprintf("%s (worker %d)", status, workerId)
 				}
 				wp.setTaskState(workerId, taskStatus)
-			}, func(msg string, level zapcore.Level) {
-				wp.msgCh <- console.LogMsg{Msg: msg, Level: level}
 			})
 
 			if j.result != nil {

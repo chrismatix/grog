@@ -2,6 +2,7 @@ package loading
 
 import (
 	"fmt"
+	"go.uber.org/zap/zaptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -126,6 +127,7 @@ func TestResolveInputs(t *testing.T) {
 		},
 	}
 
+	testLogger := zaptest.NewLogger(t).Sugar()
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create a temporary directory for the test case.
@@ -139,7 +141,7 @@ func TestResolveInputs(t *testing.T) {
 			tc.createTestFiles(tmpDir)
 
 			// Execute the function.
-			actual, err := resolveInputs(tmpDir, tc.inputs)
+			actual, err := resolveInputs(testLogger, tmpDir, tc.inputs)
 
 			if tc.expectedError {
 				if err == nil {

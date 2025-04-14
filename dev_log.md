@@ -2,6 +2,17 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 14-04-2025
+
+Wasted a lot of time trying to get a simple gradle setup for the java codegen demo, but kept running into issues.
+Will keep it narrowed down to golang and python for now and it works like a charm!
+I even found out that with grog it's quite easy to just regenerate virtual environments whenever local package dependencies change.
+
+Additionally, I figured out that bubbletea's rendering is so clever that one can just keep logging outside of bubbletea and it will just move the entire output down one line!
+So there is nothing to do to perfectly replicate Bazel's logging behavior.
+
+-C
+
 ## 13-04-2025
 
 Added input file globbing and realized that output file globbing would be very impractical:

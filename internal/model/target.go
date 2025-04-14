@@ -1,6 +1,9 @@
 package model
 
-import "grog/internal/label"
+import (
+	"grog/internal/label"
+	"strings"
+)
 
 // Target defines a build step that depends on Deps (other targets)
 // and Inputs (files) and produces Outputs.
@@ -29,10 +32,11 @@ func (t *Target) GetDepsString() []string {
 }
 
 func (t *Target) CommandEllipsis() string {
-	if len(t.Command) > 70 {
-		return t.Command[:67] + "..."
+	firstLine := strings.SplitN(t.Command, "\n", 2)[0]
+	if len(firstLine) > 70 {
+		return firstLine[:67] + "..."
 	}
-	return t.Command
+	return firstLine
 }
 
 func (t *Target) IsTest() bool {

@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package grog.codegen;
+
+option go_package = "codegen/src/proto/pb";
+option java_package = "com.examples.codegen.proto";
+option java_outer_classname = "PersonOuterClass";
+
+message Person {
+  string name = 1;
+  int32 id = 2;
+  string email = 3;
+}

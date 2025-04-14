@@ -1,0 +1,11 @@
+targets:
+  go:
+    inputs:
+      - "*.go"
+    cmd: go build -o main.bin
+    outputs:
+      - main.bin
+  go_test:
+    inputs:
+      - "*.go"
+    cmd: go test

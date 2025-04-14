@@ -55,8 +55,7 @@ func Execute(
 	// walkCallback will be called at max parallelism by the graph walker
 	walkCallback := func(ctx context.Context, target *model.Target, depsCached bool) (bool, error) {
 		// taskFunc will be run in the worker pool
-		taskFunc := GetTaskFunc(targetCache, target, depsCached)
-
+		taskFunc := GetTaskFunc(ctx, targetCache, target, depsCached)
 		// awaits execution of taskFunc
 		return workerPool.Run(taskFunc)
 	}
@@ -66,9 +65,14 @@ func Execute(
 	return completionMap, err
 }
 
-func GetTaskFunc(targetCache *caching.TargetCache, target *model.Target, depsCached bool) worker.TaskFunc[bool] {
+func GetTaskFunc(
+	ctx context.Context,
+	targetCache *caching.TargetCache,
+	target *model.Target,
+	depsCached bool,
+) worker.TaskFunc[bool] {
 	// taskFunc will run in the worker pool and return a bool indicating whether the target was cached
-	return func(update worker.StatusFunc, log worker.LogFunc) (bool, error) {
+	return func(update worker.StatusFunc) (bool, error) {
 		changeHash, err := hashing.GetTargetChangeHash(*target)
 		if err != nil {
 			return false, err
@@ -91,7 +95,7 @@ func GetTaskFunc(targetCache *caching.TargetCache, target *model.Target, depsCac
 		}
 
 		update(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis()))
-		err = executeTarget(target)
+		err = executeTarget(ctx, target)
 		if err != nil {
 			return false, err
 		}
@@ -114,10 +118,10 @@ func downloadCachedOutputs(targetCache *caching.TargetCache, target *model.Targe
 	return nil
 }
 
-func executeTarget(target *model.Target) error {
+func executeTarget(ctx context.Context, target *model.Target) error {
 	executionPath := config.GetPathAbsoluteToWorkspaceRoot(target.Label.Package)
 
-	cmd := exec.Command("sh", "-c", target.Command)
+	cmd := exec.CommandContext(ctx, "sh", "-c", target.Command)
 	cmd.Dir = executionPath
 
 	output, err := cmd.CombinedOutput()
