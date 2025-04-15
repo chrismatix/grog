@@ -7,10 +7,17 @@ Many teams are recognizing the strong organizational value in moving to a mono r
 When they first do that they might start by just putting all of their projects into one place, but as complexity grows there is a need to share code and introduce interdependencies.
 Now unless you are only using a single language with a built-in solution for this it is here where most teams are stuck between a rock and a hard place:
 
-1. Adopt a true mono-repo build tool like Bazel or Pants.
-2. Use scripts, Makefiles or internal CLIs to glue your modules together.
+1. **Adopting sophisticated mono-repo build tools** like Bazel or Pants.
+   These tools offer powerful features but come with steep learning curves. They introduce complex build configurations, demand strict determinism, and often require custom code for missing use cases. This level of investment can make even moderate-scale setups feel overwhelming—turning mono-repo maintenance into a full-time job.
+2. **Creating ad-hoc solutions** with scripts, Makefiles, or internal CLIs.
+   These may work initially but inevitably become fragile as your project scales. Building in custom logic to handle dependencies, execution order, or incremental runs becomes a time and resource sink.
 
-The first option is great when you have the time (read money) to invest into these tools since they have quite a steep learning curve:
-You need to learn their build configuration language and every single build target requires a complex setup to ensure that builds are deterministic and reproducible.
-This often means that you cannot just bring the tools that you are used to, but instead have to rely on community supplied Bazel rules (if they exist!) or write custom wrappers to support your use case.
-All of this is very important for running monorepo builds at scale, but even at moderate scale it can become someone's full-time job to maintain this setup.
+This is where **Grog** steps in—a tool designed to streamline your builds while allowing you to keep using the tools and commands you’re already familiar with.
+By focusing on efficiency and simplicity, Grog empowers your team to handle core build challenges without the overhead of larger tools.
+With Grog, the common needs of internal build systems become approachable and manageable:
+
+1. Execute builds in the correct order without over-complicating dependency management.
+2. Run builds in parallel for faster delivery.
+3. Rebuild only what’s changed, leveraging incremental updates to save time.
+
+Most teams eventually reinvent these capabilities on their own—but Grog provides them in one simple, cohesive system out of the box.

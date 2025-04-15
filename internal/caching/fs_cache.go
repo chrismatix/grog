@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-// FileSystemCache implements the Cache interface using the file system for storage
+// FileSystemCache implements the CacheBackend interface using the file system for storage
 type FileSystemCache struct {
 	workspaceRootDir string
 	mutex            sync.RWMutex

@@ -2,7 +2,7 @@ package caching
 
 import "encoding/json"
 
-// MetaFile is a wrapper format for .meta files which we store along side the cache files
+// MetaFile is a wrapper format for .meta files which we store along-side the cache files
 // to record the hash of the file that was cached (faster than hashing the file again)
 type MetaFile struct {
 	Hash string `json:"hash"`

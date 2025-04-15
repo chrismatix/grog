@@ -26,7 +26,7 @@ func GetCleanCmd() *cobra.Command {
 			}
 
 			if expunge {
-				logger.Info("Cache expunged successfully.")
+				logger.Info("CacheBackend expunged successfully.")
 				return
 			}
 			logger.Info("Workspace cache cleaned successfully.")

@@ -14,16 +14,16 @@ import (
 const existsFileKey = "__grog_exists__"
 
 type TargetCache struct {
-	cache Cache
+	cache CacheBackend
 }
 
 func NewTargetCache(
-	cache Cache,
+	cache CacheBackend,
 ) *TargetCache {
 	return &TargetCache{cache: cache}
 }
 
-func (tc *TargetCache) GetCache() Cache {
+func (tc *TargetCache) GetCache() CacheBackend {
 	return tc.cache
 }
 

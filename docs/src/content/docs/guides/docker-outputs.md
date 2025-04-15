@@ -1,0 +1,75 @@
+---
+title: Docker Outputs
+description: Grog can cache your docker images for you.
+---
+
+Many real-world CI/CDs don't just produce files or directories, but package the entire app into a docker image that lives on your local docker engine.
+Grog can also cache these, but it is not as straight-forward as caching a file.
+This guide will cover
+
+## 1. Setup
+
+The first step is to add the following lines to your `grog.toml`:
+
+```toml
+[docker]
+enabled = true
+```
+
+Next, you need to choose a storage backend for your docker images:
+
+### Filesystem
+
+grog will store your images as a tarball using the (remote) filesystem cache that you configured.
+While this is fast to set up it can be quite storage intensive as layers are not deduplicated between caches.
+
+Here is how to enable this option:
+
+```toml
+[docker]
+enabled = true
+backend = "filesystem"
+```
+
+### Registry
+
+Using a registry as your backend allows you to store your images in a remote or local Docker registry.
+This is more efficient as layers are deduplicated, reducing storage costs.
+However, it requires you to have a registry running and accessible.
+
+Here’s how to enable this option:
+
+```toml
+[docker]
+enabled = true
+backend = "registry"
+registry_url = "https://your-registry-url"
+```
+
+Replace `https://your-registry-url` with the URL of your Docker registry and the appropriate credentials if authentication is required.
+For example, if you're using Docker Hub, your `registry_url` would be `https://index.docker.io/v1/`.
+If you're running a private registry locally, you may use something like `http://localhost:5000` as the URL.
+
+**Authentication:** Grog expects your current session to be authenticated. Here is how to do that:
+
+- Docker registry via [docker login](https://docs.docker.com/reference/cli/docker/login/)
+- GCP Artifact Registry [docs](https://cloud.google.com/artifact-registry/docs/docker/authentication)
+- AWS ECR [docs](https://docs.aws.amazon.com/AmazonECR/latest/userguide/registry_auth.html)
+
+## 2. Defining docker outputs
+
+Once your docker storage is setup you can define a docker image output for your target:
+
+```yaml
+targets:
+  build_img:
+    inputs:
+      - Dockerfile
+      - src/**/*.py
+    cmd: docker build -t some-python-image .
+    outputs:
+      - docker://some-python-image
+```
+
+Grog will look for outputs beginning with `docker://` and apply the specified caching strategy to them.
+If the resulting image is not found locally, grog will error out.

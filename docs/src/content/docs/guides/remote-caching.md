@@ -1,0 +1,50 @@
+---
+title: Remote Caching (s3 and gcs)
+description: Store your build output cache on remote file systems for
+---
+
+By default, Grog caches your build output files and directories in the local `GROG_ROOT` (default `$HOME/.grog`) directory.
+For CI use-cases or when developing on larger repositories it can be beneficial to share caches between machines.
+Grog supports the following providers for remote caching:
+
+- AWS S3 (go to config)
+- Google Cloud Storage (go to config)
+
+## Behavior
+
+When using a remote cache grog will effectively use the remote file system as a backup system for your local file system.
+This means that local outputs are first cached locally and then on the cloud.
+Likewise, when checking the cache grog will fall back to the remote cache if there is no local copy
+
+**Note:** Grog does not take garbage collect your cache files in any way so even though storage is relatively cheap it can be good practice to set up a mechanism for monitoring its size.
+
+## Google Cloud Storage (GCS)
+
+To enable remote caching via GCS add the following to your config:
+
+```toml
+[cache]
+backend = "gcs"
+
+[cache.gcs]
+bucket = "<your-gcs-bucket-name>"
+prefix = "<prefix-for-cache-files>" # optional
+credentials_file = "<path-to-google-credentials-json>" # optional
+```
+
+`credentials_file` should be a path to a service account json key file.
+When it is not provided grog will attempt to use whatever authentication is associated with the current session (see [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials)).
+
+## AWS S3
+
+To enable remote caching via S3 add the following to your config:
+
+```toml
+[cache]
+backend = "s3"
+
+[cache.s3]
+bucket = "<your-s3-bucket-name>"
+prefix = "<prefix-for-cache-files>" # optional
+credentials_file = "<path-to-aws-credentials-json>" # optional
+```

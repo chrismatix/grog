@@ -30,7 +30,7 @@ func (e *CommandError) Error() string {
 // Execute executes the targets in the given graph and returns the completion map
 func Execute(
 	ctx context.Context,
-	cache caching.Cache,
+	cache caching.CacheBackend,
 	graph *dag.DirectedTargetGraph,
 	failFast bool,
 ) (dag.CompletionMap, error) {

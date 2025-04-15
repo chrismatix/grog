@@ -2,8 +2,8 @@ package caching
 
 import "go.uber.org/zap"
 
-// Cache represents an interface for a file system-based cache.
-type Cache interface {
+// CacheBackend represents an interface for a file system-based cache.
+type CacheBackend interface {
 	// TypeName returns the name of the cache type.
 	TypeName() string
 
@@ -26,6 +26,6 @@ type Cache interface {
 	Clear(expunge bool) error
 }
 
-func GetCache(logger *zap.SugaredLogger) (Cache, error) {
+func GetCache(logger *zap.SugaredLogger) (CacheBackend, error) {
 	return NewFileSystemCache(logger)
 }

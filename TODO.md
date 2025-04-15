@@ -3,9 +3,11 @@
 Actually we do need to track caching in the graph walker since it needs to check if dependencies were cached and propagate that
 
 - [ ] Only replace outputs when they have changed -> Will require tracking hashes in a separate, small file
+- [ ] Allow running target patterns relative to the current directory
 - [ ] Add s3 caching option
 - [ ] Add gcs caching option
 - [ ] Add docker outputs
+- [ ] Add directory outputs
 - [ ] The TargetCache should warn when a target is overwriting another's outputs
 - [ ] Loading: Figure out a way to better relate why unmarshalling a json config failed -> Use json schema!
 - [ ] Loading: Add executable support
@@ -16,3 +18,4 @@ Actually we do need to track caching in the graph walker since it needs to check
 - [ ] Tests: Use the new synctest package to better test the execution semantic
 - [ ] Execution: Warn if one or more of the input files specified for a target do not exist
 - [ ] Add runnable binary outputs
+- [ ] Add shell completions for commands that run targets
