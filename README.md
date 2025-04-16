@@ -8,9 +8,10 @@ Grog **is not** a replacement for Bazel or Pants. Instead, think of it as the in
 
 ## Highlights
 
-- 🚀 Runs all your build commands in parallel
-- 💾 Caches build outputs
-- 🔄 Re-runs whenever file inputs change
+- 🌐 Language agnostic
+- 🚀 Parallelize your build commands
+- 🔄 Only rebuilds changed targets
+- 💾 (Remote) output caching
 - 🛠️ Simple build configuration with either Makefile, JSON, yaml, ...
 - 📦 Single binary
 

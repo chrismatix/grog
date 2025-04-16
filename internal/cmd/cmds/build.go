@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"grog/internal/analysis"
-	"grog/internal/caching"
+	"grog/internal/caching/backends"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/execution"
@@ -109,7 +109,7 @@ func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest b
 
 	failFast := config.Global.FailFast
 
-	cache, err := caching.GetCache(logger)
+	cache, err := backends.GetCacheBackend(ctx, logger, config.Global.Cache)
 	if err != nil {
 		logger.Fatalf("could not instantiate cache: %v", err)
 	}

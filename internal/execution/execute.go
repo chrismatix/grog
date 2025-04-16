@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/viper"
 	"grog/internal/caching"
+	"grog/internal/caching/backends"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/dag"
@@ -30,7 +31,7 @@ func (e *CommandError) Error() string {
 // Execute executes the targets in the given graph and returns the completion map
 func Execute(
 	ctx context.Context,
-	cache caching.CacheBackend,
+	cache backends.CacheBackend,
 	graph *dag.DirectedTargetGraph,
 	failFast bool,
 ) (dag.CompletionMap, error) {
@@ -79,17 +80,17 @@ func GetTaskFunc(
 		}
 		target.ChangeHash = changeHash
 
-		hasCacheHit := targetCache.HasCacheHit(*target)
+		hasCacheHit := targetCache.HasCacheHit(ctx, *target)
 		target.HasCacheHit = hasCacheHit
 
 		// If either the inputs or the deps have changed we need to re-execute the target
 		// depsCached is also true when there are no deps
 		if hasCacheHit && depsCached {
 			if len(target.Outputs) > 0 {
-				update(fmt.Sprintf("%s: cache hit (%s). fetching...", target.Label, targetCache.GetCache().TypeName()))
-				return true, downloadCachedOutputs(targetCache, target)
+				update(fmt.Sprintf("%s: cache hit (%s). fetching...", target.Label, targetCache.GetBackend().TypeName()))
+				return true, downloadCachedOutputs(ctx, targetCache, target)
 			} else {
-				update(fmt.Sprintf("%s: cache hit (%s).", target.Label, targetCache.GetCache().TypeName()))
+				update(fmt.Sprintf("%s: cache hit (%s).", target.Label, targetCache.GetBackend().TypeName()))
 				return true, nil
 			}
 		}
@@ -101,8 +102,8 @@ func GetTaskFunc(
 		}
 
 		// Write outputs to the cache:
-		update(fmt.Sprintf("%s: cache hit (%s). fetching ", target.Label, targetCache.GetCache().TypeName()))
-		err = targetCache.WriteOutputs(*target)
+		update(fmt.Sprintf("%s: cache hit (%s). fetching ", target.Label, targetCache.GetBackend().TypeName()))
+		err = targetCache.WriteOutputs(ctx, *target)
 		if err != nil {
 			return false, fmt.Errorf("build completed but failed to write outputs to cache for target %s:\n%w", target.Label, err)
 		}
@@ -110,8 +111,8 @@ func GetTaskFunc(
 	}
 }
 
-func downloadCachedOutputs(targetCache *caching.TargetCache, target *model.Target) error {
-	err := targetCache.LoadOutputs(*target)
+func downloadCachedOutputs(ctx context.Context, targetCache *caching.TargetCache, target *model.Target) error {
+	err := targetCache.LoadOutputs(ctx, *target)
 	if err != nil {
 		return fmt.Errorf("build completed but failed to read outputs from cache for target %s: %w", target.Label, err)
 	}

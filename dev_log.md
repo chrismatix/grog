@@ -2,6 +2,12 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 15-04-2025
+
+Rewrote the caching interface to support file streaming and started with the remote storage implementations.
+
+-C
+
 ## 14-04-2025
 
 Wasted a lot of time trying to get a simple gradle setup for the java codegen demo, but kept running into issues.

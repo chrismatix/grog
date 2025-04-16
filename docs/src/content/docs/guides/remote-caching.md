@@ -27,8 +27,8 @@ To enable remote caching via GCS add the following to your config:
 backend = "gcs"
 
 [cache.gcs]
-bucket = "<your-gcs-bucket-name>"
-prefix = "<prefix-for-cache-files>" # optional
+bucket = "<bucket-name>"
+prefix = "<prefix-for-cache-files>" # optional default: '/'
 credentials_file = "<path-to-google-credentials-json>" # optional
 ```
 
@@ -44,7 +44,9 @@ To enable remote caching via S3 add the following to your config:
 backend = "s3"
 
 [cache.s3]
-bucket = "<your-s3-bucket-name>"
-prefix = "<prefix-for-cache-files>" # optional
+bucket = "<bucket-name>"
+prefix = "<prefix-for-cache-files>" # optional default: '/'
 credentials_file = "<path-to-aws-credentials-json>" # optional
 ```
+
+`credentials_file` should be a path to an iam account json key file.

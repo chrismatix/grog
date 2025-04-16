@@ -1,8 +1,10 @@
 package cmds
 
 import (
+	"context"
 	"github.com/spf13/cobra"
-	"grog/internal/caching"
+	"grog/internal/caching/backends"
+	"grog/internal/config"
 	"grog/internal/console"
 )
 
@@ -15,12 +17,14 @@ func GetCleanCmd() *cobra.Command {
 		Long:  `Removes build outputs and clears the cache.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			logger := console.InitLogger()
-			cache, err := caching.GetCache(logger)
+			ctx := context.Background()
+			cache, err := backends.GetCacheBackend(ctx, logger, config.Global.Cache)
+
 			if err != nil {
 				logger.Fatalf("could not get cache: %v", err)
 			}
 
-			err = cache.Clear(expunge)
+			err = cache.Clear(ctx, expunge)
 			if err != nil {
 				logger.Fatalf("could not clear cache: %v", err)
 			}
