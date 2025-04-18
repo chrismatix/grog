@@ -9,6 +9,7 @@ import (
 	"grog/internal/config"
 	"grog/internal/label"
 	"grog/internal/model"
+	"grog/internal/output"
 	"io/fs"
 	"os"
 	"strings"
@@ -122,12 +123,17 @@ func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg Packa
 			return nil, fmt.Errorf("failed to resolve inputs for target %s: %w", targetLabel, err)
 		}
 
+		parsedOutputs, err := output.ParseOutputs(target.Outputs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse outputs for target %s: %w", targetLabel, err)
+		}
+
 		targets[targetLabel] = &model.Target{
 			Label:   targetLabel,
 			Command: target.Command,
 			Deps:    deps,
 			Inputs:  resolvedInputs,
-			Outputs: target.Outputs,
+			Outputs: parsedOutputs,
 		}
 	}
 

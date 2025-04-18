@@ -28,7 +28,7 @@ func hashTargetDefinition(target model.Target) (string, error) {
 	_, err := hasher.WriteString(target.Label.String())
 	_, err = hasher.WriteString(target.Command)
 	_, err = hasher.WriteString(sorted(target.Inputs))
-	_, err = hasher.WriteString(sorted(target.Outputs))
+	_, err = hasher.WriteString(sorted(target.OutputDefinitions()))
 	_, err = hasher.WriteString(sorted(target.GetDepsString()))
 
 	if err != nil {

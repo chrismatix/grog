@@ -2,6 +2,14 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 17-04-2025
+
+Making slow progress with adding pluggable output types to the code as it requires getting rid of all the logic that just assumes files.
+
+## 16-04-2025
+
+Finished the first draft of the gcs backend implementation and wrote some docs to go with it.
+
 ## 15-04-2025
 
 Rewrote the caching interface to support file streaming and started with the remote storage implementations.

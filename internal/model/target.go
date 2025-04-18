@@ -13,7 +13,7 @@ type Target struct {
 	Command string              `json:"cmd"`
 	Deps    []label.TargetLabel `json:"deps,omitempty"`
 	Inputs  []string            `json:"inputs,omitempty"`
-	Outputs []string            `json:"outputs,omitempty"`
+	Outputs []Output            `json:"outputs,omitempty"`
 
 	// Whether this target is selected for execution.
 	IsSelected bool `json:"is_selected,omitempty"`
@@ -41,4 +41,24 @@ func (t *Target) CommandEllipsis() string {
 
 func (t *Target) IsTest() bool {
 	return t.Label.IsTest()
+}
+
+func (t *Target) FileOutputs() []string {
+	var filePaths []string
+	for _, output := range t.Outputs {
+		if output.IsFile() {
+			// Identifier will be the path of the file
+			filePaths = append(filePaths, output.Identifier)
+		}
+	}
+	return filePaths
+}
+
+func (t *Target) OutputDefinitions() []string {
+	var definitions []string
+	for _, output := range t.Outputs {
+		// String() will return the full output definition as specified by the user
+		definitions = append(definitions, output.String())
+	}
+	return definitions
 }

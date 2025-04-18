@@ -115,7 +115,7 @@ func (fsc *FileSystemCache) Delete(_ context.Context, path, key string) error {
 }
 
 // Exists checks if a file exists in the cache with the given key
-func (fsc *FileSystemCache) Exists(_ context.Context, path, key string) bool {
+func (fsc *FileSystemCache) Exists(_ context.Context, path, key string) (bool, error) {
 	fsc.logger.Debugf("Checking existence of file in cache for path: %s, key: %s", path, key)
 	fsc.mutex.RLock()
 	defer fsc.mutex.RUnlock()
@@ -123,8 +123,13 @@ func (fsc *FileSystemCache) Exists(_ context.Context, path, key string) bool {
 	filePath := fsc.buildFilePath(path, key)
 
 	_, err := os.Stat(filePath)
-	fsc.logger.Debugf("File exists: %v", err == nil)
-	return err == nil
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 // Clear removes all files from the cache

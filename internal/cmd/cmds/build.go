@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"grog/internal/analysis"
+	"grog/internal/caching"
 	"grog/internal/caching/backends"
 	"grog/internal/config"
 	"grog/internal/console"
@@ -14,6 +15,7 @@ import (
 	"grog/internal/label"
 	"grog/internal/loading"
 	"grog/internal/model"
+	"grog/internal/output"
 	"os"
 	"os/signal"
 	"strings"
@@ -113,8 +115,10 @@ func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest b
 	if err != nil {
 		logger.Fatalf("could not instantiate cache: %v", err)
 	}
+	targetCache := caching.NewTargetCache(cache)
+	registry := output.NewRegistry(targetCache)
 
-	completionMap, err := execution.Execute(ctx, cache, graph, failFast)
+	completionMap, err := execution.Execute(ctx, registry, graph, failFast)
 
 	elapsedTime := time.Since(startTime).Seconds()
 	// Mostly used to keep our test fixtures deterministic

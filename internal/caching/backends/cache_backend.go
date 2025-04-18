@@ -26,7 +26,7 @@ type CacheBackend interface {
 	Delete(ctx context.Context, path string, key string) error
 
 	// Exists checks if a file exists in the cache with the given key.
-	Exists(ctx context.Context, path string, key string) bool
+	Exists(ctx context.Context, path string, key string) (bool, error)
 
 	// Clear removes all files from the workspace cache and optionally purges the cache directory.
 	Clear(ctx context.Context, expunge bool) error

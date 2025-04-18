@@ -76,7 +76,7 @@ func pathTriesToEscape(relPath string) bool {
 func checkOutputsAreWithinRepository(target *model.Target) (errs []error) {
 	workspaceRoot := viper.GetString("workspace_root")
 
-	for _, output := range target.Outputs {
+	for _, output := range target.FileOutputs() {
 		if path.IsAbs(output) {
 			errs = append(errs, fmt.Errorf(
 				"output %s for target %s is not relative",

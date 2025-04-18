@@ -3,6 +3,7 @@ package backends
 import (
 	"cloud.google.com/go/storage"
 	"context"
+	"errors"
 	"fmt"
 	"go.uber.org/zap"
 	"grog/internal/config"
@@ -118,18 +119,21 @@ func (gcs *GCSCache) Delete(ctx context.Context, path string, key string) error 
 }
 
 // Exists checks if a file exists in GCS.
-func (gcs *GCSCache) Exists(ctx context.Context, path string, key string) bool {
+func (gcs *GCSCache) Exists(ctx context.Context, path string, key string) (bool, error) {
 	gcs.logger.Debugf("Checking existence of file in GCS for path: %s, key: %s", path, key)
 
 	gcsPath := gcs.buildPath(path, key)
 
 	_, err := gcs.client.Bucket(gcs.bucketName).Object(gcsPath).Attrs(ctx)
+	if errors.Is(err, storage.ErrObjectNotExist) {
+		gcs.logger.Debugf("File does not exist: %s", gcsPath)
+		return false, nil
+	}
 	if err != nil {
-		gcs.logger.Debugf("File exists: %v", err == nil)
-		return false
+		return false, err
 	}
 
-	return true
+	return true, nil
 }
 
 // Clear removes all files from the GCS bucket with the given prefix (path).

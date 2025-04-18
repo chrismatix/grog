@@ -100,10 +100,14 @@ func (rw *RemoteWrapper) Delete(ctx context.Context, path string, key string) er
 }
 
 // Exists checks if a file exists in either the local file system cache or the remote cache.
-func (rw *RemoteWrapper) Exists(ctx context.Context, path string, key string) bool {
+func (rw *RemoteWrapper) Exists(ctx context.Context, path string, key string) (bool, error) {
 	// Check if the file exists in the local file system cache
-	if rw.fs.Exists(ctx, path, key) {
-		return true
+	localExists, err := rw.fs.Exists(ctx, path, key)
+	if err != nil {
+		return false, err
+	}
+	if localExists {
+		return true, nil
 	}
 
 	// Check if the file exists in the remote cache

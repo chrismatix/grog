@@ -80,7 +80,7 @@ type model struct {
 	msgCh chan tea.Msg
 
 	// Mutex for the tasks map
-	tasksMutex sync.RWMutex
+	tasksMutex sync.Mutex
 }
 
 func initialModel(msgCh chan tea.Msg) *model {
@@ -136,8 +136,8 @@ func (m *model) View() string {
 	// Render tasks in order.
 	// tasks may be sparse so we need to sort the task ids and then loop
 	keys := make([]int, 0, len(m.tasks))
-	m.tasksMutex.RLock()
-	defer m.tasksMutex.RUnlock()
+	m.tasksMutex.Lock()
+	defer m.tasksMutex.Unlock()
 	for k := range m.tasks {
 		keys = append(keys, k)
 	}

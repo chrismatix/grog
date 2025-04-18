@@ -3,6 +3,7 @@ package analysis
 import (
 	"github.com/stretchr/testify/assert"
 	"grog/internal/console"
+	"grog/internal/output"
 	"os"
 	"testing"
 
@@ -32,6 +33,14 @@ func setupWorkspaceRoot(t *testing.T) (string, func()) {
 	return workspaceRoot, cleanup
 }
 
+func mustParseOutputs(outputs []string) []model.Output {
+	parsedOutputs, err := output.ParseOutputs(outputs)
+	if err != nil {
+		panic(err)
+	}
+	return parsedOutputs
+}
+
 func TestCheckPathConstraints(t *testing.T) {
 	tests := []struct {
 		name               string
@@ -46,7 +55,7 @@ func TestCheckPathConstraints(t *testing.T) {
 					Label:   label.TL("", "target1"),
 					Inputs:  []string{"src/file.go"},
 					Deps:    []label.TargetLabel{label.TL("", "dep1")},
-					Outputs: []string{"bin/output1"},
+					Outputs: mustParseOutputs([]string{"bin/output1"}),
 				},
 			},
 			expectWarningCount: 0,
@@ -68,7 +77,7 @@ func TestCheckPathConstraints(t *testing.T) {
 				label.TL("", "target1"): &model.Target{
 					Label:   label.TL("", "target1"),
 					Inputs:  []string{"/abs/path/file.go"},
-					Outputs: []string{"bin/output1"}, // Added output to prevent warning
+					Outputs: mustParseOutputs([]string{"bin/output1"}), // Added output to prevent warning
 				},
 			},
 			expectWarningCount: 0,
@@ -80,7 +89,7 @@ func TestCheckPathConstraints(t *testing.T) {
 				label.TL("", "target1"): &model.Target{
 					Label:   label.TL("", "target1"),
 					Inputs:  []string{"../../outside/package/file.go"},
-					Outputs: []string{"bin/output1"}, // Added output to prevent warning
+					Outputs: mustParseOutputs([]string{"bin/output1"}), // Added output to prevent warning
 				},
 			},
 			expectWarningCount: 0,
@@ -92,7 +101,7 @@ func TestCheckPathConstraints(t *testing.T) {
 				label.TL("", "target1"): &model.Target{
 					Label:   label.TL("", "target1"),
 					Inputs:  []string{"src/file.go"},
-					Outputs: []string{"/outside/repo/output"},
+					Outputs: mustParseOutputs([]string{"/outside/repo/output"}),
 				},
 			},
 			expectWarningCount: 0,
@@ -104,7 +113,7 @@ func TestCheckPathConstraints(t *testing.T) {
 				label.TL("", "target1"): &model.Target{
 					Label:   label.TL("", "target1"),
 					Inputs:  []string{"/abs/path/file.go", "../../outside/package/file.go"},
-					Outputs: []string{"bin/output1"},
+					Outputs: mustParseOutputs([]string{"bin/output1"}),
 				},
 			},
 			expectWarningCount: 0,
@@ -116,7 +125,7 @@ func TestCheckPathConstraints(t *testing.T) {
 				label.TL("", "target1"): &model.Target{
 					Label:   label.TL("", "target1"),
 					Inputs:  []string{"src/file.go"},
-					Outputs: []string{"bin/output1", "bin/output2"},
+					Outputs: mustParseOutputs([]string{"bin/output1", "bin/output2"}),
 				},
 			},
 			expectWarningCount: 0,
@@ -128,7 +137,7 @@ func TestCheckPathConstraints(t *testing.T) {
 				label.TL("", "target1"): &model.Target{
 					Label:   label.TL("", "target1"),
 					Inputs:  []string{"src/file.go"},
-					Outputs: []string{"../output1"},
+					Outputs: mustParseOutputs([]string{"../output1"}),
 				},
 			},
 			expectWarningCount: 0,
