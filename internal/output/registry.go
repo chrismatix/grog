@@ -27,6 +27,7 @@ func NewRegistry(
 
 	// Register built-in handlers
 	r.Register(handlers.NewFileOutputHandler(targetCache))
+	r.Register(handlers.NewDirectoryOutputHandler(targetCache))
 
 	return r
 }

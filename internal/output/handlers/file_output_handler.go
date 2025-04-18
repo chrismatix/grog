@@ -23,13 +23,13 @@ func (f *FileOutputHandler) Type() HandlerType {
 }
 
 func (f *FileOutputHandler) Has(ctx context.Context, target model.Target, output model.Output) (bool, error) {
-	return f.targetCache.FileExists(ctx, target, output.Identifier)
+	return f.targetCache.FileExists(ctx, target, output)
 }
 
 func (f *FileOutputHandler) Write(ctx context.Context, target model.Target, output model.Output) error {
-	return f.targetCache.WriteFile(ctx, target, output.Identifier)
+	return f.targetCache.WriteFile(ctx, target, output)
 }
 
 func (f *FileOutputHandler) Load(ctx context.Context, target model.Target, output model.Output) error {
-	return f.targetCache.LoadFile(ctx, target, output.Identifier)
+	return f.targetCache.LoadFile(ctx, target, output)
 }

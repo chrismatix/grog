@@ -42,28 +42,33 @@ func (tc *TargetCache) cachePath(target model.Target) string {
 		target.ChangeHash)
 }
 
-func (tc *TargetCache) FileExists(ctx context.Context, target model.Target, output string) (bool, error) {
-	return tc.backend.Exists(ctx, tc.cachePath(target), hashing.HashString(output))
+func (tc *TargetCache) FileExists(ctx context.Context, target model.Target, output model.Output) (bool, error) {
+	return tc.backend.Exists(ctx, tc.cachePath(target), hashing.HashString(output.String()))
 }
 
 // WriteFile writes a file path relative to the target path to the cache backend
-func (tc *TargetCache) WriteFile(ctx context.Context, target model.Target, outputRef string) error {
-	absOutputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, outputRef))
+func (tc *TargetCache) WriteFile(ctx context.Context, target model.Target, output model.Output) error {
+	absOutputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.Identifier))
 	outputReader, err := os.Open(absOutputPath)
 	if err != nil {
-		return fmt.Errorf("declared output %s for target %s was not created", outputRef, target.Label)
+		return fmt.Errorf("declared output %s for target %s was not created", output, target.Label)
 	}
 
-	return tc.backend.Set(ctx, tc.cachePath(target), hashing.HashString(outputRef), outputReader)
+	return tc.backend.Set(ctx, tc.cachePath(target), hashing.HashString(output.String()), outputReader)
+}
+
+// WriteFileStream same as WriteFile but takes a reader instead of trying to open the file directly
+func (tc *TargetCache) WriteFileStream(ctx context.Context, target model.Target, output model.Output, reader io.Reader) error {
+	return tc.backend.Set(ctx, tc.cachePath(target), hashing.HashString(output.String()), reader)
 }
 
 // LoadFile loads a cached file from the cache backend and writes it to the given path
-func (tc *TargetCache) LoadFile(ctx context.Context, target model.Target, outputRef string) error {
-	absOutputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, outputRef))
-	contentReader, err := tc.backend.Get(ctx, tc.cachePath(target), hashing.HashString(outputRef))
+func (tc *TargetCache) LoadFile(ctx context.Context, target model.Target, output model.Output) error {
+	absOutputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.Identifier))
+	contentReader, err := tc.backend.Get(ctx, tc.cachePath(target), hashing.HashString(output.String()))
 	if err != nil {
 		return fmt.Errorf("output %s for target %s does not exist in %s backend",
-			outputRef,
+			output.String(),
 			target.Label,
 			tc.backend.TypeName())
 	}
@@ -79,6 +84,10 @@ func (tc *TargetCache) LoadFile(ctx context.Context, target model.Target, output
 	}
 
 	return outputFile.Close()
+}
+
+func (tc *TargetCache) LoadFileStream(ctx context.Context, target model.Target, output model.Output) (io.ReadCloser, error) {
+	return tc.backend.Get(ctx, tc.cachePath(target), hashing.HashString(output.String()))
 }
 
 // HasCacheExistsFile only checks if the default file we use (for empty outputs) is present

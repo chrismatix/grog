@@ -93,6 +93,17 @@ func GetLogger(ctx context.Context) *zap.SugaredLogger {
 	return InitLogger()
 }
 
+// WarnDeferredError is a helper for warning when some defer cleanup
+// function returns an error.
+func WarnDeferredError(ctx context.Context, fn func() error) func() {
+	logger := GetLogger(ctx)
+	return func() {
+		if err := fn(); err != nil {
+			logger.Warnf("deferred error: %v", err)
+		}
+	}
+}
+
 func MustApplyColorSetting() {
 	colorSetting := viper.GetString("color")
 	if colorSetting == "yes" {

@@ -1,0 +1,10 @@
+targets:
+  dir_output:
+    inputs:
+      - input.txt
+    outputs:
+      - dir::dist/ # Directory output containing generated files
+    cmd: |
+      mkdir -p dist
+      echo "Hello World" > dist/file1.txt
+      echo "Lorem ipsum" > dist/file2.txt
