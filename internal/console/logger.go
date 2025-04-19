@@ -2,22 +2,30 @@ package console
 
 import (
 	"context"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fatih/color"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"grog/internal/config"
 	"strings"
 )
 
-// InitLogger returns a new logger
+// InitLogger returns a new logger that writes to stdout.
 func InitLogger() *zap.SugaredLogger {
-	logPath := viper.GetString("log_output_path")
+	return InitLoggerWithTea(nil)
+}
+
+// InitLoggerWithTea returns a new logger that writes to the given program.
+// Leave the program empty to write to stdout
+func InitLoggerWithTea(program *tea.Program) *zap.SugaredLogger {
+	logPath := config.Global.LogOutputPath
 	if logPath == "" {
 		// default to stdout
 		logPath = "stdout"
 	}
 
-	logLevel := viper.GetString("log_level")
+	logLevel := config.Global.LogLevel
 	if logLevel == "" {
 		logLevel = "info"
 	}
@@ -73,6 +81,17 @@ func InitLogger() *zap.SugaredLogger {
 		panic(err)
 	}
 
+	if program != nil {
+		teaCore := zapcore.NewCore(
+			zapcore.NewConsoleEncoder(encoderConfig),
+			zapcore.AddSync(teaWriter{program}),
+			level,
+		)
+		logger = logger.WithOptions(zap.WrapCore(
+			func(c zapcore.Core) zapcore.Core { return zapcore.NewTee(c, teaCore) }),
+		)
+	}
+
 	return logger.Sugar()
 }
 
@@ -86,6 +105,11 @@ func SetLogger(ctx context.Context, logger *zap.SugaredLogger) context.Context {
 	return context.WithValue(ctx, "logger", logger)
 }
 
+// WithTeaLogging returns a new context with a tea logger
+func WithTeaLogging(ctx context.Context, program *tea.Program) context.Context {
+	return context.WithValue(ctx, "logger", InitLoggerWithTea(program))
+}
+
 func GetLogger(ctx context.Context) *zap.SugaredLogger {
 	if logger, ok := ctx.Value("logger").(*zap.SugaredLogger); ok {
 		return logger
@@ -93,14 +117,12 @@ func GetLogger(ctx context.Context) *zap.SugaredLogger {
 	return InitLogger()
 }
 
-// WarnDeferredError is a helper for warning when some defer cleanup
+// WarnOnError is a helper for warning when some defer cleanup
 // function returns an error.
-func WarnDeferredError(ctx context.Context, fn func() error) func() {
+func WarnOnError(ctx context.Context, fn func() error) {
 	logger := GetLogger(ctx)
-	return func() {
-		if err := fn(); err != nil {
-			logger.Warnf("deferred error: %v", err)
-		}
+	if err := fn(); err != nil {
+		logger.Warnf("deferred error: %v", err)
 	}
 }
 

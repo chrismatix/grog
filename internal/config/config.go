@@ -9,8 +9,13 @@ import (
 type WorkspaceConfig struct {
 	GrogRoot      string `mapstructure:"grog_root"`
 	WorkspaceRoot string `mapstructure:"workspace_root"`
-	FailFast      bool   `mapstructure:"fail_fast"`
+
+	// Execution
+	FailFast   bool `mapstructure:"fail_fast"`
+	NumWorkers int  `mapstructure:"num_workers"`
+	// Logging
 	LogLevel      string `mapstructure:"log_level"`
+	LogOutputPath string `mapstructure:"log_output_path"`
 
 	Cache CacheConfig `mapstructure:"cache"`
 }

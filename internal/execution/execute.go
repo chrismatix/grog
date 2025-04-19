@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/spf13/viper"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/dag"
@@ -34,17 +33,20 @@ func Execute(
 	graph *dag.DirectedTargetGraph,
 	failFast bool,
 ) (dag.CompletionMap, error) {
-	numWorkers := viper.GetInt("num_workers")
-	logger := console.GetLogger(ctx)
+	numWorkers := config.Global.NumWorkers
+	stdLogger := console.GetLogger(ctx)
 
 	program, msgCh := console.StartTaskUI(ctx)
 	defer func(p *tea.Program) {
 		err := p.ReleaseTerminal()
 		if err != nil {
-			logger.Errorf("error releasing terminal: %v", err)
+			stdLogger.Errorf("error releasing terminal: %v", err)
 		}
 	}(program)
 	defer program.Quit()
+
+	// Attach the tea logger to the context
+	ctx = console.WithTeaLogging(ctx, program)
 
 	selectedTargetCount := len(graph.GetSelectedVertices())
 	workerPool := worker.NewPool[bool](numWorkers, msgCh, selectedTargetCount)
@@ -88,7 +90,13 @@ func GetTaskFunc(
 		if hasCacheHit && depsCached {
 			if len(target.Outputs) > 0 {
 				update(fmt.Sprintf("%s: cache hit. fetching outputs...", target.Label))
-				return true, downloadCachedOutputs(ctx, registry, target)
+				loadingErr := loadCachedOutputs(ctx, registry, target)
+				if loadingErr != nil {
+					// Don't return so that we instead break out and continue executing the target
+					console.GetLogger(ctx).Errorf("failed to load outputs from cache for target %s: %v", target.Label, loadingErr)
+				} else {
+					return true, nil
+				}
 			} else {
 				update(fmt.Sprintf("%s: cache hit.", target.Label))
 				return true, nil
@@ -102,7 +110,7 @@ func GetTaskFunc(
 		}
 
 		// Write outputs to the cache:
-		update(fmt.Sprintf("%s: cache hit. fetching outputs...", target.Label))
+		update(fmt.Sprintf("%s complete. writing outputs...", target.Label))
 		err = registry.WriteOutputs(ctx, *target)
 		if err != nil {
 			return false, fmt.Errorf("build completed but failed to write outputs to cache for target %s:\n%w", target.Label, err)
@@ -111,10 +119,10 @@ func GetTaskFunc(
 	}
 }
 
-func downloadCachedOutputs(ctx context.Context, registry *output.Registry, target *model.Target) error {
+func loadCachedOutputs(ctx context.Context, registry *output.Registry, target *model.Target) error {
 	err := registry.LoadOutputs(ctx, *target)
 	if err != nil {
-		return fmt.Errorf("build completed but failed to read outputs from cache for target %s: %w", target.Label, err)
+		return fmt.Errorf("failed to read outputs from cache for target %s: %w", target.Label, err)
 	}
 	return nil
 }

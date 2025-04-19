@@ -1,0 +1,7 @@
+targets:
+  build:
+    inputs:
+      - "app/**/*.tsx"
+    cmd: npm run build
+    outputs:
+      - dir::.next/

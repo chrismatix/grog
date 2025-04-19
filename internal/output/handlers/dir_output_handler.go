@@ -10,6 +10,7 @@ import (
 	"grog/internal/console"
 	"grog/internal/model"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 )
@@ -37,76 +38,85 @@ func (d *DirectoryOutputHandler) Has(ctx context.Context, target model.Target, o
 	return d.targetCache.FileExists(ctx, target, output)
 }
 
-// Write compresses the directory and writes it to the cache as a single file
-func (d *DirectoryOutputHandler) Write(ctx context.Context, target model.Target, output model.Output) error {
-	dirPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.Identifier))
+// Write compresses a directory into <output>.tar.gz and streams it into the cache.
+func (d *DirectoryOutputHandler) Write(
+	ctx context.Context,
+	target model.Target,
+	output model.Output,
+) error {
+	logger := console.GetLogger(ctx)
 
-	// Create a pipe to stream the compressed data
-	pr, pw := io.Pipe()
+	workspaceRelativePath := filepath.Join(target.Label.Package, output.Identifier)
+	directoryPath := config.GetPathAbsoluteToWorkspaceRoot(workspaceRelativePath)
 
-	// Start a goroutine to compress the directory
+	logger.Debugf("compressing %s (target %s → %s)", directoryPath, target.Label, output)
+
+	pipeReader, pipeWriter := io.Pipe()
+
 	go func() {
-		defer console.WarnDeferredError(ctx, pw.Close)
+		gzipWriter := gzip.NewWriter(pipeWriter)
+		tarWriter := tar.NewWriter(gzipWriter)
 
-		gw := gzip.NewWriter(pw)
-		defer console.WarnDeferredError(ctx, gw.Close)
-
-		tw := tar.NewWriter(gw)
-		defer console.WarnDeferredError(ctx, tw.Close)
-
-		// Walk the directory and add files to the tar archive
-		// TODO use fastwalk here aswell
-		err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+		walkError := filepath.WalkDir(directoryPath, func(path string, directoryEntry fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
-
-			// Skip the root directory itself
-			if path == dirPath {
+			if path == directoryPath { // skip the root directory entry
 				return nil
 			}
 
-			// Create a tar header
-			header, err := tar.FileInfoHeader(info, "")
+			fileInfo, err := directoryEntry.Info()
 			if err != nil {
 				return err
 			}
 
-			// Set the name to be relative to the directory being archived
-			relPath, err := filepath.Rel(dirPath, path)
+			header, err := tar.FileInfoHeader(fileInfo, "")
 			if err != nil {
 				return err
 			}
-			header.Name = relPath
 
-			// Write the header
-			if err := tw.WriteHeader(header); err != nil {
+			relativePath, err := filepath.Rel(directoryPath, path)
+			if err != nil {
+				return err
+			}
+			header.Name = filepath.ToSlash(relativePath) // POSIX‑style paths in the archive
+
+			if err := tarWriter.WriteHeader(header); err != nil {
 				return err
 			}
 
-			// If it's a regular file, write the content
-			if !info.IsDir() {
+			if !directoryEntry.IsDir() {
 				file, err := os.Open(path)
 				if err != nil {
 					return err
 				}
-				defer console.WarnDeferredError(ctx, file.Close)
-
-				if _, err := io.Copy(tw, file); err != nil {
+				if _, err := io.Copy(tarWriter, file); err != nil {
+					file.Close()
 					return err
 				}
+				file.Close()
 			}
-
 			return nil
 		})
 
-		if err != nil {
-			pw.CloseWithError(err)
+		closeError := func() error {
+			if err := tarWriter.Close(); err != nil {
+				return err
+			}
+			return gzipWriter.Close()
+		}()
+
+		if walkError != nil {
+			pipeWriter.CloseWithError(walkError)
+		} else if closeError != nil {
+			pipeWriter.CloseWithError(closeError)
+		} else {
+			pipeWriter.Close()
 		}
 	}()
 
-	// Write the compressed data to the cache
-	return d.targetCache.WriteFileStream(ctx, target, output, pr)
+	logger.Debug("streaming tar.gz to cache")
+	return d.targetCache.WriteFileStream(ctx, target, output, pipeReader)
 }
 
 // Load extracts the compressed directory from the cache and writes it to the target directory.
@@ -116,10 +126,8 @@ func (d *DirectoryOutputHandler) Write(ctx context.Context, target model.Target,
 //
 // This is because the tar reader doesn't support reading from a stream, so we need to write the
 // compressed data to a temporary file first.
-//
-// The temporary file is then opened in a separate goroutine to avoid blocking the main goroutine
-// while reading the compressed data.
 func (d *DirectoryOutputHandler) Load(ctx context.Context, target model.Target, output model.Output) error {
+	logger := console.GetLogger(ctx)
 	dirPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.Identifier))
 
 	// Create a temporary file to store the compressed data
@@ -128,17 +136,19 @@ func (d *DirectoryOutputHandler) Load(ctx context.Context, target model.Target, 
 		return err
 	}
 	tempFilePath := tempFile.Name()
-	defer console.WarnDeferredError(ctx, func() error {
-		return os.Remove(tempFilePath)
+	defer console.WarnOnError(ctx, func() error {
+		if err := os.Remove(tempFilePath); err != nil {
+			return fmt.Errorf("failed to clean up tmp tar file file %s: %w", tempFilePath, err)
+		}
+		return nil
 	})
-	defer console.WarnDeferredError(ctx, tempFile.Close)
 
 	// Get the compressed file from the cache
 	contentReader, err := d.targetCache.LoadFileStream(ctx, target, output)
 	if err != nil {
 		return err
 	}
-	defer console.WarnDeferredError(ctx, contentReader.Close)
+	defer console.WarnOnError(ctx, contentReader.Close)
 
 	// Copy the compressed data to the temporary file
 	if _, err := io.Copy(tempFile, contentReader); err != nil {
@@ -155,9 +165,7 @@ func (d *DirectoryOutputHandler) Load(ctx context.Context, target model.Target, 
 	if err != nil {
 		return err
 	}
-	defer console.WarnDeferredError(ctx, func() error {
-		return tempFile.Close()
-	})
+	defer console.WarnOnError(ctx, tempFile.Close)
 
 	// Create the target directory if it doesn't exist
 	if err := os.MkdirAll(dirPath, 0755); err != nil {
@@ -165,25 +173,24 @@ func (d *DirectoryOutputHandler) Load(ctx context.Context, target model.Target, 
 	}
 
 	// Create a gzip reader
+	// NOTE does not need to be closed since it's closed by the tar reader
 	gzipReader, err := gzip.NewReader(tempFile)
 	if err != nil {
 		return err
 	}
-	defer console.WarnDeferredError(ctx, func() error {
-		return gzipReader.Close()
-	})
 
 	// Create a tar reader
 	tarReader := tar.NewReader(gzipReader)
 
 	// Extract the files
+	fileCount := 0
 	for {
 		header, tarError := tarReader.Next()
 		if tarError == io.EOF {
 			break
 		}
 		if tarError != nil {
-			return tarError
+			return fmt.Errorf("error reading tar header: %w", tarError)
 		}
 
 		// Get the target path
@@ -194,30 +201,32 @@ func (d *DirectoryOutputHandler) Load(ctx context.Context, target model.Target, 
 			if err := os.MkdirAll(targetPath, 0755); err != nil {
 				return err
 			}
+			fileCount++
 			continue
 		}
 
 		// Create parent directories if needed
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-			return err
+			return fmt.Errorf("failed to create parent directories for file %s: %w", targetPath, err)
 		}
 
 		// Create the file
 		file, tarError := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY, os.FileMode(header.Mode))
 		if tarError != nil {
-			return tarError
+			return fmt.Errorf("failed to create file %s: %w", targetPath, tarError)
 		}
 
-		// Copy the content
 		if _, err := io.Copy(file, tarReader); err != nil {
-			file.Close()
-			return err
+			return fmt.Errorf("failed to copy file %s: %w", targetPath, err)
 		}
 
 		if err := file.Close(); err != nil {
-			return err
+			return fmt.Errorf("failed to close file %s: %w", targetPath, err)
 		}
+
+		fileCount++
 	}
 
+	logger.Debugf("Successfully extracted %d files to %s", fileCount, dirPath)
 	return nil
 }

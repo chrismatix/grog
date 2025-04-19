@@ -5,8 +5,6 @@ import (
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/mattn/go-isatty"
-	"io"
-	"log"
 	"os"
 	"sort"
 	"sync"
@@ -36,9 +34,6 @@ func StartTaskUI(ctx context.Context) (*tea.Program, chan tea.Msg) {
 	if !isatty.IsTerminal(os.Stdout.Fd()) {
 		// If we're in daemon mode don't render the TUI
 		opts = append(opts, tea.WithoutRenderer())
-	} else {
-		// If we're in TUI mode, discard log output
-		log.SetOutput(io.Discard)
 	}
 
 	// Start the Bubbletea program.
@@ -80,7 +75,7 @@ type model struct {
 	msgCh chan tea.Msg
 
 	// Mutex for the tasks map
-	tasksMutex sync.Mutex
+	tasksMutex sync.RWMutex
 }
 
 func initialModel(msgCh chan tea.Msg) *model {
@@ -117,7 +112,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.header = string(castMsg)
 	case TaskStateMsg:
 		m.tasksMutex.Lock()
-		m.tasks = castMsg.State
+		m.tasks = make(map[int]TaskState, len(castMsg.State))
+		for k, v := range castMsg.State {
+			m.tasks[k] = v
+		}
 		m.tasksMutex.Unlock()
 	case TickMsg:
 		m.tick++
@@ -133,20 +131,22 @@ func (m *model) View() string {
 	// Render header
 	s += m.header + "\n"
 
-	// Render tasks in order.
-	// tasks may be sparse so we need to sort the task ids and then loop
+	// Render tasks in order:
+	// Tasks may be sparse so we need to sort the task ids and then loop
 	keys := make([]int, 0, len(m.tasks))
-	m.tasksMutex.Lock()
-	defer m.tasksMutex.Unlock()
+	m.tasksMutex.RLock()
+	defer m.tasksMutex.RUnlock()
 	for k := range m.tasks {
 		keys = append(keys, k)
 	}
 	sort.Ints(keys)
+
 	for _, i := range keys {
 		if status, ok := m.tasks[i]; ok {
 			timePassed := int(time.Since(time.Unix(status.StartedAtSec, 0)).Seconds())
 			s += fmt.Sprintf("    %s %ds\n", status.Status, timePassed)
 		}
 	}
+	//fmt.Println(s)
 	return s
 }

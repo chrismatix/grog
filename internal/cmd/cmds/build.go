@@ -93,7 +93,7 @@ func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest b
 		graph.SelectAllTargets()
 		logger.Infof("Selected all targets (%s loaded, %s configured).", console.FCountPkg(numPackages), console.FCountTargets(len(targets)))
 	}
-
+	logger.WithOptions()
 	ctx, cancel := context.WithCancel(context.Background())
 	ctx = console.SetLogger(ctx, logger)
 	defer cancel()
