@@ -7,7 +7,7 @@ import (
 )
 
 type WorkspaceConfig struct {
-	GrogRoot      string `mapstructure:"grog_root"`
+	Root          string `mapstructure:"root"`
 	WorkspaceRoot string `mapstructure:"workspace_root"`
 
 	// Execution
@@ -17,21 +17,27 @@ type WorkspaceConfig struct {
 	LogLevel      string `mapstructure:"log_level"`
 	LogOutputPath string `mapstructure:"log_output_path"`
 
-	Cache CacheConfig `mapstructure:"cache"`
+	// Caching
+	EnableCache bool        `mapstructure:"enable_cache"`
+	Cache       CacheConfig `mapstructure:"cache"`
 }
 
 var Global WorkspaceConfig
 
 func (w WorkspaceConfig) GetCacheDirectory() string {
-	if w.GrogRoot == "" {
-		// This can only ever happen if the user intentionally sets the GrogRoot to ""
+	if w.Root == "" {
+		// This can only ever happen if the user intentionally sets the Root to ""
 		// or if we have an initialization bug.
 		// In any case we should exit with an error because otherwise we might end up
 		// writing/removing files in the wrong place.
 		fmt.Println("GROG_ROOT is not set (or set to \"\").")
 		os.Exit(1)
 	}
-	return filepath.Join(w.GrogRoot, "cache")
+	return filepath.Join(w.Root, "cache")
+}
+
+func (w WorkspaceConfig) IsDebug() bool {
+	return w.LogLevel == "debug"
 }
 
 type CacheBackend string

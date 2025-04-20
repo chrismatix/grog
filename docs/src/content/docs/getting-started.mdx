@@ -1,0 +1,230 @@
+---
+title: Getting Started
+description: Take your first steps to running your builds with Grog.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+import { Aside } from "@astrojs/starlight/components";
+
+## What is Grog?
+
+Grog is an ergonomic build system inspired by tools like Pants and Bazel. It emphasizes simplicity by letting users declare build targets with file dependencies and commands. When an input file changes, Grog re-executes the affected build steps and caches results to avoid unnecessary rebuilds.
+
+Unlike some build systems, Grog remains agnostic to the actual build execution and focuses solely on incremental runs, parallel execution, and caching. It's designed to be an intermediate solution that helps teams move towards a coherent mono-repo approach by efficiently gluing together their existing build tooling using a very simple interface.
+
+## Installation
+
+<Tabs>
+  <TabItem label="macOS">
+  ```bash
+  # Using Homebrew
+  brew install grog
+
+# Or download the binary directly
+
+curl -L https://github.com/chrismatix/grog/releases/latest/download/grog-darwin-arm64 -o /usr/local/bin/grog
+chmod +x /usr/local/bin/grog
+
+````
+</TabItem>
+<TabItem label="Linux">
+```bash
+# Download the binary
+curl -L https://github.com/chrismatix/grog/releases/latest/download/grog-linux-amd64 -o /usr/local/bin/grog
+chmod +x /usr/local/bin/grog
+````
+
+  </TabItem>
+</Tabs>
+
+## Initialize Your Repository
+
+To start using Grog in your project, you need to initialize it by creating a `grog.toml` file at the root of your repository:
+
+```bash
+touch grog.toml
+```
+
+A minimal `grog.toml` file can be empty, with all settings using default values.
+Refer to the [configuration reference](/reference/configuration.md) to see all avalailable options.
+
+## Define Build Files
+
+Grog provides a wide array of build file formats to define your build targets.
+You can create these files in various formats depending on your needs:
+
+<Tabs>
+  <TabItem label="JSON">
+  ```json
+  {
+    "targets": {
+      "build_app": {
+        "cmd": "npm run build",
+        "deps": [
+          ":generate_proto",
+          "//path/to/other/package:target_name"
+        ],
+        "inputs": ["src/**/*.js", "package.json"],
+        "outputs": ["dist/bundle.js"]
+      },
+      "generate_proto": {
+        "cmd": "protoc --js_out=src/generated proto/*.proto",
+        "inputs": ["proto/*.proto"],
+        "outputs": ["dir::src/generated"]
+      }
+    }
+  }
+  ```
+  Save this as `BUILD.json` in your project directory.
+  </TabItem>
+  <TabItem label="YAML">
+  ```yaml
+  targets:
+    build_app:
+      cmd: npm run build
+      deps:
+        - :generate_proto
+        - //path/to/other/package:target_name
+      inputs:
+        - src/**/*.js
+      outputs:
+        - dist/bundle.js
+    generate_proto:
+      cmd: protoc --js_out=src/generated proto/*.proto
+      inputs:
+        - proto/*.proto
+      outputs:
+        - dir::src/generated
+  ```
+  Save this as `BUILD.yaml` in your project directory.
+  </TabItem>
+  <TabItem label="Makefile">
+  ```Makefile
+    # @grog
+    # inputs:
+    #   - src/**/*.js
+    #   - package.json
+    # outputs:
+    #   - dist/bundle.js
+    # deps:
+    #   - :generate_proto
+    #   - //path/to/other/package:target_name
+    build_app:
+      npm run build
+
+    # @grog
+    # inputs:
+    #   - proto/*.proto
+    # outputs:
+    #   - dir::src/generated
+    generate_proto:
+      protoc --js_out=src/generated proto/*.proto
+
+````
+Add the grog metadata comments to your `Makefile` goals to allow running them with Grog.
+</TabItem>
+</Tabs>
+
+Things to note from the above examples:
+
+- Targets are referenced using [Bazel-style](https://bazel.build/concepts/labels) labels.
+- Directory outputs are prefixed with `dir::` to indicate they are directories.
+- Cmd are executed as shell scripts in the target's directory.
+
+## Running Builds
+
+To run a build, use the `grog build` command followed by the target label:
+
+```bash
+# Build a specific target
+grog build //path/to/package:target_name
+
+# Build all targets
+grog build //...
+# or just
+grog build
+````
+
+Grog will re-run a build if any of the following conditions are met:
+
+- A target's definition has changed.
+- A target's inputs have changed.
+- A target's dependencies have changed.
+- Any of the target's outputs are not present.
+
+## Running Tests
+
+Grog will automatically treat targets that end with `_test` as test targets.
+They will only be executed if you run `grog test` and will be ignored for `grog build`
+
+## Target Overview
+
+### Inputs
+
+Inputs are files that your build target depends on. When any of these files change, Grog will re-run the target's command.
+You can specify inputs using file paths or glob patterns:
+
+```text
+"inputs": [
+  "src/**/*.js",
+  "package.json",
+  "assets/*.{png,jpg}"
+]
+```
+
+- `src/**/*.js` - All JavaScript files in src directory and subdirectories
+- `package.json` - A specific file
+- `assets/*.{png,jpg}` - All PNG and JPG files in assets directory
+
+Grog tracks inputs by computing a hash of their contents.
+This allows it to detect changes and only rebuild when necessary.
+
+<Aside>
+  You do not have to specify all files that your build target depends on for
+  grog to work. However, it is recommended to specify all inputs to avoid
+  unnecessary rebuilds.
+</Aside>
+
+### Dependencies
+
+Dependencies are other targets that must be built before the current target.
+This creates a directed acyclic graph (DAG) of build steps:
+
+```text
+"deps": [
+  "generate_proto",
+  "//lib:build_lib"
+]
+```
+
+- `generate_proto` - A dependency on another target in the same package
+- `//lib:build_lib` - A dependency on a target in another package
+
+When you specify dependencies:
+
+- Grog ensures they are built before the current target.
+- Changes to a dependency's outputs will trigger a rebuild of dependent targets.
+- Grog can parallelize the build by running independent targets concurrently.
+
+## Defining Outputs
+
+Outputs are files or directories that your build command produces. Grog caches these outputs and restores them when possible to avoid unnecessary rebuilds.
+
+```text
+"outputs": [
+  "dist/bundle.js",
+  "dir::dist/assets/",
+]
+```
+
+- `dist/bundle.js` - A file output
+- `dir::dist/assets/` - A directory output
+
+## Next Steps
+
+Now that you've set up Grog and created your first build targets, you might want to explore:
+
+- [Configuration Reference](/reference/configuration) - Learn about all available configuration options
+- [Remote Caching](/guides/remote-caching) - Set up remote caching for your builds
+- [Docker Outputs](/guides/docker-outputs) - Learn more about caching Docker images
+- [Troubleshooting](/reference/troubleshooting) - Solve common issues

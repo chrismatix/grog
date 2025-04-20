@@ -2,6 +2,7 @@ package analysis
 
 import (
 	"github.com/stretchr/testify/assert"
+	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/output"
 	"os"
@@ -23,7 +24,8 @@ func setupWorkspaceRoot(t *testing.T) (string, func()) {
 	}
 
 	// Set the workspace_root config value
-	viper.Set("workspace_root", workspaceRoot)
+	//viper.Set("workspace_root", workspaceRoot)
+	config.Global.WorkspaceRoot = workspaceRoot
 
 	cleanup := func() {
 		os.RemoveAll(workspaceRoot)

@@ -72,7 +72,7 @@ func (wp *Pool[T]) StartWorkers(ctx context.Context) {
 }
 
 func (wp *Pool[T]) worker(ctx context.Context, workerId int) {
-	isDebug := config.IsDebug()
+	isDebug := config.Global.IsDebug()
 
 	for {
 		select {

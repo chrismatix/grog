@@ -2,6 +2,22 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 19-04-2025
+
+Found and fixed the issue with writing the `tar.gz` files for the directory outputs!
+Also found a straight-forward way to pipe zap logs to the tea program and attaching that logger to the context.
+So basically, all functions that do log should get their logger from the context which may or may not contain a logger that writes to tea.
+
+-C
+
+## 18-04-2025
+
+Gave the directory output task to Junie, and it delivered a good first solution.
+Truly felt like magic, but it did have some issues that also revealed that regular logging (while a tea program is running) doesn't actually work.
+Left it in what felt like a pretty broken state.
+
+-C
+
 ## 17-04-2025
 
 Making slow progress with adding pluggable output types to the code as it requires getting rid of all the logic that just assumes files.

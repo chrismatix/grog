@@ -32,10 +32,17 @@ prefix = "<prefix-for-cache-files>" # optional default: '/'
 credentials_file = "<path-to-google-credentials-json>" # optional
 ```
 
+import { Aside } from "@astrojs/starlight/components";
+
 `credentials_file` should be a path to a service account json key file.
 When it is not provided grog will attempt to use whatever authentication is associated with the current session (see [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials)).
 
 ## AWS S3
+
+<Aside type="caution">
+  This feature is not ready yet. The docs instead reflect the planned
+  implementation.
+</Aside>
 
 To enable remote caching via S3 add the following to your config:
 

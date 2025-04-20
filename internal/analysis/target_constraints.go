@@ -3,8 +3,8 @@ package analysis
 import (
 	"fmt"
 	"github.com/fatih/color"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
+	"grog/internal/config"
 	"grog/internal/model"
 	"path"
 	"path/filepath"
@@ -74,7 +74,7 @@ func pathTriesToEscape(relPath string) bool {
 }
 
 func checkOutputsAreWithinRepository(target *model.Target) (errs []error) {
-	workspaceRoot := viper.GetString("workspace_root")
+	workspaceRoot := config.Global.WorkspaceRoot
 
 	for _, output := range target.FileOutputs() {
 		if path.IsAbs(output) {

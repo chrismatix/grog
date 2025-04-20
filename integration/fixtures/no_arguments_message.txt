@@ -11,12 +11,12 @@ Available Commands:
   version     Print the version info
 
 Flags:
-      --color string     Set color output (yes, no, or auto) (default "auto")
-      --debug            Enable debug logging
-      --enable-caching   Enable caching (default true)
-      --fail-fast        Fail fast on first error
-  -h, --help             help for grog
-  -v, --verbose count    Set verbosity level (-v, -vv)
-      --version          version for grog
+      --color string    Set color output (yes, no, or auto) (default "auto")
+      --debug           Enable debug logging
+      --enable-cache    Enable cache (default true)
+      --fail-fast       Fail fast on first error
+  -h, --help            help for grog
+  -v, --verbose count   Set verbosity level (-v, -vv)
+      --version         version for grog
 
 Use "grog [command] --help" for more information about a command.

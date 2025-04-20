@@ -18,14 +18,14 @@ export default defineConfig({
           items: ["getting-started", "why-grog"],
         },
         {
+          label: "Guides",
+          collapsed: false,
+          autogenerate: { directory: "guides" },
+        },
+        {
           label: "Reference",
           collapsed: false,
           autogenerate: { directory: "reference", collapsed: true },
-        },
-        {
-          label: "Guides",
-          collapsed: true,
-          autogenerate: { directory: "guides" },
         },
       ],
     }),

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/charlievieth/fastwalk"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"grog/internal/config"
 	"grog/internal/label"
@@ -17,7 +16,7 @@ import (
 )
 
 func LoadPackages(logger *zap.SugaredLogger) ([]*model.Package, error) {
-	workspaceRoot := viper.Get("workspace_root").(string)
+	workspaceRoot := config.Global.WorkspaceRoot
 
 	var packages []*model.Package
 

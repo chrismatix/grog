@@ -50,13 +50,14 @@ func init() {
 	// Set up Viper
 	viper.SetConfigName("grog")
 	viper.SetConfigType("toml")
+	viper.SetEnvPrefix("GROG")
 	viper.AddConfigPath(workspaceRoot)                     // search in workspace root
 	viper.AddConfigPath("$HOME/.grog")                     // optionally look for config in the home directory
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_")) // allow FLAG-NAME to map to ENV VAR_NAME
 	viper.AutomaticEnv()                                   // read in environment variables that match
 
 	// Set default cache directory
-	viper.SetDefault("grog_root", filepath.Join(os.Getenv("HOME"), ".grog"))
+	viper.SetDefault("root", filepath.Join(os.Getenv("HOME"), ".grog"))
 
 	// Options:
 	// color
@@ -75,9 +76,9 @@ func init() {
 	err = viper.BindPFlag("fail_fast", RootCmd.PersistentFlags().Lookup("fail-fast"))
 
 	// enable_caching
-	RootCmd.PersistentFlags().Bool("enable-caching", true, "Enable caching")
-	err = viper.BindPFlag("enable_caching", RootCmd.PersistentFlags().Lookup("enable-caching"))
-	viper.SetDefault("enable_caching", true)
+	RootCmd.PersistentFlags().Bool("enable-cache", true, "Enable cache")
+	err = viper.BindPFlag("enable_cache", RootCmd.PersistentFlags().Lookup("enable-cache"))
+	viper.SetDefault("enable_cache", true)
 
 	// Register subcommands
 	RootCmd.AddCommand(cmds.BuildCmd)

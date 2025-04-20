@@ -170,7 +170,7 @@ func runBinary(args []string, repoPath string) ([]byte, error) {
 		return nil, err
 	}
 	cmd.Env = append(os.Environ(), "GOCOVERDIR="+coverDir)
-	cmd.Env = append(cmd.Env, "DISABLE_TIME_LOGGING=true")
+	cmd.Env = append(cmd.Env, "GROG_DISABLE_TIME_LOGGING=true")
 
 	// Uncomment to enable debug logging
 	// TODO move to makefile flag

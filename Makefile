@@ -74,7 +74,6 @@ run-repo: build
 	@cd integration/test_repos/$(path) && ../../dist/grog $(MAKECMDGOALS)
 
 gen-docs: # Re-generate cli docs
-	cd docs
-	go run gen_docs.go
+	cd docs && go run gen_docs.go
 
 .DEFAULT_GOAL := build
