@@ -2,6 +2,8 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 20-04-2025
+
 ## 19-04-2025
 
 Found and fixed the issue with writing the `tar.gz` files for the directory outputs!
@@ -238,19 +240,23 @@ One open question: When selecting targets should we:
 1. Mark all the selected targets (and dependents) for a run, or
 2. Return a subgraph that only includes targets that we want to run
 
-Gut feel says that either decision locks us in for some interesting constraints down the road. Luca and I agree to go for `1.` for now, the first principle being that it "destroys" less information (the rest of the graph) for downstream processing.
+Gut feel says that either decision locks us in for some interesting constraints down the road.
+Luca and I agree to go for `1.` for now, the first principle being that it "destroys" less information (the rest of the graph) for downstream processing.
 
 -C
 
 ## 18-03-2025
 
-Changing the package schema to a dict rather than a list broke the targeting. Also target patterns had not yet supported shorthands. Fixed both issues and added a minimal graph implementation.
+Changing the package schema to a dict rather than a list broke the targeting.
+Also target patterns had not yet supported shorthands.
+Fixed both issues and added a minimal graph implementation.
 
 -C
 
 ## 17-03-2025
 
-After having a first read of the OpenTofu dag code I felt a bit disheartened at the task ahead of me since it is a lot of work. However, after more reading and rubber-ducking I have made some observations:
+After having a first read of the OpenTofu dag code I felt a bit disheartened at the task ahead of me since it is a lot of work.
+However, after more reading and rubber-ducking I have made some observations:
 
 - For parallel tasks we need a worker pool to A) limit concurrency and B) be able to get the nice live updating progress view that `docker pull` and `bazel build` do. Limiting concurrency is important since user build commands might be very cpu intensive and running more of them than there are cores on a machine will slow the program down.
 - OpenTofu's [dag walk](https://github.com/opentofu/opentofu/blob/b1f5cb2588fd04002977405839e495a75ab13a70/internal/dag/walk.go#L150) heavily leans into goroutines and I should just use the same design:
@@ -268,13 +274,15 @@ Otherwise, no coding progress today, but lots of conceptual understanding.
 ## 16-03-2025
 
 I prefer the way target labels work in Bazel over pants (or earthly) so that's what we're going for.
-Observation: While I think that regular globbing would work for target patterns as well you would have to always quote your paths to prevent shell expansion.
+Observation: While I think that regular globbing would work for target patterns, as well, you would have to always quote your paths to prevent shell expansion.
 
 I gave the problem to o3-mini with deep research enabled, and it produced a perfect solution on the first try.
 
-Finally got a first working version for the loading phase, while fixing some terminal output bugs along the way.
+Finally, got a first working version for the loading phase, while fixing some terminal output bugs along the way.
 
-Next up is the actual protein of the program: Building the graph and executing it. Luca recommended looking into how OpenTofu does it, but even though it is very well written it is quite a lot of code and some of it may not be needed or useful to our needs. So the option is to either use that or roll our own dag execution.
+Next up is the actual protein of the program: Building the graph and executing it.
+Luca recommended looking into how OpenTofu does it, but even though it is very well written it is quite a lot of code and some of it may not be needed or useful to our needs.
+So the option is to either use that or roll our own dag execution.
 
 -C
 
@@ -295,6 +303,6 @@ Most notable success is infecting/radicalizing Luca with this idea which brings 
 
 Last night, I finally had the eureka moment to make all of this work which is to have the BUILD files be user executables (or plain data files).
 I could not sleep, because I was so excited at the idea and because I could picture every aspect of how this would work.
-Today I scoped out a simple program structure based on the loading, analysis, and execution phase in bazel.
+Today I scoped out a simple program structure based on the loading, analysis, and execution phase in Bazel.
 
 -C

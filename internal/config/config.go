@@ -20,6 +20,9 @@ type WorkspaceConfig struct {
 	// Caching
 	EnableCache bool        `mapstructure:"enable_cache"`
 	Cache       CacheConfig `mapstructure:"cache"`
+
+	// Docker
+	Docker DockerConfig `mapstructure:"docker"`
 }
 
 var Global WorkspaceConfig
@@ -64,4 +67,13 @@ type S3CacheConfig struct {
 	Bucket          string `mapstructure:"bucket"`
 	Prefix          string `mapstructure:"prefix"`
 	CredentialsFile string `mapstructure:"credentials_file"`
+}
+
+type DockerConfig struct {
+	Enabled bool   `mapstructure:"enabledocker"`
+	Backend string `mapstructure:"backend"`
+
+	Registry string `mapstructure:"registry"`
+	Username string `mapstructure:"username"`
+	Password string `mapstructure:"password"`
 }

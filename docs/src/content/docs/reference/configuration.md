@@ -3,7 +3,7 @@ title: Configuration
 description: Find an overview of all possible grog configuration options.
 ---
 
-Grog is configured using a `grog.toml` file.
+Grog is configured using a `grog.toml` file that is placed in the root of your workspace.
 Find below a complete example of a grog configuration file:
 
 ```toml
@@ -14,7 +14,7 @@ root = "/path/to/grog/root"
 
 # Execution Settings
 fail_fast = true # Exit immediately when encountering an issue
-num_workers = 4 # Default: matches cpu count
+num_workers = 4
 
 # Logging Settings
 log_level = "info"
@@ -37,7 +37,7 @@ For instance, to set or override the `fail_fast` option set `GROG_FAIL_FAST=fals
 ## Configuration Variables Explained
 
 - **root**: The base directory where Grog stores its internal files. Defaults to `~/.grog`.
-- **fail_fast**: When true, Grog will stop execution after the first error.
-- **num_workers**: Number of concurrent workers for parallel task execution
-- **log_level**: Determines verbosity of logging (e.g., "debug", "info"). Defaults to "info".
-- **enable_cache**: Controls whether caching is enabled. Defaults to true.
+- **fail_fast**: When true, Grog will stop execution after encountering the first error, cancelling all running tasks. Defaults to `false`.
+- **num_workers**: Number of concurrent workers for parallel task execution. Defaults to the number of CPUs.
+- **log_level**: Determines verbosity of logging (e.g., "debug", "info"). Defaults to `info`.
+- **enable_cache**: Controls whether caching is enabled. Defaults to `true`.

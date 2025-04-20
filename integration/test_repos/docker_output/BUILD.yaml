@@ -1,0 +1,8 @@
+targets:
+  dir_output:
+    cmd: |
+      docker build -t grog-hello-world .
+    inputs:
+      - script.sh
+    outputs:
+      - docker::grog-hello-world

@@ -2,6 +2,7 @@ package caching
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"fmt"
 	"grog/internal/caching/backends"
@@ -62,6 +63,15 @@ func (tc *TargetCache) WriteFileStream(ctx context.Context, target model.Target,
 	return tc.backend.Set(ctx, tc.cachePath(target), hashing.HashString(output.String()), reader)
 }
 
+// WriteFileStreamGzipped wraps the WriteFileStream with a gzip stream
+func (tc *TargetCache) WriteFileStreamGzipped(ctx context.Context, target model.Target, output model.Output, reader io.Reader) error {
+	reader, err := gzip.NewReader(reader)
+	if err != nil {
+		return err
+	}
+	return tc.backend.Set(ctx, tc.cachePath(target), hashing.HashString(output.String()), reader)
+}
+
 // LoadFile loads a cached file from the cache backend and writes it to the given path
 func (tc *TargetCache) LoadFile(ctx context.Context, target model.Target, output model.Output) error {
 	absOutputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.Identifier))
@@ -88,6 +98,15 @@ func (tc *TargetCache) LoadFile(ctx context.Context, target model.Target, output
 
 func (tc *TargetCache) LoadFileStream(ctx context.Context, target model.Target, output model.Output) (io.ReadCloser, error) {
 	return tc.backend.Get(ctx, tc.cachePath(target), hashing.HashString(output.String()))
+}
+
+// LoadFileStreamGzipped wraps the LoadFileStream with a gzip stream
+func (tc *TargetCache) LoadFileStreamGzipped(ctx context.Context, target model.Target, output model.Output) (io.ReadCloser, error) {
+	contentReader, err := tc.backend.Get(ctx, tc.cachePath(target), hashing.HashString(output.String()))
+	if err != nil {
+		return nil, err
+	}
+	return gzip.NewReader(contentReader)
 }
 
 // HasCacheExistsFile only checks if the default file we use (for empty outputs) is present

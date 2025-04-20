@@ -3,6 +3,8 @@ title: Docker Outputs
 description: Grog can cache your docker images for you.
 ---
 
+import { Aside } from "@astrojs/starlight/components";
+
 Many real-world CI/CDs don't just produce files or directories, but package the entire app into a docker image that lives on your local docker engine.
 Grog can also cache these, but it is not as straight-forward as caching a file.
 This guide will cover
@@ -58,7 +60,13 @@ If you're running a private registry locally, you may use something like `http:/
 
 ## 2. Defining docker outputs
 
-Once your docker storage is setup you can define a docker image output for your target:
+<Aside type="caution">
+  This feature is not ready yet. The docs instead reflect the planned
+  implementation in the spirit of Documentation-driven Development. So let us
+  know what you think!
+</Aside>
+
+Once your docker storage is set up you can define a docker image output for your target:
 
 ```yaml
 targets:

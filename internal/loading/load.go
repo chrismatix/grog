@@ -60,6 +60,7 @@ func LoadPackages(logger *zap.SugaredLogger) ([]*model.Package, error) {
 
 			pkg, err := getEnrichedPackage(logger, packagePath, pkgDto)
 			if err != nil {
+				fmt.Println(err)
 				return err
 			}
 
