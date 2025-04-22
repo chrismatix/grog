@@ -95,7 +95,7 @@ func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest b
 	}
 	logger.WithOptions()
 	ctx, cancel := context.WithCancel(context.Background())
-	ctx = console.SetLogger(ctx, logger)
+	ctx = console.WithLogger(ctx, logger)
 	defer cancel()
 
 	// Listen for SIGTERM or SIGINT to cancel the context
@@ -111,7 +111,7 @@ func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest b
 
 	failFast := config.Global.FailFast
 
-	cache, err := backends.GetCacheBackend(ctx, logger, config.Global.Cache)
+	cache, err := backends.GetCacheBackend(ctx, config.Global.Cache)
 	if err != nil {
 		logger.Fatalf("could not instantiate cache: %v", err)
 	}
@@ -142,7 +142,7 @@ func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest b
 	buildErrors := completionMap.GetErrors()
 	successCount, cacheHits := completionMap.SuccessCount()
 	if len(buildErrors) > 0 {
-		logger.Errorf("%s failed. %s completed (%d cached), %d failed:",
+		logger.Errorf("%s failed. %s completed (%d cache hits), %d failed:",
 			goal,
 			console.FCountTargets(successCount),
 			cacheHits,
@@ -170,7 +170,7 @@ func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest b
 		os.Exit(1)
 	}
 
-	logger.Infof("%s completed successfully. %s completed (%d cached).",
+	logger.Infof("%s completed successfully. %s completed (%d cache hits).",
 		goal,
 		console.FCountTargets(successCount),
 		cacheHits)

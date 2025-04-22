@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"go.uber.org/zap"
 	"grog/internal/config"
+	"grog/internal/console"
 	"io"
 	"strings"
 )
@@ -27,7 +28,6 @@ func (gcs *GCSCache) TypeName() string {
 // NewGCSCache creates a new GCS cache.
 func NewGCSCache(
 	ctx context.Context,
-	logger *zap.SugaredLogger,
 	cacheConfig config.GCSCacheConfig,
 ) (*GCSCache, error) {
 	if cacheConfig.Bucket == "" {
@@ -38,17 +38,17 @@ func NewGCSCache(
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client: %w", err)
 	}
-
 	prefix := cacheConfig.Prefix
 	if prefix == "" {
-		prefix = "/"
-	} else if !strings.HasPrefix(prefix, "/") {
-		prefix = "/" + prefix
+		prefix = ""
+	} else {
+		prefix = strings.Trim(prefix, "/")
 	}
 
 	workspaceDir := config.Global.WorkspaceRoot
-	workspacePrefix := config.GetWorkspaceCachePrefix(workspaceDir)
+	workspacePrefix := strings.Trim(config.GetWorkspaceCachePrefix(workspaceDir), "/")
 
+	logger := console.GetLogger(ctx)
 	logger.Debugf("Instantiated GCS cache at bucket %s with prefix %s and workspace dir %s",
 		cacheConfig.Bucket,
 		prefix,
@@ -63,23 +63,27 @@ func NewGCSCache(
 }
 
 func (gcs *GCSCache) fullPrefix() string {
+	if gcs.prefix == "" {
+		return gcs.workspacePrefix
+	}
 	return gcs.prefix + "/" + gcs.workspacePrefix
 }
 
 // buildPath constructs the full GCS path for a cached item.
 func (gcs *GCSCache) buildPath(path, key string) string {
-	// Avoid accidental double slashes
-	return gcs.fullPrefix() + "/" + strings.TrimPrefix(path, "/") + "/" + strings.TrimPrefix(key, "/")
+	parts := []string{gcs.fullPrefix(), strings.Trim(path, "/"), strings.Trim(key, "/")}
+	return strings.Join(parts, "/")
 }
 
 // Get retrieves a cached file from GCS.
 func (gcs *GCSCache) Get(ctx context.Context, path, key string) (io.ReadCloser, error) {
-	gcs.logger.Debugf("Getting file from GCS for path: %s, key: %s", path, key)
-
+	logger := console.GetLogger(ctx)
 	gcsPath := gcs.buildPath(path, key)
+	logger.Debugf("Getting file from GCS for path: %s", gcsPath)
+
 	rc, err := gcs.client.Bucket(gcs.bucketName).Object(gcsPath).NewReader(ctx)
 	if err != nil {
-		gcs.logger.Debugf("Failed to get file from GCS for path: %s, key: %s: %v", path, key, err)
+		logger.Debugf("Failed to get file from GCS for path: %s, key: %s: %v", path, key, err)
 		return nil, fmt.Errorf("failed to create reader: %w", err)
 	}
 
@@ -88,9 +92,10 @@ func (gcs *GCSCache) Get(ctx context.Context, path, key string) (io.ReadCloser, 
 
 // Set stores a file in GCS.
 func (gcs *GCSCache) Set(ctx context.Context, path, key string, content io.Reader) error {
-	gcs.logger.Debugf("Setting file in GCS for path: %s, key: %s", path, key)
-
+	logger := console.GetLogger(ctx)
 	gcsPath := gcs.buildPath(path, key)
+	logger.Debugf("Setting file in GCS for path: %s", gcsPath)
+
 	wc := gcs.client.Bucket(gcs.bucketName).Object(gcsPath).NewWriter(ctx)
 
 	if _, err := io.Copy(wc, content); err != nil {
@@ -106,9 +111,9 @@ func (gcs *GCSCache) Set(ctx context.Context, path, key string, content io.Reade
 
 // Delete removes a cached file from GCS.
 func (gcs *GCSCache) Delete(ctx context.Context, path string, key string) error {
-	gcs.logger.Debugf("Deleting file from GCS for path: %s, key: %s", path, key)
-
+	logger := console.GetLogger(ctx)
 	gcsPath := gcs.buildPath(path, key)
+	logger.Debugf("Deleting file from GCS for path: %s", gcsPath)
 
 	err := gcs.client.Bucket(gcs.bucketName).Object(gcsPath).Delete(ctx)
 	if err != nil {
@@ -120,13 +125,13 @@ func (gcs *GCSCache) Delete(ctx context.Context, path string, key string) error 
 
 // Exists checks if a file exists in GCS.
 func (gcs *GCSCache) Exists(ctx context.Context, path string, key string) (bool, error) {
-	gcs.logger.Debugf("Checking existence of file in GCS for path: %s, key: %s", path, key)
-
+	logger := console.GetLogger(ctx)
 	gcsPath := gcs.buildPath(path, key)
+	logger.Debugf("Checking existence of file in GCS for path: %s", gcsPath)
 
 	_, err := gcs.client.Bucket(gcs.bucketName).Object(gcsPath).Attrs(ctx)
 	if errors.Is(err, storage.ErrObjectNotExist) {
-		gcs.logger.Debugf("File does not exist: %s", gcsPath)
+		logger.Debugf("File does not exist: %s", gcsPath)
 		return false, nil
 	}
 	if err != nil {
@@ -136,33 +141,7 @@ func (gcs *GCSCache) Exists(ctx context.Context, path string, key string) (bool,
 	return true, nil
 }
 
-// Clear removes all files from the GCS bucket with the given prefix (path).
+// Clear is not supported for remote caches
 func (gcs *GCSCache) Clear(ctx context.Context, expunge bool) error {
-	gcs.logger.Debugf("Clearing all files from GCS with expunge=%t", expunge)
-
-	// Only delete the workspace cache files
-	deletePrefix := gcs.fullPrefix()
-	if expunge {
-		// If expunge is true, delete all files under prefix
-		deletePrefix = gcs.prefix
-	}
-
-	// List all objects with the prefix and delete them.
-	query := &storage.Query{Prefix: deletePrefix}
-	it := gcs.client.Bucket(gcs.bucketName).Objects(ctx, query)
-	for {
-		attrs, err := it.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return fmt.Errorf("failed to list objects: %w", err)
-		}
-
-		if err := gcs.client.Bucket(gcs.bucketName).Object(attrs.Name).Delete(ctx); err != nil {
-			return fmt.Errorf("failed to delete object %s: %w", attrs.Name, err)
-		}
-	}
-
 	return nil
 }

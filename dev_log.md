@@ -2,7 +2,28 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 22-04-2025
+
+Finally completely fixed the issue of logging (debug) output above the task ui.
+I think next I will use the go pond library to parallelize calls to our cache backends in the registry since there is
+no reason to do any of the fetching sequentially.
+
+## 21-04-2025
+
+Wanted to add some improvements to the remote wrapper so that we stream more efficiently, but it turned into a hell-hole of neither me nor my AI slop machine understanding how the go interfaces are meant to be used for this.
+Not proud of this code or of the testing code, but perhaps I should not have even tried to optimize it in the first place.
+I think next I should do executable build files, since they were meant to be a big selling point.
+
+-C
+
 ## 20-04-2025
+
+Did some work on documentation, cleaned up the environment variables a bit.
+Then I got around to implementing the last big pre-pre-release feature which is docker outputs.
+Using `go-containerregistry` and the abstractions I had built around the cache this was surprisingly easy.
+Calling the docker cli would also do, but the library is clearly superior in many ways as it allows for way more control over options while being fundamentally docker-agnostic.
+
+-C
 
 ## 19-04-2025
 

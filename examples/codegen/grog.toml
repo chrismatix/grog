@@ -1,0 +1,7 @@
+[cache]
+backend = "gcs"
+
+[cache.gcs]
+bucket = "grog-cache"
+prefix = "/" # optional default: '/'
+#credentials_file = "<path-to-google-credentials-json>" # optional

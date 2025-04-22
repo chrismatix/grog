@@ -48,7 +48,7 @@ touch grog.toml
 A minimal `grog.toml` file can be empty, with all settings using default values.
 Refer to the [configuration reference](/reference/configuration.md) to see all avalailable options.
 
-## Define Build Files
+## 3. Define Build Files
 
 Grog provides a wide array of build file formats to define your build targets.
 You can create these files in various formats depending on your needs:
@@ -127,11 +127,11 @@ Add the grog metadata comments to your `Makefile` goals to allow running them wi
 
 Things to note from the above examples:
 
-- Targets are referenced using [Bazel-style](https://bazel.build/concepts/labels) labels.
+- Targets are referenced using [labels](/reference/labels.md).
 - Directory outputs are prefixed with `dir::` to indicate they are directories.
-- Cmd are executed as shell scripts in the target's directory.
+- Command definition `cmd` are executed as sh scripts in the target's directory.
 
-## 4. Running Builds
+## 5. Running Builds
 
 To run a build, use the `grog build` command followed by the target label:
 
@@ -150,9 +150,8 @@ Grog will re-run a build if any of the following conditions are met:
 - A target's definition has changed.
 - A target's inputs have changed.
 - A target's dependencies have changed.
-- Any of the target's outputs are not present.
 
-## 5. Running Tests
+## 6. Running Tests
 
 Grog will automatically treat targets that end with `_test` as test targets.
 They will only be executed if you run `grog test` and will be ignored for `grog build`
@@ -221,7 +220,7 @@ Grog, therefore, caches these outputs and restores them when possible to avoid u
 
 - `dist/bundle.js` - A file output
 - `dir::dist/assets/` - A directory output
-- `docker::some-image` - A Docker image output
+- `docker::some-image-tag` - A Docker image output
 
 ## Next Steps
 

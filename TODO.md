@@ -2,7 +2,7 @@
 
 Actually we do need to track caching in the graph walker since it needs to check if dependencies were cached and propagate that
 
-- [ ] Gzip the docker tarballs
+- [ ] Gzip the docker tarballs (?)
 - [ ] Only replace outputs when they have changed -> Will require tracking hashes in a separate, small file
 - [ ] Allow running target labels relative to the current directory
 - [ ] Add s3 caching option

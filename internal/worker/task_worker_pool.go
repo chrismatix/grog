@@ -28,9 +28,9 @@ type job[T any] struct {
 	result chan TaskResult[T]
 }
 
-// Pool runs tasks that return T with a fixed number of workers,
+// TaskWorkerPool runs tasks that return T with a fixed number of workers,
 // reporting progress to the tea UI
-type Pool[T any] struct {
+type TaskWorkerPool[T any] struct {
 	maxWorkers int
 	// totalTasks total number of tasks to run (0 for unlimited)
 	totalTasks int
@@ -51,11 +51,11 @@ type Pool[T any] struct {
 	closed bool
 }
 
-func NewPool[T any](maxWorkers int, msgCh chan tea.Msg, totalTasks int) *Pool[T] {
+func NewTaskWorkerPool[T any](maxWorkers int, msgCh chan tea.Msg, totalTasks int) *TaskWorkerPool[T] {
 	if maxWorkers < 1 {
 		maxWorkers = runtime.NumCPU()
 	}
-	return &Pool[T]{
+	return &TaskWorkerPool[T]{
 		maxWorkers: maxWorkers,
 		totalTasks: totalTasks,
 		jobCh:      make(chan job[T]),
@@ -64,35 +64,35 @@ func NewPool[T any](maxWorkers int, msgCh chan tea.Msg, totalTasks int) *Pool[T]
 	}
 }
 
-func (wp *Pool[T]) StartWorkers(ctx context.Context) {
-	for i := 0; i < wp.maxWorkers; i++ {
+func (twp *TaskWorkerPool[T]) StartWorkers(ctx context.Context) {
+	for i := 0; i < twp.maxWorkers; i++ {
 		workerId := i + 1
-		go wp.worker(ctx, workerId)
+		go twp.worker(ctx, workerId)
 	}
 }
 
-func (wp *Pool[T]) worker(ctx context.Context, workerId int) {
+func (twp *TaskWorkerPool[T]) worker(ctx context.Context, workerId int) {
 	isDebug := config.Global.IsDebug()
 
 	for {
 		select {
 		case <-ctx.Done():
-			wp.closed = true
+			twp.closed = true
 			console.GetLogger(ctx).Debugf("Worker %d context cancelled, exiting", workerId)
 			return
-		case j, ok := <-wp.jobCh:
+		case j, ok := <-twp.jobCh:
 			if !ok {
 				// Channel closed, exit worker
 				return
 			}
-			wp.setTaskState(workerId, fmt.Sprintf("Starting task %d on worker %d", j.id+1, workerId))
+			twp.setTaskState(workerId, fmt.Sprintf("Starting task %d on worker %d", j.id+1, workerId))
 			// Run the task, passing a callback to update progress.
 			result, err := j.task(func(status string) {
 				taskStatus := status
 				if isDebug {
 					taskStatus = fmt.Sprintf("%s (worker %d)", status, workerId)
 				}
-				wp.setTaskState(workerId, taskStatus)
+				twp.setTaskState(workerId, taskStatus)
 			})
 
 			if j.result != nil {
@@ -102,76 +102,76 @@ func (wp *Pool[T]) worker(ctx context.Context, workerId int) {
 				}
 				close(j.result) // Close the channel after sending the result
 			}
-			wp.completeTask(workerId)
+			twp.completeTask(workerId)
 		}
 	}
 }
 
 // setTaskState updates the task state from a worker
-func (wp *Pool[T]) setTaskState(workerId int, status string) {
-	wp.mu.Lock()
-	defer wp.mu.Unlock()
-	state, ok := wp.taskState[workerId]
+func (twp *TaskWorkerPool[T]) setTaskState(workerId int, status string) {
+	twp.mu.Lock()
+	defer twp.mu.Unlock()
+	state, ok := twp.taskState[workerId]
 	if !ok {
-		wp.taskState[workerId] = console.TaskState{Status: status, StartedAtSec: time.Now().Unix()}
-		wp.flushState()
+		twp.taskState[workerId] = console.TaskState{Status: status, StartedAtSec: time.Now().Unix()}
+		twp.flushState()
 		return
 	}
 
 	state.Status = status
-	wp.taskState[workerId] = state
-	wp.flushState()
+	twp.taskState[workerId] = state
+	twp.flushState()
 }
 
 // setTaskState updates the task state from a worker
-func (wp *Pool[T]) completeTask(workerId int) {
-	wp.mu.Lock()
-	defer wp.mu.Unlock()
-	delete(wp.taskState, workerId)
-	wp.completedTasks++
-	wp.flushState()
+func (twp *TaskWorkerPool[T]) completeTask(workerId int) {
+	twp.mu.Lock()
+	defer twp.mu.Unlock()
+	delete(twp.taskState, workerId)
+	twp.completedTasks++
+	twp.flushState()
 }
 
 // flushState sends the current task state to the UI.
-func (wp *Pool[T]) flushState() {
-	if wp.closed {
+func (twp *TaskWorkerPool[T]) flushState() {
+	if twp.closed {
 		return
 	}
 	green := color.New(color.FgGreen).SprintFunc()
 	// Write the current task state
-	wp.msgCh <- console.TaskStateMsg{State: wp.taskState}
-	totalTasks := wp.nextTaskId
-	if wp.totalTasks > 0 {
-		totalTasks = wp.totalTasks
+	twp.msgCh <- console.TaskStateMsg{State: twp.taskState}
+	totalTasks := twp.nextTaskId
+	if twp.totalTasks > 0 {
+		totalTasks = twp.totalTasks
 	}
 
-	actionsRunning := len(wp.taskState)
-	wp.msgCh <- console.HeaderMsg(green(
-		fmt.Sprintf("[%d/%d]", wp.completedTasks, totalTasks)) +
+	actionsRunning := len(twp.taskState)
+	twp.msgCh <- console.HeaderMsg(green(
+		fmt.Sprintf("[%d/%d]", twp.completedTasks, totalTasks)) +
 		fmt.Sprintf(" %s running", console.FCount(actionsRunning, "action")))
 }
 
-func (wp *Pool[T]) NumWorkers() int {
-	return wp.maxWorkers
+func (twp *TaskWorkerPool[T]) NumWorkers() int {
+	return twp.maxWorkers
 }
 
-func (wp *Pool[T]) Run(task TaskFunc[T]) (T, error) {
-	wp.mu.Lock()
-	taskId := wp.nextTaskId
-	wp.nextTaskId++
-	wp.mu.Unlock()
+func (twp *TaskWorkerPool[T]) Run(task TaskFunc[T]) (T, error) {
+	twp.mu.Lock()
+	taskId := twp.nextTaskId
+	twp.nextTaskId++
+	twp.mu.Unlock()
 
 	// Create a channel to receive the result from the worker.
 	resultCh := make(chan TaskResult[T], 1)
 
 	// Enqueue the task with the result channel.
-	wp.jobCh <- job[T]{id: taskId, task: task, result: resultCh}
+	twp.jobCh <- job[T]{id: taskId, task: task, result: resultCh}
 
 	// Wait for the result.
 	result := <-resultCh
 	return result.Return, result.Error
 }
 
-func (wp *Pool[T]) Shutdown() {
-	close(wp.jobCh)
+func (twp *TaskWorkerPool[T]) Shutdown() {
+	close(twp.jobCh)
 }

@@ -3,7 +3,6 @@ package backends
 import (
 	"context"
 	"fmt"
-	"go.uber.org/zap"
 	"grog/internal/config"
 	"io"
 )
@@ -34,10 +33,9 @@ type CacheBackend interface {
 
 func GetCacheBackend(
 	ctx context.Context,
-	logger *zap.SugaredLogger,
 	cacheConfig config.CacheConfig,
 ) (CacheBackend, error) {
-	fs, err := NewFileSystemCache(logger)
+	fs, err := NewFileSystemCache(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +43,7 @@ func GetCacheBackend(
 	switch cacheConfig.Backend {
 
 	case config.GCSCacheBackend:
-		gcsCache, err := NewGCSCache(ctx, logger, cacheConfig.GCS)
+		gcsCache, err := NewGCSCache(ctx, cacheConfig.GCS)
 		if err != nil {
 			return nil, err
 		}

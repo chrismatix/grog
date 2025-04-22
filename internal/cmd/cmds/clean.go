@@ -17,8 +17,8 @@ func GetCleanCmd() *cobra.Command {
 		Long:  `Removes build outputs and clears the cache.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			logger := console.InitLogger()
-			ctx := context.Background()
-			cache, err := backends.GetCacheBackend(ctx, logger, config.Global.Cache)
+			ctx := console.WithLogger(context.Background(), logger)
+			cache, err := backends.GetCacheBackend(ctx, config.Global.Cache)
 
 			if err != nil {
 				logger.Fatalf("could not get cache: %v", err)

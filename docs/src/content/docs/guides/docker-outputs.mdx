@@ -35,6 +35,12 @@ backend = "filesystem"
 
 ### Registry
 
+<Aside type="caution">
+  This feature is not ready yet. The docs instead reflect the planned
+  implementation in the spirit of Documentation-driven Development. So let us
+  know what you think!
+</Aside>
+
 Using a registry as your backend allows you to store your images in a remote or local Docker registry.
 This is more efficient as layers are deduplicated, reducing storage costs.
 However, it requires you to have a registry running and accessible.
@@ -59,12 +65,6 @@ If you're running a private registry locally, you may use something like `http:/
 - AWS ECR [docs](https://docs.aws.amazon.com/AmazonECR/latest/userguide/registry_auth.html)
 
 ## 2. Defining docker outputs
-
-<Aside type="caution">
-  This feature is not ready yet. The docs instead reflect the planned
-  implementation in the spirit of Documentation-driven Development. So let us
-  know what you think!
-</Aside>
 
 Once your docker storage is set up you can define a docker image output for your target:
 

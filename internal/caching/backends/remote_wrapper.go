@@ -3,7 +3,11 @@ package backends
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
+	"grog/internal/console"
 	"io"
+	"sync"
 )
 
 // RemoteWrapper is the default implementation when using a remote cache
@@ -56,7 +60,8 @@ func (rw *RemoteWrapper) Get(ctx context.Context, path, key string) (io.ReadClos
 	go func() {
 		err := rw.fs.Set(ctx, path, key, &buf)
 		if err != nil {
-			rw.fs.logger.Errorf("Failed to store file in local cache after retrieving from remote: %v", err)
+			logger := console.GetLogger(ctx)
+			logger.Errorf("Failed to store file in local cache after retrieving from remote: %v", err)
 		}
 		// Close the reader after storing the content locally
 		reader.Close()
@@ -64,26 +69,90 @@ func (rw *RemoteWrapper) Get(ctx context.Context, path, key string) (io.ReadClos
 	return io.NopCloser(teeReader), nil
 }
 
-// Set stores a file in both the local file system cache and the remote cache.
+// Set stores a file in both the local file system cache and the remote cache concurrently.
 func (rw *RemoteWrapper) Set(ctx context.Context, path, key string, content io.Reader) error {
-	// Store the file in the local file system cache
-	err := rw.fs.Set(ctx, path, key, content)
-	if err != nil {
-		return err
+	// Create pipes for the two cache destinations
+	fsRead, fsWrite := io.Pipe()
+	remoteRead, remoteWrite := io.Pipe()
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	errChan := make(chan error, 2)
+
+	var wg sync.WaitGroup
+	wg.Add(3) // Track all three goroutines
+
+	// Goroutine for writing to the filesystem cache
+	go func() {
+		defer wg.Done()
+		defer fsRead.Close()
+
+		if err := rw.fs.Set(ctx, path, key, fsRead); err != nil {
+			select {
+			case errChan <- fmt.Errorf("filesystem cache error: %w", err):
+			default:
+			}
+		}
+	}()
+
+	// Goroutine for writing to the remote cache
+	go func() {
+		defer wg.Done()
+		defer remoteRead.Close()
+
+		if err := rw.remote.Set(ctx, path, key, remoteRead); err != nil {
+			select {
+			case errChan <- fmt.Errorf("remote cache error: %w", err):
+			default:
+			}
+		}
+	}()
+
+	// Goroutine for copying content to both destinations
+	go func() {
+		defer wg.Done()
+		defer fsWrite.Close() // Always close write ends to signal EOF
+		defer remoteWrite.Close()
+
+		mw := io.MultiWriter(fsWrite, remoteWrite)
+
+		_, err := io.Copy(mw, content)
+		if err != nil {
+			fsWrite.CloseWithError(err)
+			remoteWrite.CloseWithError(err)
+		} else {
+			fsWrite.Close()
+			remoteWrite.Close()
+		}
+	}()
+
+	wg.Wait()
+	close(errChan)
+
+	// Collect all errors (if any)
+	var errs []error
+	for err := range errChan {
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
 
-	// Reset the reader to the beginning so that it can be read again
-	// Wrap the content reader with a buffer to allow reading multiple times
+	// Return a combined error if we have any
+	if len(errs) > 0 {
+		if len(errs) == 1 {
+			return errs[0]
+		}
 
-	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, content); err != nil {
-		return err
+		// Otherwise, combine all errors into one
+		errMsg := "multiple cache write errors occurred:"
+		for i, err := range errs {
+			errMsg += fmt.Sprintf(" (%d) %v;", i+1, err)
+		}
+		return errors.New(errMsg)
 	}
 
-	// Store the file in the remote cache
-	err = rw.remote.Set(ctx, path, key, bytes.NewReader(buf.Bytes()))
-
-	return err
+	return nil
 }
 
 // Delete removes a cached file from both the local file system cache and the remote cache.
@@ -116,13 +185,6 @@ func (rw *RemoteWrapper) Exists(ctx context.Context, path string, key string) (b
 
 // Clear removes all files from both the local file system cache and the remote cache.
 func (rw *RemoteWrapper) Clear(ctx context.Context, expunge bool) error {
-	// Clear the local file system cache
-	err := rw.fs.Clear(ctx, expunge)
-	if err != nil {
-		return err
-	}
-
-	// Clear the remote cache
-	err = rw.remote.Clear(ctx, expunge)
-	return err
+	// Clear the local file system cache only
+	return rw.fs.Clear(ctx, expunge)
 }

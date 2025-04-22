@@ -76,45 +76,47 @@ func InitLoggerWithTea(program *tea.Program) *zap.SugaredLogger {
 
 	cfg.EncoderConfig = encoderConfig
 
-	logger, err := cfg.Build()
-	if err != nil {
-		panic(err)
-	}
-
 	if program != nil {
 		teaCore := zapcore.NewCore(
 			zapcore.NewConsoleEncoder(encoderConfig),
 			zapcore.AddSync(teaWriter{program}),
 			level,
 		)
-		logger = logger.WithOptions(zap.WrapCore(
-			func(c zapcore.Core) zapcore.Core { return zapcore.NewTee(c, teaCore) }),
-		)
+
+		return zap.New(teaCore).Sugar()
 	}
 
+	logger, err := cfg.Build()
+	if err != nil {
+		panic(err)
+	}
 	return logger.Sugar()
 }
 
-func SetLogger(ctx context.Context, logger *zap.SugaredLogger) context.Context {
-	if storedLogger, ok := ctx.Value("logger").(*zap.SugaredLogger); ok {
+type ctxLoggerKey struct{}
+
+func WithLogger(ctx context.Context, logger *zap.SugaredLogger) context.Context {
+	if storedLogger, ok := ctx.Value(ctxLoggerKey{}).(*zap.SugaredLogger); ok {
 		if storedLogger == logger {
 			return ctx
 		}
 	}
 
-	return context.WithValue(ctx, "logger", logger)
+	return context.WithValue(ctx, ctxLoggerKey{}, logger)
 }
 
-// WithTeaLogging returns a new context with a tea logger
-func WithTeaLogging(ctx context.Context, program *tea.Program) context.Context {
-	return context.WithValue(ctx, "logger", InitLoggerWithTea(program))
+// WithTeaLogger returns a new context with a tea logger
+func WithTeaLogger(ctx context.Context, program *tea.Program) context.Context {
+	return context.WithValue(ctx, ctxLoggerKey{}, InitLoggerWithTea(program))
 }
 
 func GetLogger(ctx context.Context) *zap.SugaredLogger {
-	if logger, ok := ctx.Value("logger").(*zap.SugaredLogger); ok {
+	if logger, ok := ctx.Value(ctxLoggerKey{}).(*zap.SugaredLogger); ok {
 		return logger
 	}
-	return InitLogger()
+	logger := InitLogger()
+	logger.Debugf("no logger found in context, using default logger. This is probably a bug.")
+	return logger
 }
 
 // WarnOnError is a helper for warning when some defer cleanup

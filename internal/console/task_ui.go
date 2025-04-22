@@ -147,6 +147,5 @@ func (m *model) View() string {
 			s += fmt.Sprintf("    %s %ds\n", status.Status, timePassed)
 		}
 	}
-	//fmt.Println(s)
 	return s
 }

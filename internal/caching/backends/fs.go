@@ -2,8 +2,8 @@ package backends
 
 import (
 	"context"
-	"go.uber.org/zap"
 	"grog/internal/config"
+	"grog/internal/console"
 	"io"
 	"os"
 	"path/filepath"
@@ -14,8 +14,7 @@ import (
 type FileSystemCache struct {
 	workspaceCacheDir string
 	// TODO is there a better way of making this thread-safe perhaps on a file level?
-	mutex  sync.RWMutex
-	logger *zap.SugaredLogger
+	mutex sync.RWMutex
 }
 
 func (fsc *FileSystemCache) TypeName() string {
@@ -23,7 +22,7 @@ func (fsc *FileSystemCache) TypeName() string {
 }
 
 // NewFileSystemCache creates a new cache using the configured cache directory
-func NewFileSystemCache(logger *zap.SugaredLogger) (*FileSystemCache, error) {
+func NewFileSystemCache(ctx context.Context) (*FileSystemCache, error) {
 	workspaceDir := config.Global.WorkspaceRoot
 	workspacePrefix := config.GetWorkspaceCachePrefix(workspaceDir)
 	workspaceCacheDir := filepath.Join(config.Global.GetCacheDirectory(), workspacePrefix)
@@ -33,9 +32,8 @@ func NewFileSystemCache(logger *zap.SugaredLogger) (*FileSystemCache, error) {
 		return nil, err
 	}
 
-	logger.Debugf("Instantiated fs cache at: %s", workspaceCacheDir)
+	console.GetLogger(ctx).Debugf("Instantiated fs cache at: %s", workspaceCacheDir)
 	return &FileSystemCache{
-		logger:            logger,
 		workspaceCacheDir: workspaceCacheDir,
 		mutex:             sync.RWMutex{},
 	}, nil
@@ -48,8 +46,9 @@ func (fsc *FileSystemCache) buildFilePath(path, key string) string {
 }
 
 // Get retrieves a cached file by its key
-func (fsc *FileSystemCache) Get(_ context.Context, path, key string) (io.ReadCloser, error) {
-	fsc.logger.Debugf("Getting file from cache for path: %s, key: %s", path, key)
+func (fsc *FileSystemCache) Get(ctx context.Context, path, key string) (io.ReadCloser, error) {
+	logger := console.GetLogger(ctx)
+	logger.Debugf("Getting file from cache for path: %s, key: %s", path, key)
 	fsc.mutex.RLock()
 	defer fsc.mutex.RUnlock()
 
@@ -57,7 +56,7 @@ func (fsc *FileSystemCache) Get(_ context.Context, path, key string) (io.ReadClo
 
 	file, err := os.Open(filePath)
 	if err != nil {
-		fsc.logger.Debugf("Failed to get file for path: %s, key: %s", path, key)
+		logger.Debugf("Failed to get file for path: %s, key: %s", path, key)
 		return nil, err
 	}
 
@@ -65,8 +64,9 @@ func (fsc *FileSystemCache) Get(_ context.Context, path, key string) (io.ReadClo
 }
 
 // Set stores a file in the cache with the given key and content
-func (fsc *FileSystemCache) Set(_ context.Context, path, key string, content io.Reader) error {
-	fsc.logger.Debugf("Setting file in cache for path: %s, key: %s", path, key)
+func (fsc *FileSystemCache) Set(ctx context.Context, path, key string, content io.Reader) error {
+	logger := console.GetLogger(ctx)
+	logger.Debugf("Setting file in cache for path: %s, key: %s", path, key)
 
 	// Use Lock for writing operations
 	fsc.mutex.Lock()
@@ -98,8 +98,9 @@ func (fsc *FileSystemCache) Set(_ context.Context, path, key string, content io.
 }
 
 // Delete removes a cached file by its key
-func (fsc *FileSystemCache) Delete(_ context.Context, path, key string) error {
-	fsc.logger.Debugf("Deleting file from cache for path: %s, key: %s", path, key)
+func (fsc *FileSystemCache) Delete(ctx context.Context, path, key string) error {
+	logger := console.GetLogger(ctx)
+	logger.Debugf("Deleting file from cache for path: %s, key: %s", path, key)
 	fsc.mutex.Lock()
 	defer fsc.mutex.Unlock()
 
@@ -107,7 +108,7 @@ func (fsc *FileSystemCache) Delete(_ context.Context, path, key string) error {
 
 	// Check if file exists before attempting to remove
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		fsc.logger.Debugf("File not found for deletion for path: %s, key: %s", path, key)
+		logger.Debugf("File not found for deletion for path: %s, key: %s", path, key)
 		return nil
 	}
 
@@ -115,8 +116,9 @@ func (fsc *FileSystemCache) Delete(_ context.Context, path, key string) error {
 }
 
 // Exists checks if a file exists in the cache with the given key
-func (fsc *FileSystemCache) Exists(_ context.Context, path, key string) (bool, error) {
-	fsc.logger.Debugf("Checking existence of file in cache for path: %s, key: %s", path, key)
+func (fsc *FileSystemCache) Exists(ctx context.Context, path, key string) (bool, error) {
+	logger := console.GetLogger(ctx)
+	logger.Debugf("Checking existence of file in cache for path: %s, key: %s", path, key)
 	fsc.mutex.RLock()
 	defer fsc.mutex.RUnlock()
 
@@ -133,8 +135,9 @@ func (fsc *FileSystemCache) Exists(_ context.Context, path, key string) (bool, e
 }
 
 // Clear removes all files from the cache
-func (fsc *FileSystemCache) Clear(_ context.Context, expunge bool) error {
-	fsc.logger.Debugf("Clearing all files from cache expunge=%t", expunge)
+func (fsc *FileSystemCache) Clear(ctx context.Context, expunge bool) error {
+	logger := console.GetLogger(ctx)
+	logger.Debugf("Clearing all files from cache expunge=%t", expunge)
 	fsc.mutex.Lock()
 	defer fsc.mutex.Unlock()
 

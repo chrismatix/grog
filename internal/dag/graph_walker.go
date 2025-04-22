@@ -111,7 +111,7 @@ func (w *Walker) Walk(
 
 		w.wait.Add(1)
 		// start all routines
-		go w.vertexRoutine(vertex, w.vertexInfoMap[vertex])
+		go w.vertexRoutine(ctx, vertex, w.vertexInfoMap[vertex])
 
 		// start all routines with no dependencies immediately
 		if len(w.graph.inEdges[vertex]) == 0 {
@@ -246,13 +246,14 @@ func (w *Walker) cancelAll() {
 }
 
 func (w *Walker) vertexRoutine(
+	ctx context.Context,
 	target *model.Target,
 	info *vertexInfo,
 ) {
 	// always decrement wait group
 	defer w.wait.Done()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	// ensure cancel is called to prevent context leak
 	defer cancel()
 

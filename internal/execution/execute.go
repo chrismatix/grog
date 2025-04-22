@@ -46,10 +46,10 @@ func Execute(
 	defer program.Quit()
 
 	// Attach the tea logger to the context
-	ctx = console.WithTeaLogging(ctx, program)
+	ctx = console.WithTeaLogger(ctx, program)
 
 	selectedTargetCount := len(graph.GetSelectedVertices())
-	workerPool := worker.NewPool[bool](numWorkers, msgCh, selectedTargetCount)
+	workerPool := worker.NewTaskWorkerPool[bool](numWorkers, msgCh, selectedTargetCount)
 	workerPool.StartWorkers(ctx)
 
 	// walkCallback will be called at max parallelism by the graph walker
@@ -79,6 +79,7 @@ func GetTaskFunc(
 		}
 		target.ChangeHash = changeHash
 
+		update(fmt.Sprintf("%s: checking cache.", target.Label))
 		hasCacheHit, err := registry.HasCacheHit(ctx, *target)
 		if err != nil {
 			return false, err
@@ -89,7 +90,7 @@ func GetTaskFunc(
 		// depsCached is also true when there are no deps
 		if hasCacheHit && depsCached {
 			if len(target.Outputs) > 0 {
-				update(fmt.Sprintf("%s: cache hit. fetching outputs...", target.Label))
+				update(fmt.Sprintf("%s: cache hit. fetching outputs.", target.Label))
 				loadingErr := loadCachedOutputs(ctx, registry, target)
 				if loadingErr != nil {
 					// Don't return so that we instead break out and continue executing the target
