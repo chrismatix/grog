@@ -119,3 +119,17 @@ func (tc *TargetCache) HasCacheExistsFile(ctx context.Context, target model.Targ
 func (tc *TargetCache) WriteCacheExistsFile(ctx context.Context, target model.Target) error {
 	return tc.backend.Set(ctx, tc.cachePath(target), existsFileKey, bytes.NewReader([]byte{}))
 }
+
+// WriteLocalCacheExistsFile write the empty cache exists file to the local cache only
+// Context: If we restored the cache from remote we want to mark the local cache with the existsFileKey
+// However, the registry calls .Load() per handler
+func (tc *TargetCache) WriteLocalCacheExistsFile(ctx context.Context, target model.Target) error {
+	if fsCache, ok := tc.backend.(*backends.FileSystemCache); ok {
+		return fsCache.Set(ctx, tc.cachePath(target), existsFileKey, bytes.NewReader([]byte{}))
+	} else if remoteWrapper, ok := tc.backend.(*backends.RemoteWrapper); ok {
+		return remoteWrapper.GetFS().Set(ctx, tc.cachePath(target), existsFileKey, bytes.NewReader([]byte{}))
+	}
+
+	// Default to just writing to whatever cache we have
+	return tc.backend.Set(ctx, tc.cachePath(target), existsFileKey, bytes.NewReader([]byte{}))
+}

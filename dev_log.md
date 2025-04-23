@@ -8,6 +8,8 @@ Finally completely fixed the issue of logging (debug) output above the task ui.
 I think next I will use the go pond library to parallelize calls to our cache backends in the registry since there is
 no reason to do any of the fetching sequentially.
 
+-C
+
 ## 21-04-2025
 
 Wanted to add some improvements to the remote wrapper so that we stream more efficiently, but it turned into a hell-hole of neither me nor my AI slop machine understanding how the go interfaces are meant to be used for this.

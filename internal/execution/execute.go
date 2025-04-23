@@ -89,17 +89,12 @@ func GetTaskFunc(
 		// If either the inputs or the deps have changed we need to re-execute the target
 		// depsCached is also true when there are no deps
 		if hasCacheHit && depsCached {
-			if len(target.Outputs) > 0 {
-				update(fmt.Sprintf("%s: cache hit. fetching outputs.", target.Label))
-				loadingErr := loadCachedOutputs(ctx, registry, target)
-				if loadingErr != nil {
-					// Don't return so that we instead break out and continue executing the target
-					console.GetLogger(ctx).Errorf("failed to load outputs from cache for target %s: %v", target.Label, loadingErr)
-				} else {
-					return true, nil
-				}
+			update(fmt.Sprintf("%s: cache hit. loading outputs.", target.Label))
+			loadingErr := loadCachedOutputs(ctx, registry, target)
+			if loadingErr != nil {
+				// Don't return so that we instead break out and continue executing the target
+				console.GetLogger(ctx).Errorf("failed to load outputs from cache for target %s: %v", target.Label, loadingErr)
 			} else {
-				update(fmt.Sprintf("%s: cache hit.", target.Label))
 				return true, nil
 			}
 		}

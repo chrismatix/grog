@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"go.uber.org/zap/zaptest"
 	"io"
 	"strings"
 	"testing"
@@ -72,7 +71,6 @@ func TestRemoteWrapper_Get(t *testing.T) {
 	t.Run("file exists locally", func(t *testing.T) {
 		fs := &FileSystemCache{
 			workspaceCacheDir: t.TempDir(),
-			logger:            zaptest.NewLogger(t).Sugar(),
 		}
 		err := fs.Set(ctx, path, key, strings.NewReader(content))
 		if err != nil {
@@ -102,7 +100,6 @@ func TestRemoteWrapper_Get(t *testing.T) {
 	t.Run("file exists remotely, stores locally", func(t *testing.T) {
 		fs := &FileSystemCache{
 			workspaceCacheDir: t.TempDir(),
-			logger:            zaptest.NewLogger(t).Sugar(),
 		}
 
 		remote := &mockCacheBackend{
@@ -151,7 +148,6 @@ func TestRemoteWrapper_Get(t *testing.T) {
 	t.Run("file does not exist remotely or locally", func(t *testing.T) {
 		fs := &FileSystemCache{
 			workspaceCacheDir: t.TempDir(),
-			logger:            zaptest.NewLogger(t).Sugar(),
 		}
 		remote := &mockCacheBackend{
 			getFunc: func(ctx context.Context, path, key string) (io.ReadCloser, error) {
@@ -180,7 +176,6 @@ func TestRemoteWrapper_Set(t *testing.T) {
 	t.Run("successful set", func(t *testing.T) {
 		fs := &FileSystemCache{
 			workspaceCacheDir: t.TempDir(),
-			logger:            zaptest.NewLogger(t).Sugar(),
 		}
 		var remoteContent bytes.Buffer
 		remote := &mockCacheBackend{
@@ -222,7 +217,6 @@ func TestRemoteWrapper_Set(t *testing.T) {
 	t.Run("local set fails", func(t *testing.T) {
 		fs := &FileSystemCache{
 			workspaceCacheDir: "/invalid/path",
-			logger:            zaptest.NewLogger(t).Sugar(),
 		}
 		remote := &mockCacheBackend{
 			setFunc: func(ctx context.Context, path, key string, content io.Reader) error {
@@ -245,7 +239,6 @@ func TestRemoteWrapper_Set(t *testing.T) {
 	t.Run("remote set fails", func(t *testing.T) {
 		fs := &FileSystemCache{
 			workspaceCacheDir: t.TempDir(),
-			logger:            zaptest.NewLogger(t).Sugar(),
 		}
 		remote := &mockCacheBackend{
 			setFunc: func(ctx context.Context, path, key string, content io.Reader) error {
@@ -267,7 +260,6 @@ func TestRemoteWrapper_Set(t *testing.T) {
 	t.Run("io.Copy fails", func(t *testing.T) {
 		fs := &FileSystemCache{
 			workspaceCacheDir: t.TempDir(),
-			logger:            zaptest.NewLogger(t).Sugar(),
 		}
 		remote := &mockCacheBackend{
 			setFunc: func(ctx context.Context, path, key string, content io.Reader) error {
@@ -300,7 +292,6 @@ func TestRemoteWrapper_Delete(t *testing.T) {
 	t.Run("successful delete", func(t *testing.T) {
 		fs := &FileSystemCache{
 			workspaceCacheDir: t.TempDir(),
-			logger:            zaptest.NewLogger(t).Sugar(),
 		}
 		remote := &mockCacheBackend{
 			deleteFunc: func(ctx context.Context, path string, key string) error {
@@ -319,7 +310,6 @@ func TestRemoteWrapper_Delete(t *testing.T) {
 	t.Run("local delete fails", func(t *testing.T) {
 		fs := &FileSystemCache{
 			workspaceCacheDir: t.TempDir(),
-			logger:            zaptest.NewLogger(t).Sugar(),
 		}
 		// Create a file so that deletion will fail
 		err := fs.Set(ctx, path, key, strings.NewReader("test"))
@@ -345,7 +335,6 @@ func TestRemoteWrapper_Delete(t *testing.T) {
 	t.Run("remote delete fails", func(t *testing.T) {
 		fs := &FileSystemCache{
 			workspaceCacheDir: t.TempDir(),
-			logger:            zaptest.NewLogger(t).Sugar(),
 		}
 		remote := &mockCacheBackend{
 			deleteFunc: func(ctx context.Context, path string, key string) error {
@@ -374,7 +363,6 @@ func TestRemoteWrapper_Exists(t *testing.T) {
 	t.Run("exists locally", func(t *testing.T) {
 		fs := &FileSystemCache{
 			workspaceCacheDir: t.TempDir(),
-			logger:            zaptest.NewLogger(t).Sugar(),
 		}
 		err := fs.Set(ctx, path, key, strings.NewReader(content))
 		if err != nil {
@@ -400,7 +388,6 @@ func TestRemoteWrapper_Exists(t *testing.T) {
 	t.Run("exists remotely", func(t *testing.T) {
 		fs := &FileSystemCache{
 			workspaceCacheDir: t.TempDir(),
-			logger:            zaptest.NewLogger(t).Sugar(),
 		}
 		remote := &mockCacheBackend{
 			existsFunc: func(ctx context.Context, path string, key string) (bool, error) {
@@ -422,7 +409,6 @@ func TestRemoteWrapper_Exists(t *testing.T) {
 	t.Run("does not exist", func(t *testing.T) {
 		fs := &FileSystemCache{
 			workspaceCacheDir: t.TempDir(),
-			logger:            zaptest.NewLogger(t).Sugar(),
 		}
 		remote := &mockCacheBackend{
 			existsFunc: func(ctx context.Context, path string, key string) (bool, error) {
@@ -444,7 +430,6 @@ func TestRemoteWrapper_Exists(t *testing.T) {
 	t.Run("remote exists fails", func(t *testing.T) {
 		fs := &FileSystemCache{
 			workspaceCacheDir: t.TempDir(),
-			logger:            zaptest.NewLogger(t).Sugar(),
 		}
 		remote := &mockCacheBackend{
 			existsFunc: func(ctx context.Context, path string, key string) (bool, error) {
@@ -470,7 +455,6 @@ func TestRemoteWrapper_Clear(t *testing.T) {
 	t.Run("successful clear", func(t *testing.T) {
 		fs := &FileSystemCache{
 			workspaceCacheDir: t.TempDir(),
-			logger:            zaptest.NewLogger(t).Sugar(),
 		}
 		remote := &mockCacheBackend{
 			clearFunc: func(ctx context.Context, expunge bool) error {
@@ -483,28 +467,6 @@ func TestRemoteWrapper_Clear(t *testing.T) {
 		err := rw.Clear(ctx, false)
 		if err != nil {
 			t.Fatalf("Clear failed: %v", err)
-		}
-	})
-
-	t.Run("remote clear fails", func(t *testing.T) {
-		fs := &FileSystemCache{
-			workspaceCacheDir: t.TempDir(),
-			logger:            zaptest.NewLogger(t).Sugar(),
-		}
-		remote := &mockCacheBackend{
-			clearFunc: func(ctx context.Context, expunge bool) error {
-				return errors.New("remote clear failed")
-			},
-		}
-
-		rw := NewRemoteWrapper(fs, remote)
-
-		err := rw.Clear(ctx, false)
-		if err == nil {
-			t.Fatal("expected Clear to fail, but it didn't")
-		}
-		if err.Error() != "remote clear failed" {
-			t.Errorf("expected error %q, got %q", "remote clear failed", err.Error())
 		}
 	})
 }

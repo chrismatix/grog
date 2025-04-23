@@ -101,5 +101,11 @@ func (r *Registry) LoadOutputs(ctx context.Context, target model.Target) error {
 			return err
 		}
 	}
-	return nil
+
+	// Why this is needed:
+	// - When restoring from the remote cache we copy every file to the local cache
+	// - However, we don't explicitly restore the cache exists file
+	// TODO here we should only write the local cache exists file but it feels like the wrong place to do this
+	// since the output registry should not have to know about the file cache
+	return r.targetCache.WriteLocalCacheExistsFile(ctx, target)
 }

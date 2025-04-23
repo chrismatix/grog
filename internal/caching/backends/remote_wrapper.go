@@ -29,6 +29,10 @@ func NewRemoteWrapper(
 	}
 }
 
+func (rw *RemoteWrapper) GetFS() *FileSystemCache {
+	return rw.fs
+}
+
 func (rw *RemoteWrapper) TypeName() string {
 	return rw.remote.TypeName()
 }
@@ -40,18 +44,16 @@ func (rw *RemoteWrapper) Get(ctx context.Context, path, key string) (io.ReadClos
 	// Try to get the file from the local file system cache
 	reader, err := rw.fs.Get(ctx, path, key)
 	if err == nil {
-		// File found locally, return it
 		return reader, nil
 	}
 
 	// File not found locally, try the remote cache
 	reader, err = rw.remote.Get(ctx, path, key)
 	if err != nil {
-		// File not found in remote cache, return the error
 		return nil, err
 	}
 
-	// File found in remote cache, store it in the local file system cache for future access
+	// File found in remote-cache, store it in the local file system cache for future access
 	// Create a buffer to read the content from the remote reader and store it in both the local cache and the return reader
 	var buf bytes.Buffer
 	teeReader := io.TeeReader(reader, &buf)
