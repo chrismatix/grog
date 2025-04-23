@@ -28,3 +28,6 @@ Grog's documentation is available at [grog.build](https://grog.build).
 Additionally, the command line reference documentation can be viewed with `grog help`.
 
 ## Versioning
+
+While Grog is still in pre-release (<1.0.0) all version changes might be breaking.
+After that Grog will follow [semver](https://semver.org/).

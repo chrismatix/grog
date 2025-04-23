@@ -15,7 +15,7 @@ export default defineConfig({
       sidebar: [
         {
           label: "Start Here!",
-          items: ["getting-started", "why-grog"],
+          items: ["get-started", "why-grog", "build-configuration"],
         },
         {
           label: "Guides",

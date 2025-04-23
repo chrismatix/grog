@@ -1,0 +1,71 @@
+---
+title: Build configuration
+description: Learn the different ways that you can configure your builds with Grog.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+As you grow your mono-repository and start to adopt more advanced tooling the configuration of your builds can get quite complex.
+In fact, one of the reasons that Grog was created was the steep learning curve of Bazel's starlark configuration language and their API for writing custom rules.
+Grog, therefore, takes a different approach to configuration that emphasizes **simplicity** and **extensibility**.
+
+Grog tries to have as little opinion as possible about how you define the builds as long as each package can output a structured definition of its build targets.
+There are three different ways in which you accomplish this with Grog:
+
+- **Static configuration:** A simple `BUILD.{json,yaml}` file that defines the build targets for each package. Great for most use cases.
+- **Makefiles:** Add comments to your existing `Makefile`s that allow you to run your make goals while benefitting of grog's execution model. Great for gradually adopting grog when you already have Makefile.
+- **Executable configuration (planned!):** A `BUILD.{py,ts}` file that can dynamically define targets based on your own custom logic. Useful when you either need to dynamically adjust your configuration or when you want to re-use target definitions.
+
+## Static configuration
+
+The simplest way to define your build targets is to create a `BUILD.{json,yaml}` file in your package directory.
+This file defines the build targets for each package in your mono-repository.
+
+<Tabs>
+  <TabItem label="JSON">
+  ```json
+  {
+    "targets": {
+      "build_app": {
+        "cmd": "npm run build",
+        "deps": [
+          ":generate_proto",
+          "//path/to/other/package:target_name"
+        ],
+        "inputs": ["src/**/*.js", "package.json"],
+        "outputs": ["dist/bundle.js"]
+      },
+      "generate_proto": {
+        "cmd": "protoc --js_out=src/generated proto/*.proto",
+        "inputs": ["proto/*.proto"],
+        "outputs": ["dir::src/generated"]
+      }
+    }
+  }
+  ```
+  Save this as `BUILD.json` in your project directory.
+  </TabItem>
+  <TabItem label="YAML">
+  ```yaml
+  targets:
+    build_app:
+      cmd: npm run build
+      deps:
+        - :generate_proto
+        - //path/to/other/package:target_name
+      inputs:
+        - src/**/*.js
+      outputs:
+        - dist/bundle.js
+    generate_proto:
+      cmd: protoc --js_out=src/generated proto/*.proto
+      inputs:
+        - proto/*.proto
+      outputs:
+        - dir::src/generated
+  ```
+  Save this as `BUILD.yaml` in your project directory.
+  </TabItem>
+</Tabs>
+
+You can find a full list of the available options in the target [configuration reference](/reference/target-configuration).

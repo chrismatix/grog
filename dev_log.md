@@ -2,6 +2,11 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 23-04-2025
+
+Ok before looking into the executable build files, I finally looked into pkl as suggested by Luca and damn am I impressed.
+There might not even be any need for having `BUILD.{ts,py}` files at all since pkl allows importing and extending modules and even allows for reading the environment.
+
 ## 22-04-2025
 
 Finally completely fixed the issue of logging (debug) output above the task ui.

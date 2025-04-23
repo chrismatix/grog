@@ -1,0 +1,11 @@
+name: Docker outputs
+repo: docker_output
+cases:
+  - name: creates_docker_output
+    args:
+      - build
+
+  # This loads the directory output from the cache
+  - name: loads_docker_output
+    args:
+      - build
