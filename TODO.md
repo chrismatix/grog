@@ -2,7 +2,6 @@
 
 Actually we do need to track caching in the graph walker since it needs to check if dependencies were cached and propagate that
 
-- [ ] Loading: Add pkl support
 - [ ] Gzip the docker tarballs (?)
 - [ ] Only replace outputs when they have changed -> Will require tracking hashes in a separate, small file
 - [ ] Allow running target labels relative to the current directory
@@ -13,6 +12,6 @@ Actually we do need to track caching in the graph walker since it needs to check
 - [ ] Docs: Kick-ass README
 - [ ] Tests: Use the new synctest package to better test the execution semantic
 - [ ] Execution: Warn if one or more of the input files specified for a target do not exist
-- [ ] Execution:
+- [ ] Add
 - [ ] Add runnable binary outputs
 - [ ] Add shell completions for commands that run targets

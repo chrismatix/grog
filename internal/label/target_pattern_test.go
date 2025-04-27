@@ -13,7 +13,7 @@ func TestTargetPatternMatching(t *testing.T) {
 	}
 
 	// Pattern: all targets under "//foo/..."
-	patFooAll, err := ParseTargetPattern("//foo/...")
+	patFooAll, err := ParseTargetPattern("", "//foo/...")
 	if err != nil {
 		t.Fatalf("Failed to parse pattern: %v", err)
 	}
@@ -40,7 +40,7 @@ func TestTargetPatternMatching(t *testing.T) {
 	}
 
 	// Pattern: all targets in entire repo ("//...")
-	patternAll, err := ParseTargetPattern("//...")
+	patternAll, err := ParseTargetPattern("", "//...")
 	if err != nil {
 		t.Fatalf("Failed to parse pattern: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestTargetPatternMatching(t *testing.T) {
 	}
 
 	// Pattern with specific target filter: "//foo/...:lib" matches only targets named "lib"
-	patFooLib, err := ParseTargetPattern("//foo/...:lib")
+	patFooLib, err := ParseTargetPattern("", "//foo/...:lib")
 	if err != nil {
 		t.Fatalf("Failed to parse pattern: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestTargetPatternMatching(t *testing.T) {
 	}
 
 	// Pattern without recursion (exact package match): e.g. "//foo:bar"
-	patExact, err := ParseTargetPattern("//foo:bar")
+	patExact, err := ParseTargetPattern("", "//foo:bar")
 	if err != nil {
 		t.Fatalf("Failed to parse pattern: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestTargetPatternMatching(t *testing.T) {
 	}
 
 	// Pattern with short-hand notation: "//foo"
-	patShortHandExact, err := ParseTargetPattern("//foo")
+	patShortHandExact, err := ParseTargetPattern("", "//foo")
 	if err != nil {
 		t.Fatalf("Failed to parse pattern: %v", err)
 	}
@@ -86,5 +86,36 @@ func TestTargetPatternMatching(t *testing.T) {
 	}
 	if patShortHandExact.Matches(tl("//foo:bar")) {
 		t.Error("Pattern //foo should not match //foo:bar")
+	}
+}
+
+func TestCurrentPackageTargetPattern(t *testing.T) {
+	currentPkg := "pkg/path"
+
+	// Relative pattern without colon is interpreted as shorthand for ":target"
+	patRelative, err := ParseTargetPattern(currentPkg, "foo")
+	if err != nil {
+		t.Fatalf("Failed to parse relative pattern: %v", err)
+	}
+
+	// Should match a label in the current package with target "foo"
+	if !patRelative.Matches(TargetLabel{Package: currentPkg, Name: "foo"}) {
+		t.Error("Relative pattern 'foo' should match target 'foo' in current package")
+	}
+	// Should not match labels in other packages even if the target name is "foo"
+	if patRelative.Matches(TargetLabel{Package: "other/pkg", Name: "foo"}) {
+		t.Error("Relative pattern 'foo' should not match targets in a different package")
+	}
+
+	// Relative pattern with explicit colon, e.g. ":bar", should have target "bar"
+	patColon, err := ParseTargetPattern(currentPkg, ":bar")
+	if err != nil {
+		t.Fatalf("Failed to parse relative pattern with colon: %v", err)
+	}
+	if !patColon.Matches(TargetLabel{Package: currentPkg, Name: "bar"}) {
+		t.Error("Relative pattern ':bar' should match target 'bar' in current package")
+	}
+	if patColon.Matches(TargetLabel{Package: currentPkg, Name: "foo"}) {
+		t.Error("Relative pattern ':bar' should not match target 'foo' in current package")
 	}
 }

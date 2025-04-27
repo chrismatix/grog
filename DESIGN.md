@@ -290,6 +290,10 @@ grog build //path/to/package:target_name
 - Within the same package the path can be omitted.
 - Relative paths are disallowed.
 
+## Cross-platform support
+
+Grog primarily
+
 ## Glossary
 
 - **Workspace:** A folder containing a `grog.toml`.

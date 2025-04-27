@@ -2,7 +2,7 @@ package label
 
 import "testing"
 
-func TestParseAndStringTargetLabel(t *testing.T) {
+func TestParseTargetLabel(t *testing.T) {
 	cases := []struct {
 		input       string
 		packagePath string
@@ -11,6 +11,8 @@ func TestParseAndStringTargetLabel(t *testing.T) {
 	}{
 		{"//foo:bar", "", "foo", "bar"},
 		{"//foo/bar:baz", "", "foo/bar", "baz"},
+		// Allow any type of package paths
+		{"//foo $!?/bar:Baz_-01", "", "foo $!?/bar", "Baz_-01"},
 		{"//:root", "", "", "root"},
 		{":root", "", "", "root"},
 		{":root", ".", "", "root"},
@@ -53,6 +55,15 @@ func TestParseAndStringTargetLabel(t *testing.T) {
 	for _, inp := range invalid {
 		if _, err := ParseTargetLabel(inp.packagePath, inp.input); err == nil {
 			t.Errorf("ParseTargetLabel(%q) should have failed, but got no error", inp.input)
+		}
+	}
+}
+
+func TestValidateTargetName(t *testing.T) {
+	failureCases := []string{"//foo:b ar", "//foo:bar$"}
+	for _, c := range failureCases {
+		if _, err := ParseTargetLabel("", c); err == nil {
+			t.Errorf("ValidateTargetName(%q) should have failed, but got no error", c)
 		}
 	}
 }

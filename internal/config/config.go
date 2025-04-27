@@ -43,6 +43,20 @@ func (w WorkspaceConfig) IsDebug() bool {
 	return w.LogLevel == "debug"
 }
 
+func (w WorkspaceConfig) GetCurrentPackage() (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("failed to get current working directory: %w", err)
+	}
+
+	rel, err := filepath.Rel(w.WorkspaceRoot, cwd)
+	if err != nil {
+		return "", fmt.Errorf("failed to get relative path: %w", err)
+	}
+
+	return rel, nil
+}
+
 type CacheBackend string
 
 const (

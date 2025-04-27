@@ -14,9 +14,23 @@ type TargetPattern struct {
 }
 
 // ParseTargetPattern parses a Bazel target pattern.
-func ParseTargetPattern(pattern string) (TargetPattern, error) {
+func ParseTargetPattern(currentPackage string, pattern string) (TargetPattern, error) {
 	if !strings.HasPrefix(pattern, "//") {
-		return TargetPattern{}, fmt.Errorf("invalid pattern %q: must start with \"//\"", pattern)
+		// We are running a package in the current directory
+		// i.e. running :foo in pkg/path
+		colonIdx := strings.Index(pattern, ":")
+		var targetName string
+		if colonIdx == -1 {
+			// Shorthand: "foo" is equivalent to ":foo"
+			targetName = pattern
+		} else {
+			targetName = pattern[colonIdx+1:]
+		}
+		if err := validateName(targetName); err != nil {
+			return TargetPattern{}, err
+		}
+
+		return TargetPattern{prefix: currentPackage, targetPattern: targetName}, nil
 	}
 	body := pattern[2:]
 	var prefix, targetPattern string
@@ -54,7 +68,7 @@ func ParseTargetPattern(pattern string) (TargetPattern, error) {
 		}
 	}
 
-	// Normalize prefix by removing a trailing slash if present.
+	// Normalize the prefix by removing a trailing slash if present.
 	if len(prefix) > 0 && prefix[len(prefix)-1] == '/' {
 		prefix = prefix[:len(prefix)-1]
 	}

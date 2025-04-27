@@ -20,7 +20,7 @@ type TargetLabel struct {
 func ParseTargetLabel(packagePath, label string) (TargetLabel, error) {
 	if strings.HasPrefix(label, ":") {
 		if packagePath == "." {
-			// For the root package we omit the .
+			// For the root package we omit the "."
 			packagePath = ""
 		}
 
@@ -28,6 +28,9 @@ func ParseTargetLabel(packagePath, label string) (TargetLabel, error) {
 		targetName := label[1:]
 		if targetName == "" {
 			return TargetLabel{}, fmt.Errorf("invalid relative label %q: target name is empty", label)
+		}
+		if err := validateName(targetName); err != nil {
+			return TargetLabel{}, err
 		}
 		return TargetLabel{Package: packagePath, Name: targetName}, nil
 	}
@@ -53,7 +56,28 @@ func ParseTargetLabel(packagePath, label string) (TargetLabel, error) {
 			return TargetLabel{}, fmt.Errorf("invalid label %q: target name is empty", label)
 		}
 	}
+
+	if err := validateName(name); err != nil {
+		return TargetLabel{}, err
+	}
 	return TargetLabel{Package: pkg, Name: name}, nil
+}
+
+func validateName(name string) error {
+	if name == "" {
+		return fmt.Errorf("target name is empty")
+	}
+	for _, c := range name {
+		switch {
+		case c >= 'a' && c <= 'z':
+		case c >= 'A' && c <= 'Z':
+		case c >= '0' && c <= '9':
+		case c == '_' || c == '-':
+		default:
+			return fmt.Errorf("invalid character %q in target name %q: only alphanumeric characters, underscores, and dashes are allowed", c, name)
+		}
+	}
+	return nil
 }
 
 // TL is a convenience shorthand for tests
