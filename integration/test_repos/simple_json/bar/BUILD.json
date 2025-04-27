@@ -1,16 +1,18 @@
 {
-  "targets": {
-    "bar": {
+  "targets": [
+    {
+      "name": "bar",
       "inputs": ["source.txt"],
       "deps": ["//foo:foo"],
       "cmd": "cat source.txt ../foo/output.txt > output.txt && cat source.txt ../foo/output.txt > ../bar_output.txt",
       "outputs": ["output.txt", "../bar_output.txt"]
     },
-    "bar_test": {
+    {
+      "name": "bar_test",
       "inputs": ["source.txt"],
       "deps": [":bar"],
       "cmd": "cat output.txt && echo 'some text' >> output.txt && cp output.txt test_output.txt",
       "outputs": ["test_output.txt"]
     }
-  }
+  ]
 }

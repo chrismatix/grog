@@ -54,11 +54,37 @@ Grog provides a wide array of build file formats to define your build targets.
 You can create these files in various formats depending on your needs:
 
 <Tabs>
+  <TabItem label="YAML">
+    ```yaml
+    targets:
+      - name: build_app
+        cmd: npm run build
+        deps:
+          - :generate_proto
+          - //path/to/other/package:target_name
+        inputs:
+          - src/**/*.js
+        outputs:
+          - dist/bundle.js
+
+      - name: generate_proto
+        cmd: |
+          # Yaml supports multiline commands
+          protoc --js_out=src/generated proto/*.proto
+        inputs:
+          - proto/*.proto
+        outputs:
+          - dir::src/generated
+    ```
+    Save this as `BUILD.yaml` in your project directory.
+
+  </TabItem>
   <TabItem label="JSON">
   ```json
   {
-    "targets": {
-      "build_app": {
+    "targets": [
+      {
+        "name": "build_app",
         "cmd": "npm run build",
         "deps": [
           ":generate_proto",
@@ -67,61 +93,77 @@ You can create these files in various formats depending on your needs:
         "inputs": ["src/**/*.js", "package.json"],
         "outputs": ["dist/bundle.js"]
       },
-      "generate_proto": {
+      {
+        "name": "generate_proto",
         "cmd": "protoc --js_out=src/generated proto/*.proto",
         "inputs": ["proto/*.proto"],
         "outputs": ["dir::src/generated"]
       }
-    }
+    ]
   }
   ```
   Save this as `BUILD.json` in your project directory.
   </TabItem>
-  <TabItem label="YAML">
-  ```yaml
-  targets:
-    build_app:
-      cmd: npm run build
-      deps:
-        - :generate_proto
-        - //path/to/other/package:target_name
-      inputs:
-        - src/**/*.js
-      outputs:
-        - dist/bundle.js
-    generate_proto:
-      cmd: protoc --js_out=src/generated proto/*.proto
-      inputs:
-        - proto/*.proto
-      outputs:
-        - dir::src/generated
-  ```
-  Save this as `BUILD.yaml` in your project directory.
-  </TabItem>
   <TabItem label="Makefile">
   ```Makefile
-    # @grog
-    # inputs:
-    #   - src/**/*.js
-    #   - package.json
-    # outputs:
-    #   - dist/bundle.js
-    # deps:
-    #   - :generate_proto
-    #   - //path/to/other/package:target_name
-    build_app:
-      npm run build
+  # @grog
+  # inputs:
+  #   - src/**/*.js
+  #   - package.json
+  # outputs:
+  #   - dist/bundle.js
+  # deps:
+  #   - :generate_proto
+  #   - //path/to/other/package:target_name
+  build_app:
+    npm run build
 
-    # @grog
-    # inputs:
-    #   - proto/*.proto
-    # outputs:
-    #   - dir::src/generated
-    generate_proto:
-      protoc --js_out=src/generated proto/*.proto
+# @grog
+
+# inputs:
+
+# - proto/\*.proto
+
+# outputs:
+
+# - dir::src/generated
+
+generate_proto:
+protoc --js_out=src/generated proto/\*.proto
 
 ````
 Add the grog metadata comments to your `Makefile` goals to allow running them with Grog.
+</TabItem>
+<TabItem label="Pkl">
+  ```pkl
+  amends "tbd.pkl"
+
+  targets {
+    new {
+      name = "build_app"
+      cmd = "npm run build"
+      deps {
+        ":generate_proto"
+        "//path/to/other/package:target_name"
+      }
+      outputs {
+        "dir::src/generated"
+      }
+    }
+
+    new {
+      name = "generate_proto"
+      cmd = "protoc --js_out=src/generated proto/*.proto"
+      inputs {
+        "proto/*.proto"
+      }
+      outputs {
+        "test_output.txt"
+      }
+    }
+  }
+  ```
+  Save this as `BUILD.pkl` in your project directory.
 </TabItem>
 </Tabs>
 

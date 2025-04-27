@@ -16,8 +16,8 @@ func (j JsonLoader) FileNames() []string {
 }
 
 // Load reads the file at the specified filePath and unmarshals its content into a model.Package.
-func (j JsonLoader) Load(_ context.Context, filePath string) (PackageDto, bool, error) {
-	var pkg PackageDto
+func (j JsonLoader) Load(_ context.Context, filePath string) (PackageDTO, bool, error) {
+	var pkg PackageDTO
 
 	// Open the file.
 	file, err := os.Open(filePath)

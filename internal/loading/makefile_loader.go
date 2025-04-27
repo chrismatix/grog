@@ -18,11 +18,11 @@ func (m MakefileLoader) FileNames() []string {
 	return []string{"Makefile"}
 }
 
-// Load reads the Makefile at filePath parses it to PackageDto
-func (m MakefileLoader) Load(_ context.Context, filePath string) (PackageDto, bool, error) {
+// Load reads the Makefile at filePath parses it to PackageDTO
+func (m MakefileLoader) Load(_ context.Context, filePath string) (PackageDTO, bool, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		return PackageDto{}, false, err
+		return PackageDTO{}, false, err
 	}
 	defer file.Close()
 
@@ -42,22 +42,22 @@ func (m MakefileLoader) Load(_ context.Context, filePath string) (PackageDto, bo
 // makefileParser encapsulates the scanning logic and state.
 type makefileParser struct {
 	scanner *bufio.Scanner
-	pkg     PackageDto
+	pkg     PackageDTO
 }
 
 // newMakefileParser creates a new parser for the given scanner and file path.
 func newMakefileParser(scanner *bufio.Scanner) *makefileParser {
 	return &makefileParser{
 		scanner: scanner,
-		pkg: PackageDto{
-			Targets: make(map[string]*TargetDto),
+		pkg: PackageDTO{
+			Targets: make([]*TargetDTO, 0),
 		},
 	}
 }
 
 // parse iterates through the file line by line, handling annotations and targets.
-// returns the parsed PackageDto and a bool indicating if targets were found at all
-func (p *makefileParser) parse() (PackageDto, bool, error) {
+// returns the parsed PackageDTO and a bool indicating if targets were found at all
+func (p *makefileParser) parse() (PackageDTO, bool, error) {
 	targetsFound := false
 	lineCount := 0
 
@@ -133,8 +133,9 @@ func (p *makefileParser) handleTarget(
 	// Extract the target name (remove the trailing colon).
 	targetName := strings.Split(trimmedTarget, ":")[0]
 
-	// Create the TargetDto.
-	target := &TargetDto{
+	// Create the TargetDTO.
+	target := &TargetDTO{
+		Name:    targetName,
 		Command: "make " + targetName,
 		Deps:    annotation.Deps,
 		Inputs:  annotation.Inputs,
@@ -142,11 +143,10 @@ func (p *makefileParser) handleTarget(
 	}
 
 	// Use the annotation's name as key if provided, otherwise use the target name.
-	key := targetName
 	if annotation.Name != "" {
-		key = annotation.Name
+		target.Name = annotation.Name
 	}
 
-	p.pkg.Targets[key] = target
+	p.pkg.Targets = append(p.pkg.Targets, target)
 	return nil
 }

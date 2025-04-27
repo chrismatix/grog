@@ -1,12 +1,14 @@
 {
-  "targets": {
-    "server_pex": {
+  "targets": [
+    {
+      "name": "server_pex",
       "cmd": "cd .. && ./scripts/build_pex.sh server",
       "inputs": ["server/**/*.py"]
     },
-    "server_test": {
+    {
+      "name": "server_test",
       "cmd": "uv run pytest",
       "inputs": ["server/**/*.py", "tests/**/*.py"]
     }
-  }
+  ]
 }

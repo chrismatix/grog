@@ -1,5 +1,5 @@
 targets:
-  build:
+  - name: build
     inputs:
       - "app/**/*.tsx"
     cmd: npm run build

@@ -1,5 +1,5 @@
 targets:
-  dir_output:
+  - name: dir_output
     inputs:
       - input.txt
     outputs:

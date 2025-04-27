@@ -1,9 +1,9 @@
 targets:
-  target_1:
+  - name: target_1
     cmd: "echo 'failed' && exit 1"
-  target_2:
+  - name: target_2
     cmd: ""
     deps:
       - :target_1
-  target_3:
+  - name: target_3
     cmd: "sleep 0.1 && echo 'this should run with --fail-fast=false'"

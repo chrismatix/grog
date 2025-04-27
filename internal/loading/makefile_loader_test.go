@@ -16,7 +16,7 @@ func TestMakefileParser(t *testing.T) {
 	tests := []struct {
 		name              string
 		input             string
-		expectedTargets   map[string]TargetDto
+		expectedTargets   []TargetDTO
 		expectedFoundFlag bool
 		shouldError       bool
 		errorContains     string
@@ -35,8 +35,9 @@ func TestMakefileParser(t *testing.T) {
 #   - dist/styles.bundle.css
 build_app:
 	npm run build`,
-			expectedTargets: map[string]TargetDto{
-				"grog_build_app": {
+			expectedTargets: []TargetDTO{
+				{
+					Name:    "grog_build_app",
 					Command: "make build_app",
 					Deps:    []string{"//proto:build"},
 					Inputs:  []string{"src/**/*.js", "assets/**/*.scss"},
@@ -57,8 +58,9 @@ build_app:
 #   - dist/*.js
 build_target:
 	echo "Building..."`,
-			expectedTargets: map[string]TargetDto{
-				"build_target": {
+			expectedTargets: []TargetDTO{
+				{
+					Name:    "build_target",
 					Command: "make build_target",
 					Deps:    []string{"//proto:build"},
 					Inputs:  []string{"src/**/*.js"},
@@ -73,7 +75,7 @@ build_target:
 			input: `build_app:
 	npm run build`,
 			// No annotation => no targets parsed by our loader.
-			expectedTargets:   map[string]TargetDto{},
+			expectedTargets:   []TargetDTO{},
 			expectedFoundFlag: false,
 			shouldError:       false,
 		},
@@ -109,7 +111,7 @@ build_error:
 # name: grog_empty
 # deps:
 #   - //proto:build`,
-			expectedTargets:   map[string]TargetDto{}, // since no target definition was provided
+			expectedTargets:   []TargetDTO{}, // since no target definition was provided
 			expectedFoundFlag: true,
 			shouldError:       false,
 		},
@@ -127,14 +129,16 @@ target_one:
 #   - file1.js
 target_two:
 	echo "target two"`,
-			expectedTargets: map[string]TargetDto{
-				"target_one": {
+			expectedTargets: []TargetDTO{
+				{
+					Name:    "target_one",
 					Command: "make target_one",
 					Deps:    []string{"dep1"},
 					Inputs:  nil,
 					Outputs: nil,
 				},
-				"target_two": {
+				{
+					Name:    "target_two",
 					Command: "make target_two",
 					Deps:    nil,
 					Inputs:  []string{"file1.js"},
@@ -155,8 +159,9 @@ target_two:
 #
 target_empty:
 	echo "target with empty lines"`,
-			expectedTargets: map[string]TargetDto{
-				"target_empty_lines": {
+			expectedTargets: []TargetDTO{
+				{
+					Name:    "target_empty_lines",
 					Command: "make target_empty",
 					Deps:    []string{"dep2"},
 					Inputs:  nil,
@@ -198,32 +203,28 @@ target_empty:
 			}
 
 			// Compare each target.
-			for key, expected := range tc.expectedTargets {
-				target, exists := pkg.Targets[key]
-				if !exists {
-					t.Errorf("expected target %q to be present", key)
-					continue
-				}
+			for index, expected := range tc.expectedTargets {
+				target := pkg.Targets[index]
 				if target.Command != expected.Command {
-					t.Errorf("for target %q, expected command %q, got %q", key, expected.Command, target.Command)
+					t.Errorf("for target %q, expected command %q, got %q", index, expected.Command, target.Command)
 				}
-				compareStringSlices(t, expected.Deps, target.Deps, key, "Deps")
-				compareStringSlices(t, expected.Inputs, target.Inputs, key, "Inputs")
-				compareStringSlices(t, expected.Outputs, target.Outputs, key, "Outputs")
+				compareStringSlices(t, expected.Deps, target.Deps, index, "Deps")
+				compareStringSlices(t, expected.Inputs, target.Inputs, index, "Inputs")
+				compareStringSlices(t, expected.Outputs, target.Outputs, index, "Outputs")
 			}
 		})
 	}
 }
 
 // compareStringSlices compares two slices of strings.
-func compareStringSlices(t *testing.T, expected, got []string, targetKey, field string) {
+func compareStringSlices(t *testing.T, expected, got []string, targetIndex int, field string) {
 	if len(expected) != len(got) {
-		t.Errorf("target %q: expected %s length %d; got %d", targetKey, field, len(expected), len(got))
+		t.Errorf("target %q: expected %s length %d; got %d", targetIndex, field, len(expected), len(got))
 		return
 	}
 	for i, exp := range expected {
 		if exp != got[i] {
-			t.Errorf("target %q: expected %s[%d] %q; got %q", targetKey, field, i, exp, got[i])
+			t.Errorf("target %q: expected %s[%d] %q; got %q", targetIndex, field, i, exp, got[i])
 		}
 	}
 }

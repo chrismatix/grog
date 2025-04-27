@@ -1,5 +1,5 @@
 targets:
-  dir_output:
+  - name: docker_output
     cmd: |
       docker build -t grog-hello-world .
     inputs:

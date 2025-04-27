@@ -1,8 +1,9 @@
 {
-  "targets": {
-    "bar": {
+  "targets": [
+    {
+      "name": "bar",
       "cmd": "cat grog.toml",
       "inputs": ["grog.toml"]
     }
-  }
+  ]
 }

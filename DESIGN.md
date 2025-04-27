@@ -93,14 +93,15 @@ Example `BUILD.json`:
 
 ```json
 {
-  "targets": {
-    "foo": {
+  "targets": [
+    {
+      "name": "foo",
       "cmd": "echo 'Hello world' > foo.out",
       "deps": ["bar"],
       "inputs": ["foo.txt", "src/**/*.txt"],
       "outputs": ["foo.out"]
     }
-  }
+  ]
 }
 ```
 
@@ -260,7 +261,7 @@ We could make outputs extensible like so:
 
 ```yaml
 targets:
-  foo:
+  - name: foo
     cmd: "some command"
     outputs:
       - ../output.txt

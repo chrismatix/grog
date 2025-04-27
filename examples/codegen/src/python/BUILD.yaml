@@ -1,5 +1,5 @@
 targets:
-  venv:
+  - name: venv
     inputs:
       - requirements.txt
     deps:
@@ -10,7 +10,7 @@ targets:
       source .venv/bin/activate
       pip install -r requirements.txt
 
-  python_test:
+  - name: python_test
     inputs:
       - "*.py"
     deps:

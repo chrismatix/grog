@@ -97,11 +97,11 @@ func LoadPackages(ctx context.Context) ([]*model.Package, error) {
 // - adds the package path to the target labels
 // - resolves the globs in the inputs TODO
 // - parses the deps into target labels
-func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg PackageDto) (*model.Package, error) {
+func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg PackageDTO) (*model.Package, error) {
 	targets := make(map[label.TargetLabel]*model.Target)
 	absolutePackagePath := config.GetPathAbsoluteToWorkspaceRoot(packagePath)
 
-	for targetName, target := range pkg.Targets {
+	for _, target := range pkg.Targets {
 		var deps []label.TargetLabel
 		// parse labels
 		for _, dep := range target.Deps {
@@ -116,9 +116,9 @@ func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg Packa
 		if packagePath == "." {
 			packagePath = ""
 		}
-		targetLabel := label.TargetLabel{Package: packagePath, Name: targetName}
+		targetLabel := label.TargetLabel{Package: packagePath, Name: target.Name}
 		if _, ok := targets[targetLabel]; ok {
-			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", targetName, pkg.SourceFilePath)
+			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", target.Name, pkg.SourceFilePath)
 		}
 
 		resolvedInputs, err := resolveInputs(logger, absolutePackagePath, target.Inputs)
@@ -129,6 +129,10 @@ func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg Packa
 		parsedOutputs, err := output.ParseOutputs(target.Outputs)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse outputs for target %s: %w", targetLabel, err)
+		}
+
+		if _, ok := targets[targetLabel]; ok {
+			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", target.Name, pkg.SourceFilePath)
 		}
 
 		targets[targetLabel] = &model.Target{

@@ -1,5 +1,5 @@
 targets:
-  codegen:
+  - name: codegen
     inputs:
       - "*.proto"
     cmd: |
@@ -12,7 +12,7 @@ targets:
       - pb/person.pb.go
       - pb/person_pb2.py
 
-  codegen_pip:
+  - name: codegen_pip
     inputs:
       - "**/*.py"
       - requirements.txt
