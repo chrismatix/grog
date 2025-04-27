@@ -1,0 +1,19 @@
+import "target.pkl"
+
+function java_app(
+  inputName: String
+) = new target.Target {
+  name = inputName
+  cmd = "build"
+}
+
+
+function java_app_multiple_targets(
+  inputName: String
+) = List(new target.Target {
+  name = inputName
+  cmd = "build"
+}, new target.Target {
+  name = inputName + "_test"
+  cmd = "test"
+})

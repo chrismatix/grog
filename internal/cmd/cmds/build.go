@@ -55,8 +55,11 @@ var BuildCmd = &cobra.Command{
 func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest bool) {
 	startTime := time.Now()
 	logger := console.InitLogger()
+	ctx, cancel := context.WithCancel(context.Background())
+	ctx = console.WithLogger(ctx, logger)
+	defer cancel()
 
-	packages, err := loading.LoadPackages(logger)
+	packages, err := loading.LoadPackages(ctx)
 	if err != nil {
 		logger.Fatalf(
 			"could not load packages: %v",
@@ -93,10 +96,6 @@ func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest b
 		graph.SelectAllTargets()
 		logger.Infof("Selected all targets (%s loaded, %s configured).", console.FCountPkg(numPackages), console.FCountTargets(len(targets)))
 	}
-	logger.WithOptions()
-	ctx, cancel := context.WithCancel(context.Background())
-	ctx = console.WithLogger(ctx, logger)
-	defer cancel()
 
 	// Listen for SIGTERM or SIGINT to cancel the context
 	signalChan := make(chan os.Signal, 1)

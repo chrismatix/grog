@@ -1,6 +1,7 @@
 package loading
 
 import (
+	"context"
 	"fmt"
 	"gopkg.in/yaml.v3"
 	"os"
@@ -15,8 +16,8 @@ func (j YamlLoader) FileNames() []string {
 }
 
 // Load reads the file at the specified filePath and unmarshals its content into a model.Package.
-func (j YamlLoader) Load(filePath string) (PackageDTO, bool, error) {
-	var pkg PackageDTO
+func (j YamlLoader) Load(_ context.Context, filePath string) (PackageDto, bool, error) {
+	var pkg PackageDto
 
 	// Open the file.
 	file, err := os.Open(filePath)

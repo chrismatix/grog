@@ -1,0 +1,6 @@
+module package
+
+import "target.pkl"
+
+
+targets: Listing<target.Target>(isDistinctBy((it) -> it.name))

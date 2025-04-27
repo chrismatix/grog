@@ -1,0 +1,12 @@
+amends "pkl:Project"
+
+dependencies {
+}
+
+package {
+  name = "grog"
+  // TODO build the right paths here
+  //baseUri = "package://grog.build/"
+  version = "0.0.1"
+  //packageZipUrl = "https://example.com/birds@\(version).zip"
+}

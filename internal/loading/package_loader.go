@@ -1,6 +1,7 @@
 package loading
 
 import (
+	"context"
 	"go.uber.org/zap"
 	"slices"
 )
@@ -11,7 +12,7 @@ type Loader interface {
 	FileNames() []string
 	// Load reads the file at the specified filePath and unmarshals its content into a model.Package
 	// Returns true if the file contains a valid package definition (needed for Makefiles)
-	Load(filePath string) (PackageDTO, bool, error)
+	Load(ctx context.Context, filePath string) (PackageDto, bool, error)
 }
 
 // PackageLoader facade that delegates to the correct loader based on the pattern
@@ -29,20 +30,21 @@ func NewPackageLoader(logger *zap.SugaredLogger) *PackageLoader {
 			JsonLoader{},
 			YamlLoader{},
 			MakefileLoader{},
+			PklLoader{},
 		},
 	}
 }
 
 // LoadIfMatched loads the package from the specified file name if it matches any of the supported file names.
-func (p *PackageLoader) LoadIfMatched(filePath string, fileName string) (PackageDTO, bool, error) {
+func (p *PackageLoader) LoadIfMatched(ctx context.Context, filePath string, fileName string) (PackageDto, bool, error) {
 	for _, loader := range p.loaders {
 		if slices.Contains(loader.FileNames(), fileName) {
 			p.logger.Debugf("Loading package from %s using loader %s", filePath, loader)
-			pkgDto, matched, err := loader.Load(filePath)
+			pkgDto, matched, err := loader.Load(ctx, filePath)
 			pkgDto.SourceFilePath = filePath
 			return pkgDto, matched, err
 		}
 	}
 
-	return PackageDTO{}, false, nil
+	return PackageDto{}, false, nil
 }

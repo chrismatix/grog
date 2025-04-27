@@ -1,0 +1,29 @@
+amends "../../../../pkl/package.pkl"
+
+targets {
+  new {
+    name = "bar"
+    cmd = "cat source.txt ../foo/output.txt > output.txt && cat source.txt ../foo/output.txt > ../bar_output.txt"
+    deps {
+      "//foo"
+    }
+    outputs {
+      "output.txt"
+      "../bar_output.txt"
+    }
+  }
+
+  new {
+    name = "bar_test"
+    cmd = "cat output.txt && echo 'some text' >> output.txt && cp output.txt test_output.txt"
+    inputs {
+      "source.txt"
+    }
+    deps {
+      ":bar"
+    }
+    outputs {
+      "test_output.txt"
+    }
+  }
+}

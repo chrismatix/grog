@@ -1,11 +1,13 @@
 package loading
 
 import (
+	"context"
 	"fmt"
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/charlievieth/fastwalk"
 	"go.uber.org/zap"
 	"grog/internal/config"
+	"grog/internal/console"
 	"grog/internal/label"
 	"grog/internal/model"
 	"grog/internal/output"
@@ -15,8 +17,9 @@ import (
 	"sync"
 )
 
-func LoadPackages(logger *zap.SugaredLogger) ([]*model.Package, error) {
+func LoadPackages(ctx context.Context) ([]*model.Package, error) {
 	workspaceRoot := config.Global.WorkspaceRoot
+	logger := console.GetLogger(ctx)
 
 	var packages []*model.Package
 
@@ -47,7 +50,7 @@ func LoadPackages(logger *zap.SugaredLogger) ([]*model.Package, error) {
 				path)
 		}
 
-		pkgDto, matched, err := packageLoader.LoadIfMatched(path, d.Name())
+		pkgDto, matched, err := packageLoader.LoadIfMatched(ctx, path, d.Name())
 		if err != nil {
 			return err
 		}
@@ -94,7 +97,7 @@ func LoadPackages(logger *zap.SugaredLogger) ([]*model.Package, error) {
 // - adds the package path to the target labels
 // - resolves the globs in the inputs TODO
 // - parses the deps into target labels
-func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg PackageDTO) (*model.Package, error) {
+func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg PackageDto) (*model.Package, error) {
 	targets := make(map[label.TargetLabel]*model.Target)
 	absolutePackagePath := config.GetPathAbsoluteToWorkspaceRoot(packagePath)
 

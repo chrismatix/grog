@@ -2,9 +2,19 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 26-04-2025
+
+Implemented pkl parsing which was straight-forward.
+One annoying realization is that users will have to have the pkl cli installed in order for this to work which is not great.
+
+## 25-04-2025
+
+Just did some reading into how to best setup pkl for our use case.
+Also came up with a first schema for the package pkl that looks and feels convenient.
+
 ## 23-04-2025
 
-Ok before looking into the executable build files, I finally looked into pkl as suggested by Luca and damn am I impressed.
+Ok, before looking into the executable build files, I finally looked into pkl as suggested by Luca and damn am I impressed.
 There might not even be any need for having `BUILD.{ts,py}` files at all since pkl allows importing and extending modules and even allows for reading the environment.
 
 ## 22-04-2025

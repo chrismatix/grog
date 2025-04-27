@@ -126,6 +126,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) View() string {
+	m.tasksMutex.RLock()
+	defer m.tasksMutex.RUnlock()
 	s := ""
 
 	// Render header
@@ -134,8 +136,6 @@ func (m *model) View() string {
 	// Render tasks in order:
 	// Tasks may be sparse so we need to sort the task ids and then loop
 	keys := make([]int, 0, len(m.tasks))
-	m.tasksMutex.RLock()
-	defer m.tasksMutex.RUnlock()
 	for k := range m.tasks {
 		keys = append(keys, k)
 	}

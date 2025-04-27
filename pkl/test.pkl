@@ -1,0 +1,33 @@
+// targets.pkl
+amends "package.pkl"
+
+import "helper.pkl"
+
+targets {
+  new {
+    name = "foo"
+    cmd = "go build ./cmd/app"
+    deps {
+      "pkg/foo"
+      "pkg/bar"
+    }
+    inputs  {
+      "cmd/app/main.go"
+    }
+    outputs {
+      "bin/app"
+    }
+  }
+
+  new {
+    name = "bar"
+    cmd = """
+      Such multi-line!
+      Wow!
+    """
+  }
+
+  helper.java_app("test")
+
+  ...helper.java_app_multiple_targets("test")
+}

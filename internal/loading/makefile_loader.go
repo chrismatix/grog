@@ -2,6 +2,7 @@ package loading
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -17,11 +18,11 @@ func (m MakefileLoader) FileNames() []string {
 	return []string{"Makefile"}
 }
 
-// Load reads the Makefile at filePath parses it to PackageDTO
-func (m MakefileLoader) Load(filePath string) (PackageDTO, bool, error) {
+// Load reads the Makefile at filePath parses it to PackageDto
+func (m MakefileLoader) Load(_ context.Context, filePath string) (PackageDto, bool, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		return PackageDTO{}, false, err
+		return PackageDto{}, false, err
 	}
 	defer file.Close()
 
@@ -41,22 +42,22 @@ func (m MakefileLoader) Load(filePath string) (PackageDTO, bool, error) {
 // makefileParser encapsulates the scanning logic and state.
 type makefileParser struct {
 	scanner *bufio.Scanner
-	pkg     PackageDTO
+	pkg     PackageDto
 }
 
 // newMakefileParser creates a new parser for the given scanner and file path.
 func newMakefileParser(scanner *bufio.Scanner) *makefileParser {
 	return &makefileParser{
 		scanner: scanner,
-		pkg: PackageDTO{
-			Targets: make(map[string]*TargetDTO),
+		pkg: PackageDto{
+			Targets: make(map[string]*TargetDto),
 		},
 	}
 }
 
 // parse iterates through the file line by line, handling annotations and targets.
-// returns the parsed PackageDTO and a bool indicating if targets were found at all
-func (p *makefileParser) parse() (PackageDTO, bool, error) {
+// returns the parsed PackageDto and a bool indicating if targets were found at all
+func (p *makefileParser) parse() (PackageDto, bool, error) {
 	targetsFound := false
 	lineCount := 0
 
@@ -132,8 +133,8 @@ func (p *makefileParser) handleTarget(
 	// Extract the target name (remove the trailing colon).
 	targetName := strings.Split(trimmedTarget, ":")[0]
 
-	// Create the TargetDTO.
-	target := &TargetDTO{
+	// Create the TargetDto.
+	target := &TargetDto{
 		Command: "make " + targetName,
 		Deps:    annotation.Deps,
 		Inputs:  annotation.Inputs,

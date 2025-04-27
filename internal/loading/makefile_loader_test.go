@@ -16,7 +16,7 @@ func TestMakefileParser(t *testing.T) {
 	tests := []struct {
 		name              string
 		input             string
-		expectedTargets   map[string]TargetDTO
+		expectedTargets   map[string]TargetDto
 		expectedFoundFlag bool
 		shouldError       bool
 		errorContains     string
@@ -35,7 +35,7 @@ func TestMakefileParser(t *testing.T) {
 #   - dist/styles.bundle.css
 build_app:
 	npm run build`,
-			expectedTargets: map[string]TargetDTO{
+			expectedTargets: map[string]TargetDto{
 				"grog_build_app": {
 					Command: "make build_app",
 					Deps:    []string{"//proto:build"},
@@ -57,7 +57,7 @@ build_app:
 #   - dist/*.js
 build_target:
 	echo "Building..."`,
-			expectedTargets: map[string]TargetDTO{
+			expectedTargets: map[string]TargetDto{
 				"build_target": {
 					Command: "make build_target",
 					Deps:    []string{"//proto:build"},
@@ -73,7 +73,7 @@ build_target:
 			input: `build_app:
 	npm run build`,
 			// No annotation => no targets parsed by our loader.
-			expectedTargets:   map[string]TargetDTO{},
+			expectedTargets:   map[string]TargetDto{},
 			expectedFoundFlag: false,
 			shouldError:       false,
 		},
@@ -109,7 +109,7 @@ build_error:
 # name: grog_empty
 # deps:
 #   - //proto:build`,
-			expectedTargets:   map[string]TargetDTO{}, // since no target definition was provided
+			expectedTargets:   map[string]TargetDto{}, // since no target definition was provided
 			expectedFoundFlag: true,
 			shouldError:       false,
 		},
@@ -127,7 +127,7 @@ target_one:
 #   - file1.js
 target_two:
 	echo "target two"`,
-			expectedTargets: map[string]TargetDTO{
+			expectedTargets: map[string]TargetDto{
 				"target_one": {
 					Command: "make target_one",
 					Deps:    []string{"dep1"},
@@ -155,7 +155,7 @@ target_two:
 #
 target_empty:
 	echo "target with empty lines"`,
-			expectedTargets: map[string]TargetDTO{
+			expectedTargets: map[string]TargetDto{
 				"target_empty_lines": {
 					Command: "make target_empty",
 					Deps:    []string{"dep2"},
