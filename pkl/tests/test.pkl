@@ -1,6 +1,7 @@
 // targets.pkl
-amends "package.pkl"
+amends "../package.pkl"
 
+import "https://raw.githubusercontent.com/apple/pkl-pantry/refs/heads/main/packages/pkl.toml/PklProject"
 import "helper.pkl"
 
 targets {

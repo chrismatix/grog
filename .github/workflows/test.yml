@@ -17,12 +17,20 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.23
+          go-version: 1.24
 
       - name: Install dependencies
         run: |
           go mod tidy
           go install gotest.tools/gotestsum@latest
+
+      - name: Install pkl
+        run: |
+          curl -L -o pkl 'https://github.com/apple/pkl/releases/download/0.28.2/pkl-linux-aarch64'
+          chmod +x pkl
+          sudo mv pkl /usr/local/bin/pkl
+
+          pkl --version
 
       - name: Build and test
         run: make test

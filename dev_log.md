@@ -2,6 +2,20 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 27-04-2025
+
+Lots of time today to wrap some things up.
+Made it possible to reference targets in the current directory directly when using the cli.
+So you can now do `grog build some-target` and it will build `some-target` in the current directory.
+
+Also, finally broke down and changed the basic `package` schema to be a list of targets instead of a map.
+My original intention was to enforce name uniqueness in the very data structure itself, but A) it just reads worse and B) for pkl it would have required maintaining an entirely different parsing dto which just felt unnecessary.
+
+I honestly think that grog is ready for a test drive in the visia mono-repo already, but I keep pushing it off.
+I will create a special checklist just for this purpose.
+
+-C
+
 ## 26-04-2025
 
 Implemented pkl parsing which was straight-forward.

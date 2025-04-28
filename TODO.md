@@ -1,6 +1,13 @@
 # TODOs
 
-Actually we do need to track caching in the graph walker since it needs to check if dependencies were cached and propagate that
+Visia dog-food checklist:
+
+- [ ] Add platform selectors
+- [ ] Add filtering by tags
+- [ ] Working release flow
+- [ ] Stomp out ALL remaining potential deadlocks
+
+Other TODOs:
 
 - [ ] Gzip the docker tarballs (?)
 - [ ] Only replace outputs when they have changed -> Will require tracking hashes in a separate, small file
@@ -9,7 +16,7 @@ Actually we do need to track caching in the graph walker since it needs to check
 - [ ] Add docker outputs (registry)
 - [ ] The Output Registry should warn when a target is overwriting another's outputs
 - [ ] Logging: Create a diagnotics module that we attach to the context and that - on failure - will always write all the diagnostics to the grog root
-- [ ] Docs: Kick-ass README
+- [ ] Docs: Strong README
 - [ ] Tests: Use the new synctest package to better test the execution semantic
 - [ ] Execution: Warn if one or more of the input files specified for a target do not exist
 - [ ] Add

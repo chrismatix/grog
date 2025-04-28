@@ -1,3 +1,3 @@
 FATAL: could not load packages: found conflicting package definitions at package path: .
-- Makefile
 - BUILD.json
+- Makefile

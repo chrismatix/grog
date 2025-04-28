@@ -13,6 +13,7 @@ import (
 	"grog/internal/output"
 	"io/fs"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -71,10 +72,17 @@ func LoadPackages(ctx context.Context) ([]*model.Package, error) {
 			loadedMu.Lock()
 			if loadedPackageFile, ok := loadedPackagePaths[packagePath]; ok {
 				loadedMu.Unlock()
-				return fmt.Errorf("found conflicting package definitions at package path: %s\n- %s\n- %s",
-					packagePath,
+
+				// Sort the paths to make the error message deterministic and testable via integration test
+				paths := []string{
 					config.MustGetPathRelativeToWorkspaceRoot(loadedPackageFile),
 					config.MustGetPathRelativeToWorkspaceRoot(pkg.SourceFilePath),
+				}
+				slices.Sort(paths)
+				return fmt.Errorf("found conflicting package definitions at package path: %s\n- %s\n- %s",
+					packagePath,
+					paths[0],
+					paths[1],
 				)
 			}
 			loadedPackagePaths[packagePath] = pkgDto.SourceFilePath

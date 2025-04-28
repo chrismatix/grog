@@ -6,7 +6,14 @@ dependencies {
 package {
   name = "grog"
   // TODO build the right paths here
-  //baseUri = "package://grog.build/"
-  version = "0.0.1"
-  //packageZipUrl = "https://example.com/birds@\(version).zip"
+  baseUri = "package://grog.build/pkl"
+  version = "0.1.0"
+  packageZipUrl = "https://grog.build/releases/download/v\(version)/pkl.zip"
 }
+
+// How do apple host their pkl packages with vanity url?
+// For toml they have "packageUri": "package://pkg.pkl-lang.org/pkl-pantry/pkl.toml@1.0.0"
+// https://pkg.pkl-lang.org/pkl-pantry/pkl.toml@1.0.0
+// redirects to
+// https://github.com/apple/pkl-pantry/releases/download/pkl.toml@1.0.0/pkl.toml@1.0.0
+// Their zip url is just directly to the releases page because not user-facing

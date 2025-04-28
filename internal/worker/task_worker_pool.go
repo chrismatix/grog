@@ -137,15 +137,21 @@ func (twp *TaskWorkerPool[T]) flushState() {
 	if twp.closed {
 		return
 	}
-	green := color.New(color.FgGreen).SprintFunc()
+
+	// create a copy of the map so we don't modify the original'
+	stateCopy := make(console.TaskStateMap, len(twp.taskState))
+	for key, value := range twp.taskState {
+		stateCopy[key] = value
+	}
 	// Write the current task state
-	twp.msgCh <- console.TaskStateMsg{State: twp.taskState}
+	twp.msgCh <- console.TaskStateMsg{State: stateCopy}
 	totalTasks := twp.nextTaskId
 	if twp.totalTasks > 0 {
 		totalTasks = twp.totalTasks
 	}
 
 	actionsRunning := len(twp.taskState)
+	green := color.New(color.FgGreen).SprintFunc()
 	twp.msgCh <- console.HeaderMsg(green(
 		fmt.Sprintf("[%d/%d]", twp.completedTasks, totalTasks)) +
 		fmt.Sprintf(" %s running", console.FCount(actionsRunning, "action")))
