@@ -2,6 +2,56 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 30-04-2025
+
+Finished the platform selection configuration option.
+Also learned that in order to do nested objects in pkl it's best to to factor out the nested object into a separate file and then import it.
+If you use a class instead users will have to import the file and do `new module.Class` whenever they want to create a nested field.
+
+## 29-04-2025
+
+Some learning on how to layout the docker registry cache: https://chatgpt.com/share/681087e4-9bfc-8007-b9af-7b8e0e0b0400
+Some work on implementing platform selectors.
+
+## 28-04-2025
+
+Came up with a simple proposal for how we could do workspace bootstrapping in a repository:
+
+```yaml
+targets:
+  - name: some_build_target
+    inputs:
+      - requirements.txt
+    deps:
+      - :a_bin_tool
+      - :a_bin_path_tool
+    cmd: |
+      # Using the bin tool
+      $(bin :a_bin_tool) inputs
+
+  # A target can only produce a single binary
+  # You can run that binary by running:
+  # grog run //package:a_bin_tool -- arg1 arg2
+  - name: a_bin_tool
+    cmd: |
+      echo "I am a binary" >> dist/bin
+    bin_output: dist/bin
+
+  # Installs one more tools on the host machine
+  # Cache-hit when we find the binary on the path
+  # -> These cannot be cached remotely
+  - name: a_bin_path_tool
+    cmd: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      brew install grog
+    outputs:
+      - bin-path::uv
+      - bin-path::grog
+```
+
+- bin tools are very much how it works in Bazel. A single binary that you can cache between targets.
+- bin-path tools on the other hand are a pratical grog thing where we only run the install command if the binary is not found on the path.
+
 ## 27-04-2025
 
 Lots of time today to wrap some things up.

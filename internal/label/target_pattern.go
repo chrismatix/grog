@@ -75,6 +75,10 @@ func ParseTargetPattern(currentPackage string, pattern string) (TargetPattern, e
 	return TargetPattern{prefix: prefix, targetPattern: targetPattern, recursive: recursive}, nil
 }
 
+func GetMatchAllTargetPattern() TargetPattern {
+	return TargetPattern{prefix: "", recursive: true}
+}
+
 // Matches returns true if the given TargetLabel matches the pattern.
 func (p TargetPattern) Matches(t TargetLabel) bool {
 	// Package matching.

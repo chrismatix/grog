@@ -19,7 +19,7 @@ Read more in [Why grog?](https://grog.build/why-grog/)
 
 ## Installation
 
-TBD
+Install grog by
 
 ## Documentation
 

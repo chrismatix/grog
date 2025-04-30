@@ -23,14 +23,9 @@ TODO: We don't yet check that a parent package does not include inputs from chil
 
 // CheckTargetConstraints checks that the paths defined by each target are valid
 // logs any warnings on the way
-func CheckTargetConstraints(logger *zap.SugaredLogger, targetMap model.TargetMap) (errs []error) {
+func CheckTargetConstraints(_ *zap.SugaredLogger, targetMap model.TargetMap) (errs []error) {
 	// iterate over targets in alphabetical order for consistent logging
 	for _, target := range targetMap.TargetsAlphabetically() {
-		// warn if target has no inputs (re-runs every time)
-		if len(target.Inputs) == 0 && len(target.Deps) == 0 {
-			logger.Warnf("target %s has no inputs or dependencies causing it to re-run every time.", target.Label)
-		}
-
 		inputRelativeError := checkInputPathsRelative(target)
 		errs = append(errs, inputRelativeError...)
 

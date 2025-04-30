@@ -1,4 +1,4 @@
-amends "../../../../pkl/package.pkl"
+amends ".../pkl/package.pkl"
 
 targets {
   new {

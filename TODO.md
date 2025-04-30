@@ -6,6 +6,7 @@ Visia dog-food checklist:
 - [ ] Add filtering by tags
 - [ ] Working release flow
 - [ ] Stomp out ALL remaining potential deadlocks
+- [ ] Add info log statement for when we have loaded an image
 
 Other TODOs:
 
@@ -22,3 +23,4 @@ Other TODOs:
 - [ ] Add
 - [ ] Add runnable binary outputs
 - [ ] Add shell completions for commands that run targets
+- [ ] Record a brief terminal clip using tea's vhs tape

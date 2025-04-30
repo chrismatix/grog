@@ -10,10 +10,11 @@ import (
 type Target struct {
 	Label label.TargetLabel `json:"label"`
 
-	Command string              `json:"cmd"`
-	Deps    []label.TargetLabel `json:"deps,omitempty"`
-	Inputs  []string            `json:"inputs,omitempty"`
-	Outputs []Output            `json:"outputs,omitempty"`
+	Command  string              `json:"cmd"`
+	Deps     []label.TargetLabel `json:"deps,omitempty"`
+	Inputs   []string            `json:"inputs,omitempty"`
+	Outputs  []Output            `json:"outputs,omitempty"`
+	Platform *PlatformConfig     `json:"platform,omitempty"`
 
 	// Whether this target is selected for execution.
 	IsSelected bool `json:"is_selected,omitempty"`
@@ -21,6 +22,11 @@ type Target struct {
 	// ChangeHash is the combined hash of the target definition and its input files
 	ChangeHash  string `json:"change_hash,omitempty"`
 	HasCacheHit bool   `json:"has_cache_hit,omitempty"`
+}
+
+type PlatformConfig struct {
+	OS   []string `json:"os,omitempty" yaml:"os,omitempty" pkl:"os"`
+	Arch []string `json:"arch,omitempty" yaml:"arch,omitempty" pkl:"arch"`
 }
 
 func (t *Target) GetDepsString() []string {

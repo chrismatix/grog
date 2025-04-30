@@ -95,7 +95,7 @@ func (w *Walker) Walk(
 			continue
 		}
 
-		doneCh := make(chan Completion)
+		doneCh := make(chan Completion, 1)
 		readyCh := make(chan bool)
 		cancelCh := make(chan struct{})
 
@@ -265,14 +265,10 @@ func (w *Walker) vertexRoutine(
 		// call the callback
 		cached, err := w.walkCallback(ctx, target, depsCached)
 		if err != nil {
-			go func() {
-				// don't account for cache hits in errors
-				info.done <- Completion{IsSuccess: false, Err: err}
-			}()
+			// don't account for cache hits in errors
+			info.done <- Completion{IsSuccess: false, Err: err}
 		} else {
-			go func() {
-				info.done <- Completion{IsSuccess: true, Err: nil, HasCacheHit: depsCached && cached}
-			}()
+			info.done <- Completion{IsSuccess: true, Err: nil, HasCacheHit: depsCached && cached}
 		}
 		return
 	}

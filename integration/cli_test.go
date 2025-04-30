@@ -53,6 +53,7 @@ type TestCase struct {
 	// Names must be unique as they determine the fixture file name
 	Name       string   `yaml:"name"`
 	Args       []string `yaml:"args"`
+	EnvVars    []string `yaml:"env_vars"`
 	ExpectFail bool     `yaml:"expect_fail"`
 }
 
@@ -87,10 +88,10 @@ func TestCliArgs(t *testing.T) {
 		t.Run(tt.Name, func(t *testing.T) {
 
 			// Clear repository cache
-			output, err := runBinary([]string{"clean"}, tt.Repo)
+			output, err := runBinary([]string{"clean"}, tt.Repo, []string{})
 			if err != nil {
 				t.Fatalf(
-					"could not run `grog clean` on repo %s: %v\nCommand output: %s",
+					"could not run `grog clean` on repo %s: %v\nCommand output:\n%s",
 					tt.Repo,
 					err,
 					output)
@@ -107,7 +108,7 @@ func TestCliArgs(t *testing.T) {
 
 				t.Run(tc.Name, func(t *testing.T) {
 
-					output, err = runBinary(tc.Args, tt.Repo)
+					output, err = runBinary(tc.Args, tt.Repo, tc.EnvVars)
 
 					if err != nil && !tc.ExpectFail {
 						fmt.Printf("Command ouput: %s\n", output)
@@ -126,7 +127,7 @@ func TestCliArgs(t *testing.T) {
 
 					expected, err := loadFixture(t, tc.Name)
 					if err != nil {
-						t.Fatalf("could not load fixture %s: %v\ncommand output:%s", tc.Name, err, actual)
+						t.Fatalf("could not load fixture %s: %v\ncommand output:\n%s", tc.Name, err, actual)
 					}
 
 					if !reflect.DeepEqual(actual, expected) {
@@ -155,7 +156,7 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func runBinary(args []string, repoPath string) ([]byte, error) {
+func runBinary(args []string, repoPath string, extraEnvVars []string) ([]byte, error) {
 	repoPath = filepath.Join("./integration/test_repos", repoPath)
 
 	// Debug print the command invocation
@@ -171,6 +172,9 @@ func runBinary(args []string, repoPath string) ([]byte, error) {
 	}
 	cmd.Env = append(os.Environ(), "GOCOVERDIR="+coverDir)
 	cmd.Env = append(cmd.Env, "GROG_DISABLE_TIME_LOGGING=true")
+	for _, envVar := range extraEnvVars {
+		cmd.Env = append(cmd.Env, envVar)
+	}
 
 	// Uncomment to enable debug logging
 	// TODO move to makefile flag

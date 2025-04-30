@@ -1,0 +1,2 @@
+INFO: Selected 5 targets (2 packages loaded, 5 targets configured).
+INFO: Build completed successfully. 5 targets completed (3 cache hits).

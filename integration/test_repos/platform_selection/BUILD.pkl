@@ -1,0 +1,34 @@
+amends ".../pkl/package.pkl"
+
+targets {
+  new {
+    name = "os_guard"
+    cmd = "echo 'hello world'"
+    platform {
+      os {
+        "made-up-os"
+      }
+    }
+  }
+
+  // Bar depends on foo and selecting it should fail if we cannot
+  // build foo due to a platform mismatch
+  new {
+    name = "bar"
+    cmd = "echo 'hello world'"
+    deps {
+      ":os_guard"
+     }
+  }
+
+  new {
+    name = "arch_guard"
+    inputs { "src/*.txt" }
+    cmd = "echo 'hello world'"
+    platform {
+      arch {
+        "made-up-arch"
+      }
+    }
+  }
+}

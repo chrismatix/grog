@@ -1,6 +1,16 @@
 module package
 
-import "target.pkl"
+import "platform.pkl"
+
+class Target {
+  name: String
+  cmd: String
+  deps: Listing<String>(isDistinct)
+  inputs:  Listing<String>(isDistinct)
+  outputs: Listing<String>(isDistinct)
+
+  platform: platform?
+}
 
 
-targets: Listing<target.Target>(isDistinctBy((it) -> it.name))
+targets: Listing<Target>(isDistinctBy((it) -> it.name))

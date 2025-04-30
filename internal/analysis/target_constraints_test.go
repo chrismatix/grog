@@ -64,13 +64,13 @@ func TestCheckPathConstraints(t *testing.T) {
 			expectErrorCount:   0,
 		},
 		{
-			name: "target without inputs or dependencies generates warning",
+			name: "target without inputs or dependencies does NOT generate warnings",
 			targetMap: model.TargetMap{
 				label.TL("", "target1"): &model.Target{
 					Label: label.TL("", "target1"),
 				},
 			},
-			expectWarningCount: 1,
+			expectWarningCount: 0,
 			expectErrorCount:   0,
 		},
 		{

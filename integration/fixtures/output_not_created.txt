@@ -1,4 +1,3 @@
-WARN: target //:output_not_created has no inputs or dependencies causing it to re-run every time.
 INFO: Selected 1 target (1 package loaded, 1 target configured).
 ERROR: Build failed. 0 targets completed (0 cache hits), 1 failed:
 ---------------------------------

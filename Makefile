@@ -21,8 +21,8 @@ unit-test:
 test: build-with-coverage
 	@rm -fr coverdata
 	@mkdir -p coverdata/unit coverdata/integration
-	@gotestsum -- -cover ./internal/... -test.gocoverdir="$$(pwd)/coverdata/unit"
-	@gotestsum ./integration/... $(UPDATE_FLAG) $(UPDATE_ALL_FLAG)
+	@gotestsum -- -timeout 60s -cover ./internal/... -test.gocoverdir="$$(pwd)/coverdata/unit"
+	@gotestsum -- -timeout 60s ./integration/... $(UPDATE_FLAG) $(UPDATE_ALL_FLAG)
 	@go tool covdata percent -i=coverdata/integration,coverdata/unit
 	@go tool covdata textfmt -i=coverdata/integration,coverdata/unit -o coverdata/coverage.out
 

@@ -1,0 +1,4 @@
+module platform
+
+os: Listing<String>
+arch: Listing<String>

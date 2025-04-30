@@ -38,8 +38,20 @@ func (pl PklLoader) Load(ctx context.Context, filePath string) (PackageDTO, bool
 		return pkg, false, fmt.Errorf("found a BUILD.pkl file but the `pkl` cli is not available. " +
 			"Please install it to use pkl files: https://pkl-lang.org/main/current/pkl-cli/index.html#installation")
 	}
-	if err = evaluator.EvaluateModule(ctx, pkl.FileSource(filePath), &pkg); err != nil {
-		return pkg, false, err
+
+	var evalErr error
+	// pkl evaluator can panic so we need to be able to recover
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				evalErr = fmt.Errorf("panic occurred while evaluating module: %v", r)
+			}
+		}()
+		evalErr = evaluator.EvaluateModule(ctx, pkl.FileSource(filePath), &pkg)
+	}()
+
+	if evalErr != nil {
+		return pkg, false, evalErr
 	}
 
 	return pkg, true, nil

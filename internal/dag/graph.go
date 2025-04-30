@@ -5,8 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"go.uber.org/zap"
+	"grog/internal/config"
 	"grog/internal/label"
 	"grog/internal/model"
+	"slices"
+	"strings"
 )
 
 // DirectedTargetGraph represents a directed graph of build targets.
@@ -163,13 +166,23 @@ func (g *DirectedTargetGraph) HasCycle() bool {
 	return false // No cycle detected in the entire graph
 }
 
-// SelectTargets sets targets as selected and returns the number of selected targets.
-func (g *DirectedTargetGraph) SelectTargets(pattern label.TargetPattern, isTest bool) int {
+// SelectTargets sets targets as selected
+// returns the number of selected targets, the number of targets skipped due to platform mismatch
+// and an error if a selected target depends on a target that does not match the platform
+func (g *DirectedTargetGraph) SelectTargets(pattern label.TargetPattern, isTest bool) (int, int, error) {
+
+	platformSkipped := 0
 	for _, target := range g.vertices {
 		// Match pattern and test flag
 		if pattern.Matches(target.Label) && (isTest == target.IsTest()) {
+			if !targetMatchesPlatform(target) {
+				platformSkipped += 1
+				continue // Skip targets that don't match the platform
+			}
 			target.IsSelected = true
-			g.selectAllAncestors(target)
+			if err := g.selectAllAncestors([]string{target.Label.String()}, target); err != nil {
+				return 0, 0, err
+			}
 		}
 	}
 
@@ -181,23 +194,41 @@ func (g *DirectedTargetGraph) SelectTargets(pattern label.TargetPattern, isTest 
 		}
 	}
 
-	return selectedCount
+	return selectedCount, platformSkipped, nil
 }
 
 // selectAllAncestors recursively selects all ancestors of the given target
 // and returns the number of selected targets.
-func (g *DirectedTargetGraph) selectAllAncestors(target *model.Target) {
+func (g *DirectedTargetGraph) selectAllAncestors(depChain []string, target *model.Target) error {
 	for _, ancestor := range g.inEdges[target] {
+		depChain = append(depChain, ancestor.Label.String())
+		if !targetMatchesPlatform(ancestor) {
+			depChainStr := strings.Join(depChain[1:], " -> ")
+			return fmt.Errorf("could not select target %s because it depends on %s, which does not match the platform %s",
+				depChain[0], depChainStr, config.Global.GetPlatform())
+		}
+
 		ancestor.IsSelected = true
-		g.selectAllAncestors(ancestor)
+		if err := g.selectAllAncestors(depChain, ancestor); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-// SelectAllTargets selects all targets in the graphs
-func (g *DirectedTargetGraph) SelectAllTargets() {
-	for _, target := range g.vertices {
-		target.IsSelected = true
+func targetMatchesPlatform(target *model.Target) bool {
+	if target.Platform == nil {
+		return true
 	}
+
+	if len(target.Platform.OS) != 0 && !slices.Contains(target.Platform.OS, config.Global.OS) {
+		return false
+	}
+	if len(target.Platform.Arch) != 0 && !slices.Contains(target.Platform.Arch, config.Global.Arch) {
+		return false
+	}
+
+	return true
 }
 
 // ToJSON serializes the directed graph to a JSON representation for debugging.

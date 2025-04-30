@@ -23,6 +23,11 @@ type WorkspaceConfig struct {
 
 	// Docker
 	Docker DockerConfig `mapstructure:"docker"`
+
+	// Environment
+	// Not officially supported in grog.toml but exposed via env variables
+	OS   string `mapstructure:"os"`
+	Arch string `mapstructure:"arch"`
 }
 
 var Global WorkspaceConfig
@@ -54,15 +59,23 @@ func (w WorkspaceConfig) GetCurrentPackage() (string, error) {
 		return "", fmt.Errorf("failed to get relative path: %w", err)
 	}
 
+	if rel == "." {
+		// Since we are returning the package we omit the dot prefix.
+		return "", nil
+	}
+
 	return rel, nil
+}
+
+func (w WorkspaceConfig) GetPlatform() string {
+	return fmt.Sprintf("%s/%s", w.OS, w.Arch)
 }
 
 type CacheBackend string
 
 const (
-	LocalCacheBackend CacheBackend = "" // Default to local cache
-	GCSCacheBackend   CacheBackend = "gcs"
-	S3CacheBackend    CacheBackend = "s3"
+	GCSCacheBackend CacheBackend = "gcs"
+	S3CacheBackend  CacheBackend = "s3"
 )
 
 type CacheConfig struct {

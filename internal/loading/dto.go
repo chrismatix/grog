@@ -1,5 +1,7 @@
 package loading
 
+import "grog/internal/model"
+
 // TargetDTO is used for deserializing a target in a loader.
 // The target is used internally is in model.Target.
 type TargetDTO struct {
@@ -8,6 +10,13 @@ type TargetDTO struct {
 	Deps    []string `json:"deps,omitempty" yaml:"deps,omitempty" pkl:"deps"`
 	Inputs  []string `json:"inputs,omitempty" yaml:"inputs,omitempty" pkl:"inputs"`
 	Outputs []string `json:"outputs,omitempty" yaml:"outputs,omitempty" pkl:"outputs"`
+
+	Platform *model.PlatformConfig `json:"platform,omitempty" yaml:"platform,omitempty" pkl:"platform"`
+}
+
+type PlatformConfigDTO struct {
+	Os   []string `json:"os,omitempty" yaml:"os,omitempty" pkl:"os"`
+	Arch []string `json:"arch,omitempty" yaml:"arch,omitempty" pkl:"arch"`
 }
 
 // PackageDTO is used for deserializing a package in a loader.

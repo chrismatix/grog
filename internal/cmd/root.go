@@ -9,6 +9,7 @@ import (
 	"grog/internal/console"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -109,20 +110,23 @@ func initConfig() error {
 	// Set defaults here
 	viper.SetDefault("fail_fast", false)
 	viper.SetDefault("log_level", "info")
-
-	// Read config
-	logger := console.InitLogger()
+	viper.SetDefault("os", runtime.GOOS)
+	viper.SetDefault("arch", runtime.GOARCH)
 
 	// Read in config
 	if err := viper.ReadInConfig(); err != nil {
 		return err
 	}
-	logger.Debugf("Using config file: %s", viper.ConfigFileUsed())
 
 	// Merge all config sources into struct
 	if err := viper.Unmarshal(&config.Global); err != nil {
 		return fmt.Errorf("Failed to parse config: %v\n", err)
 	}
+
+	// Read config
+	logger := console.InitLogger()
+	logger.Debugf("Using config file: %s", viper.ConfigFileUsed())
+	logger.Debugf("Running on %s", config.Global.GetPlatform())
 
 	return nil
 }

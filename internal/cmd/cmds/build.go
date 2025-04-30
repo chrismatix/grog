@@ -3,6 +3,7 @@ package cmds
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -35,28 +36,22 @@ var BuildCmd = &cobra.Command{
 			logger.Fatalf("could not get current package: %v", err)
 		}
 
+		var targetPattern label.TargetPattern
 		if len(args) > 0 {
-			targetPattern, err := label.ParseTargetPattern(currentPackagePath, args[0])
+			targetPattern, err = label.ParseTargetPattern(currentPackagePath, args[0])
 			if err != nil {
 				logger.Fatalf("could not parse target pattern: %v", err)
 			}
-			runBuild(
-				targetPattern,
-				true,
-				false)
 		} else {
-			// No target pattern: build all targets
-			runBuild(
-				label.TargetPattern{},
-				false,
-				false,
-			)
+			targetPattern = label.GetMatchAllTargetPattern()
 		}
+
+		runBuild(targetPattern, false)
 	},
 }
 
 // runBuild runs the build/test command with the given target pattern
-func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest bool) {
+func runBuild(targetPattern label.TargetPattern, isTest bool) {
 	startTime := time.Now()
 	logger := console.InitLogger()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -85,21 +80,36 @@ func runBuild(targetPattern label.TargetPattern, hasTargetPattern bool, isTest b
 		logger.Fatalf("could not build graph: %v", err)
 	}
 
-	if hasTargetPattern {
-		selectedCount := graph.SelectTargets(targetPattern, isTest)
-		if selectedCount == 0 {
-			logger.Fatalf("could not find any targets matching %s", targetPattern.String())
-		}
+	// Select targets based on the target pattern.
+	selectedCount, skippedCount, err := graph.SelectTargets(targetPattern, isTest)
+	if err != nil {
+		logger.Fatalf("target selection failed: %v", err)
+	}
 
-		logger.Infof("Selected %s (%s loaded, %s configured).",
+	if selectedCount == 0 {
+		// Fail if no targets were selected
+		errString := fmt.Sprintf("could not find any targets matching %s", targetPattern.String())
+		if skippedCount > 0 {
+			errString += fmt.Sprintf(" (%s not matching %s host)",
+				console.FCountTargets(skippedCount), config.Global.GetPlatform())
+		}
+		logger.Fatalf(errString)
+	}
+
+	infoStr := fmt.Sprintf("Selected %s (%s loaded, %s configured).",
+		console.FCountTargets(selectedCount),
+		console.FCountPkg(numPackages),
+		console.FCountTargets(len(targets)))
+	if skippedCount > 0 {
+		infoStr = fmt.Sprintf("Selected %s (%s loaded, %s configured, %s not matching %s host).",
 			console.FCountTargets(selectedCount),
 			console.FCountPkg(numPackages),
-			console.FCountTargets(len(targets)))
-	} else {
-		// No target pattern: build all targets
-		graph.SelectAllTargets()
-		logger.Infof("Selected all targets (%s loaded, %s configured).", console.FCountPkg(numPackages), console.FCountTargets(len(targets)))
+			console.FCountTargets(len(targets)),
+			console.FCountTargets(skippedCount),
+			config.Global.GetPlatform())
 	}
+
+	logger.Infof(infoStr)
 
 	// Listen for SIGTERM or SIGINT to cancel the context
 	signalChan := make(chan os.Signal, 1)

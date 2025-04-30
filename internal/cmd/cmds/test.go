@@ -19,22 +19,16 @@ var TestCmd = &cobra.Command{
 			logger.Fatalf("could not get current package: %v", err)
 		}
 
+		var targetPattern label.TargetPattern
 		if len(args) > 0 {
-			targetPattern, err := label.ParseTargetPattern(currentPackagePath, args[0])
+			targetPattern, err = label.ParseTargetPattern(currentPackagePath, args[0])
 			if err != nil {
 				logger.Fatalf("could not parse target pattern: %v", err)
 			}
-			runBuild(
-				targetPattern,
-				true,
-				true)
 		} else {
-			// No target pattern: build all targets
-			runBuild(
-				label.TargetPattern{},
-				false,
-				true,
-			)
+			targetPattern = label.GetMatchAllTargetPattern()
 		}
+
+		runBuild(targetPattern, true)
 	},
 }

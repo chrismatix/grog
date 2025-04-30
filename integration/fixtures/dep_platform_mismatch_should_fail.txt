@@ -1,0 +1,1 @@
+FATAL: target selection failed: could not select target //:bar because it depends on //:os_guard, which does not match the platform darwin/arm64
