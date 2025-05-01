@@ -48,19 +48,31 @@ build:
 build-with-coverage:
 	@go build -cover -o dist/grog $(LD_FLAGS)
 
-# Build release targets for static binaries across architectures.
-# CGO_ENABLED=0 ensures static linking.
-release: clean
-	@echo "Building static binaries"
-	@mkdir -p dist
-	# Linux binaries
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build $(LD_FLAGS) -o dist/grog-linux-amd64
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build $(LD_FLAGS) -o dist/grog-linux-arm64
+release-pkl:
+	@cd pkl && VERSION=$(VERSION) pkl project package
 
-	# MacOS
-	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build $(LD_FLAGS) -o dist/grog-darwin-amd64
-	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build $(LD_FLAGS) -o dist/grog-darwin-arm64
+
+# Build release targets for static binaries across architectures.
+release: clean
+	@echo "Building release binaries"
+	@mkdir -p dist
+
+	$(MAKE) release-build GOOS=linux GOARCH=amd64
+	$(MAKE) release-build GOOS=linux GOARCH=arm64
+	$(MAKE) release-build GOOS=darwin GOARCH=amd64
+	$(MAKE) release-build GOOS=darwin GOARCH=arm64
+	$(MAKE) release-build GOOS=windows GOARCH=amd64
+
+	$(MAKE) release-pkl
+
+	@shasum -a 256 dist/* > dist/SHASUMS256.txt
+
 	@echo "Release build completed."
+
+# CGO_ENABLED=0 ensures static linking.
+release-build:
+	@echo "Building for $(GOOS)/$(GOARCH)"
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(LD_FLAGS) -o dist/grog-$(GOOS)-$(GOARCH)$(if $(findstring windows,$(GOOS)),.exe,)
 
 # Clean built binaries
 clean:

@@ -16,6 +16,8 @@ type Target struct {
 	Outputs  []Output            `json:"outputs,omitempty"`
 	Platform *PlatformConfig     `json:"platform,omitempty"`
 
+	// BinOutput is always a path to a binary file
+	BinOutput Output `json:"bin_output"`
 	// Whether this target is selected for execution.
 	IsSelected bool `json:"is_selected,omitempty"`
 
@@ -27,6 +29,17 @@ type Target struct {
 type PlatformConfig struct {
 	OS   []string `json:"os,omitempty" yaml:"os,omitempty" pkl:"os"`
 	Arch []string `json:"arch,omitempty" yaml:"arch,omitempty" pkl:"arch"`
+}
+
+func (t *Target) AllOutputs() []Output {
+	if t.HasBinOutput() {
+		return append(t.Outputs, t.BinOutput)
+	}
+	return t.Outputs
+}
+
+func (t *Target) HasBinOutput() bool {
+	return t.BinOutput.IsSet()
 }
 
 func (t *Target) GetDepsString() []string {
@@ -51,7 +64,7 @@ func (t *Target) IsTest() bool {
 
 func (t *Target) FileOutputs() []string {
 	var filePaths []string
-	for _, output := range t.Outputs {
+	for _, output := range t.AllOutputs() {
 		if output.IsFile() {
 			// Identifier will be the path of the file
 			filePaths = append(filePaths, output.Identifier)
@@ -62,7 +75,7 @@ func (t *Target) FileOutputs() []string {
 
 func (t *Target) OutputDefinitions() []string {
 	var definitions []string
-	for _, output := range t.Outputs {
+	for _, output := range t.AllOutputs() {
 		// String() will return the full output definition as specified by the user
 		definitions = append(definitions, output.String())
 	}

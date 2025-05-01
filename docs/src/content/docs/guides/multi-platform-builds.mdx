@@ -1,0 +1,37 @@
+---
+title: Multi-platform Builds
+description: Learn how to build for multiple platforms using Grog's platform selectors.
+---
+
+There may be scenarios where you want to build outputs for different platforms or operating systems.
+Say, for instance, that you want create to create an arm64 and an amd64 docker image as part of your build CI.
+There are two ways of tackling this problem:
+
+1. Create a multi-platform build target: Make your `cmd` script output two different build targets.
+2. Create one build target for each platform and run them on separate hosts.
+
+We are actively working on supporting `1.` via automatic build virtualization, but for now this is a manual process.
+For the second option, however, there is a tailored feature that is presented in the next section.
+
+## Platform Selectors
+
+For each build target Grog allows you to specify a platform selector using the `platform` field.
+Specifying a platform selector will change Grog's target selection such that if a target does not match your hosts platform it will be effectively invisible.
+
+Take, for instance, the following build target:
+
+```yaml
+targets:
+  - name: target_a
+    cmd: ...
+    platform:
+      os:
+        - linux
+        - darwin
+      arch:
+        - amd64
+```
+
+If you run all build targets, Grog will automatically skip `target_a` if your host is not either `linux` or `darwin` while also having the `amd64` architecture.
+But what happens if we add a `target_b` that depends on `target_a`?
+In this case grog will fail if you try to build `target_b` when you cannot build `target_a`.

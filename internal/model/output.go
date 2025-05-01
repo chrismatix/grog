@@ -22,6 +22,10 @@ func (o Output) String() string {
 	return o.Type + "::" + o.Identifier
 }
 
+func (o Output) IsSet() bool {
+	return o.Identifier != ""
+}
+
 func (o Output) IsFile() bool {
 	return o.Type == "file"
 }

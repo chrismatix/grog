@@ -1,0 +1,41 @@
+---
+title: Bootstrapping
+description: An important aspect of building a reproducible build process is setting up the build tooling itself.
+---
+
+An important aspect of building a reproducible build process is installing the necessary tool chain of compilers, linters etc.
+Grog provides two simple mechanisms to facilitate that process that we will discuss below:
+
+- `Binary Outputs`: Targets that output an executable file can be used as a tool to build other targets.
+
+  - **Advantage:** Allows caching and better reproducibility between hosts.
+  - **Disadvantage:** Many tools do not come as single portable binaries.
+
+- `Bin-path Outputs`: An output type that only checks if a tool is already installed on the host platform.
+  - **Advantage:** Easy to set up as you can just use the installation scripts as specified by the tool.
+  - **Disadvantage:** Worse in terms of reproducibility as we cannot verify the version or build of the tool.
+
+## Binary Outputs
+
+Each target can register a single `bin_output` field that has to be of type file.
+When the build completes grog will mark this file as executable and expose it dependant targets using a shell command.
+The following package illustrates how this works:
+
+```yaml
+targets:
+  - name: some_build_target
+    inputs:
+      - requirements.txt
+    deps:
+      - :a_bin_tool
+    cmd: |
+      # Using the bin tool
+      $(bin :a_bin_tool) inputs
+
+  # You can alos run that binary directly by running:
+  # grog run //package:a_bin_tool -- arg1 arg2
+  - name: a_bin_tool
+    cmd: |
+      echo "I am a binary" >> dist/bin
+    bin_output: dist/bin
+```

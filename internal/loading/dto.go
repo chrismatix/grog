@@ -5,11 +5,12 @@ import "grog/internal/model"
 // TargetDTO is used for deserializing a target in a loader.
 // The target is used internally is in model.Target.
 type TargetDTO struct {
-	Name    string   `json:"name" yaml:"name" pkl:"name"`
-	Command string   `json:"cmd" yaml:"cmd" pkl:"cmd"`
-	Deps    []string `json:"deps,omitempty" yaml:"deps,omitempty" pkl:"deps"`
-	Inputs  []string `json:"inputs,omitempty" yaml:"inputs,omitempty" pkl:"inputs"`
-	Outputs []string `json:"outputs,omitempty" yaml:"outputs,omitempty" pkl:"outputs"`
+	Name      string   `json:"name" yaml:"name" pkl:"name"`
+	Command   string   `json:"cmd" yaml:"cmd" pkl:"cmd"`
+	Deps      []string `json:"deps,omitempty" yaml:"deps,omitempty" pkl:"deps"`
+	Inputs    []string `json:"inputs,omitempty" yaml:"inputs,omitempty" pkl:"inputs"`
+	Outputs   []string `json:"outputs,omitempty" yaml:"outputs,omitempty" pkl:"outputs"`
+	BinOutput string   `json:"bin_output" yaml:"bin_output" pkl:"bin_output"`
 
 	Platform *model.PlatformConfig `json:"platform,omitempty" yaml:"platform,omitempty" pkl:"platform"`
 }

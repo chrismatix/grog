@@ -112,6 +112,7 @@ func (d *DockerOutputHandler) Load(ctx context.Context, target model.Target, out
 		return fmt.Errorf("failed to write image %q to Docker daemon: %w", imageName, err)
 	}
 	logger.Debugf("successfully loaded Docker image %s (written tag: %s)", imageName, writtenTag)
+	logger.Infof("Loaded image %s (tar)", imageName)
 
 	return nil
 }

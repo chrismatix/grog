@@ -120,7 +120,7 @@ func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg Packa
 			deps = append(deps, depLabel)
 		}
 
-		// root package should be understood as ""
+		// root package is always encoded as ""
 		if packagePath == "." {
 			packagePath = ""
 		}
@@ -139,17 +139,30 @@ func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg Packa
 			return nil, fmt.Errorf("failed to parse outputs for target %s: %w", targetLabel, err)
 		}
 
+		parsedBinOutput := model.Output{}
+		if target.BinOutput != "" {
+			parsedBinOutput, err = output.ParseOutput(target.BinOutput)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse bin output for target %s: %w", targetLabel, err)
+			}
+			if parsedBinOutput.IsFile() == false {
+				return nil, fmt.Errorf("bin output %s for target %s must be of type file",
+					target.BinOutput, targetLabel)
+			}
+		}
+
 		if _, ok := targets[targetLabel]; ok {
 			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", target.Name, pkg.SourceFilePath)
 		}
 
 		targets[targetLabel] = &model.Target{
-			Label:    targetLabel,
-			Command:  target.Command,
-			Deps:     deps,
-			Inputs:   resolvedInputs,
-			Outputs:  parsedOutputs,
-			Platform: target.Platform,
+			Label:     targetLabel,
+			Command:   target.Command,
+			Deps:      deps,
+			Inputs:    resolvedInputs,
+			Outputs:   parsedOutputs,
+			BinOutput: parsedBinOutput,
+			Platform:  target.Platform,
 		}
 	}
 

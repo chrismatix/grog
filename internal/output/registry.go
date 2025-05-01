@@ -66,7 +66,7 @@ func (r *Registry) HasCacheHit(ctx context.Context, target model.Target) (bool, 
 		return false, nil
 	}
 
-	for _, outputRef := range target.Outputs {
+	for _, outputRef := range target.AllOutputs() {
 		handler := r.mustGetHandler(outputRef.Type)
 		handlerCacheHit, handlerErr := handler.Has(ctx, target, outputRef)
 		if handlerErr != nil {
@@ -86,7 +86,7 @@ func (r *Registry) WriteOutputs(ctx context.Context, target model.Target) error 
 		return err
 	}
 
-	for _, outputRef := range target.Outputs {
+	for _, outputRef := range target.AllOutputs() {
 		if handlerErr := r.mustGetHandler(outputRef.Type).Write(ctx, target, outputRef); handlerErr != nil {
 			return handlerErr
 		}
@@ -96,7 +96,7 @@ func (r *Registry) WriteOutputs(ctx context.Context, target model.Target) error 
 }
 
 func (r *Registry) LoadOutputs(ctx context.Context, target model.Target) error {
-	for _, outputRef := range target.Outputs {
+	for _, outputRef := range target.AllOutputs() {
 		if err := r.mustGetHandler(outputRef.Type).Load(ctx, target, outputRef); err != nil {
 			return err
 		}

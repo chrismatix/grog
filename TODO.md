@@ -2,19 +2,24 @@
 
 Visia dog-food checklist:
 
-- [ ] Add platform selectors
-- [ ] Add filtering by tags
+- [x] Add platform selectors
+- [x] Add info log statement for when we have loaded an image
+- [ ] Add `bin_output`
+- [ ] Add docker outputs (registry)
+- [ ] Add `binary-path` outputs
+- [ ] Add `$(bin //target)` shell expansion
+- [ ] Add `grog run` command
 - [ ] Working release flow
 - [ ] Stomp out ALL remaining potential deadlocks
-- [ ] Add info log statement for when we have loaded an image
 
 Other TODOs:
 
+- [ ] Add filtering by tags
 - [ ] Gzip the docker tarballs (?)
+- [ ] Add `grog info`
 - [ ] Only replace outputs when they have changed -> Will require tracking hashes in a separate, small file
 - [ ] Allow running target labels relative to the current directory
 - [ ] Add s3 caching option
-- [ ] Add docker outputs (registry)
 - [ ] The Output Registry should warn when a target is overwriting another's outputs
 - [ ] Logging: Create a diagnotics module that we attach to the context and that - on failure - will always write all the diagnostics to the grog root
 - [ ] Docs: Strong README

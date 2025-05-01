@@ -1,0 +1,11 @@
+# $(bin //pkg:target) returns the path to the target binary
+bin() {
+    case "$1" in
+    {{- range $label, $path := .BinToolMap }}
+        "{{$label}}") echo "{{$path}}" ;;
+    {{- end }}
+    *) echo "Error: unknown bin tool '$1'. Did you add '$1' to the targets dependencies?" >&2; exit 1 ;;
+    esac
+}
+
+{{ .UserCommand }}

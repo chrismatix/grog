@@ -30,6 +30,7 @@ func hashTargetDefinition(target model.Target) (string, error) {
 	_, err = hasher.WriteString(sorted(target.Inputs))
 	_, err = hasher.WriteString(sorted(target.OutputDefinitions()))
 	_, err = hasher.WriteString(sorted(target.GetDepsString()))
+	_, err = hasher.WriteString(config.Global.GetPlatform())
 
 	if err != nil {
 		return "", err

@@ -4,10 +4,11 @@ import "platform.pkl"
 
 class Target {
   name: String
-  cmd: String
+  cmd: String?
   deps: Listing<String>(isDistinct)
   inputs:  Listing<String>(isDistinct)
   outputs: Listing<String>(isDistinct)
+  bin_output: String?
 
   platform: platform?
 }

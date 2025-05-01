@@ -1,0 +1,35 @@
+targets:
+  - name: uses_bin_tool
+    deps:
+      - :defines_bin_tool
+    #      - :a_bin_path_tool
+    cmd: |
+      # Using the bin tool
+      $(bin :defines_bin_tool) foo
+
+  # A target can only produce a single binary
+  # You can run that binary by running:
+  # grog run //package:a_bin_tool -- arg1 arg2
+  - name: defines_bin_tool
+    cmd: |
+      mkdir -p dist
+
+      cat > dist/bin << 'EOF'
+      #!/bin/bash
+      if [[ "$1" != "foo" ]]; then
+        exit 1
+      fi
+      EOF
+
+    bin_output: dist/bin
+
+    # Installs one more tools on the host machine
+  # Cache-hit when we find the binary on the path
+  # -> These cannot be cached remotely
+#  - name: a_bin_path_tool
+#    cmd: curl -LsSf https://astral.sh/uv/install.sh | sh
+#
+#      brew install grog
+#    outputs:
+#      - bin-path::uv
+#      - bin-path::grog
