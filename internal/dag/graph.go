@@ -20,26 +20,26 @@ type DirectedTargetGraph struct {
 
 	// outEdges maps a vertex to its list of outgoing vertices,
 	// representing the directed outEdges in the graph.
-	outEdges map[*model.Target][]*model.Target
+	outEdges map[label.TargetLabel][]*model.Target
 	// inEdges map a vertex to its list of incoming vertices,
 	// representing the directed inEdges in the graph.
-	inEdges map[*model.Target][]*model.Target
+	inEdges map[label.TargetLabel][]*model.Target
 }
 
 // NewDirectedGraph creates and initializes a new directed graph.
 func NewDirectedGraph() *DirectedTargetGraph {
 	return &DirectedTargetGraph{
 		vertices: make(model.TargetMap),
-		outEdges: make(map[*model.Target][]*model.Target),
-		inEdges:  make(map[*model.Target][]*model.Target),
+		outEdges: make(map[label.TargetLabel][]*model.Target),
+		inEdges:  make(map[label.TargetLabel][]*model.Target),
 	}
 }
 
 func NewDirectedGraphFromMap(targetMap model.TargetMap) *DirectedTargetGraph {
 	return &DirectedTargetGraph{
 		vertices: targetMap,
-		outEdges: make(map[*model.Target][]*model.Target),
-		inEdges:  make(map[*model.Target][]*model.Target),
+		outEdges: make(map[label.TargetLabel][]*model.Target),
+		inEdges:  make(map[label.TargetLabel][]*model.Target),
 	}
 }
 
@@ -47,8 +47,8 @@ func NewDirectedGraphFromMap(targetMap model.TargetMap) *DirectedTargetGraph {
 func NewDirectedGraphFromTargets(targets ...*model.Target) *DirectedTargetGraph {
 	return &DirectedTargetGraph{
 		vertices: model.TargetMapFromTargets(targets...),
-		outEdges: make(map[*model.Target][]*model.Target),
-		inEdges:  make(map[*model.Target][]*model.Target),
+		outEdges: make(map[label.TargetLabel][]*model.Target),
+		inEdges:  make(map[label.TargetLabel][]*model.Target),
 	}
 }
 
@@ -82,8 +82,8 @@ func (g *DirectedTargetGraph) AddEdge(from, to *model.Target) error {
 	if !g.hasVertex(from) || !g.hasVertex(to) {
 		return errors.New("both vertices must exist in the graph")
 	}
-	g.outEdges[from] = append(g.outEdges[from], to)
-	g.inEdges[to] = append(g.inEdges[to], from)
+	g.outEdges[from.Label] = append(g.outEdges[from.Label], to)
+	g.inEdges[to.Label] = append(g.inEdges[to.Label], from)
 	return nil
 }
 
@@ -93,7 +93,7 @@ func (g *DirectedTargetGraph) GetInEdges(target *model.Target) ([]*model.Target,
 	if !g.hasVertex(target) {
 		return nil, errors.New("vertex not found")
 	}
-	return g.inEdges[target], nil
+	return g.inEdges[target.Label], nil
 }
 
 // GetOutEdges returns a list of vertices pointing from the given vertex.
@@ -102,14 +102,14 @@ func (g *DirectedTargetGraph) GetOutEdges(target *model.Target) ([]*model.Target
 	if !g.hasVertex(target) {
 		return nil, errors.New("vertex not found")
 	}
-	return g.outEdges[target], nil
+	return g.outEdges[target.Label], nil
 }
 
 // GetDescendants returns a list of vertices that are descendants of the given vertex.
 // Recurses via the outEdges of each vertex.
 func (g *DirectedTargetGraph) GetDescendants(target *model.Target) []*model.Target {
 	var descendants []*model.Target
-	for _, descendant := range g.outEdges[target] {
+	for _, descendant := range g.outEdges[target.Label] {
 		descendants = append(descendants, descendant)
 
 		// Recurse
@@ -140,7 +140,7 @@ func (g *DirectedTargetGraph) HasCycle() bool {
 	depthFirstSearch = func(target *model.Target) bool {
 		visited[target] = 1 // Mark as visiting
 
-		for _, neighbor := range g.outEdges[target] {
+		for _, neighbor := range g.outEdges[target.Label] {
 			if visited[neighbor] == 1 {
 				return true // Cycle detected
 			}
@@ -200,7 +200,7 @@ func (g *DirectedTargetGraph) SelectTargets(pattern label.TargetPattern, isTest 
 // selectAllAncestors recursively selects all ancestors of the given target
 // and returns the number of selected targets.
 func (g *DirectedTargetGraph) selectAllAncestors(depChain []string, target *model.Target) error {
-	for _, ancestor := range g.inEdges[target] {
+	for _, ancestor := range g.inEdges[target.Label] {
 		depChain = append(depChain, ancestor.Label.String())
 		if !targetMatchesPlatform(ancestor) {
 			depChainStr := strings.Join(depChain[1:], " -> ")
@@ -257,7 +257,7 @@ func (g *DirectedTargetGraph) ToJSON() (string, error) {
 	for from, toList := range g.outEdges {
 		for _, to := range toList {
 			graphJSON.Edges = append(graphJSON.Edges, Edge{
-				From: from.Label.String(),
+				From: from.String(),
 				To:   to.Label.String(),
 			})
 		}
@@ -295,7 +295,7 @@ func (g *DirectedTargetGraph) MarshalJSON() ([]byte, error) {
 	}
 
 	for from, toList := range g.outEdges {
-		fromLabel := from.Label
+		fromLabel := from
 		var toLabels []string
 		for _, to := range toList {
 			toLabels = append(toLabels, to.Label.String())

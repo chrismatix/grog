@@ -17,10 +17,10 @@ targets:
       cat > dist/bin << 'EOF'
       #!/bin/bash
       if [[ "$1" != "foo" ]]; then
+        echo "expected 'foo'"
         exit 1
       fi
       EOF
-
     bin_output: dist/bin
 
     # Installs one more tools on the host machine

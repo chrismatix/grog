@@ -1,11 +1,9 @@
 package cmds
 
 import (
-	"context"
 	"github.com/spf13/cobra"
 	"grog/internal/caching/backends"
 	"grog/internal/config"
-	"grog/internal/console"
 )
 
 var expunge bool
@@ -16,8 +14,8 @@ func GetCleanCmd() *cobra.Command {
 		Short: "Removes build outputs and clears the cache",
 		Long:  `Removes build outputs and clears the cache.`,
 		Run: func(cmd *cobra.Command, args []string) {
-			logger := console.InitLogger()
-			ctx := console.WithLogger(context.Background(), logger)
+			ctx, logger := setupCommand()
+
 			cache, err := backends.GetCacheBackend(ctx, config.Global.Cache)
 
 			if err != nil {

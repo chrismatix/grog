@@ -1,2 +1,3 @@
-INFO: Selected 1 target (2 packages loaded, 5 targets configured, 1 target not matching darwin/arm64 host).
+INFO: 2 packages loaded, 5 targets configured.
+INFO: Selected 1 target (1 target not matching test-os/test-arch host).
 INFO: Build completed successfully. 1 target completed (0 cache hits).

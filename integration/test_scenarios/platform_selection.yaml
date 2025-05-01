@@ -5,6 +5,11 @@ cases:
     args:
       - build
       - //pkg/...
+    env_vars:
+      # We are only setting the os and arch here to get at consistent warning
+      # output between different machines during testing
+      - "GROG_OS=test-os"
+      - "GROG_ARCH=test-arch"
 
   - name: select_by_os
     args:
@@ -32,3 +37,8 @@ cases:
       - build
       - :bar
     expect_fail: true
+    env_vars:
+      # We are only setting the os and arch here to get at consistent warning
+      # output between different machines during testing
+      - "GROG_OS=test-os"
+      - "GROG_ARCH=test-arch"

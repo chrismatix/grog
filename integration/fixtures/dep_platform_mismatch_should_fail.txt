@@ -1,1 +1,2 @@
-FATAL: target selection failed: could not select target //:bar because it depends on //:os_guard, which does not match the platform darwin/arm64
+INFO: 2 packages loaded, 5 targets configured.
+FATAL: target selection failed: could not select target //:bar because it depends on //:os_guard, which does not match the platform test-os/test-arch

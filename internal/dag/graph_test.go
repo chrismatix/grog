@@ -57,12 +57,12 @@ func TestDirectedTargetGraph_AddEdge(t *testing.T) {
 		t.Errorf("AddEdge should have returned an error for non-existent 'from' vertex")
 	}
 
-	if len(graph.outEdges[target1]) != 2 {
-		t.Errorf("Expected 2 outEdges from target1, got %d", len(graph.outEdges[target1]))
+	if len(graph.outEdges[target1.Label]) != 2 {
+		t.Errorf("Expected 2 outEdges from target1, got %d", len(graph.outEdges[target1.Label]))
 	}
 
-	if len(graph.inEdges[target2]) != 2 {
-		t.Errorf("Expected 2 inEdges to target2, got %d", len(graph.inEdges[target2]))
+	if len(graph.inEdges[target2.Label]) != 2 {
+		t.Errorf("Expected 2 inEdges to target2, got %d", len(graph.inEdges[target2.Label]))
 	}
 }
 
@@ -165,7 +165,7 @@ func TestDirectedTargetGraph_HasCycle(t *testing.T) {
 	}
 
 	// Remove one edge to break the cycle: target1 -> target2 -> target3
-	graph.outEdges[target3] = []*model.Target{}
+	graph.outEdges[target3.Label] = []*model.Target{}
 
 	// Check if there is a cycle
 	graph = NewDirectedGraph()

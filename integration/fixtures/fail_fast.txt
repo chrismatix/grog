@@ -1,4 +1,5 @@
-INFO: Selected 3 targets (1 package loaded, 3 targets configured).
+INFO: 1 package loaded, 3 targets configured.
+INFO: Selected 3 targets.
 ERROR: Build failed. 0 targets completed (0 cache hits), 1 failed:
 ---------------------------------
 ERROR: Target //:target_1 failed with exit code 1:

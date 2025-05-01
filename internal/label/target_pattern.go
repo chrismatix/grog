@@ -75,6 +75,10 @@ func ParseTargetPattern(currentPackage string, pattern string) (TargetPattern, e
 	return TargetPattern{prefix: prefix, targetPattern: targetPattern, recursive: recursive}, nil
 }
 
+func TargetPatternFromLabel(label TargetLabel) TargetPattern {
+	return TargetPattern{prefix: label.Package, targetPattern: label.Name, recursive: false}
+}
+
 func GetMatchAllTargetPattern() TargetPattern {
 	return TargetPattern{prefix: "", recursive: true}
 }

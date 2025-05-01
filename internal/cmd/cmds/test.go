@@ -3,7 +3,6 @@ package cmds
 import (
 	"github.com/spf13/cobra"
 	"grog/internal/config"
-	"grog/internal/console"
 	"grog/internal/label"
 )
 
@@ -13,7 +12,8 @@ var TestCmd = &cobra.Command{
 	Long:  `Loads the user configuration, checks which targets need to be rebuilt based on file hashes, builds the dependency graph, and executes targets.`,
 	Args:  cobra.MaximumNArgs(1), // Optional argument for target pattern
 	Run: func(cmd *cobra.Command, args []string) {
-		logger := console.InitLogger()
+		ctx, logger := setupCommand()
+
 		currentPackagePath, err := config.Global.GetCurrentPackage()
 		if err != nil {
 			logger.Fatalf("could not get current package: %v", err)
@@ -29,6 +29,8 @@ var TestCmd = &cobra.Command{
 			targetPattern = label.GetMatchAllTargetPattern()
 		}
 
-		runBuild(targetPattern, true)
+		graph := mustLoadGraph(ctx, logger)
+
+		runBuild(ctx, logger, targetPattern, graph, true)
 	},
 }

@@ -7,6 +7,7 @@ Available Commands:
   completion  Generate the autocompletion script for the specified shell
   graph       Outputs the target dependency graph
   help        Help about any command
+  run         Builds and runs a single target's binary output
   test        Loads the user configuration and executes test targets
   version     Print the version info
 

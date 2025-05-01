@@ -114,7 +114,7 @@ func (w *Walker) Walk(
 		go w.vertexRoutine(ctx, vertex, w.vertexInfoMap[vertex])
 
 		// start all routines with no dependencies immediately
-		if len(w.graph.inEdges[vertex]) == 0 {
+		if len(w.graph.inEdges[vertex.Label]) == 0 {
 			w.startTarget(vertex, true)
 		}
 	}
@@ -215,12 +215,12 @@ func (w *Walker) onComplete(target *model.Target, completion Completion) {
 
 	// Iterate over all dependants and send a ready message
 	// if their deps are satisfied
-	for _, dependant := range w.graph.outEdges[target] {
+	for _, dependant := range w.graph.outEdges[target.Label] {
 
 		// Check if dependant deps are satisfied
 		depsDone := true
 		depsCached := true
-		for _, dep := range w.graph.inEdges[dependant] {
+		for _, dep := range w.graph.inEdges[dependant.Label] {
 			depCompletion, ok := w.completions[dep]
 			if !ok || !depCompletion.IsSuccess {
 				depsDone = false

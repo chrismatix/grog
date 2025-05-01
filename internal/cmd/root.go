@@ -84,6 +84,7 @@ func init() {
 	// Register subcommands
 	RootCmd.AddCommand(cmds.BuildCmd)
 	RootCmd.AddCommand(cmds.TestCmd)
+	RootCmd.AddCommand(cmds.RunCmd)
 	RootCmd.AddCommand(cmds.GetCleanCmd())
 	RootCmd.AddCommand(cmds.VersionCmd)
 	RootCmd.AddCommand(cmds.GraphCmd)

@@ -1,11 +1,9 @@
 package cmds
 
 import (
-	"context"
 	"fmt"
 	"github.com/spf13/cobra"
 	"grog/internal/analysis"
-	"grog/internal/console"
 	"grog/internal/loading"
 	"grog/internal/model"
 )
@@ -18,10 +16,7 @@ var GraphCmd = &cobra.Command{
 	Use:   "graph",
 	Short: "Outputs the target dependency graph",
 	Run: func(cmd *cobra.Command, args []string) {
-		logger := console.InitLogger()
-		ctx, cancel := context.WithCancel(context.Background())
-		ctx = console.WithLogger(ctx, logger)
-		defer cancel()
+		ctx, logger := setupCommand()
 
 		packages, err := loading.LoadPackages(ctx)
 		if err != nil {

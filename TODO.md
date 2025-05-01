@@ -4,11 +4,11 @@ Visia dog-food checklist:
 
 - [x] Add platform selectors
 - [x] Add info log statement for when we have loaded an image
-- [ ] Add `bin_output`
+- [x] Add `bin_output`
+- [x] Add `$(bin //target)` shell expansion
 - [ ] Add docker outputs (registry)
 - [ ] Add `binary-path` outputs
-- [ ] Add `$(bin //target)` shell expansion
-- [ ] Add `grog run` command
+- [x] Add `grog run` command
 - [ ] Working release flow
 - [ ] Stomp out ALL remaining potential deadlocks
 
@@ -29,3 +29,4 @@ Other TODOs:
 - [ ] Add runnable binary outputs
 - [ ] Add shell completions for commands that run targets
 - [ ] Record a brief terminal clip using tea's vhs tape
+- [ ] Support running multiple targets at the same time

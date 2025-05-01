@@ -7,20 +7,20 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 	"grog/internal/analysis"
 	"grog/internal/caching"
 	"grog/internal/caching/backends"
 	"grog/internal/config"
 	"grog/internal/console"
+	"grog/internal/dag"
 	"grog/internal/execution"
 	"grog/internal/label"
 	"grog/internal/loading"
 	"grog/internal/model"
 	"grog/internal/output"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -30,7 +30,8 @@ var BuildCmd = &cobra.Command{
 	Long:  `Loads the user configuration, checks which targets need to be rebuilt based on file hashes, builds the dependency graph, and executes targets.`,
 	Args:  cobra.MaximumNArgs(1), // Optional argument for target pattern
 	Run: func(cmd *cobra.Command, args []string) {
-		logger := console.InitLogger()
+		ctx, logger := setupCommand()
+
 		currentPackagePath, err := config.Global.GetCurrentPackage()
 		if err != nil {
 			logger.Fatalf("could not get current package: %v", err)
@@ -46,39 +47,21 @@ var BuildCmd = &cobra.Command{
 			targetPattern = label.GetMatchAllTargetPattern()
 		}
 
-		runBuild(targetPattern, false)
+		graph := mustLoadGraph(ctx, logger)
+
+		runBuild(ctx, logger, targetPattern, graph, false)
 	},
 }
 
 // runBuild runs the build/test command with the given target pattern
-func runBuild(targetPattern label.TargetPattern, isTest bool) {
+func runBuild(
+	ctx context.Context,
+	logger *zap.SugaredLogger,
+	targetPattern label.TargetPattern,
+	graph *dag.DirectedTargetGraph,
+	isTest bool,
+) {
 	startTime := time.Now()
-	logger := console.InitLogger()
-	ctx, cancel := context.WithCancel(context.Background())
-	ctx = console.WithLogger(ctx, logger)
-	defer cancel()
-
-	packages, err := loading.LoadPackages(ctx)
-	if err != nil {
-		logger.Fatalf(
-			"could not load packages: %v",
-			err)
-	}
-
-	numPackages := len(packages)
-	targets, err := model.TargetMapFromPackages(packages)
-	if err != nil {
-		logger.Fatalf("could not create target map: %v", err)
-	}
-
-	errs := analysis.CheckTargetConstraints(logger, targets)
-	if len(errs) > 0 {
-		logger.Fatalf("Found issues with your configuration: \n%s", console.FormatErrors(errs))
-	}
-	graph, err := analysis.BuildGraphAndAnalyze(targets)
-	if err != nil {
-		logger.Fatalf("could not build graph: %v", err)
-	}
 
 	// Select targets based on the target pattern.
 	selectedCount, skippedCount, err := graph.SelectTargets(targetPattern, isTest)
@@ -96,31 +79,16 @@ func runBuild(targetPattern label.TargetPattern, isTest bool) {
 		logger.Fatalf(errString)
 	}
 
-	infoStr := fmt.Sprintf("Selected %s (%s loaded, %s configured).",
-		console.FCountTargets(selectedCount),
-		console.FCountPkg(numPackages),
-		console.FCountTargets(len(targets)))
+	infoStr := fmt.Sprintf("Selected %s.",
+		console.FCountTargets(selectedCount))
 	if skippedCount > 0 {
-		infoStr = fmt.Sprintf("Selected %s (%s loaded, %s configured, %s not matching %s host).",
+		infoStr = fmt.Sprintf("Selected %s (%s not matching %s host).",
 			console.FCountTargets(selectedCount),
-			console.FCountPkg(numPackages),
-			console.FCountTargets(len(targets)),
 			console.FCountTargets(skippedCount),
 			config.Global.GetPlatform())
 	}
 
 	logger.Infof(infoStr)
-
-	// Listen for SIGTERM or SIGINT to cancel the context
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		select {
-		case <-signalChan:
-			cancel()
-		case <-ctx.Done():
-		}
-	}()
 
 	failFast := config.Global.FailFast
 
@@ -187,5 +155,26 @@ func runBuild(targetPattern label.TargetPattern, isTest bool) {
 		goal,
 		console.FCountTargets(successCount),
 		cacheHits)
-	os.Exit(0)
+}
+
+func mustLoadGraph(ctx context.Context, logger *zap.SugaredLogger) *dag.DirectedTargetGraph {
+	packages, err := loading.LoadPackages(ctx)
+	if err != nil {
+		logger.Fatalf(
+			"could not load packages: %v",
+			err)
+	}
+
+	targets, err := model.TargetMapFromPackages(packages)
+	if err != nil {
+		logger.Fatalf("could not create target map: %v", err)
+	}
+
+	graph, err := analysis.BuildGraphAndAnalyze(targets)
+	if err != nil {
+		logger.Fatalf("could not build graph: %v", err)
+	}
+
+	logger.Infof("%s loaded, %s configured.", console.FCountPkg(len(packages)), console.FCountTargets(len(targets)))
+	return graph
 }
