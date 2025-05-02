@@ -1,5 +1,8 @@
 # Grog
 
+![Tests Badge]
+(https://github.com/chrismatix/grog/actions/workflows/test.yml/badge.svg)
+
 The build tool for the grug-brained developer.
 
 Grog **is** a mono-repo build tool that is agnostic on how you run your build commands, but instead focuses on caching and parallel execution.
@@ -18,8 +21,6 @@ Read more in [Why grog?](https://grog.build/why-grog/)
 - 📦 Single binary
 
 ## Installation
-
-Install grog by
 
 ## Documentation
 

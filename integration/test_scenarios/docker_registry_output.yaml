@@ -1,0 +1,11 @@
+name: Docker Registry Outputs
+repo: docker_output
+requires_creds: true
+cases:
+  - name: creates_docker_registry_output
+    args:
+      - build
+
+  - name: loads_docker_registry_output
+    args:
+      - build

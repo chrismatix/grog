@@ -31,10 +31,10 @@ func (tc *TargetCache) GetBackend() backends.CacheBackend {
 	return tc.backend
 }
 
-// cachePath returns the path in the backend where the target backend data is stored
+// CachePath returns the path in the backend where the target backend data is stored
 // -> {targetPackagePath}/{targetName}_cache_{targetInputHash}
 // the key, i.e. {outputHash} or {outputHash}.meta must be supplied separately
-func (tc *TargetCache) cachePath(target model.Target) string {
+func (tc *TargetCache) CachePath(target model.Target) string {
 	return fmt.Sprintf(
 		"%s/%s_cache_%s",
 		target.Label.Package,
@@ -42,8 +42,12 @@ func (tc *TargetCache) cachePath(target model.Target) string {
 		target.ChangeHash)
 }
 
+func (tc *TargetCache) CacheKey(output model.Output) string {
+	return hashing.HashString(output.String())
+}
+
 func (tc *TargetCache) FileExists(ctx context.Context, target model.Target, output model.Output) (bool, error) {
-	return tc.backend.Exists(ctx, tc.cachePath(target), hashing.HashString(output.String()))
+	return tc.backend.Exists(ctx, tc.CachePath(target), tc.CacheKey(output))
 }
 
 // WriteFile writes a file path relative to the target path to the cache backend
@@ -54,18 +58,18 @@ func (tc *TargetCache) WriteFile(ctx context.Context, target model.Target, outpu
 		return fmt.Errorf("declared output %s for target %s was not created", output, target.Label)
 	}
 
-	return tc.backend.Set(ctx, tc.cachePath(target), hashing.HashString(output.String()), outputReader)
+	return tc.backend.Set(ctx, tc.CachePath(target), tc.CacheKey(output), outputReader)
 }
 
 // WriteFileStream same as WriteFile but takes a reader instead of trying to open the file directly
 func (tc *TargetCache) WriteFileStream(ctx context.Context, target model.Target, output model.Output, reader io.Reader) error {
-	return tc.backend.Set(ctx, tc.cachePath(target), hashing.HashString(output.String()), reader)
+	return tc.backend.Set(ctx, tc.CachePath(target), tc.CacheKey(output), reader)
 }
 
 // LoadFile loads a cached file from the cache backend and writes it to the given path
 func (tc *TargetCache) LoadFile(ctx context.Context, target model.Target, output model.Output) error {
 	absOutputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.Identifier))
-	contentReader, err := tc.backend.Get(ctx, tc.cachePath(target), hashing.HashString(output.String()))
+	contentReader, err := tc.backend.Get(ctx, tc.CachePath(target), tc.CacheKey(output))
 	if err != nil {
 		return fmt.Errorf("output %s for target %s does not exist in %s backend",
 			output.String(),
@@ -87,18 +91,18 @@ func (tc *TargetCache) LoadFile(ctx context.Context, target model.Target, output
 }
 
 func (tc *TargetCache) LoadFileStream(ctx context.Context, target model.Target, output model.Output) (io.ReadCloser, error) {
-	return tc.backend.Get(ctx, tc.cachePath(target), hashing.HashString(output.String()))
+	return tc.backend.Get(ctx, tc.CachePath(target), tc.CacheKey(output))
 }
 
 // HasCacheExistsFile only checks if the default file we use (for empty outputs) is present
 func (tc *TargetCache) HasCacheExistsFile(ctx context.Context, target model.Target) (bool, error) {
 	// check that the existsFileKey is present in the backend
-	return tc.backend.Exists(ctx, tc.cachePath(target), existsFileKey)
+	return tc.backend.Exists(ctx, tc.CachePath(target), existsFileKey)
 }
 
 // WriteCacheExistsFile write the empty cache exists file to the backend
 func (tc *TargetCache) WriteCacheExistsFile(ctx context.Context, target model.Target) error {
-	return tc.backend.Set(ctx, tc.cachePath(target), existsFileKey, bytes.NewReader([]byte{}))
+	return tc.backend.Set(ctx, tc.CachePath(target), existsFileKey, bytes.NewReader([]byte{}))
 }
 
 // WriteLocalCacheExistsFile write the empty cache exists file to the local cache only
@@ -106,11 +110,11 @@ func (tc *TargetCache) WriteCacheExistsFile(ctx context.Context, target model.Ta
 // However, the registry calls .Load() per handler
 func (tc *TargetCache) WriteLocalCacheExistsFile(ctx context.Context, target model.Target) error {
 	if fsCache, ok := tc.backend.(*backends.FileSystemCache); ok {
-		return fsCache.Set(ctx, tc.cachePath(target), existsFileKey, bytes.NewReader([]byte{}))
+		return fsCache.Set(ctx, tc.CachePath(target), existsFileKey, bytes.NewReader([]byte{}))
 	} else if remoteWrapper, ok := tc.backend.(*backends.RemoteWrapper); ok {
-		return remoteWrapper.GetFS().Set(ctx, tc.cachePath(target), existsFileKey, bytes.NewReader([]byte{}))
+		return remoteWrapper.GetFS().Set(ctx, tc.CachePath(target), existsFileKey, bytes.NewReader([]byte{}))
 	}
 
 	// Default to just writing to whatever cache we have
-	return tc.backend.Set(ctx, tc.cachePath(target), existsFileKey, bytes.NewReader([]byte{}))
+	return tc.backend.Set(ctx, tc.CachePath(target), existsFileKey, bytes.NewReader([]byte{}))
 }

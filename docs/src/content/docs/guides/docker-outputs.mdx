@@ -22,7 +22,7 @@ Next, you need to choose a storage backend for your docker images:
 
 ### Filesystem
 
-grog will store your images as a tarball using the (remote) filesystem cache that you configured.
+Grog will store your images as a tarball using the (remote) filesystem cache that you configured.
 While this is fast to set up it can be quite storage intensive as layers are not deduplicated between caches.
 
 Here is how to enable this option:
@@ -30,16 +30,10 @@ Here is how to enable this option:
 ```toml
 [docker]
 enabled = true
-backend = "filesystem"
+backend = "tarball" # Optional as this is the default
 ```
 
 ### Registry
-
-<Aside type="caution">
-  This feature is not ready yet. The docs instead reflect the planned
-  implementation in the spirit of Documentation-driven Development. So let us
-  know what you think!
-</Aside>
 
 Using a registry as your backend allows you to store your images in a remote or local Docker registry.
 This is more efficient as layers are deduplicated, reducing storage costs.
@@ -49,7 +43,6 @@ Here’s how to enable this option:
 
 ```toml
 [docker]
-enabled = true
 backend = "registry"
 registry_url = "https://your-registry-url"
 ```

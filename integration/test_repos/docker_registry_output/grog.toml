@@ -1,0 +1,3 @@
+[docker]
+backend = "registry"
+registry = "us-central1-docker.pkg.dev/grog-457510/grog-cache"

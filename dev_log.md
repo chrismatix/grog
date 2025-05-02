@@ -2,6 +2,26 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 02-05-2025
+
+First quick and simple version of the docker registry cache backend is working now.
+But to have any sort of confidence in these features, I will add dedicated tests for things that need to use cloud services.
+Using this I will be able to also get more effective test coverage and then push a badge for that using gcs.
+
+The pre-release TODO list is very short now and I don't see any reason to unnecessarily expand it even further.
+
+-C
+
+## 01-05-2025
+
+Was surprised by a day off of work and had a lot of time to push forward.
+Positive that I can start dog-fooding grog in the visia mono-repo maybe as early as next week.
+In particular, I got the `binary_output` and bin tooling to work which is very important for bootstrapping.
+
+Also making good progress on the release flow.
+
+-C
+
 ## 30-04-2025
 
 Finished the platform selection configuration option.

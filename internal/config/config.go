@@ -71,6 +71,15 @@ func (w WorkspaceConfig) GetPlatform() string {
 	return fmt.Sprintf("%s/%s", w.OS, w.Arch)
 }
 
+func (w WorkspaceConfig) Validate() error {
+	if w.Docker.Backend != "" &&
+		(w.Docker.Backend != DockerBackendFSTarball && w.Docker.Backend != DockerBackendRegistry) {
+		return fmt.Errorf("invalid docker backend: %s. Must be either %s or %s",
+			w.Docker.Backend, DockerBackendFSTarball, DockerBackendRegistry)
+	}
+	return nil
+}
+
 type CacheBackend string
 
 const (
@@ -96,8 +105,12 @@ type S3CacheConfig struct {
 	CredentialsFile string `mapstructure:"credentials_file"`
 }
 
+const (
+	DockerBackendFSTarball = "tarball"
+	DockerBackendRegistry  = "registry"
+)
+
 type DockerConfig struct {
-	Enabled bool   `mapstructure:"enabledocker"`
 	Backend string `mapstructure:"backend"`
 
 	Registry string `mapstructure:"registry"`

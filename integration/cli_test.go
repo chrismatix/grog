@@ -48,6 +48,10 @@ type TestTable struct {
 	Name  string `yaml:"name"`
 	Repo  string `yaml:"repo"`
 	Cases []TestCase
+
+	// Only run this test when REQUIRES_CREDS is set
+	// (for tests that require cloud credentials)
+	RequiresCreds bool `yaml:"requires_creds"`
 }
 type TestCase struct {
 	// Names must be unique as they determine the fixture file name
@@ -85,6 +89,12 @@ func TestCliArgs(t *testing.T) {
 	}
 
 	for _, tt := range testTables {
+		if tt.RequiresCreds {
+			if os.Getenv("REQUIRES_CREDS") == "" {
+				continue
+			}
+		}
+
 		t.Run(tt.Name, func(t *testing.T) {
 
 			// Clear repository cache

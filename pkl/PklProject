@@ -5,9 +5,9 @@ dependencies {
 
 package {
   name = "grog"
-  // TODO build the right paths here
   baseUri = "package://grog.build/pkl"
-  version = read?("env:VERSION") ?? "0.0.0-dev"
+  version = (read?("env:VERSION") ?? "0.0.0-dev").dropWhile((seq) -> seq == "v")
+  // TODO build the right paths here
   packageZipUrl = "https://grog.build/releases/download/v\(version)/pkl.zip"
 }
 

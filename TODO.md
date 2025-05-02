@@ -6,7 +6,8 @@ Visia dog-food checklist:
 - [x] Add info log statement for when we have loaded an image
 - [x] Add `bin_output`
 - [x] Add `$(bin //target)` shell expansion
-- [ ] Add docker outputs (registry)
+- [x] Add docker outputs (registry)
+  - [ ] Add network tests on main branch
 - [ ] Add `binary-path` outputs
 - [x] Add `grog run` command
 - [ ] Working release flow
@@ -14,6 +15,7 @@ Visia dog-food checklist:
 
 Other TODOs:
 
+- [ ] Parallelize output loading using workers
 - [ ] Add filtering by tags
 - [ ] Gzip the docker tarballs (?)
 - [ ] Add `grog info`
@@ -25,8 +27,6 @@ Other TODOs:
 - [ ] Docs: Strong README
 - [ ] Tests: Use the new synctest package to better test the execution semantic
 - [ ] Execution: Warn if one or more of the input files specified for a target do not exist
-- [ ] Add
-- [ ] Add runnable binary outputs
 - [ ] Add shell completions for commands that run targets
 - [ ] Record a brief terminal clip using tea's vhs tape
 - [ ] Support running multiple targets at the same time

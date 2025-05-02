@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"grog/internal/caching"
+	"grog/internal/config"
 	"grog/internal/model"
 	"grog/internal/output/handlers"
 	"sync"
@@ -28,8 +29,15 @@ func NewRegistry(
 	// Register built-in handlers
 	r.Register(handlers.NewFileOutputHandler(targetCache))
 	r.Register(handlers.NewDirectoryOutputHandler(targetCache))
-	r.Register(handlers.NewDockerOutputHandler(targetCache))
 
+	dockerBackend := config.Global.Docker.Backend
+	if dockerBackend == "registry" {
+		r.Register(handlers.NewDockerRegistryOutputHandler(targetCache, config.Global.Docker))
+	} else {
+		// The backend setting is validated in the config package
+		// so we can assume it's either "docker" or "fs-tarball"
+		r.Register(handlers.NewDockerOutputHandler(targetCache))
+	}
 	return r
 }
 

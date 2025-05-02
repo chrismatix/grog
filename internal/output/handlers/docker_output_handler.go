@@ -41,7 +41,7 @@ func (d *DockerOutputHandler) Write(ctx context.Context, target model.Target, ou
 	logger := console.GetLogger(ctx)
 	imageName := output.Identifier
 
-	logger.Debugf("saving Docker image %s to tarball using go-containerregistry", imageName)
+	logger.Debugf("saving Docker image %s to tarball", imageName)
 
 	// Parse the image reference
 	ref, err := name.ParseReference(imageName)

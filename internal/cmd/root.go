@@ -21,10 +21,10 @@ var RootCmd = &cobra.Command{
 		if err := initConfig(); err != nil {
 			return err
 		}
-		// TODO Validate the loaded config
-		//if err := validateConfig(); err != nil {
-		//	return err
-		//}
+
+		if err := config.Global.Validate(); err != nil {
+			return err
+		}
 		return nil
 	},
 }

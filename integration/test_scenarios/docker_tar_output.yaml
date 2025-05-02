@@ -1,11 +1,11 @@
-name: Docker outputs
+name: Docker Tar Outputs
 repo: docker_output
 cases:
-  - name: creates_docker_output
+  - name: creates_docker_tar_output
     args:
       - build
 
   # This loads the directory output from the cache
-  - name: loads_docker_output
+  - name: loads_docker_tar_output
     args:
       - build
