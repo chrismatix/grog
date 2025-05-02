@@ -5,6 +5,9 @@ on:
     tags:
       - "v*.*.*" # Only run on version tags
 
+permissions:
+  contents: write
+
 jobs:
   release-bin:
     name: Release binaries

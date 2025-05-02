@@ -1,7 +1,6 @@
 # Grog
 
-![Tests Badge]
-(https://github.com/chrismatix/grog/actions/workflows/test.yml/badge.svg)
+![Tests Badge](https://github.com/chrismatix/grog/actions/workflows/test.yml/badge.svg)
 
 The build tool for the grug-brained developer.
 
