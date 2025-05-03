@@ -4,14 +4,13 @@ import (
 	"context"
 	"fmt"
 	"github.com/bmatcuk/doublestar/v4"
-	"github.com/charlievieth/fastwalk"
+	"github.com/boyter/gocodewalker"
 	"go.uber.org/zap"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/label"
 	"grog/internal/model"
 	"grog/internal/output"
-	"io/fs"
 	"os"
 	"slices"
 	"strings"
@@ -22,12 +21,10 @@ func LoadPackages(ctx context.Context) ([]*model.Package, error) {
 	workspaceRoot := config.Global.WorkspaceRoot
 	logger := console.GetLogger(ctx)
 
-	var packages []*model.Package
+	fileListQueue := make(chan *gocodewalker.File, 100)
 
-	conf := fastwalk.Config{
-		// Don't follow symlinks
-		Follow: false,
-	}
+	fileWalker := gocodewalker.NewParallelFileWalker([]string{workspaceRoot}, fileListQueue)
+	go fileWalker.Start()
 
 	packageLoader := NewPackageLoader(logger)
 
@@ -37,35 +34,26 @@ func LoadPackages(ctx context.Context) ([]*model.Package, error) {
 	loadedPackagePaths := make(map[string]string)
 	loadedMu := &sync.Mutex{}
 
-	walkFn := func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			// TODO do we want to collect all loading errors first? Seems like a better dev-ex
-			// Idea: collect errors like so: https://github.com/hashicorp/go-multierror
-			return err // returning the error stops iteration
-		}
+	var packages []*model.Package
 
-		// TODO Apparently, d can be nil for some reason
-		if d == nil {
-			return fmt.Errorf(
-				"d is nil for path %s",
-				path)
-		}
+	for f := range fileListQueue {
+		// TODO this should be processed in a worker as well
 
-		pkgDto, matched, err := packageLoader.LoadIfMatched(ctx, path, d.Name())
+		pkgDto, matched, err := packageLoader.LoadIfMatched(ctx, f.Location, f.Filename)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		if matched {
-			packagePath, err := config.GetPackagePath(path)
+			packagePath, err := config.GetPackagePath(f.Location)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			pkg, err := getEnrichedPackage(logger, packagePath, pkgDto)
 			if err != nil {
 				fmt.Println(err)
-				return err
+				return nil, err
 			}
 
 			// Check for duplicate package definitions
@@ -79,7 +67,7 @@ func LoadPackages(ctx context.Context) ([]*model.Package, error) {
 					config.MustGetPathRelativeToWorkspaceRoot(pkg.SourceFilePath),
 				}
 				slices.Sort(paths)
-				return fmt.Errorf("found conflicting package definitions at package path: %s\n- %s\n- %s",
+				return nil, fmt.Errorf("found conflicting package definitions at package path: %s\n- %s\n- %s",
 					packagePath,
 					paths[0],
 					paths[1],
@@ -90,12 +78,6 @@ func LoadPackages(ctx context.Context) ([]*model.Package, error) {
 
 			packages = append(packages, pkg)
 		}
-
-		return nil
-	}
-
-	if err := fastwalk.Walk(&conf, workspaceRoot, walkFn); err != nil {
-		return nil, err
 	}
 
 	return packages, nil

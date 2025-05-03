@@ -5,12 +5,12 @@ dependencies {
 
 package {
   name = "grog"
-  baseUri = "package://grog.build/pkl"
+  baseUri = "package://grog.build/releases/v\(version)/pkl@\(version)"
   version = (read?("env:VERSION") ?? "0.0.0-dev").dropWhile((seq) -> seq == "v")
-  // TODO build the right paths here
-  packageZipUrl = "https://grog.build/releases/download/v\(version)/pkl.zip"
+  packageZipUrl = "https://github.com/chrismatix/grog/releases/download/v\(version)/pkl@\(version).zip"
 }
 
+// https://github.com/chrismatix/grog/releases/download/v0.1.0/pkl@0.1.0.zip
 // How do apple host their pkl packages with vanity url?
 // For toml they have "packageUri": "package://pkg.pkl-lang.org/pkl-pantry/pkl.toml@1.0.0"
 // https://pkg.pkl-lang.org/pkl-pantry/pkl.toml@1.0.0

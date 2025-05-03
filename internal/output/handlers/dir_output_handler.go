@@ -80,6 +80,7 @@ func (d *DirectoryOutputHandler) Write(
 				return err
 			}
 			header.Name = filepath.ToSlash(relativePath) // POSIX‑style paths in the archive
+			header.Format = tar.FormatPAX
 
 			if err := tarWriter.WriteHeader(header); err != nil {
 				return err

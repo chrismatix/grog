@@ -6,8 +6,8 @@ require (
 	cloud.google.com/go/storage v1.51.0
 	github.com/apple/pkl-go v0.10.0
 	github.com/bmatcuk/doublestar/v4 v4.8.1
+	github.com/boyter/gocodewalker v1.4.0
 	github.com/cespare/xxhash/v2 v2.3.0
-	github.com/charlievieth/fastwalk v1.0.10
 	github.com/charmbracelet/bubbletea v1.3.4
 	github.com/fatih/color v1.18.0
 	github.com/google/go-containerregistry v0.20.3
@@ -42,6 +42,7 @@ require (
 	github.com/cncf/xds/go v0.0.0-20250121191232-2f005788dc42 // indirect
 	github.com/containerd/stargz-snapshotter/estargz v0.16.3 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
+	github.com/danwakefield/fnmatch v0.0.0-20160403171240-cbb64ac3d964 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/cli v27.5.0+incompatible // indirect

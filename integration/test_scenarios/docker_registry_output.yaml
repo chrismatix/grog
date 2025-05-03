@@ -1,5 +1,5 @@
 name: Docker Registry Outputs
-repo: docker_output
+repo: docker_registry_output
 requires_creds: true
 cases:
   - name: creates_docker_registry_output

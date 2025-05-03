@@ -15,7 +15,7 @@ endif
 unit-test:
 	@gotestsum ./internal/...
 
-# TODO combine all this cover data and show on github usin
+# TODO combine all this cover data and show on github using
 # https://github.com/tj-actions/coverage-badge-go
 # https://dustinspecker.com/posts/go-combined-unit-integration-code-coverage/
 test: build-with-coverage

@@ -21,7 +21,7 @@ Other TODOs:
 - [ ] Add `grog info`
 - [ ] Only replace outputs when they have changed -> Will require tracking hashes in a separate, small file
 - [ ] Allow running target labels relative to the current directory
-- [ ] Add s3 caching option
+- [ ] Add s3 caching Option
 - [ ] The Output Registry should warn when a target is overwriting another's outputs
 - [ ] Logging: Create a diagnotics module that we attach to the context and that - on failure - will always write all the diagnostics to the grog root
 - [ ] Docs: Strong README
