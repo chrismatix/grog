@@ -5,9 +5,12 @@ dependencies {
 
 package {
   name = "grog"
-  baseUri = "package://grog.build/releases/v\(version)/pkl@\(version)"
+
+  baseUri = "package://grog.build/releases/v\(version)/\(name)"
   version = (read?("env:VERSION") ?? "0.0.0-dev").dropWhile((seq) -> seq == "v")
   packageZipUrl = "https://github.com/chrismatix/grog/releases/download/v\(version)/pkl@\(version).zip"
+
+  license = "MIT"
 }
 
 // https://github.com/chrismatix/grog/releases/download/v0.1.0/pkl@0.1.0.zip

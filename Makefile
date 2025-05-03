@@ -49,6 +49,7 @@ build-with-coverage:
 	@go build -cover -o dist/grog $(LD_FLAGS)
 
 release-pkl:
+	echo $(VERSION)
 	@cd pkl && VERSION=$(VERSION) pkl project package
 
 
