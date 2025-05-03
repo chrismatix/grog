@@ -15,6 +15,9 @@ endif
 unit-test:
 	@gotestsum ./internal/...
 
+full-test:
+	REQUIRES_CREDS=true $(MAKE) test
+
 # TODO combine all this cover data and show on github using
 # https://github.com/tj-actions/coverage-badge-go
 # https://dustinspecker.com/posts/go-combined-unit-integration-code-coverage/
@@ -25,6 +28,12 @@ test: build-with-coverage
 	@gotestsum -- -timeout 60s ./integration/... $(UPDATE_FLAG) $(UPDATE_ALL_FLAG)
 	@go tool covdata percent -i=coverdata/integration,coverdata/unit
 	@go tool covdata textfmt -i=coverdata/integration,coverdata/unit -o coverdata/coverage.out
+	@go tool cover -func=coverdata/coverage.out -o=coverdata/coverage.out
+
+	@echo ""
+	@echo "Total Coverage:"
+	@echo "$$(awk 'END {print $$NF}' coverdata/coverage.out)"
+
 
 check-coverage: test
 	@go tool covdata textfmt -i=coverdata/integration,coverdata/unit -o coverdata/profile.txt

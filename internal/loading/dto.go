@@ -12,6 +12,7 @@ type TargetDTO struct {
 	Outputs   []string `json:"outputs,omitempty" yaml:"outputs,omitempty" pkl:"outputs"`
 	BinOutput string   `json:"bin_output" yaml:"bin_output" pkl:"bin_output"`
 
+	Tags     []string              `json:"tags,omitempty" yaml:"tags,omitempty" pkl:"tags"`
 	Platform *model.PlatformConfig `json:"platform,omitempty" yaml:"platform,omitempty" pkl:"platform"`
 }
 

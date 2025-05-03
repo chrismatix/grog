@@ -8,7 +8,7 @@ package {
 
   baseUri = "package://grog.build/releases/v\(version)/\(name)"
   version = (read?("env:VERSION") ?? "0.0.0-dev").dropWhile((seq) -> seq == "v")
-  packageZipUrl = "https://github.com/chrismatix/grog/releases/download/v\(version)/pkl@\(version).zip"
+  packageZipUrl = "https://github.com/chrismatix/grog/releases/download/v\(version)/grog@\(version).zip"
 
   license = "MIT"
 }

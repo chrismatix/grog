@@ -15,6 +15,7 @@ type Target struct {
 	Inputs   []string            `json:"inputs,omitempty"`
 	Outputs  []Output            `json:"outputs,omitempty"`
 	Platform *PlatformConfig     `json:"platform,omitempty"`
+	Tags     []string            `json:"tags,omitempty"`
 
 	// BinOutput is always a path to a binary file
 	BinOutput Output `json:"bin_output"`

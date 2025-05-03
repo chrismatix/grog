@@ -10,6 +10,8 @@ class Target {
   outputs: Listing<String>(isDistinct)
   bin_output: String?
 
+  // Target Filtering
+  tags: Listing<String>(isDistinct)
   platform: platform?
 }
 

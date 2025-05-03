@@ -31,6 +31,6 @@ var TestCmd = &cobra.Command{
 
 		graph := mustLoadGraph(ctx, logger)
 
-		runBuild(ctx, logger, targetPattern, graph, true)
+		runBuild(ctx, logger, targetPattern, graph, config.Global.Tags, true)
 	},
 }

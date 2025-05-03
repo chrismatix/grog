@@ -28,6 +28,8 @@ type WorkspaceConfig struct {
 	// Not officially supported in grog.toml but exposed via env variables
 	OS   string `mapstructure:"os"`
 	Arch string `mapstructure:"arch"`
+
+	Tags []string `mapstructure:"tag"`
 }
 
 var Global WorkspaceConfig

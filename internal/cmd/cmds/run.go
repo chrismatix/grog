@@ -51,7 +51,7 @@ var RunCmd = &cobra.Command{
 		// Turn the single target label into a pattern for the build func
 		// TODO eventually we might use the worker pool to run multiple t
 		targetPattern := label.TargetPatternFromLabel(targetLabel)
-		runBuild(ctx, logger, targetPattern, graph, false)
+		runBuild(ctx, logger, targetPattern, graph, config.Global.Tags, false)
 
 		// Run the target output
 		binOutputPath := config.GetPathAbsoluteToWorkspaceRoot(

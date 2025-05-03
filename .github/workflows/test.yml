@@ -33,32 +33,11 @@ jobs:
           pkl --version
 
       - name: Build and test
+        #        env:
+        #          REQUIRES_CREDS: ${{ github.ref == 'refs/heads/main' }}
         run: make test
-
-      # The following code is taken from the coverage action readme
-      - name: Go Coverage Badge
-        uses: tj-actions/coverage-badge-go@v3
-        with:
-          filename: coverdata/coverage.out
-
-      - name: Verify Changed files
-        uses: tj-actions/verify-changed-files@v16
-        id: verify-changed-files
-        with:
-          files: README.md
-
-      - name: Commit changes
-        if: steps.verify-changed-files.outputs.files_changed == 'true'
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add README.md
-          git commit -m "chore: Updated coverage badge."
-
-# TODO add once we have a real release flow
-#      - name: Push changes
-#        if: steps.verify-changed-files.outputs.files_changed == 'true'
-#        uses: ad-m/github-push-action@master
-#        with:
-#          github_token: ${{ github.token }}
-#          branch: ${{ github.head_ref }}
+#      - name: Upload coverage badge
+#        if: github.ref == 'refs/heads/main'
+#        run: |
+#          .github/upload_badge.sh
+#

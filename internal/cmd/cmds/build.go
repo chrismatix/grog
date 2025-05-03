@@ -49,7 +49,7 @@ var BuildCmd = &cobra.Command{
 
 		graph := mustLoadGraph(ctx, logger)
 
-		runBuild(ctx, logger, targetPattern, graph, false)
+		runBuild(ctx, logger, targetPattern, graph, config.Global.Tags, false)
 	},
 }
 
@@ -59,12 +59,13 @@ func runBuild(
 	logger *zap.SugaredLogger,
 	targetPattern label.TargetPattern,
 	graph *dag.DirectedTargetGraph,
+	tags []string,
 	isTest bool,
 ) {
 	startTime := time.Now()
 
 	// Select targets based on the target pattern.
-	selectedCount, skippedCount, err := graph.SelectTargets(targetPattern, isTest)
+	selectedCount, skippedCount, err := graph.SelectTargets(targetPattern, tags, isTest)
 	if err != nil {
 		logger.Fatalf("target selection failed: %v", err)
 	}

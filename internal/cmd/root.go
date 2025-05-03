@@ -76,6 +76,10 @@ func init() {
 	RootCmd.PersistentFlags().Bool("fail-fast", false, "Fail fast on first error")
 	err = viper.BindPFlag("fail_fast", RootCmd.PersistentFlags().Lookup("fail-fast"))
 
+	// tags
+	RootCmd.PersistentFlags().StringSlice("tag", []string{}, "Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar")
+	err = viper.BindPFlag("tag", RootCmd.PersistentFlags().Lookup("tag"))
+
 	// enable_caching
 	RootCmd.PersistentFlags().Bool("enable-cache", true, "Enable cache")
 	err = viper.BindPFlag("enable_cache", RootCmd.PersistentFlags().Lookup("enable-cache"))

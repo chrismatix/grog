@@ -1,5 +1,6 @@
 # Grog
 
+![Coverage](https://storage.cloud.google.com/grog-assets/github/coverage.svg)
 ![Tests Badge](https://github.com/chrismatix/grog/actions/workflows/test.yml/badge.svg)
 
 The build tool for the grug-brained developer.
