@@ -112,19 +112,39 @@ func (d *DockerRegistryOutputHandler) Load(ctx context.Context, target model.Tar
 
 	logger.Debugf("pulling Docker image %s from registry", remoteImageName)
 
-	// Create the remote tag reference.
+	// Create the remote tag reference
 	remoteTag, err := name.NewTag(remoteImageName)
 	if err != nil {
 		return fmt.Errorf("failed to parse remote image tag %q: %w", remoteImageName, err)
 	}
 
-	// Pull the image from the remote registry.
+	// Get remote image digest
+	remoteDesc, err := remote.Head(remoteTag, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+	if err != nil {
+		return fmt.Errorf("failed to get remote image digest: %w", err)
+	}
+
+	// Check if image with same digest exists locally
+	localRef, err := name.ParseReference(output.Identifier)
+	if err != nil {
+		return fmt.Errorf("failed to parse local image reference %q: %w", localImageName, err)
+	}
+
+	if localImg, err := daemon.Image(localRef); err == nil {
+		localDigest, err := localImg.Digest()
+		if err == nil && localDigest.String() == remoteDesc.Digest.String() {
+			logger.Debugf("image %s with digest %s already exists locally, skipping pull", localImageName, localDigest)
+			return nil
+		}
+	}
+
+	// Pull the image from the remote registry
 	img, err := remote.Image(remoteTag, remote.WithAuthFromKeychain(authn.DefaultKeychain))
 	if err != nil {
 		return fmt.Errorf("failed to pull image %q from registry: %w", remoteImageName, err)
 	}
 
-	// Write the image into the local Docker daemon.
+	// Write the image into the local Docker daemon
 	writtenTag, err := daemon.Write(remoteTag, img)
 	if err != nil {
 		return fmt.Errorf("failed to write image %q to Docker daemon: %w", remoteImageName, err)

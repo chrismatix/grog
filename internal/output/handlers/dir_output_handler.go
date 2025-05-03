@@ -70,6 +70,31 @@ func (d *DirectoryOutputHandler) Write(
 				return err
 			}
 
+			// Handle symlinks differently:
+			if fileInfo.Mode()&os.ModeSymlink != 0 {
+				linkTarget, err := os.Readlink(path)
+				if err != nil {
+					return err
+				}
+				// Just link to the target in the header
+				header, err := tar.FileInfoHeader(fileInfo, linkTarget)
+				if err != nil {
+					return err
+				}
+				relativePath, err := filepath.Rel(directoryPath, path)
+				if err != nil {
+					return err
+				}
+				header.Name = filepath.ToSlash(relativePath)
+				header.Format = tar.FormatPAX
+
+				if err := tarWriter.WriteHeader(header); err != nil {
+					return err
+				}
+				// Do not copy file content for symlink.
+				return nil
+			}
+
 			header, err := tar.FileInfoHeader(fileInfo, "")
 			if err != nil {
 				return err
@@ -92,6 +117,7 @@ func (d *DirectoryOutputHandler) Write(
 					return err
 				}
 				if _, err := io.Copy(tarWriter, file); err != nil {
+					logger.Debugf("Error writing file %s error: %v", path, err)
 					file.Close()
 					return err
 				}
@@ -132,7 +158,7 @@ func (d *DirectoryOutputHandler) Load(ctx context.Context, target model.Target, 
 	dirPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.Identifier))
 
 	// Create a temporary file to store the compressed data
-	tempFile, err := os.CreateTemp("", fmt.Sprintf("%s_dir_output_*.tar.gz", target.Label.Package))
+	tempFile, err := os.CreateTemp("", fmt.Sprintf("%s_dir_output_*.tar.gz", target.ChangeHash))
 	if err != nil {
 		return err
 	}
