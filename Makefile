@@ -72,7 +72,6 @@ release: clean
 	$(MAKE) release-build GOOS=linux GOARCH=arm64
 	$(MAKE) release-build GOOS=darwin GOARCH=amd64
 	$(MAKE) release-build GOOS=darwin GOARCH=arm64
-	$(MAKE) release-build GOOS=windows GOARCH=amd64
 
 	$(MAKE) release-pkl
 
@@ -83,7 +82,9 @@ release: clean
 # CGO_ENABLED=0 ensures static linking.
 release-build:
 	@echo "Building for $(GOOS)/$(GOARCH)"
-	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(LD_FLAGS) -o dist/grog-$(GOOS)-$(GOARCH)$(if $(findstring windows,$(GOOS)),.exe,)
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(LD_FLAGS) -o dist/grog-$(GOOS)-$(GOARCH)
+	@shasum -a 256 dist/grog-$(GOOS)-$(GOARCH) > dist/grog-$(GOOS)-$(GOARCH).sha256
+
 
 # Clean built binaries
 clean:

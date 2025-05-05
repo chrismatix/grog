@@ -5,12 +5,14 @@ on:
     branches:
       - main
 
-env:
-  FORCE_COLOR: 1
-
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+
+    # Add "id-token" for the google authentication
+    permissions:
+      contents: "read"
+      id-token: "write"
 
     steps:
       - name: Checkout code
@@ -52,6 +54,5 @@ jobs:
         run: make full-test
 
       - name: Upload coverage badge
-        if: github.ref == 'refs/heads/main'
         run: |
           .github/upload_badge.sh

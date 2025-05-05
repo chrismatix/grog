@@ -4,8 +4,6 @@
 - [ ] Add `binary-path` outputs
 - [ ] Working release flow
 - [ ] Stomp out ALL remaining potential deadlocks
-- [ ] Only load docker images when needed
-- [ ] Inject platform, os, and arch into pkl inference env
 - [ ] Parallelize output loading using workers
 - [ ] Add filtering by tags
 - [ ] Gzip the docker tarballs (?)
@@ -22,4 +20,4 @@
 - [ ] Execution: Warn if one or more of the input files specified for a target do not exist
 - [ ] Add shell completions for commands that run targets
 - [ ] Record a brief terminal clip using tea's vhs tape
-- [ ] Support running multiple targets at the same time
+- [ ] Support running multiple targets with `grog run` at the same time
