@@ -16,6 +16,7 @@ unit-test:
 	@gotestsum ./internal/...
 
 full-test:
+	./.github/reset_test_infra.sh
 	REQUIRES_CREDS=true $(MAKE) test
 
 # TODO combine all this cover data and show on github using
@@ -24,8 +25,8 @@ full-test:
 test: build-with-coverage
 	@rm -fr coverdata
 	@mkdir -p coverdata/unit coverdata/integration
-	@gotestsum -- -timeout 60s -cover ./internal/... -test.gocoverdir="$$(pwd)/coverdata/unit"
-	@gotestsum -- -timeout 60s ./integration/... $(UPDATE_FLAG) $(UPDATE_ALL_FLAG)
+	@gotestsum -- -timeout 360s -cover ./internal/... -test.gocoverdir="$$(pwd)/coverdata/unit"
+	@gotestsum -- -timeout 360s ./integration/... $(UPDATE_FLAG) $(UPDATE_ALL_FLAG)
 	@go tool covdata percent -i=coverdata/integration,coverdata/unit
 	@go tool covdata textfmt -i=coverdata/integration,coverdata/unit -o coverdata/coverage.out
 	@go tool cover -func=coverdata/coverage.out -o=coverdata/coverage.out

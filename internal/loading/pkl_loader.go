@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/apple/pkl-go/pkl"
+	"grog/internal/config"
 	"grog/internal/console"
 )
 
@@ -19,13 +20,30 @@ func (pl PklLoader) FileNames() []string {
 // getEvaluator lazily loads and caches the evaluator
 func (pl PklLoader) getEvaluator() (pkl.Evaluator, error) {
 	if pl.evaluator == nil {
-		evaluator, err := pkl.NewEvaluator(context.Background(), pkl.PreconfiguredOptions)
+		evaluator, err := pkl.NewEvaluator(context.Background(), pkl.PreconfiguredOptions, withEnv(map[string]string{
+			"GROG_OS":       config.Global.OS,
+			"GROG_ARCH":     config.Global.Arch,
+			"GROG_PLATFORM": config.Global.GetPlatform(),
+		}))
 		if err != nil {
 			return nil, err
 		}
 		pl.evaluator = evaluator
 	}
 	return pl.evaluator, nil
+}
+
+// withEnv adds or overrides environment variables for the `env:` resource reader.
+// Any key in envVars will be set into EvaluatorOptions.Env.
+func withEnv(envVars map[string]string) func(*pkl.EvaluatorOptions) {
+	return func(opts *pkl.EvaluatorOptions) {
+		if opts.Env == nil {
+			opts.Env = make(map[string]string, len(envVars))
+		}
+		for k, v := range envVars {
+			opts.Env[k] = v
+		}
+	}
 }
 
 // Load reads the file at the specified filePath and unmarshals its content into a model.Package.

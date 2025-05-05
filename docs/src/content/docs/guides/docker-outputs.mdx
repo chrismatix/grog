@@ -69,8 +69,19 @@ targets:
       - src/**/*.py
     cmd: docker build -t some-python-image .
     outputs:
-      - docker://some-python-image
+      - docker::some-local-python-image
+      - docker::registry.io/repository/some-python-image
 ```
 
-Grog will look for outputs beginning with `docker://` and apply the specified caching strategy to them.
-If the resulting image is not found locally, grog will error out.
+Grog will treat docker outputs differently if you explicitly specify a registry URL:
+
+- **Without** registry URL:
+
+  - On completion of the build Grog will push the local image to the registry cache.
+  - On subsequent builds, Grog will only load the image from the registry cache if it does not exist locally.
+  - Use this for local images that you may want to use in tests or builds.
+
+- **With** registry URL:
+  - On completion of the build Grog will push the image tag to the registry.
+  - On subsequent builds, Grog will push the cached image to the registry tag if it does not exist yet.
+  - Use this when deploying to a remote registry.

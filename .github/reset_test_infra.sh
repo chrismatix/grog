@@ -11,11 +11,10 @@ echo "Listing Docker images in the Artifact Registry: ${REGISTRY_URL}"
 
 # List all Docker images; the output is a list of image names.
 # We assume that the repository holds Docker images
-IMAGES=$(gcloud artifacts docker images list "${REGISTRY_URL}" --format="value(NAME)")
+IMAGES=$(gcloud artifacts docker images list "${REGISTRY_URL}" --format="value(IMAGE)")
 
 if [ -z "$IMAGES" ]; then
     echo "No images found in ${REGISTRY_URL}."
-    exit 0
 fi
 
 for IMAGE in $IMAGES; do

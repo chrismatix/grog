@@ -4,7 +4,9 @@ on:
   push:
     branches:
       - main
-  pull_request:
+
+env:
+  FORCE_COLOR: 1
 
 jobs:
   build-and-test:
@@ -18,6 +20,20 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: 1.24
+
+      - name: Authenticate with GCloud
+        id: "auth"
+        uses: "google-github-actions/auth@v1"
+        with:
+          workload_identity_provider: projects/546356038464/locations/global/workloadIdentityPools/github-pool/providers/github-ci
+          service_account: grog-sa@grog-457510.iam.gserviceaccount.com
+
+      - name: "Set up Cloud SDK"
+        uses: "google-github-actions/setup-gcloud@v1"
+
+      - name: Configure Docker
+        id: "configure-docker"
+        run: gcloud auth configure-docker us-east1-docker.pkg.dev
 
       - name: Install dependencies
         run: |
@@ -33,11 +49,9 @@ jobs:
           pkl --version
 
       - name: Build and test
-        #        env:
-        #          REQUIRES_CREDS: ${{ github.ref == 'refs/heads/main' }}
-        run: make test
-#      - name: Upload coverage badge
-#        if: github.ref == 'refs/heads/main'
-#        run: |
-#          .github/upload_badge.sh
-#
+        run: make full-test
+
+      - name: Upload coverage badge
+        if: github.ref == 'refs/heads/main'
+        run: |
+          .github/upload_badge.sh

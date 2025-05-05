@@ -5,7 +5,19 @@ cases:
   - name: creates_docker_registry_output
     args:
       - build
+      - :docker_output
 
   - name: loads_docker_registry_output
     args:
       - build
+      - :docker_output
+
+  - name: creates_remote_docker_registry_output
+    args:
+      - build
+      - :remote_docker_output_succeeds
+
+  - name: loads_remote_docker_registry_output
+    args:
+      - build
+      - :remote_docker_output_succeeds

@@ -127,7 +127,7 @@ Furthermore, if you install a pkl IDE plugin you can get semantic highlighting a
 See below for an example of the same build configuration as above, but using pkl:
 
 ```pkl
-amends "tbd.pkl"
+amends "package://grog.build/releases/v0.1.3/grog@0.1.3#/package.pkl"
 
 targets {
   new {
@@ -157,15 +157,15 @@ targets {
 
 This is already pretty neat, because your IDE can now validate and auto-complete your configuration as you type.
 But let's try to address the problem of sharing build target templates by creating a re-usable definition of a build target.
-Say that we want to have a default setup for a nextjs project that includes `installing` and `building` the app.
+Say that we want to have a default setup for a Next.js project that includes `installing` and `building` the app.
 We can create a re-usable template for this:
 
 ```pkl
-import "tbd.pkl"
+import "package://grog.build/releases/v0.1.3/grog@0.1.3#/package.pkl"
 
 function app(
   inputName: String
-) = new Listing<target.Target> {
+) = new Listing<package.Target> {
   new {
     name = inputName + "_install"
     cmd = "npm"

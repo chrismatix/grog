@@ -46,8 +46,55 @@ func (tc *TargetCache) CacheKey(output model.Output) string {
 	return hashing.HashString(output.String())
 }
 
+func (tc *TargetCache) MetaCacheKey(output model.Output, metaKey string) string {
+	return fmt.Sprintf("%s_%s", tc.CacheKey(output), metaKey)
+}
+
 func (tc *TargetCache) FileExists(ctx context.Context, target model.Target, output model.Output) (bool, error) {
 	return tc.backend.Exists(ctx, tc.CachePath(target), tc.CacheKey(output))
+}
+
+// WriteOutputMetaFile writes a meta key/value for a given output
+// Output handlers can use this to track the contents of an output and thereby decide when to load it
+// Note: Meta values are usually small and thus should not require streaming
+func (tc *TargetCache) WriteOutputMetaFile(
+	ctx context.Context,
+	target model.Target,
+	output model.Output,
+	metaKey string,
+	metaValue string,
+) error {
+	return tc.backend.Set(ctx, tc.CachePath(target), tc.MetaCacheKey(output, metaKey), bytes.NewReader([]byte(metaValue)))
+}
+
+func (tc *TargetCache) LoadOutputMetaFile(
+	ctx context.Context,
+	target model.Target,
+	output model.Output,
+	metaKey string,
+) (string, error) {
+	contentReader, err := tc.backend.Get(ctx, tc.CachePath(target), tc.MetaCacheKey(output, metaKey))
+	if err != nil {
+		return "", fmt.Errorf("output %s for target %s does not exist in %s backend",
+			output.String(),
+			target.Label,
+			tc.backend.TypeName())
+	}
+	defer contentReader.Close()
+	buf := new(bytes.Buffer)
+	if _, err := io.Copy(buf, contentReader); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
+func (tc *TargetCache) HasOutputMetaFile(
+	ctx context.Context,
+	target model.Target,
+	output model.Output,
+	metaKey string,
+) (bool, error) {
+	return tc.backend.Exists(ctx, tc.CachePath(target), tc.MetaCacheKey(output, metaKey))
 }
 
 // WriteFile writes a file path relative to the target path to the cache backend

@@ -62,6 +62,10 @@ func StartTaskUI(ctx context.Context) (*tea.Program, chan tea.Msg) {
 	return p, msgCh
 }
 
+func useTea() bool {
+	return !isatty.IsTerminal(os.Stdout.Fd())
+}
+
 // Bubbletea Model
 type model struct {
 	// the header message to keep updating

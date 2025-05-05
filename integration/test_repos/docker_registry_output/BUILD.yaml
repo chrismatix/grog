@@ -6,3 +6,12 @@ targets:
       - script.sh
     outputs:
       - docker::grog-hello-world
+
+  - name: remote_docker_output_succeeds
+    cmd: |
+      docker tag grog-hello-world us-central1-docker.pkg.dev/grog-457510/grog-cache/grog-hello-world
+      docker push us-central1-docker.pkg.dev/grog-457510/grog-cache/grog-hello-world
+    deps:
+      - :docker_output
+    outputs:
+      - docker::us-central1-docker.pkg.dev/grog-457510/grog-cache/grog-hello-world

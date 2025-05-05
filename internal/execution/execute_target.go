@@ -32,6 +32,7 @@ func executeTarget(ctx context.Context, target *model.Target, binToolPaths BinTo
 	}
 
 	cmd := exec.CommandContext(ctx, "sh", "-c", templatedCommand)
+
 	cmd.Dir = executionPath
 
 	cmdOut, err := cmd.CombinedOutput()

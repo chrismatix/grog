@@ -1,25 +1,18 @@
 # TODOs
 
-Visia dog-food checklist:
-
-- [x] Add platform selectors
-- [x] Add info log statement for when we have loaded an image
-- [x] Add `bin_output`
-- [x] Add `$(bin //target)` shell expansion
-- [x] Add docker outputs (registry)
-  - [ ] Add network tests on main branch
+- [ ] Add network tests on main branch
 - [ ] Add `binary-path` outputs
-- [x] Add `grog run` command
 - [ ] Working release flow
 - [ ] Stomp out ALL remaining potential deadlocks
-
-Other TODOs:
-
+- [ ] Only load docker images when needed
+- [ ] Inject platform, os, and arch into pkl inference env
 - [ ] Parallelize output loading using workers
 - [ ] Add filtering by tags
 - [ ] Gzip the docker tarballs (?)
 - [ ] Add `grog info`
+- [ ] Add golangci-lint
 - [ ] Only replace outputs when they have changed -> Will require tracking hashes in a separate, small file
+  - [ ] Benchmark if this is even necessary for single files and directories
 - [ ] Allow running target labels relative to the current directory
 - [ ] Add s3 caching Option
 - [ ] The Output Registry should warn when a target is overwriting another's outputs
