@@ -1,4 +1,122 @@
 ---
-title: Querying
-description: An important aspect of building a reproducible build process is setting up the build tooling itself.
+title: Querying Targets
+description: Learn how to use Grog's query commands to understand target interdependencies and craft CI build commands.
 ---
+
+import { Aside } from "@astrojs/starlight/components";
+
+<Aside type="caution">
+  This feature is not ready yet. The docs instead reflect the planned
+  implementation in the spirit of Documentation-driven Development. So let us
+  know what you think!
+</Aside>
+
+Common use cases for querying your grog build graph might be:
+
+- Only re-run targets that changed between two commits in CI.
+- Understanding the interdependencies of your target.
+
+Grog provides a number of commands that can be chained or combined with tools like `jq` so that you can extract the information that you need:
+
+- [`grog list`](#grog-list): List all targets matching a pattern.
+- [`grog deps`](#grog-deps): Get a target's (transitive) dependencies.
+- [`grog rdeps`](#grog-rdeps): Get a target's transitive dependants ("reverse dependencies").
+- [`grog owners`](#grog-owners): Get all targets that own a set of files as an input.
+- [`grog changes`](#grog-changes): Get all targets changed since a given commit.
+
+But before we go into each command individually, we need to cover the basics of how targets can be selected in grog commands.
+
+## Target Selection Basics
+
+Grog commands that accept multiple targets (such as `build`, `test`, and most of the query commands on this page) accept them in the form of a target pattern.
+You can read the full specification of target patterns [here](/references/), but here are some common uses:
+
+```shell
+# Reference a single target
+grog build //package:target_name
+
+# Reference all targets in package and its sub-packages:
+grog build //package/...
+```
+
+Additionally, you can add tags to your targets that you can then query like so:
+
+```shell
+# Build all targets in the `model_training` package that have at least one of the tags
+grog build --tag=ci-only --tag=python //model_training/...
+```
+
+## grog list
+
+`grog list <target-pattern>`
+
+Lists all the targets that are matched by a given target pattern (or all by default).
+
+```shell
+grog list //package/...
+# Will return
+# //package:foo
+# //package:bar
+# //package/sub-package:baz
+# ...
+
+grog list //package:...
+# Will return
+# //package:foo
+# //package:bar
+```
+
+## grog deps
+
+`grog deps <target-pattern> [--transitive]`
+
+Lists all the dependencies listed by a target.
+When specifying `--transitive` it will return the full list of transitive dependencies.
+
+```shell
+grog deps //package:server
+# Returns the contents of the `deps` field in your BUILD file
+
+grog deps --transitive //package:server
+# Recursively gets the `deps` of server's `deps`
+```
+
+## grog rdeps
+
+`grog rdeps <target-pattern> [--transitive]`
+
+Lists all the targets that depend on the selected target patterns (basically the reverse direction of `deps`).
+Likewise `--transitive` will return the full list of transitive dependants.
+
+```shell
+grog rdeps //package:server
+# Returns all targets that have server in their `deps` field
+
+grog rdeps --transitive //package:server
+# Recursively gets the dependants of server's dependants
+```
+
+## grog owners
+
+`grog owners <file-list/glob>`
+
+Find the build targets that "own" the provided file in the sense that they are part of their `inputs`.
+
+```shell
+grog owners src/app/**/*.go
+# Returns all build targets that have any of the go files as their input
+```
+
+## grog changes
+
+`grog changes <target-pattern> [--since=<commit>] [--dependents=none|transitive]`
+
+Returns all targets whose inputs have been modified since a given commit.
+By setting the `dependents` argument you can control if you also want to get the dependent targets that are affected by a change.
+The default is `none` which will only return the changed targets while `transitive will return all affected dependants.
+
+```shell
+grog changes //server/... --since=origin/main --dependents=transitive
+# Returns all targets (and their dependants) in the server target that
+# changed compared to your local state of origin/main
+```

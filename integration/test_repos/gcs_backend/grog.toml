@@ -1,0 +1,6 @@
+[cache]
+backend = "gcs"
+
+[cache.gcs]
+bucket = "grog-test-cache"
+prefix = "/codegen"

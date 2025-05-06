@@ -253,10 +253,6 @@ func (w *Walker) vertexRoutine(
 	// always decrement wait group
 	defer w.wait.Done()
 
-	ctx, cancel := context.WithCancel(ctx)
-	// ensure cancel is called to prevent context leak
-	defer cancel()
-
 	// listen to all events
 	select {
 	case <-info.cancel:

@@ -1,0 +1,15 @@
+name: GCS backend
+repo: gcs_backend
+requires_network: true
+cases:
+  - name: should_write_to_gcs
+    args:
+      - build
+
+  - name: should_only_clean_local_cache
+    args:
+      - clean
+
+  - name: should_restore_from_gcs
+    args:
+      - build

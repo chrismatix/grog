@@ -16,8 +16,18 @@
 - [ ] The Output Registry should warn when a target is overwriting another's outputs
 - [ ] Logging: Create a diagnotics module that we attach to the context and that - on failure - will always write all the diagnostics to the grog root
 - [ ] Docs: Strong README
-- [ ] Tests: Use the new synctest package to better test the execution semantic
 - [ ] Execution: Warn if one or more of the input files specified for a target do not exist
 - [ ] Add shell completions for commands that run targets
 - [ ] Record a brief terminal clip using tea's vhs tape
 - [ ] Support running multiple targets with `grog run` at the same time
+
+Querying
+
+- [ ] Exclude tags
+- [ ]
+
+Tests
+
+- [ ] symlinked output directories
+- [ ] gcs backend
+- [ ] Tests: Use the new synctest package to better test the execution semantic

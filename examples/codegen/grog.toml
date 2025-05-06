@@ -2,6 +2,6 @@
 backend = "gcs"
 
 [cache.gcs]
-bucket = "grog-cache"
-prefix = "/" # optional default: '/'
+bucket = "grog-test-cache"
+prefix = "/codegen" # optional default: '/'
 #credentials_file = "<path-to-google-credentials-json>" # optional

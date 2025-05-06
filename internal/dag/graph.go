@@ -169,7 +169,11 @@ func (g *DirectedTargetGraph) HasCycle() bool {
 // SelectTargets sets targets as selected
 // returns the number of selected targets, the number of targets skipped due to platform mismatch
 // and an error if a selected target depends on a target that does not match the platform
-func (g *DirectedTargetGraph) SelectTargets(pattern label.TargetPattern, tags []string, isTest bool) (int, int, error) {
+func (g *DirectedTargetGraph) SelectTargets(
+	pattern label.TargetPattern,
+	tags []string,
+	isTest bool,
+) (int, int, error) {
 
 	platformSkipped := 0
 	for _, target := range g.vertices {

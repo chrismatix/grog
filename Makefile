@@ -29,11 +29,11 @@ test: build-with-coverage
 	@gotestsum -- -timeout 360s ./integration/... $(UPDATE_FLAG) $(UPDATE_ALL_FLAG)
 	@go tool covdata percent -i=coverdata/integration,coverdata/unit
 	@go tool covdata textfmt -i=coverdata/integration,coverdata/unit -o coverdata/coverage.out
-	@go tool cover -func=coverdata/coverage.out -o=coverdata/coverage.out
+	@go tool cover -func=coverdata/coverage.out -o=coverdata/coverage_overview.out
 
 	@echo ""
 	@echo "Total Coverage:"
-	@echo "$$(awk 'END {print $$NF}' coverdata/coverage.out)"
+	@echo "$$(awk 'END {print $$NF}' coverdata/coverage_overview.out)"
 
 
 check-coverage: test
