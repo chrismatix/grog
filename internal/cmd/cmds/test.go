@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 	"grog/internal/config"
 	"grog/internal/label"
+	"grog/internal/selection"
 )
 
 var TestCmd = &cobra.Command{
@@ -19,18 +20,13 @@ var TestCmd = &cobra.Command{
 			logger.Fatalf("could not get current package: %v", err)
 		}
 
-		var targetPattern label.TargetPattern
-		if len(args) > 0 {
-			targetPattern, err = label.ParseTargetPattern(currentPackagePath, args[0])
-			if err != nil {
-				logger.Fatalf("could not parse target pattern: %v", err)
-			}
-		} else {
-			targetPattern = label.GetMatchAllTargetPattern()
+		targetPatterns, err := label.ParsePatternsOrMatchAll(currentPackagePath, args)
+		if err != nil {
+			logger.Fatalf("could not parse target pattern: %v", err)
 		}
 
 		graph := mustLoadGraph(ctx, logger)
 
-		runBuild(ctx, logger, targetPattern, graph, config.Global.Tags, true)
+		runBuild(ctx, logger, targetPatterns, graph, config.Global.Tags, selection.TestOnly)
 	},
 }

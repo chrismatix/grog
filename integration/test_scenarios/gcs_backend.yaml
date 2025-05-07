@@ -1,6 +1,6 @@
 name: GCS backend
 repo: gcs_backend
-requires_network: true
+requires_creds: true
 cases:
   - name: should_write_to_gcs
     args:

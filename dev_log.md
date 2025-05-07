@@ -2,6 +2,21 @@
 
 Observations, ramblings, and learnings along the way.
 
+## 07-05-2025
+
+Skipped a few days of writing even though I got lots of small things done.
+The docker registry cache was super broken and slow when I first tried it out in the Visia monorepo.
+Some learnings:
+
+- We need to differentiate between the user building a local image and pushing to a remote (this is clear in the docs now)
+- There is a difference between the remote digest and the image id (sha256 of the config) in the local docker engine
+- The final version now uses the file cache to check if we have an image stored and only pulls that if it does not exist in the local daemon. This approach is the fastest.
+
+Also scoped out the entire first version of the query interface.
+When implementing the first query function it became immediately apparent that I would have to refactor target selection out of the graph module.
+
+Observation: Even on private solo code bases every abstraction only lives as long as the underlying feature does not evolve.
+
 ## 02-05-2025
 
 First quick and simple version of the docker registry cache backend is working now.

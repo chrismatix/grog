@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 	"grog/internal/config"
 	"grog/internal/label"
+	"grog/internal/selection"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -51,7 +52,7 @@ var RunCmd = &cobra.Command{
 		// Turn the single target label into a pattern for the build func
 		// TODO eventually we might use the worker pool to run multiple t
 		targetPattern := label.TargetPatternFromLabel(targetLabel)
-		runBuild(ctx, logger, targetPattern, graph, config.Global.Tags, false)
+		runBuild(ctx, logger, []label.TargetPattern{targetPattern}, graph, config.Global.Tags, selection.NonTestOnly)
 
 		// Run the target output
 		binOutputPath := config.GetPathAbsoluteToWorkspaceRoot(

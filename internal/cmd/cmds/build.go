@@ -19,6 +19,7 @@ import (
 	"grog/internal/loading"
 	"grog/internal/model"
 	"grog/internal/output"
+	"grog/internal/selection"
 	"os"
 	"strings"
 	"time"
@@ -37,19 +38,14 @@ var BuildCmd = &cobra.Command{
 			logger.Fatalf("could not get current package: %v", err)
 		}
 
-		var targetPattern label.TargetPattern
-		if len(args) > 0 {
-			targetPattern, err = label.ParseTargetPattern(currentPackagePath, args[0])
-			if err != nil {
-				logger.Fatalf("could not parse target pattern: %v", err)
-			}
-		} else {
-			targetPattern = label.GetMatchAllTargetPattern()
+		targetPatterns, err := label.ParsePatternsOrMatchAll(currentPackagePath, args)
+		if err != nil {
+			logger.Fatalf("could not parse target pattern: %v", err)
 		}
 
 		graph := mustLoadGraph(ctx, logger)
 
-		runBuild(ctx, logger, targetPattern, graph, config.Global.Tags, false)
+		runBuild(ctx, logger, targetPatterns, graph, config.Global.Tags, selection.NonTestOnly)
 	},
 }
 
@@ -57,22 +53,23 @@ var BuildCmd = &cobra.Command{
 func runBuild(
 	ctx context.Context,
 	logger *zap.SugaredLogger,
-	targetPattern label.TargetPattern,
+	targetPatterns []label.TargetPattern,
 	graph *dag.DirectedTargetGraph,
 	tags []string,
-	isTest bool,
+	testFilter selection.TestSelection,
 ) {
 	startTime := time.Now()
 
+	selector := selection.New(targetPatterns, tags, testFilter)
 	// Select targets based on the target pattern.
-	selectedCount, skippedCount, err := graph.SelectTargets(targetPattern, tags, isTest)
+	selectedCount, skippedCount, err := selector.SelectTargetsForBuild(graph)
 	if err != nil {
 		logger.Fatalf("target selection failed: %v", err)
 	}
 
 	if selectedCount == 0 {
 		// Fail if no targets were selected
-		errString := fmt.Sprintf("could not find any targets matching %s", targetPattern.String())
+		errString := fmt.Sprintf("could not find any targets matching %s", label.PatternSetToString(targetPatterns))
 		if skippedCount > 0 {
 			errString += fmt.Sprintf(" (%s not matching %s host)",
 				console.FCountTargets(skippedCount), config.Global.GetPlatform())
@@ -117,7 +114,7 @@ func runBuild(
 
 	// small helper for logging
 	goal := "Build"
-	if isTest {
+	if testFilter == selection.TestOnly {
 		goal = "Test"
 	}
 

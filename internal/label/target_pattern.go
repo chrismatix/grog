@@ -75,6 +75,32 @@ func ParseTargetPattern(currentPackage string, pattern string) (TargetPattern, e
 	return TargetPattern{prefix: prefix, targetPattern: targetPattern, recursive: recursive}, nil
 }
 
+type TargetPatternSet = []TargetPattern
+
+func ParsePatternsOrMatchAll(currentPackage string, patterns []string) ([]TargetPattern, error) {
+	var result []TargetPattern
+	for _, pattern := range patterns {
+		p, err := ParseTargetPattern(currentPackage, pattern)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, p)
+	}
+	if len(result) == 0 {
+		return []TargetPattern{GetMatchAllTargetPattern()}, nil
+	}
+
+	return result, nil
+}
+
+func PatternSetToString(patterns []TargetPattern) string {
+	var result []string
+	for _, p := range patterns {
+		result = append(result, p.String())
+	}
+	return strings.Join(result, " ")
+}
+
 func TargetPatternFromLabel(label TargetLabel) TargetPattern {
 	return TargetPattern{prefix: label.Package, targetPattern: label.Name, recursive: false}
 }
