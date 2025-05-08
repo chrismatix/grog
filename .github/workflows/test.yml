@@ -35,7 +35,7 @@ jobs:
 
       - name: Configure Docker
         id: "configure-docker"
-        run: gcloud auth configure-docker us-east1-docker.pkg.dev
+        run: gcloud auth configure-docker --quiet
 
       - name: Install dependencies
         run: |
