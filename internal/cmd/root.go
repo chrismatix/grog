@@ -92,6 +92,9 @@ func init() {
 	RootCmd.AddCommand(cmds.GetCleanCmd())
 	RootCmd.AddCommand(cmds.VersionCmd)
 	RootCmd.AddCommand(cmds.GraphCmd)
+	RootCmd.AddCommand(cmds.ListCmd)
+	cmds.AddDepsCmd(RootCmd)
+	cmds.AddRDepsCmd(RootCmd)
 
 	if err != nil {
 		panic(err)

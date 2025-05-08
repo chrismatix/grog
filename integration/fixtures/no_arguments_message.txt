@@ -5,8 +5,11 @@ Available Commands:
   build       Loads the user configuration and executes build targets
   clean       Removes build outputs and clears the cache
   completion  Generate the autocompletion script for the specified shell
+  deps        Lists (transitive) dependencies of a target.
   graph       Outputs the target dependency graph
   help        Help about any command
+  list        Lists targets by pattern.
+  rdeps       Lists (transitive) dependants (reverse dependencies) of a target.
   run         Builds and runs a single target's binary output
   test        Loads the user configuration and executes test targets
   version     Print the version info

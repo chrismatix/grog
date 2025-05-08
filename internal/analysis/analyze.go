@@ -6,21 +6,8 @@ import (
 	"grog/internal/model"
 )
 
-// BuildGraphAndAnalyze builds a directed graph of targets and analyzes it.
-func BuildGraphAndAnalyze(targets model.TargetMap) (*dag.DirectedTargetGraph, error) {
-	g, err := buildGraph(targets)
-	if err != nil {
-		return &dag.DirectedTargetGraph{}, err
-	}
-
-	if g.HasCycle() {
-		return &dag.DirectedTargetGraph{}, fmt.Errorf("cycle detected")
-	}
-
-	return g, nil
-}
-
-func buildGraph(targets model.TargetMap) (*dag.DirectedTargetGraph, error) {
+// BuildGraph builds a directed graph of targets and analyzes it.
+func BuildGraph(targets model.TargetMap) (*dag.DirectedTargetGraph, error) {
 	graph := dag.NewDirectedGraphFromMap(targets)
 
 	// Add edges defined by dependencies
@@ -33,6 +20,10 @@ func buildGraph(targets model.TargetMap) (*dag.DirectedTargetGraph, error) {
 				return &dag.DirectedTargetGraph{}, err
 			}
 		}
+	}
+
+	if graph.HasCycle() {
+		return &dag.DirectedTargetGraph{}, fmt.Errorf("cycle detected")
 	}
 
 	return graph, nil

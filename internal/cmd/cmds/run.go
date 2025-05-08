@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 	"grog/internal/config"
 	"grog/internal/label"
+	"grog/internal/loading"
 	"grog/internal/selection"
 	"os"
 	"os/exec"
@@ -39,7 +40,7 @@ var RunCmd = &cobra.Command{
 			logger.Fatalf("could not parse target label: %v", err)
 		}
 
-		graph := mustLoadGraph(ctx, logger)
+		graph := loading.MustLoadGraphForBuild(ctx, logger)
 		runTarget, hasTarget := graph.GetVertices()[targetLabel]
 		if !hasTarget {
 			logger.Fatalf("could not find target %s", targetLabel)

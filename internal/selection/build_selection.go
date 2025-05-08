@@ -4,11 +4,18 @@ import (
 	"fmt"
 	"grog/internal/config"
 	"grog/internal/dag"
-	"grog/internal/label"
 	"grog/internal/model"
-	"slices"
 	"strings"
 )
+
+/*
+
+When selecting targets for a build/test/run we want to additionally check the platform
+selectors when querying.
+
+This could (should?) conceivably live in the analysis package so that queries and build share the same
+target selection.
+*/
 
 // SelectTargetsForBuild sets targets as selected
 // returns the number of selected targets, the number of targets skipped due to platform mismatch
@@ -16,45 +23,18 @@ import (
 func (s *Selector) SelectTargetsForBuild(
 	graph *dag.DirectedTargetGraph,
 ) (int, int, error) {
-	selectedCountSum := 0
-	platformSkippedSum := 0
-	for _, pattern := range s.Patterns {
-		selectedCount, platformSkipped, err := s.selectTargetsForPattern(graph, pattern)
-		if err != nil {
-			return 0, 0, err
-		}
-		selectedCountSum += selectedCount
-		platformSkippedSum += platformSkipped
-	}
-
-	return selectedCountSum, platformSkippedSum, nil
-}
-
-func (s *Selector) selectTargetsForPattern(
-	graph *dag.DirectedTargetGraph,
-	pattern label.TargetPattern,
-) (int, int, error) {
 
 	platformSkipped := 0
 	for _, target := range graph.GetVertices() {
-
-		hasTag := false
-		for _, tag := range s.Tags {
-			if slices.Contains(target.Tags, tag) {
-				hasTag = true
-				break
-			}
-		}
-
 		// Match pattern and test flag
-		if pattern.Matches(target.Label) && targetMatchesTestSelection(target, s.TestFilter) && (hasTag || len(s.Tags) == 0) {
+		if s.targetMatchesFilters(target) {
 			if !targetMatchesPlatform(target) {
 				platformSkipped += 1
 				continue // Skip targets that don't match the platform
 			}
 
 			target.IsSelected = true
-			if err := s.selectAllAncestors(graph, []string{target.Label.String()}, target); err != nil {
+			if err := s.selectAllAncestorsForBuild(graph, []string{target.Label.String()}, target); err != nil {
 				return 0, 0, err
 			}
 		}
@@ -71,9 +51,9 @@ func (s *Selector) selectTargetsForPattern(
 	return selectedCount, platformSkipped, nil
 }
 
-// selectAllAncestors recursively selects all ancestors of the given target
+// selectAllAncestorsForBuild recursively selects all ancestors of the given target
 // and returns the number of selected targets.
-func (s *Selector) selectAllAncestors(
+func (s *Selector) selectAllAncestorsForBuild(
 	graph *dag.DirectedTargetGraph,
 	depChain []string,
 	target *model.Target,
@@ -92,7 +72,7 @@ func (s *Selector) selectAllAncestors(
 		}
 
 		ancestor.IsSelected = true
-		if err := s.selectAllAncestors(graph, depChain, ancestor); err != nil {
+		if err := s.selectAllAncestorsForBuild(graph, depChain, ancestor); err != nil {
 			return err
 		}
 	}

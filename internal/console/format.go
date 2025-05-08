@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/fatih/color"
 	"go.uber.org/zap/zapcore"
+	"sort"
 )
 
 // Pl small pluralization helper
@@ -61,4 +62,16 @@ func FormatErrors(errs []error) string {
 		errStr += err.Error() + "\n"
 	}
 	return errStr
+}
+
+func PrintSorted(list []fmt.Stringer) {
+	strings := make([]string, len(list))
+	for i, s := range list {
+		strings[i] = s.String()
+	}
+
+	sort.Strings(strings)
+	for _, s := range list {
+		fmt.Println(s.String())
+	}
 }

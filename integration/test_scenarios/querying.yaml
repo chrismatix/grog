@@ -1,0 +1,48 @@
+name: query commands
+repo: querying
+cases:
+  # List
+  ###
+  - name: list_by_tags
+    args:
+      - list
+      - --tag=tag1
+      - --tag=non-existent
+
+  - name: build_by_tags
+    args:
+      - build
+      - --tag=tag1
+      - --tag=non-existent
+
+  # This should only match and not recurse
+  - name: list_by_pattern
+    args:
+      - list
+      - //package_1/...
+
+  # Deps
+  ###
+  - name: deps_intransitive
+    args:
+      - deps
+      - //package_2
+
+  - name: deps_transitive
+    args:
+      - deps
+      - --transitive
+      - //package_2
+
+  # RDeps
+  ###
+  - name: rdeps_intransitive
+    args:
+      - rdeps
+      - //package_1:bar # Only depended on by foo
+
+  - name: rdeps_transitive
+    args:
+      - rdeps
+      - --transitive
+      - //package_1:bar

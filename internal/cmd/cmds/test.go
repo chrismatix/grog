@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 	"grog/internal/config"
 	"grog/internal/label"
+	"grog/internal/loading"
 	"grog/internal/selection"
 )
 
@@ -25,7 +26,7 @@ var TestCmd = &cobra.Command{
 			logger.Fatalf("could not parse target pattern: %v", err)
 		}
 
-		graph := mustLoadGraph(ctx, logger)
+		graph := loading.MustLoadGraphForBuild(ctx, logger)
 
 		runBuild(ctx, logger, targetPatterns, graph, config.Global.Tags, selection.TestOnly)
 	},

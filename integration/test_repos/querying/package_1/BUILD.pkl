@@ -1,0 +1,20 @@
+amends ".../pkl/package.pkl"
+
+targets {
+  new {
+    name = "foo"
+    cmd = "echo 'hello foo'"
+    deps {
+      ":bar"
+    }
+
+    tags {
+      "tag1"
+    }
+  }
+
+  new {
+    name = "bar"
+    cmd = "echo 'hello foo'"
+  }
+}

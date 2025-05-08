@@ -2,6 +2,7 @@ package label
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -92,4 +93,16 @@ func (t TargetLabel) String() string {
 
 func (t TargetLabel) IsTest() bool {
 	return strings.HasSuffix(t.Name, "_test")
+}
+
+func PrintSorted(labels []TargetLabel) {
+	var result []string
+	for _, label := range labels {
+		result = append(result, label.String())
+	}
+
+	sort.Strings(result)
+	for _, s := range result {
+		fmt.Println(s)
+	}
 }

@@ -1,0 +1,15 @@
+amends ".../pkl/package.pkl"
+
+targets {
+  new {
+    name = "package_2"
+    cmd = "echo 'hello world'"
+    deps {
+      "//package_1:foo"
+    }
+
+    tags {
+      "tag1"
+    }
+  }
+}

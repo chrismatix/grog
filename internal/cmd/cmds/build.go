@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
-	"grog/internal/analysis"
 	"grog/internal/caching"
 	"grog/internal/caching/backends"
 	"grog/internal/config"
@@ -17,7 +16,6 @@ import (
 	"grog/internal/execution"
 	"grog/internal/label"
 	"grog/internal/loading"
-	"grog/internal/model"
 	"grog/internal/output"
 	"grog/internal/selection"
 	"os"
@@ -43,7 +41,7 @@ var BuildCmd = &cobra.Command{
 			logger.Fatalf("could not parse target pattern: %v", err)
 		}
 
-		graph := mustLoadGraph(ctx, logger)
+		graph := loading.MustLoadGraphForBuild(ctx, logger)
 
 		runBuild(ctx, logger, targetPatterns, graph, config.Global.Tags, selection.NonTestOnly)
 	},
@@ -153,26 +151,4 @@ func runBuild(
 		goal,
 		console.FCountTargets(successCount),
 		cacheHits)
-}
-
-func mustLoadGraph(ctx context.Context, logger *zap.SugaredLogger) *dag.DirectedTargetGraph {
-	packages, err := loading.LoadPackages(ctx)
-	if err != nil {
-		logger.Fatalf(
-			"could not load packages: %v",
-			err)
-	}
-
-	targets, err := model.TargetMapFromPackages(packages)
-	if err != nil {
-		logger.Fatalf("could not create target map: %v", err)
-	}
-
-	graph, err := analysis.BuildGraphAndAnalyze(targets)
-	if err != nil {
-		logger.Fatalf("could not build graph: %v", err)
-	}
-
-	logger.Infof("%s loaded, %s configured.", console.FCountPkg(len(packages)), console.FCountTargets(len(targets)))
-	return graph
 }

@@ -30,7 +30,7 @@ var GraphCmd = &cobra.Command{
 			logger.Fatalf("could not create target map: %v", err)
 		}
 
-		graph, err := analysis.BuildGraphAndAnalyze(targets)
+		graph, err := analysis.BuildGraph(targets)
 		if err != nil {
 			logger.Fatalf("could not build graph: %v", err)
 		}

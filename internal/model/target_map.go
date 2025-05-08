@@ -43,3 +43,17 @@ func (m TargetMap) TargetsAlphabetically() []*Target {
 	})
 	return targets
 }
+
+// SelectedTargetsAlphabetically returns the targets in alphabetical order
+func (m TargetMap) SelectedTargetsAlphabetically() []*Target {
+	var targets []*Target
+	for _, target := range m {
+		if target.IsSelected {
+			targets = append(targets, target)
+		}
+	}
+	sort.Slice(targets, func(i, j int) bool {
+		return targets[i].Label.String() < targets[j].Label.String()
+	})
+	return targets
+}

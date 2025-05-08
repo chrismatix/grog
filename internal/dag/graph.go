@@ -102,7 +102,7 @@ func (g *DirectedTargetGraph) GetOutEdges(target *model.Target) ([]*model.Target
 	return g.outEdges[target.Label], nil
 }
 
-// GetDescendants returns a list of vertices that are descendants of the given vertex.
+// GetDescendants returns a list of vertices that are descendants (dependants) of the given vertex.
 // Recurses via the outEdges of each vertex.
 func (g *DirectedTargetGraph) GetDescendants(target *model.Target) []*model.Target {
 	var descendants []*model.Target
@@ -114,6 +114,20 @@ func (g *DirectedTargetGraph) GetDescendants(target *model.Target) []*model.Targ
 		descendants = append(descendants, recursiveDescendants...)
 	}
 	return descendants
+}
+
+// GetAncestors returns a list of vertices that are ancestors (dependencies) of the given vertex.
+// // Recurses via the inEdges of each vertex.
+func (g *DirectedTargetGraph) GetAncestors(target *model.Target) []*model.Target {
+	var ancestors []*model.Target
+	for _, ancestor := range g.inEdges[target.Label] {
+		ancestors = append(ancestors, ancestor)
+
+		// Recurse
+		recursiveAncestors := g.GetAncestors(ancestor)
+		ancestors = append(ancestors, recursiveAncestors...)
+	}
+	return ancestors
 }
 
 // hasVertex checks whether a vertex exists in the graph.
@@ -217,6 +231,12 @@ func (g *DirectedTargetGraph) LogGraphJSON(logger *zap.SugaredLogger) {
 type GraphJSON struct {
 	Vertices []*model.Target     `json:"vertices"`
 	Edges    map[string][]string `json:"edges"` // from label to label
+}
+
+func (g *DirectedTargetGraph) LogSelectedVertices() {
+	for _, vertex := range g.vertices.SelectedTargetsAlphabetically() {
+		fmt.Println(vertex.Label)
+	}
 }
 
 // MarshalJSON serializes the graph to JSON

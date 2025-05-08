@@ -42,7 +42,8 @@ grog build //package/...
 Additionally, you can add tags to your targets that you can then query like so:
 
 ```shell
-# Build all targets in the `model_training` package that have at least one of the tags
+# Build all targets in the `model_training` package
+# that have at least one of the tags
 grog build --tag=ci-only --tag=python //model_training/...
 ```
 
@@ -68,9 +69,9 @@ grog list //package:...
 
 ## grog deps
 
-`grog deps <target-pattern> [--transitive]`
+`grog deps <target-label> [--transitive]`
 
-Lists all the dependencies listed by a target.
+Lists all the dependencies listed by a single target.
 When specifying `--transitive` it will return the full list of transitive dependencies.
 
 ```shell
@@ -104,7 +105,8 @@ Find the build targets that "own" the provided file in the sense that they are p
 
 ```shell
 grog owners src/app/**/*.go
-# Returns all build targets that have any of the go files as their input
+# Returns all build targets that have
+# any of the go files as their input
 ```
 
 ## grog changes
