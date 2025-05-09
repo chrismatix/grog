@@ -1,7 +1,6 @@
 package cmds
 
 import (
-	"fmt"
 	"grog/internal/analysis"
 	"os/exec"
 	"path/filepath"
@@ -83,9 +82,7 @@ var ChangesCmd = &cobra.Command{
 		for _, pkg := range packages {
 			// Get the absolute path of the package definition
 			absPkgPath := pkg.SourceFilePath
-			fmt.Println(absPkgPath, changedFiles)
 			if containsFile(changedFiles, absPkgPath) {
-				fmt.Println("contains!")
 				// add all targets within that package:
 				for _, target := range pkg.Targets {
 					matchingTargets = append(matchingTargets, target)

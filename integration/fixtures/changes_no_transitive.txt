@@ -1,0 +1,2 @@
+//package_1:bar
+//package_2:package_2

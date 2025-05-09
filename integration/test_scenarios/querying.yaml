@@ -55,7 +55,16 @@ cases:
       - package_1/source.txt
 
   # Changes
-#  - name: changes
-#    args:
-#      - changes
-#      - --since=HEAD
+  - name: changes_no_transitive
+    # Returns //package_1:bar for the source file change
+    # Returns //package_2 for the build file change
+    args:
+      - changes
+      - --since=5e79b3bc4fc7f1978e78f917126710989bf0deaa
+
+  - name: changes_transitive
+    # Also returns //package_1:foo as a dependent on bar
+    args:
+      - changes
+      - --dependents=transitive
+      - --since=5e79b3bc4fc7f1978e78f917126710989bf0deaa

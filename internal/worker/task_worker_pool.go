@@ -179,6 +179,8 @@ func (twp *TaskWorkerPool[T]) Run(task TaskFunc[T]) (T, error) {
 }
 
 func (twp *TaskWorkerPool[T]) Shutdown() {
+	twp.mu.Lock()
+	defer twp.mu.Unlock()
 	twp.closed = true
 	close(twp.jobCh)
 }
