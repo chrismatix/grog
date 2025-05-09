@@ -1,11 +1,9 @@
 # TODOs
 
-- [ ] Add network tests on main branch
 - [ ] Add `binary-path` outputs
 - [ ] Working release flow
 - [ ] Stomp out ALL remaining potential deadlocks
 - [ ] Parallelize output loading using workers
-- [ ] Add filtering by tags
 - [ ] Gzip the docker tarballs (?)
 - [ ] Add `grog info`
 - [ ] Add golangci-lint
@@ -28,6 +26,6 @@ Querying
 
 Tests
 
-- [ ] symlinked output directories
-- [ ] gcs backend
+- [x] symlinked output directories
+- [x] gcs backend
 - [ ] Tests: Use the new synctest package to better test the execution semantic

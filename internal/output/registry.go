@@ -3,17 +3,21 @@ package output
 import (
 	"context"
 	"fmt"
+	"github.com/alitto/pond/v2"
 	"grog/internal/caching"
 	"grog/internal/config"
 	"grog/internal/model"
 	"grog/internal/output/handlers"
+	"runtime"
 	"sync"
+	"sync/atomic"
 )
 
 // Registry manages the available output handlers
 type Registry struct {
 	handlers    map[string]handlers.Handler
 	targetCache *caching.TargetCache
+	pool        pond.Pool
 	mu          sync.RWMutex
 }
 
@@ -24,6 +28,9 @@ func NewRegistry(
 	r := &Registry{
 		handlers:    make(map[string]handlers.Handler),
 		targetCache: targetCache,
+		pool: pond.NewPool(
+			runtime.NumCPU() * 2,
+		),
 	}
 
 	// Register built-in handlers
@@ -74,42 +81,69 @@ func (r *Registry) HasCacheHit(ctx context.Context, target model.Target) (bool, 
 		return false, nil
 	}
 
+	foundMiss := atomic.Bool{}
+	var tasks []pond.Task
 	for _, outputRef := range target.AllOutputs() {
-		handler := r.mustGetHandler(outputRef.Type)
-		handlerCacheHit, handlerErr := handler.Has(ctx, target, outputRef)
-		if handlerErr != nil {
-			return false, fmt.Errorf("error checking for output %s with %s handler: %w", outputRef, handler.Type(), handlerErr)
-		}
-		if !handlerCacheHit {
-			return false, nil
-		}
+		localOutputRef := outputRef
+		task := r.pool.SubmitErr(func() error {
+			handler := r.mustGetHandler(localOutputRef.Type)
+			handlerCacheHit, handlerErr := handler.Has(ctx, target, localOutputRef)
+			if handlerErr != nil {
+				return fmt.Errorf("error checking for output %s with %s handler: %w", localOutputRef, handler.Type(), handlerErr)
+			}
+			if !handlerCacheHit {
+				foundMiss.Store(true)
+			}
+			return nil
+		})
+		tasks = append(tasks, task)
 	}
 
-	return true, nil
+	return !foundMiss.Load(), nil
 }
 
 func (r *Registry) WriteOutputs(ctx context.Context, target model.Target) error {
-	err := r.targetCache.WriteCacheExistsFile(ctx, target)
-	if err != nil {
+	if err := r.targetCache.WriteCacheExistsFile(ctx, target); err != nil {
 		return err
 	}
 
-	for _, outputRef := range target.AllOutputs() {
-		if handlerErr := r.mustGetHandler(outputRef.Type).Write(ctx, target, outputRef); handlerErr != nil {
-			return handlerErr
-		}
+	outputs := target.AllOutputs()
+
+	var tasks []pond.Task
+	for _, outputRef := range outputs {
+		localOutputRef := outputRef
+		task := r.pool.SubmitErr(func() error {
+			return r.mustGetHandler(localOutputRef.Type).Write(ctx, target, localOutputRef)
+		})
+		tasks = append(tasks, task)
 	}
 
-	return nil
-}
-
-func (r *Registry) LoadOutputs(ctx context.Context, target model.Target) error {
-	for _, outputRef := range target.AllOutputs() {
-		if err := r.mustGetHandler(outputRef.Type).Load(ctx, target, outputRef); err != nil {
+	for _, task := range tasks {
+		if err := task.Wait(); err != nil {
 			return err
 		}
 	}
+	return nil
 
+}
+
+func (r *Registry) LoadOutputs(ctx context.Context, target model.Target) error {
+	outputs := target.AllOutputs()
+
+	var tasks []pond.Task
+	for _, outputRef := range outputs {
+		localOutputRef := outputRef
+		task := r.pool.SubmitErr(func() error {
+			return r.mustGetHandler(localOutputRef.Type).Load(ctx, target, localOutputRef)
+		})
+		tasks = append(tasks, task)
+	}
+
+	for _, task := range tasks {
+		if err := task.Wait(); err != nil {
+			return err
+		}
+	}
 	// Why this is needed:
 	// - When restoring from the remote cache we copy every file to the local cache
 	// - However, we don't explicitly restore the cache exists file
