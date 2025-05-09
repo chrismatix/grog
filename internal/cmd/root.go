@@ -96,6 +96,7 @@ func init() {
 	cmds.AddDepsCmd(RootCmd)
 	cmds.AddRDepsCmd(RootCmd)
 	cmds.AddOwnersCmd(RootCmd)
+	cmds.AddChangesCmd(RootCmd)
 
 	if err != nil {
 		panic(err)

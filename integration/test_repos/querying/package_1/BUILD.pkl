@@ -21,6 +21,7 @@ targets {
     command = "echo 'hello foo'"
     inputs {
       "source.txt"
+      "source_2.txt"
     }
   }
 }

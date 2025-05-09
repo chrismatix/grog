@@ -6,7 +6,7 @@ BUCKET_NAME="grog-assets"
 OBJECT_KEY="github/coverage.svg"
 
 # Path to the coverage file
-COVERAGE_FILE="coverdata/coverage.out"
+COVERAGE_FILE="coverdata/coverage_overview.out"
 
 # Check if the coverage file exists
 if [ ! -f "$COVERAGE_FILE" ]; then
