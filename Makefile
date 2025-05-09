@@ -16,6 +16,7 @@ unit-test:
 	@gotestsum ./internal/...
 
 full-test:
+	@echo "Clearing test infrastructure:"
 	./.github/reset_test_infra.sh
 	REQUIRES_CREDS=true $(MAKE) test
 

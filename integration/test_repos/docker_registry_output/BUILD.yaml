@@ -11,7 +11,7 @@ targets:
     command: |
       docker tag grog-hello-world us-central1-docker.pkg.dev/grog-457510/grog-cache/grog-hello-world
       docker push us-central1-docker.pkg.dev/grog-457510/grog-cache/grog-hello-world
-    deps:
+    dependencies:
       - :docker_output
     outputs:
       - docker::us-central1-docker.pkg.dev/grog-457510/grog-cache/grog-hello-world

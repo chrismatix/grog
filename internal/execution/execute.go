@@ -51,6 +51,7 @@ func Execute(
 	selectedTargetCount := len(graph.GetSelectedVertices())
 	workerPool := worker.NewTaskWorkerPool[bool](numWorkers, msgCh, selectedTargetCount)
 	workerPool.StartWorkers(ctx)
+	defer workerPool.Shutdown()
 
 	// walkCallback will be called at max parallelism by the graph walker
 	walkCallback := func(ctx context.Context, target *model.Target, depsCached bool) (bool, error) {

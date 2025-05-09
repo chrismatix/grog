@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # Clean up remote test infrastructure
 
 # 1. Delete all Docker images in the Artifact Registry

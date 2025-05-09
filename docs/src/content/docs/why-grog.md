@@ -12,6 +12,8 @@ Now unless you are only using a single language with a built-in solution for thi
 2. **Creating ad-hoc solutions** with scripts, Makefiles, or internal CLIs.
    These may work initially but inevitably become fragile as your project scales. Building in custom logic to handle dependencies, execution order, or incremental runs becomes a time and resource sink.
 
+![Grog use case graph](../../assets/grog-stat.webp)
+
 This is where **Grog** steps in—a tool designed to streamline your builds while allowing you to keep using the tools and commands you’re already familiar with.
 By focusing on efficiency and simplicity, Grog empowers your team to handle core build challenges without the overhead of larger tools.
 With Grog, the common needs of internal build systems become approachable and manageable:
