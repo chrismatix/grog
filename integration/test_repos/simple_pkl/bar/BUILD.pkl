@@ -3,8 +3,8 @@ amends ".../pkl/package.pkl"
 targets {
   new {
     name = "bar"
-    cmd = "cat source.txt ../foo/output.txt > output.txt && cat source.txt ../foo/output.txt > ../bar_output.txt"
-    deps {
+    command = "cat source.txt ../foo/output.txt > output.txt && cat source.txt ../foo/output.txt > ../bar_output.txt"
+    dependencies {
       "//foo"
     }
     outputs {
@@ -15,11 +15,11 @@ targets {
 
   new {
     name = "bar_test"
-    cmd = "cat output.txt && echo 'some text' >> output.txt && cp output.txt test_output.txt"
+    command = "cat output.txt && echo 'some text' >> output.txt && cp output.txt test_output.txt"
     inputs {
       "source.txt"
     }
-    deps {
+    dependencies {
       ":bar"
     }
     outputs {

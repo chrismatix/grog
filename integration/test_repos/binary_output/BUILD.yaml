@@ -1,9 +1,9 @@
 targets:
   - name: uses_bin_tool
-    deps:
+    dependencies:
       - :defines_bin_tool
     #      - :a_bin_path_tool
-    cmd: |
+    command: |
       # Using the bin tool
       $(bin :defines_bin_tool) foo
 
@@ -11,7 +11,7 @@ targets:
   # You can run that binary by running:
   # grog run //package:a_bin_tool -- arg1 arg2
   - name: defines_bin_tool
-    cmd: |
+    command: |
       mkdir -p dist
 
       cat > dist/bin << 'EOF'
@@ -27,7 +27,7 @@ targets:
   # Cache-hit when we find the binary on the path
   # -> These cannot be cached remotely
 #  - name: a_bin_path_tool
-#    cmd: curl -LsSf https://astral.sh/uv/install.sh | sh
+#    command: curl -LsSf https://astral.sh/uv/install.sh | sh
 #
 #      brew install grog
 #    outputs:

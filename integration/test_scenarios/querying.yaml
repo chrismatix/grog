@@ -46,3 +46,10 @@ cases:
       - rdeps
       - --transitive
       - //package_1:bar
+
+  # Owners
+  ###
+  - name: file_owners
+    args:
+      - owners
+      - package_1/source.txt

@@ -3,14 +3,14 @@ amends ".../pkl/package.pkl"
 targets {
   new {
     name = "foo"
-    cmd = "echo 'hello world'"
+    command = "echo 'hello world'"
   }
 
   // this should be silently skipped when running
   // grog build //pkg/...
   new {
     name = "foo_platform"
-    cmd = "echo 'hello world'"
+    command = "echo 'hello world'"
     platform {
       os {
         "made-up-os"

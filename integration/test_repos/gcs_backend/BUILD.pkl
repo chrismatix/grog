@@ -4,7 +4,7 @@ targets {
   new {
     name = "foo"
     inputs { "src/*.txt" }
-    cmd = "cat src/source_1.txt src/source_2.txt > output.txt"
+    command = "cat src/source_1.txt src/source_2.txt > output.txt"
     outputs {
       "output.txt"
     }

@@ -25,7 +25,7 @@ func TestMakefileParser(t *testing.T) {
 			name: "Valid annotation and target",
 			input: `# @grog
 # name: grog_build_app
-# deps:
+# dependencies:
 #   - //proto:build
 # inputs:
 #   - src/**/*.js
@@ -37,11 +37,11 @@ build_app:
 	npm run build`,
 			expectedTargets: []TargetDTO{
 				{
-					Name:    "grog_build_app",
-					Command: "make build_app",
-					Deps:    []string{"//proto:build"},
-					Inputs:  []string{"src/**/*.js", "assets/**/*.scss"},
-					Outputs: []string{"dist/*.js", "dist/styles.bundle.css"},
+					Name:         "grog_build_app",
+					Command:      "make build_app",
+					Dependencies: []string{"//proto:build"},
+					Inputs:       []string{"src/**/*.js", "assets/**/*.scss"},
+					Outputs:      []string{"dist/*.js", "dist/styles.bundle.css"},
 				},
 			},
 			expectedFoundFlag: true,
@@ -50,7 +50,7 @@ build_app:
 		{
 			name: "Valid annotation with no explicit 'name'",
 			input: `# @grog
-# deps:
+# dependencies:
 #   - //proto:build
 # inputs:
 #   - src/**/*.js
@@ -60,11 +60,11 @@ build_target:
 	echo "Building..."`,
 			expectedTargets: []TargetDTO{
 				{
-					Name:    "build_target",
-					Command: "make build_target",
-					Deps:    []string{"//proto:build"},
-					Inputs:  []string{"src/**/*.js"},
-					Outputs: []string{"dist/*.js"},
+					Name:         "build_target",
+					Command:      "make build_target",
+					Dependencies: []string{"//proto:build"},
+					Inputs:       []string{"src/**/*.js"},
+					Outputs:      []string{"dist/*.js"},
 				},
 			},
 			expectedFoundFlag: true,
@@ -83,7 +83,7 @@ build_target:
 			name: "Annotation block with non matching target definition (missing colon)",
 			input: `# @grog
 # name: grog_bug
-# deps:
+# dependencies:
 #   - //proto:build
 build_bug
 	npm run build`,
@@ -96,7 +96,7 @@ build_bug
 			name: "Annotation block with YAML error in annotation",
 			input: `# @grog
 # name: grog_error: extra
-# deps:
+# dependencies:
 #   - //proto:build
 build_error:
 	echo "error"`,
@@ -109,7 +109,7 @@ build_error:
 			name: "Annotation block with no target definition following",
 			input: `# @grog
 # name: grog_empty
-# deps:
+# dependencies:
 #   - //proto:build`,
 			expectedTargets:   []TargetDTO{}, // since no target definition was provided
 			expectedFoundFlag: true,
@@ -119,7 +119,7 @@ build_error:
 			name: "Multiple valid annotations in one file",
 			input: `# @grog
 # name: target_one
-# deps:
+# dependencies:
 #   - dep1
 target_one:
 	echo "target one"
@@ -131,18 +131,18 @@ target_two:
 	echo "target two"`,
 			expectedTargets: []TargetDTO{
 				{
-					Name:    "target_one",
-					Command: "make target_one",
-					Deps:    []string{"dep1"},
-					Inputs:  nil,
-					Outputs: nil,
+					Name:         "target_one",
+					Command:      "make target_one",
+					Dependencies: []string{"dep1"},
+					Inputs:       nil,
+					Outputs:      nil,
 				},
 				{
-					Name:    "target_two",
-					Command: "make target_two",
-					Deps:    nil,
-					Inputs:  []string{"file1.js"},
-					Outputs: nil,
+					Name:         "target_two",
+					Command:      "make target_two",
+					Dependencies: nil,
+					Inputs:       []string{"file1.js"},
+					Outputs:      nil,
 				},
 			},
 			expectedFoundFlag: true,
@@ -154,18 +154,18 @@ target_two:
 #
 # name: target_empty_lines
 #
-# deps:
+# dependencies:
 #   - dep2
 #
 target_empty:
 	echo "target with empty lines"`,
 			expectedTargets: []TargetDTO{
 				{
-					Name:    "target_empty_lines",
-					Command: "make target_empty",
-					Deps:    []string{"dep2"},
-					Inputs:  nil,
-					Outputs: nil,
+					Name:         "target_empty_lines",
+					Command:      "make target_empty",
+					Dependencies: []string{"dep2"},
+					Inputs:       nil,
+					Outputs:      nil,
 				},
 			},
 			expectedFoundFlag: true,
@@ -208,7 +208,7 @@ target_empty:
 				if target.Command != expected.Command {
 					t.Errorf("for target %q, expected command %q, got %q", index, expected.Command, target.Command)
 				}
-				compareStringSlices(t, expected.Deps, target.Deps, index, "Deps")
+				compareStringSlices(t, expected.Dependencies, target.Dependencies, index, "Dependencies")
 				compareStringSlices(t, expected.Inputs, target.Inputs, index, "Inputs")
 				compareStringSlices(t, expected.Outputs, target.Outputs, index, "Outputs")
 			}

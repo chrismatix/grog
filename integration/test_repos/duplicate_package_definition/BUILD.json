@@ -2,7 +2,7 @@
   "targets": [
     {
       "name": "bar",
-      "cmd": "cat grog.toml",
+      "command": "cat grog.toml",
       "inputs": ["grog.toml"]
     }
   ]

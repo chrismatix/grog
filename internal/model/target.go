@@ -1,24 +1,25 @@
 package model
 
 import (
+	"encoding/json"
 	"grog/internal/label"
 	"strings"
 )
 
-// Target defines a build step that depends on Deps (other targets)
+// Target defines a build step that depends on Dependencies (other targets)
 // and Inputs (files) and produces Outputs.
 type Target struct {
 	Label label.TargetLabel `json:"label"`
 
-	Command  string              `json:"cmd"`
-	Deps     []label.TargetLabel `json:"deps,omitempty"`
-	Inputs   []string            `json:"inputs,omitempty"`
-	Outputs  []Output            `json:"outputs,omitempty"`
-	Platform *PlatformConfig     `json:"platform,omitempty"`
-	Tags     []string            `json:"tags,omitempty"`
+	Command      string              `json:"cmd"`
+	Dependencies []label.TargetLabel `json:"dependencies,omitempty"`
+	Inputs       []string            `json:"inputs,omitempty"`
+	Outputs      []Output            `json:"outputs,omitempty"`
+	Platform     *PlatformConfig     `json:"platform,omitempty"`
+	Tags         []string            `json:"tags,omitempty"`
 
 	// BinOutput is always a path to a binary file
-	BinOutput Output `json:"bin_output"`
+	BinOutput Output `json:"bin_output,omitempty"`
 	// Whether this target is selected for execution.
 	IsSelected bool `json:"is_selected,omitempty"`
 
@@ -44,8 +45,8 @@ func (t *Target) HasBinOutput() bool {
 }
 
 func (t *Target) GetDepsString() []string {
-	stringDeps := make([]string, len(t.Deps))
-	for i, dep := range t.Deps {
+	stringDeps := make([]string, len(t.Dependencies))
+	for i, dep := range t.Dependencies {
 		stringDeps[i] = dep.String()
 	}
 	return stringDeps
@@ -81,4 +82,24 @@ func (t *Target) OutputDefinitions() []string {
 		definitions = append(definitions, output.String())
 	}
 	return definitions
+}
+
+// Alias to avoid infinite recursion in MarshalJSON
+type targetAlias Target
+
+func (t *Target) MarshalJSON() ([]byte, error) {
+	// embed all fields via alias, override BinOutput to a pointer so omitempty works
+	wrapper := struct {
+		*targetAlias
+		BinOutput *Output `json:"bin_output,omitempty"`
+	}{
+		targetAlias: (*targetAlias)(t),
+	}
+
+	if t.HasBinOutput() {
+		// only include when set
+		wrapper.BinOutput = &t.BinOutput
+	}
+
+	return json.Marshal(wrapper)
 }

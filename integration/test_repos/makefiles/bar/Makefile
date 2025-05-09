@@ -1,7 +1,7 @@
 # @grog
 # inputs:
 # - source.txt
-# deps:
+# dependencies:
 # - //foo:foo
 # outputs:
 # - output.txt
@@ -13,7 +13,7 @@ bar:
 # @grog
 # inputs:
 # - source.txt
-# deps:
+# dependencies:
 # - :bar
 # outputs:
 # - test_output.txt

@@ -58,8 +58,8 @@ You can create these files in various formats depending on your needs:
     ```yaml
     targets:
       - name: build_app
-        cmd: npm run build
-        deps:
+        command: npm run build
+        dependencies:
           - :generate_proto
           - //path/to/other/package:target_name
         inputs:
@@ -68,7 +68,7 @@ You can create these files in various formats depending on your needs:
           - dist/bundle.js
 
       - name: generate_proto
-        cmd: |
+        command: |
           # Yaml supports multiline commands
           protoc --js_out=src/generated proto/*.proto
         inputs:
@@ -85,8 +85,8 @@ You can create these files in various formats depending on your needs:
     "targets": [
       {
         "name": "build_app",
-        "cmd": "npm run build",
-        "deps": [
+        "command": "npm run build",
+        "dependencies": [
           ":generate_proto",
           "//path/to/other/package:target_name"
         ],
@@ -95,7 +95,7 @@ You can create these files in various formats depending on your needs:
       },
       {
         "name": "generate_proto",
-        "cmd": "protoc --js_out=src/generated proto/*.proto",
+        "command": "protoc --js_out=src/generated proto/*.proto",
         "inputs": ["proto/*.proto"],
         "outputs": ["dir::src/generated"]
       }
@@ -112,7 +112,7 @@ You can create these files in various formats depending on your needs:
   #   - package.json
   # outputs:
   #   - dist/bundle.js
-  # deps:
+  # dependencies:
   #   - :generate_proto
   #   - //path/to/other/package:target_name
   build_app:
@@ -141,8 +141,8 @@ Add the grog metadata comments to your `Makefile` goals to allow running them wi
   targets {
     new {
       name = "build_app"
-      cmd = "npm run build"
-      deps {
+      command = "npm run build"
+      dependencies {
         ":generate_proto"
         "//path/to/other/package:target_name"
       }
@@ -153,7 +153,7 @@ Add the grog metadata comments to your `Makefile` goals to allow running them wi
 
     new {
       name = "generate_proto"
-      cmd = "protoc --js_out=src/generated proto/*.proto"
+      command = "protoc --js_out=src/generated proto/*.proto"
       inputs {
         "proto/*.proto"
       }
@@ -171,7 +171,7 @@ Things to note from the above examples:
 
 - Targets are referenced using [labels](/reference/labels.md).
 - Directory outputs are prefixed with `dir::` to indicate they are directories.
-- Command definition `cmd` are executed as sh scripts in the target's directory.
+- Command definition `command` are executed as sh scripts in the target's directory.
 
 ## 5. Running Builds
 
@@ -235,7 +235,7 @@ Dependencies are other targets that must be built before the current target.
 This creates a directed acyclic graph (DAG) of build steps:
 
 ```text
-"deps": [
+"dependencies": [
   "generate_proto",
   "//lib:build_lib"
 ]

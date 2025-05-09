@@ -94,7 +94,7 @@ func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg Packa
 	for _, target := range pkg.Targets {
 		var deps []label.TargetLabel
 		// parse labels
-		for _, dep := range target.Deps {
+		for _, dep := range target.Dependencies {
 			depLabel, err := label.ParseTargetLabel(packagePath, dep)
 			if err != nil {
 				return nil, err
@@ -138,14 +138,14 @@ func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg Packa
 		}
 
 		targets[targetLabel] = &model.Target{
-			Label:     targetLabel,
-			Command:   target.Command,
-			Deps:      deps,
-			Inputs:    resolvedInputs,
-			Outputs:   parsedOutputs,
-			BinOutput: parsedBinOutput,
-			Platform:  target.Platform,
-			Tags:      target.Tags,
+			Label:        targetLabel,
+			Command:      target.Command,
+			Dependencies: deps,
+			Inputs:       resolvedInputs,
+			Outputs:      parsedOutputs,
+			BinOutput:    parsedBinOutput,
+			Platform:     target.Platform,
+			Tags:         target.Tags,
 		}
 	}
 

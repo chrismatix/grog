@@ -4,7 +4,7 @@ targets:
       - input.txt
     outputs:
       - dir::dist/ # Directory output containing generated files
-    cmd: |
+    command: |
       rm -r dist
       mkdir -p dist
       echo "Hello World" > dist/file1.txt

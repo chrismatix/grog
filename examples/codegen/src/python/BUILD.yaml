@@ -2,9 +2,9 @@ targets:
   - name: venv
     inputs:
       - requirements.txt
-    deps:
+    dependencies:
       - //src/protobuf:codegen_pip
-    cmd: |
+    command: |
       rm -rf .venv
       python -m venv .venv
       source .venv/bin/activate
@@ -13,9 +13,9 @@ targets:
   - name: python_test
     inputs:
       - "*.py"
-    deps:
+    dependencies:
       - //src/protobuf:codegen
       - :venv
-    cmd: |
+    command: |
       source .venv/bin/activate
       pytest

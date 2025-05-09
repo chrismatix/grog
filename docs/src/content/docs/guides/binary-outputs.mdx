@@ -26,16 +26,16 @@ targets:
   - name: some_build_target
     inputs:
       - requirements.txt
-    deps:
+    dependencies:
       - :a_bin_tool
-    cmd: |
+    command: |
       # Using the bin tool
       $(bin :a_bin_tool) inputs
 
   # You can alos run that binary directly by running:
   # grog run //package:a_bin_tool -- arg1 arg2
   - name: a_bin_tool
-    cmd: |
+    command: |
       echo "I am a binary" >> dist/bin
     bin_output: dist/bin
 ```

@@ -2,6 +2,6 @@ targets:
   - name: build
     inputs:
       - "app/**/*.tsx"
-    cmd: npm run build
+    command: npm run build
     outputs:
       - dir::.next/

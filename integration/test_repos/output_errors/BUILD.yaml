@@ -1,5 +1,5 @@
 targets:
   - name: output_not_created
-    cmd: "echo 'Should be piped to output file'"
+    command: "echo 'Should be piped to output file'"
     outputs:
       - does_not_get_created.txt

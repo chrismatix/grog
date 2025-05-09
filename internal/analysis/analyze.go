@@ -12,7 +12,7 @@ func BuildGraph(targets model.TargetMap) (*dag.DirectedTargetGraph, error) {
 
 	// Add edges defined by dependencies
 	for _, target := range targets {
-		for _, depLabel := range target.Deps {
+		for _, depLabel := range target.Dependencies {
 			dep := targets[depLabel]
 
 			err := graph.AddEdge(dep, target)

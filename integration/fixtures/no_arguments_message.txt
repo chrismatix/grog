@@ -9,6 +9,7 @@ Available Commands:
   graph       Outputs the target dependency graph
   help        Help about any command
   list        Lists targets by pattern.
+  owners      Lists targets that own the specified files as inputs.
   rdeps       Lists (transitive) dependants (reverse dependencies) of a target.
   run         Builds and runs a single target's binary output
   test        Loads the user configuration and executes test targets

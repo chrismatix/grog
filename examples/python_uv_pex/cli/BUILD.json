@@ -2,7 +2,7 @@
   "targets": [
     {
       "name": "cli_pex",
-      "cmd": "cd .. && ./scripts/build_pex.sh cli",
+      "command": "cd .. && ./scripts/build_pex.sh cli",
       "inputs": ["cli/**/*.py"],
       "outputs": ["dir::dist/"]
     }

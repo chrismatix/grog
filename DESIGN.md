@@ -56,11 +56,11 @@ type Target struct {
 	// unique within the package
 	Name    string   `json:"name"`
 	// dependencies on other targets
-	Deps    []string `json:"deps"`
+	dependencies    []string `json:"deps"`
 	// file dependencies
 	Inputs  []string `json:"inputs"`
 	Outputs []string `json:"outputs"`
-	Command string   `json:"cmd"`
+	Command string   `json:"command"`
 }
 
 // Graph holds targets and their relationships.
@@ -96,7 +96,7 @@ Example `BUILD.json`:
   "targets": [
     {
       "name": "foo",
-      "cmd": "echo 'Hello world' > foo.out",
+      "command": "echo 'Hello world' > foo.out",
       "deps": ["bar"],
       "inputs": ["foo.txt", "src/**/*.txt"],
       "outputs": ["foo.out"]
@@ -128,7 +128,7 @@ for comp in components:
         deps=[],  # No dependencies for this simple example.
         inputs=[source_file],
         outputs=[output_file],
-        cmd=f"echo Processing {source_file} > {output_file}"
+        command=f"echo Processing {source_file} > {output_file}"
     )
 
 # Conditionally define an extra target.
@@ -138,7 +138,7 @@ if grog.env("USE_FEATURE_X") == "1":
         deps=["build_alpha", "build_beta"],
         inputs=["feature/config.json"],
         outputs=["feature/output.txt"],
-        cmd="python generate_feature_x.py"
+        command="python generate_feature_x.py"
     )
 ```
 
@@ -262,7 +262,7 @@ We could make outputs extensible like so:
 ```yaml
 targets:
   - name: foo
-    cmd: "some command"
+    command: "some command"
     outputs:
       - ../output.txt
       # Local or with repository

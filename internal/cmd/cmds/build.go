@@ -135,7 +135,7 @@ func runBuild(
 			if completion.Err == nil {
 				logger.Errorf("Target %s failed with no error", target.Label)
 			} else if errors.As(completion.Err, &executionError) {
-				logger.Errorf("Target %s failed with exit code %d:\ncmd: \"%s\"\n%s",
+				logger.Errorf("Target %s failed with exit code %d:\ncommand: \"%s\"\n%s",
 					target.Label,
 					executionError.ExitCode,
 					target.Command,

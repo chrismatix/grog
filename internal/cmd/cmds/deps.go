@@ -44,7 +44,7 @@ var DepsCmd = &cobra.Command{
 				deps = append(deps, ancestor.Label)
 			}
 		} else {
-			deps = target.Deps
+			deps = target.Dependencies
 		}
 
 		label.PrintSorted(deps)

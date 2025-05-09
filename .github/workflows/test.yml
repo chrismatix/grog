@@ -1,9 +1,9 @@
-name: Test Fix
+name: Test
 
 on:
   push:
     branches:
-      - fix/release-flow
+      - main
 
 jobs:
   build-and-test:

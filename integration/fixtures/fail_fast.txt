@@ -3,5 +3,5 @@ INFO: Selected 3 targets.
 ERROR: Build failed. 0 targets completed (0 cache hits), 1 failed:
 ---------------------------------
 ERROR: Target //:target_1 failed with exit code 1:
-cmd: "echo 'failed' && exit 1"
+command: "echo 'failed' && exit 1"
 failed

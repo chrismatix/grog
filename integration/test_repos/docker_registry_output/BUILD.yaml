@@ -1,6 +1,6 @@
 targets:
   - name: docker_output
-    cmd: |
+    command: |
       docker build -t grog-hello-world .
     inputs:
       - script.sh
@@ -8,7 +8,7 @@ targets:
       - docker::grog-hello-world
 
   - name: remote_docker_output_succeeds
-    cmd: |
+    command: |
       docker tag grog-hello-world us-central1-docker.pkg.dev/grog-457510/grog-cache/grog-hello-world
       docker push us-central1-docker.pkg.dev/grog-457510/grog-cache/grog-hello-world
     deps:

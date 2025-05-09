@@ -1,6 +1,6 @@
 targets:
   - name: docker_output
-    cmd: |
+    command: |
       docker build -t grog-hello-world .
     inputs:
       - script.sh

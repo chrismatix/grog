@@ -3,8 +3,8 @@ amends ".../pkl/package.pkl"
 targets {
   new {
     name = "package_2"
-    cmd = "echo 'hello world'"
-    deps {
+    command = "echo 'hello world'"
+    dependencies {
       "//package_1:foo"
     }
 

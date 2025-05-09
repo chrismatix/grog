@@ -3,7 +3,7 @@ amends ".../pkl/package.pkl"
 targets {
   new {
     name = "os_guard"
-    cmd = "echo 'hello world'"
+    command = "echo 'hello world'"
     platform {
       os {
         "made-up-os"
@@ -15,8 +15,8 @@ targets {
   // build foo due to a platform mismatch
   new {
     name = "bar"
-    cmd = "echo 'hello world'"
-    deps {
+    command = "echo 'hello world'"
+    dependencies {
       ":os_guard"
      }
   }
@@ -24,7 +24,7 @@ targets {
   new {
     name = "arch_guard"
     inputs { "src/*.txt" }
-    cmd = "echo 'hello world'"
+    command = "echo 'hello world'"
     platform {
       arch {
         "made-up-arch"

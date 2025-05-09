@@ -102,10 +102,10 @@ func (p *makefileParser) parse() (PackageDTO, bool, error) {
 
 // grogAnnotation represents the annotation block in a Makefile.
 type grogAnnotation struct {
-	Name    string   `yaml:"name"`
-	Deps    []string `yaml:"deps"`
-	Inputs  []string `yaml:"inputs"`
-	Outputs []string `yaml:"outputs"`
+	Name         string   `yaml:"name"`
+	Dependencies []string `yaml:"dependencies"`
+	Inputs       []string `yaml:"inputs"`
+	Outputs      []string `yaml:"outputs"`
 }
 
 // handleTarget parses the collected annotation lines and the subsequent target definition.
@@ -135,11 +135,11 @@ func (p *makefileParser) handleTarget(
 
 	// Create the TargetDTO.
 	target := &TargetDTO{
-		Name:    targetName,
-		Command: "make " + targetName,
-		Deps:    annotation.Deps,
-		Inputs:  annotation.Inputs,
-		Outputs: annotation.Outputs,
+		Name:         targetName,
+		Command:      "make " + targetName,
+		Dependencies: annotation.Dependencies,
+		Inputs:       annotation.Inputs,
+		Outputs:      annotation.Outputs,
 	}
 
 	// Use the annotation's name as key if provided, otherwise use the target name.

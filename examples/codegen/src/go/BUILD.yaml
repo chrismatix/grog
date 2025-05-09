@@ -2,10 +2,10 @@ targets:
   - name: go
     inputs:
       - "*.go"
-    cmd: go build -o main.bin
+    command: go build -o main.bin
     outputs:
       - main.bin
   - name: go_test
     inputs:
       - "*.go"
-    cmd: go test
+    command: go test

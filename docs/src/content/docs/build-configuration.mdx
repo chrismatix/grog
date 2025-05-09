@@ -26,8 +26,8 @@ This file defines the build targets for each package in your mono-repository.
     ```yaml
     targets:
       - name: build_app
-        cmd: npm run build
-        deps:
+        command: npm run build
+        dependencies:
         - :generate_proto
         - //path/to/other/package:target_name
         inputs:
@@ -36,7 +36,7 @@ This file defines the build targets for each package in your mono-repository.
         - dist/bundle.js
 
       - name: generate_proto
-        cmd: protoc --js_out=src/generated proto/*.proto
+        command: protoc --js_out=src/generated proto/*.proto
         inputs:
         - proto/*.proto
         outputs:
@@ -51,8 +51,8 @@ This file defines the build targets for each package in your mono-repository.
     "targets": [
       {
         "name": "build_app",
-        "cmd": "npm run build",
-        "deps": [
+        "command": "npm run build",
+        "dependencies": [
           ":generate_proto",
           "//path/to/other/package:target_name"
         ],
@@ -61,7 +61,7 @@ This file defines the build targets for each package in your mono-repository.
       },
       {
         "name": "generate_proto",
-        "cmd": "protoc --js_out=src/generated proto/*.proto",
+        "command": "protoc --js_out=src/generated proto/*.proto",
         "inputs": ["proto/*.proto"],
         "outputs": ["dir::src/generated"]
       }
@@ -93,7 +93,7 @@ See below for an example:
 #   - package.json
 # outputs:
 #   - dist/bundle.js
-# deps:
+# dependencies:
 #   - :generate_proto
 #   - //path/to/other/package:target_name
 build_app:
@@ -132,8 +132,8 @@ amends "package://grog.build/releases/v0.1.3/grog@0.1.3#/package.pkl"
 targets {
   new {
     name = "build_app"
-    cmd = "npm run build"
-    deps {
+    command = "npm run build"
+    dependencies {
       ":generate_proto"
       "//path/to/other/package:target_name"
     }
@@ -144,7 +144,7 @@ targets {
 
   new {
     name = "generate_proto"
-    cmd = "protoc --js_out=src/generated proto/*.proto"
+    command = "protoc --js_out=src/generated proto/*.proto"
     inputs {
       "proto/*.proto"
     }
@@ -168,7 +168,7 @@ function app(
 ) = new Listing<package.Target> {
   new {
     name = inputName + "_install"
-    cmd = "npm"
+    command = "npm"
     inputs {
       "package.json"
       "package-lock.json"
@@ -176,8 +176,8 @@ function app(
   }
   new {
     name = inputName + "_test"
-    cmd = "build"
-    deps {
+    command = "build"
+    dependencies {
       ":" + inputName + "_install"
     }
   }

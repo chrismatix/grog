@@ -65,7 +65,7 @@ targets:
     inputs:
       - Dockerfile
       - src/**/*.py
-    cmd: docker build -t some-python-image .
+    command: docker build -t some-python-image .
     outputs:
       - docker::some-local-python-image
       - docker::registry.io/repository/some-python-image

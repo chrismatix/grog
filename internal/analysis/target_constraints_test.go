@@ -54,10 +54,10 @@ func TestCheckPathConstraints(t *testing.T) {
 			name: "valid target without warnings or errors",
 			targetMap: model.TargetMap{
 				label.TL("", "target1"): &model.Target{
-					Label:   label.TL("", "target1"),
-					Inputs:  []string{"src/file.go"},
-					Deps:    []label.TargetLabel{label.TL("", "dep1")},
-					Outputs: mustParseOutputs([]string{"bin/output1"}),
+					Label:        label.TL("", "target1"),
+					Inputs:       []string{"src/file.go"},
+					Dependencies: []label.TargetLabel{label.TL("", "dep1")},
+					Outputs:      mustParseOutputs([]string{"bin/output1"}),
 				},
 			},
 			expectWarningCount: 0,

@@ -7,7 +7,7 @@ There may be scenarios where you want to build outputs for different platforms o
 Say, for instance, that you want create to create an arm64 and an amd64 docker image as part of your build CI.
 There are two ways of tackling this problem:
 
-1. Create a multi-platform build target: Make your `cmd` script output two different build targets.
+1. Create a multi-platform build target: Make your `command` script output two different build targets.
 2. Create one build target for each platform and run them on separate hosts.
 
 We are actively working on supporting `1.` via automatic build virtualization, but for now this is a manual process.
@@ -23,7 +23,7 @@ Take, for instance, the following build target:
 ```yaml
 targets:
   - name: target_a
-    cmd: ...
+    command: ...
     platform:
       os:
         - linux
