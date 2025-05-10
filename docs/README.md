@@ -38,6 +38,11 @@ All commands are run from the root of the project, from a terminal:
 | `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
 | `npm run astro -- --help` | Get help using the Astro CLI                     |
 
-## 👀 Want to learn more?
+## Generating the pkl grammar
 
-Check out [Starlight’s docs](https://starlight.astro.build/), read [the Astro documentation](https://docs.astro.build), or jump into the [Astro Discord server](https://astro.build/chat).
+To regenerate the `pkl_grammar.json` follow these steps:
+
+1. Clone this repository: https://github.com/apple/pkl.tmbundle
+2. Change the `PlistRenderer` instances in the `pkl` directory to `JsonRenderer`
+3. Run `npm run build`
+4. Copy the contents of `Syntaxes/pkl.tmLanguage` to `pkl_grammar.json`

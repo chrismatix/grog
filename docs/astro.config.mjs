@@ -2,6 +2,7 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import starlightThemeRapide from "starlight-theme-rapide";
+import * as fs from "node:fs";
 
 // https://astro.build/config
 export default defineConfig({
@@ -28,6 +29,11 @@ export default defineConfig({
           autogenerate: { directory: "reference", collapsed: true },
         },
       ],
+      expressiveCode: {
+        shiki: {
+          langs: [JSON.parse(fs.readFileSync("./pkl_grammar.json", "utf-8"))],
+        },
+      },
     }),
   ],
 });

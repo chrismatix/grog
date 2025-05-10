@@ -17,10 +17,11 @@ Unlike some build systems, Grog remains agnostic to the actual build execution a
 <Tabs>
   <TabItem label="MacOS">
   ```bash
-  # Using Homebrew
-  brew install grog
+# Using Homebrew
+brew tap chrismatix/grog
+brew install grog
 
-# Or download the binary directly
+# Or download the binary
 
 curl -L https://github.com/chrismatix/grog/releases/latest/download/grog-darwin-arm64 -o /usr/local/bin/grog
 chmod +x /usr/local/bin/grog
@@ -46,9 +47,9 @@ touch grog.toml
 ```
 
 A minimal `grog.toml` file can be empty, with all settings using default values.
-Refer to the [configuration reference](/reference/configuration.md) to see all avalailable options.
+Refer to the [configuration reference](/reference/configuration) to see all available options.
 
-## 3. Define Build Files
+## 3. Define BUILD Files
 
 Grog provides a wide array of build file formats to define your build targets.
 You can create these files in various formats depending on your needs:
@@ -60,6 +61,8 @@ You can create these files in various formats depending on your needs:
       - name: build_app
         command: npm run build
         dependencies:
+          # Dependencies are labels that point to
+          # other targets that need to be built first.
           - :generate_proto
           - //path/to/other/package:target_name
         inputs:
@@ -105,7 +108,7 @@ You can create these files in various formats depending on your needs:
   Save this as `BUILD.json` in your project directory.
   </TabItem>
   <TabItem label="Makefile">
-  ```Makefile
+  ```make
   # @grog
   # inputs:
   #   - src/**/*.js
@@ -135,35 +138,39 @@ protoc --js_out=src/generated proto/\*.proto
 Add the grog metadata comments to your `Makefile` goals to allow running them with Grog.
 </TabItem>
 <TabItem label="Pkl">
-  ```pkl
-  amends "package://grog.build/releases/v0.1.3/grog@0.1.3#/package.pkl"
+```Pkl
+amends "package://grog.build/releases/v0.1.4/grog@0.1.4#/package.pkl"
 
-  targets {
-    new {
-      name = "build_app"
-      command = "npm run build"
-      dependencies {
-        ":generate_proto"
-        "//path/to/other/package:target_name"
-      }
-      outputs {
-        "dir::src/generated"
-      }
+targets {
+  new {
+    name = "build_app"
+    command = "npm run build"
+    dependencies {
+      // Dependencies are labels that point to
+      // other targets that need to be built first.
+      ":generate_proto"
+      "//path/to/other/package:target_name"
     }
-
-    new {
-      name = "generate_proto"
-      command = "protoc --js_out=src/generated proto/*.proto"
-      inputs {
-        "proto/*.proto"
-      }
-      outputs {
-        "test_output.txt"
-      }
+    outputs {
+      "dir::src/generated"
     }
   }
-  ```
-  Save this as `BUILD.pkl` in your project directory.
+
+  new {
+    name = "generate_proto"
+    command = "protoc --js_out=src/generated proto/*.proto"
+    inputs {
+      "proto/*.proto"
+    }
+    outputs {
+      "test_output.txt"
+    }
+  }
+}
+````
+
+Save this as `BUILD.pkl` in your project directory.
+
 </TabItem>
 </Tabs>
 
@@ -181,11 +188,12 @@ To run a build, use the `grog build` command followed by the target label:
 # Build a specific target
 grog build //path/to/package:target_name
 
+# Build all targets in a package
+grog build //path/to/package/...
+
 # Build all targets
-grog build //...
-# or just
 grog build
-````
+```
 
 Grog will re-run a build if any of the following conditions are met:
 

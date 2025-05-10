@@ -1,3 +1,7 @@
 [[redirects]]
 from = "/releases/*"
 to = "https://github.com/chrismatix/grog/releases/download/:splat"
+
+[[redirects]]
+from = "/latest/*"
+to = "https://github.com/chrismatix/grog/releases/latest/download/:splat"

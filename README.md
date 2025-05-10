@@ -22,6 +22,20 @@ Read more in [Why grog?](https://grog.build/why-grog/)
 
 ## Installation
 
+MacOS:
+
+```shell
+brew tap chrismatix/grog
+brew install grog
+```
+
+Linux:
+
+```shell
+curl -L https://github.com/chrismatix/grog/releases/latest/download/grog-linux-amd64 -o /usr/local/bin/grog
+chmod +x /usr/local/bin/grog
+```
+
 ## Documentation
 
 Grog's documentation is available at [grog.build](https://grog.build).

@@ -1,0 +1,90 @@
+name: Update Homebrew Formula
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update-homebrew:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch release info
+        id: release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const release = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag: context.payload.release.tag_name,
+            });
+            return release.data;
+
+      - name: Download assets
+        run: |
+          mkdir -p artifacts
+          cd artifacts
+          for asset in $(echo "${{ steps.release.outputs.result }}" | jq -r '.assets[].browser_download_url'); do
+            curl -LO $asset
+          done
+
+      - name: Generate formula
+        run: |
+          VERSION=${{ github.ref_name }}
+          mkdir -p formula
+
+          DARWIN_AMD64_SHA=$(shasum -a 256 artifacts/grog-darwin-amd64 | awk '{print $1}')
+          DARWIN_ARM64_SHA=$(shasum -a 256 artifacts/grog-darwin-arm64 | awk '{print $1}')
+          LINUX_AMD64_SHA=$(shasum -a 256 artifacts/grog-linux-amd64 | awk '{print $1}')
+          LINUX_ARM64_SHA=$(shasum -a 256 artifacts/grog-linux-arm64 | awk '{print $1}')
+
+          cat <<EOF > formula/grog.rb
+          class Grog < Formula
+            desc "Grog build system CLI"
+            homepage "https://github.com/${{ github.repository }}"
+            version "${VERSION}"
+
+            if OS.mac? && Hardware::CPU.arm?
+              url "https://github.com/${{ github.repository }}/releases/download/${VERSION}/grog-darwin-arm64"
+              sha256 "${DARWIN_ARM64_SHA}"
+            elsif OS.mac? && Hardware::CPU.intel?
+              url "https://github.com/${{ github.repository }}/releases/download/${VERSION}/grog-darwin-amd64"
+              sha256 "${DARWIN_AMD64_SHA}"
+            elsif OS.linux? && Hardware::CPU.arm?
+              url "https://github.com/${{ github.repository }}/releases/download/${VERSION}/grog-linux-arm64"
+              sha256 "${LINUX_ARM64_SHA}"
+            elsif OS.linux? && Hardware::CPU.intel?
+              url "https://github.com/${{ github.repository }}/releases/download/${VERSION}/grog-linux-amd64"
+              sha256 "${LINUX_AMD64_SHA}"
+            end
+
+            def install
+              bin.install Dir["grog-*"].first => "grog"
+            end
+
+            test do
+              system "#{bin}/grog", "--version"
+            end
+          end
+          EOF
+
+      - name: Clone Homebrew tap
+        run: |
+          git clone https://github.com/chrismatix/homebrew-grog.git tap
+          cp formula/grog.rb tap/Formula/grog.rb
+
+      - name: Create PR
+        run: |
+          cd tap
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git checkout -b update-grog-${{ github.ref_name }}
+          git add Formula/grog.rb
+          git commit -m "Update grog formula to ${VERSION}"
+          git push origin update-grog-${{ github.ref_name }}
+          gh pr create --fill --title "Update grog formula to ${VERSION}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

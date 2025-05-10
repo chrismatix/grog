@@ -84,7 +84,7 @@ release: clean
 release-build:
 	@echo "Building for $(GOOS)/$(GOARCH)"
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(LD_FLAGS) -o dist/grog-$(GOOS)-$(GOARCH)
-	@shasum -a 256 dist/grog-$(GOOS)-$(GOARCH) > dist/grog-$(GOOS)-$(GOARCH).sha256
+	@cd dist && shasum -a 256 grog-$(GOOS)-$(GOARCH) > grog-$(GOOS)-$(GOARCH).sha256
 
 
 # Clean built binaries

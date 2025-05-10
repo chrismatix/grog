@@ -3,6 +3,8 @@ title: Why Grog?
 description: Learn what differentiates Grog from other build tools such as Bazel or Pants and when you should or should not use it.
 ---
 
+import graph from "../../assets/grog-stat.svg";
+
 Many teams are recognizing the strong organizational value in moving to a mono repository ([see why](https://monorepo.tools/)).
 When they first do that they might start by just putting all of their projects into one place, but as complexity grows there is a need to share code and introduce interdependencies.
 Now unless you are only using a single language with a built-in solution for this it is here where most teams are stuck between a rock and a hard place:
@@ -12,7 +14,7 @@ Now unless you are only using a single language with a built-in solution for thi
 2. **Creating ad-hoc solutions** with scripts, Makefiles, or internal CLIs.
    These may work initially but inevitably become fragile as your project scales. Building in custom logic to handle dependencies, execution order, or incremental runs becomes a time and resource sink.
 
-![Grog use case graph](../../assets/grog-stat.webp)
+<img alt="Grog use case graph" height="800" src={graph.src} width="1200" />
 
 This is where **Grog** steps in—a tool designed to streamline your builds while allowing you to keep using the tools and commands you’re already familiar with.
 By focusing on efficiency and simplicity, Grog empowers your team to handle core build challenges without the overhead of larger tools.
