@@ -1,23 +1,20 @@
 ---
-title: "grog test"
+title: "grog deps"
 ---
 
-## grog test
+## grog deps
 
-Loads the user configuration and executes test targets
-
-### Synopsis
-
-Loads the user configuration, checks which targets need to be rebuilt based on file hashes, builds the dependency graph, and executes targets.
+Lists (transitive) dependencies of a target.
 
 ```
-grog test [flags]
+grog deps [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for test
+  -h, --help         help for deps
+  -t, --transitive   Include all transitive dependencies of the target
 ```
 
 ### Options inherited from parent commands

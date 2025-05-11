@@ -44,6 +44,15 @@ func (t *Target) HasBinOutput() bool {
 	return t.BinOutput.IsSet()
 }
 
+func (t *Target) SkipsCache() bool {
+	for _, tag := range t.Tags {
+		if tag == "no-cache" {
+			return true
+		}
+	}
+	return false
+}
+
 func (t *Target) GetDepsString() []string {
 	stringDeps := make([]string, len(t.Dependencies))
 	for i, dep := range t.Dependencies {

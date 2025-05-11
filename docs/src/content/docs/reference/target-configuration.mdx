@@ -2,3 +2,88 @@
 title: Target Configuration
 description: Targets define what builds to run and how. This reference covers all the configuration options for a target.
 ---
+
+import { Aside } from "@astrojs/starlight/components";
+
+## Overview
+
+A **target** is the fundamental unit of work in Grog. It defines:
+
+- What command to run (`command`)
+- Which files to track for changes (`inputs`)
+- What artifacts it produces (`outputs`)
+- Which other targets it depends on (`dependencies`)
+- Optional metadata like platform constraints and tags
+
+Grog uses this information to ensure incremental, cached, and parallel builds.
+
+## Fields Reference
+
+| Field        | Type           | Required? | Description                                                            |
+| ------------ | -------------- | --------- | ---------------------------------------------------------------------- |
+| name         | string         | yes       | Unique identifier for the target within its package                    |
+| command      | string         | yes       | Shell command or script to execute in the target's package directory   |
+| inputs       | string[]       | no        | File paths or glob patterns that, when changed, will trigger a rebuild |
+| outputs      | string[]       | no        | Files or directories produced by the target                            |
+| dependencies | label[]        | no        | Labels of other targets that must be built before this one             |
+| platform     | PlatformConfig | no        | OS and architecture constraints for where this target can run          |
+| tags         | string[]       | no        | Metadata tags that affect target behavior (e.g., "no-cache")           |
+| bin_output   | Output         | no        | Specifically identifies a binary output from the target                |
+
+<Aside type="note">
+  Targets with names ending in `_test` are automatically treated as test
+  targets. They will be executed with `grog test` but not with `grog build`
+  unless explicitly requested.
+</Aside>
+
+## Field Details
+
+### name
+
+A unique identifier for the target within its package. This forms part of the target's label.
+
+### command
+
+The shell command or script to execute. This can be a single line or a multi-line script using YAML's `|` syntax or equivalent in other formats.
+
+### inputs
+
+A list of files or glob patterns that Grog monitors for changes. When any input file changes, the target will be rebuilt.
+
+Common glob patterns:
+
+- `src/**/*.js` - All JavaScript files in the src directory and its subdirectories
+- `*.{png,jpg}` - All PNG and JPG files in the current directory
+- `go.mod` - A specific file
+
+### outputs
+
+Files or directories produced by the target. For directories, use the `dir::` prefix. For Docker images, use the `docker::` prefix.
+
+Examples:
+
+- `dist/bundle.js` - A file output
+- `dir::dist/assets/` - A directory output
+- `docker::myregistry.com/myimage:tag` - A Docker image
+
+### dependencies
+
+Other targets that must be built before this one, specified as labels. Labels can reference:
+
+- Targets in the same package: `:target_name`
+- Targets in other packages: `//path/to/package:target_name`
+
+### platform
+
+A platform configuration that restricts where this target can be executed.
+This is particularly useful for multi-platform builds (see [docs](/guides/multi-platform-builds)).
+
+The `platform` field has two sub-fields:
+
+- `os`: List of operating systems where this target can run (e.g., "linux", "darwin", "windows")
+- `arch`: List of CPU architectures where this target can run (e.g., "amd64", "arm64")
+
+When a target has platform constraints defined:
+
+1. Grog checks the current host's OS and architecture
+2. Targets that don't match the current platform are skipped

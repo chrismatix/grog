@@ -1,23 +1,20 @@
 ---
-title: "grog test"
+title: "grog rdeps"
 ---
 
-## grog test
+## grog rdeps
 
-Loads the user configuration and executes test targets
-
-### Synopsis
-
-Loads the user configuration, checks which targets need to be rebuilt based on file hashes, builds the dependency graph, and executes targets.
+Lists (transitive) dependants (reverse dependencies) of a target.
 
 ```
-grog test [flags]
+grog rdeps [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for test
+  -h, --help         help for rdeps
+  -t, --transitive   Include all transitive dependants of the target
 ```
 
 ### Options inherited from parent commands

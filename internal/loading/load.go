@@ -164,8 +164,8 @@ func resolveInputs(
 	fsys := os.DirFS(absolutePackagePath)
 
 	for _, input := range inputs {
-		if !strings.Contains(input, "*") {
-			// Nothing to resolve
+		if !strings.ContainsAny(input, "*?[{") {
+			// Nothing to resolve - no special glob characters
 			resolvedInputs = append(resolvedInputs, input)
 			continue
 		}

@@ -1,23 +1,21 @@
 ---
-title: "grog test"
+title: "grog changes"
 ---
 
-## grog test
+## grog changes
 
-Loads the user configuration and executes test targets
-
-### Synopsis
-
-Loads the user configuration, checks which targets need to be rebuilt based on file hashes, builds the dependency graph, and executes targets.
+Lists targets whose inputs have been modified since a given commit.
 
 ```
-grog test [flags]
+grog changes [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for test
+      --dependents string   Whether to include dependents of changed targets (none or transitive) (default "none")
+  -h, --help                help for changes
+      --since string        Git ref (commit or branch) to compare against
 ```
 
 ### Options inherited from parent commands

@@ -1,23 +1,19 @@
 ---
-title: "grog test"
+title: "grog run"
 ---
 
-## grog test
+## grog run
 
-Loads the user configuration and executes test targets
-
-### Synopsis
-
-Loads the user configuration, checks which targets need to be rebuilt based on file hashes, builds the dependency graph, and executes targets.
+Builds and runs a single target's binary output
 
 ```
-grog test [flags]
+grog run [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for test
+  -h, --help   help for run
 ```
 
 ### Options inherited from parent commands
