@@ -1,37 +1,195 @@
 ---
 title: Multi-platform Builds
-description: Learn how to build for multiple platforms using Grog's platform selectors.
+description: Learn how to build for multiple platforms using Grog's platform selectors and cross-compilation strategies.
 ---
 
-There may be scenarios where you want to build outputs for different platforms or operating systems.
-Say, for instance, that you want create to create an arm64 and an amd64 docker image as part of your build CI.
-There are two ways of tackling this problem:
+import { Aside } from "@astrojs/starlight/components";
 
-1. Create a multi-platform build target: Make your `command` script output two different build targets.
-2. Create one build target for each platform and run them on separate hosts.
+## Why Build for Multiple Platforms?
 
-We are actively working on supporting `1.` via automatic build virtualization, but for now this is a manual process.
-For the second option, however, there is a tailored feature that is presented in the next section.
+There are a number of use cases for building code for different platforms. Common examples include:
 
-## Platform Selectors
+- Building Docker images for both ARM64 (Apple Silicon, AWS Graviton) and AMD64 architectures
+- Creating binaries for Windows, macOS, and Linux
+- Supporting different CPU architectures for embedded systems
+- Ensuring your application works across cloud providers with different infrastructure
 
-For each build target Grog allows you to specify a platform selector using the `platform` field.
-Specifying a platform selector will change Grog's target selection such that if a target does not match your hosts platform it will be effectively invisible.
+Grog provides several approaches to for handling multi-platform builds.
 
-Take, for instance, the following build target:
+## Approaches to Multi-platform Building
+
+There are two primary strategies for building for multiple platforms:
+
+1. **Cross-compilation**: Create a single build target that outputs artifacts for multiple platforms
+2. **Platform-specific targets**: Create separate build targets for each platform and run them on appropriate hosts
+
+Grog supports both approaches, with platform selectors providing special support for the second strategy.
+
+## Cross-compilation Approach
+
+Cross-compilation involves building for a different platform than the one you're running on.
+Many languages and build tools support this out-of-the-box.
+
+### Example: Go Cross-compilation
+
+Go has excellent built-in cross-compilation support:
 
 ```yaml
 targets:
-  - name: target_a
-    command: ...
+  - name: build_multi_platform
+    command: |
+      # Build for Linux AMD64
+      GOOS=linux GOARCH=amd64 go build -o dist/myapp-linux-amd64 ./cmd/myapp
+
+      # Build for macOS ARM64
+      GOOS=darwin GOARCH=arm64 go build -o dist/myapp-darwin-arm64 ./cmd/myapp
+
+      # Build for Windows AMD64
+      GOOS=windows GOARCH=amd64 go build -o dist/myapp-windows-amd64.exe ./cmd/myapp
+    inputs:
+      - cmd/**/*.go
+      - internal/**/*.go
+      - go.mod
+      - go.sum
+    outputs:
+      - dist/myapp-linux-amd64
+      - dist/myapp-darwin-arm64
+      - dist/myapp-windows-amd64.exe
+```
+
+### Example: Multi-platform Docker Images
+
+For Docker images, you can use Docker's BuildX feature:
+
+```yaml
+targets:
+  - name: build_multi_arch_image
+    command: |
+      # Set up Docker BuildX builder with multi-platform support
+      docker buildx create --name multiplatform-builder --use
+
+      # Build and push multi-platform image
+      docker buildx build --platform linux/amd64,linux/arm64 \
+        -t registry.example.com/myapp:latest \
+        --push .
+    inputs:
+      - Dockerfile
+      - src/**/*
+    outputs:
+      - docker::registry.example.com/myapp:latest
+```
+
+<Aside type="note">
+  Cross-compilation works well for many languages but may have limitations for
+  certain types of applications, especially those with native dependencies. In
+  those cases, platform-specific targets might be necessary.
+</Aside>
+
+## Platform-specific Targets with Platform Selectors
+
+Grog's platform selectors allow you to define targets that only run on specific platforms.
+When a target doesn't match the current host's platform, Grog will skip it automatically.
+
+### Defining Platform Selectors
+
+You can specify platform requirements using the `platform` field:
+
+```yaml
+targets:
+  - name: build_linux_amd64
+    command: go build -o dist/myapp-linux-amd64 ./cmd/myapp
     platform:
       os:
         - linux
-        - darwin
       arch:
         - amd64
+    inputs:
+      - cmd/**/*.go
+      - go.mod
+    outputs:
+      - dist/myapp-linux-amd64
+
+  - name: build_darwin_arm64
+    command: go build -o dist/myapp-darwin-arm64 ./cmd/myapp
+    platform:
+      os:
+        - darwin
+      arch:
+        - arm64
+    inputs:
+      - cmd/**/*.go
+      - go.mod
+    outputs:
+      - dist/myapp-darwin-arm64
 ```
 
-If you run all build targets, Grog will automatically skip `target_a` if your host is not either `linux` or `darwin` while also having the `amd64` architecture.
-But what happens if we add a `target_b` that depends on `target_a`?
-In this case grog will fail if you try to build `target_b` when you cannot build `target_a`.
+In this example:
+
+- `build_linux_amd64` will only run on Linux AMD64 hosts
+- `build_darwin_arm64` will only run on macOS ARM64 hosts (like Apple Silicon Macs)
+
+### Platform Selector Behavior
+
+When you run `grog build`, Grog will:
+
+1. Check each target's platform selector against the current host
+2. Skip targets that don't match the current platform
+3. Build targets that do match the platform
+
+This allows you to define all platform variants in a single build file, but only build the ones appropriate for the current environment.
+
+### Handling Dependencies with Platform Selectors
+
+When a target depends on a platform-specific target, Grog enforces platform compatibility:
+
+```yaml
+targets:
+  - name: linux_binary
+    command: go build -o dist/myapp-linux ./cmd/myapp
+    platform:
+      os:
+        - linux
+    outputs:
+      - dist/myapp-linux
+
+  - name: package_linux
+    dependencies:
+      - :linux_binary
+    command: tar -czf dist/myapp-linux.tar.gz dist/myapp-linux
+    platform:
+      os:
+        - linux
+    outputs:
+      - dist/myapp-linux.tar.gz
+```
+
+If you try to build `package_linux` on a non-Linux platform, Grog will fail with an error because the dependency `linux_binary` cannot be built on the current platform.
+
+<Aside type="caution">
+  When using platform selectors with dependencies, ensure that dependent targets
+  have compatible platform selectors. Otherwise, Grog will fail when it can't
+  build a required dependency.
+</Aside>
+
+## Platform-agnostic Dependencies
+
+Sometimes you need to create platform-agnostic targets that depend on platform-specific ones.
+For these cases, you can use conditional logic in your build commands:
+
+```yaml
+targets:
+  - name: test_all_platforms
+    dependencies:
+      - :build_linux_amd64 # Will be skipped on non-Linux/AMD64 platforms
+      - :build_darwin_arm64 # Will be skipped on non-macOS/ARM64 platforms
+    command: |
+      # Run tests for whatever platform we're on
+      if [ "$(uname)" == "Darwin" ]; then
+        ./test_darwin.sh
+      elif [ "$(uname)" == "Linux" ]; then
+        ./test_linux.sh
+      else
+        echo "Unsupported platform for testing"
+        exit 1
+      fi
+```

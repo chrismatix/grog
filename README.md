@@ -32,7 +32,7 @@ brew install grog
 Linux:
 
 ```shell
-curl -L https://github.com/chrismatix/grog/releases/latest/download/grog-linux-amd64 -o /usr/local/bin/grog
+curl -L https://grog.build/latest/grog-linux-amd64 -o /usr/local/bin/grog
 chmod +x /usr/local/bin/grog
 ```
 

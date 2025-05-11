@@ -1,85 +1,226 @@
 ---
 title: Docker Outputs
-description: Grog can cache your docker images for you.
+description: Learn how to cache and manage Docker images in your Grog build process for faster builds and deployments.
 ---
 
-Many real-world CI/CDs don't just produce files or directories, but package the entire app into a docker image that lives on your local docker engine.
-Grog can also cache these, but it is not as straight-forward as caching a file.
-This guide will cover
+import { Aside } from "@astrojs/starlight/components";
 
-## 1. Setup
+## Introduction to Docker Caching
 
-The first step is to add the following lines to your `grog.toml`:
+Many real-world CI/CD pipelines don't just produce files or directories but package entire applications into Docker images. Building Docker images can be time-consuming, especially for large applications, making them perfect candidates for caching.
+
+Grog can cache Docker images, allowing you to:
+
+- Skip rebuilding images when their inputs haven't changed
+- Share images between team members using a remote cache
+- Integrate Docker builds into your dependency graph
+- Push images to registries only when needed
+
+This guide covers how to set up Docker caching, configure storage backends, and define Docker outputs in your build targets.
+
+## Setting Up Docker Caching
+
+### 1. Enable Docker Support
+
+First, add the following configuration to your `grog.toml` file at the root of your repository:
 
 ```toml
 [docker]
 enabled = true
 ```
 
-Next, you need to choose a storage backend for your docker images:
+### 2. Choose a Storage Backend
 
-### Filesystem
+Grog supports two storage backends for Docker images:
 
-Grog will store your images as a tarball using the (remote) filesystem cache that you configured.
-While this is fast to set up it can be quite storage intensive as layers are not deduplicated between caches.
+#### Filesystem Backend (Default)
 
-Here is how to enable this option:
+The filesystem backend stores Docker images as tarballs using your configured (remote) filesystem cache:
 
 ```toml
 [docker]
 enabled = true
-backend = "tarball" # Optional as this is the default
+backend = "tarball"  # This is the default, so it's optional
 ```
 
-### Registry
+**Advantages:**
 
-Using a registry as your backend allows you to store your images in a remote or local Docker registry.
-This is more efficient as layers are deduplicated, reducing storage costs.
-However, it requires you to have a registry running and accessible.
+- Simple to set up
+- Works with any filesystem cache
+- No additional infrastructure required
 
-Here’s how to enable this option:
+**Disadvantages:**
+
+- More storage-intensive as layers aren't deduplicated between images
+- Slower for large images
+
+#### Registry Backend
+
+The registry backend stores Docker images in a Docker registry:
 
 ```toml
 [docker]
+enabled = true
 backend = "registry"
 registry_url = "https://your-registry-url"
 ```
 
-Replace `https://your-registry-url` with the URL of your Docker registry and the appropriate credentials if authentication is required.
-For example, if you're using Docker Hub, your `registry_url` would be `https://index.docker.io/v1/`.
-If you're running a private registry locally, you may use something like `http://localhost:5000` as the URL.
+**Advantages:**
 
-**Authentication:** Grog expects your current session to be authenticated. Here is how to do that:
+- More efficient storage through layer deduplication
+- Better performance for large images
+- Familiar workflow for Docker users
 
-- Docker registry via [docker login](https://docs.docker.com/reference/cli/docker/login/)
-- GCP Artifact Registry [docs](https://cloud.google.com/artifact-registry/docs/docker/authentication)
-- AWS ECR [docs](https://docs.aws.amazon.com/AmazonECR/latest/userguide/registry_auth.html)
+**Disadvantages:**
 
-## 2. Defining docker outputs
+- Requires a registry to be running and accessible
+- Needs authentication setup
 
-Once your docker storage is set up you can define a docker image output for your target:
+### 3. Registry Authentication
+
+When using the registry backend, Grog expects your current session to be authenticated with the registry. Here's how to authenticate with common registries:
+
+- **Docker Hub**: Use `docker login`
+- **Google Artifact Registry**: Follow the [GCP authentication docs](https://cloud.google.com/artifact-registry/docs/docker/authentication)
+- **AWS ECR**: Follow the [AWS ECR authentication docs](https://docs.aws.amazon.com/AmazonECR/latest/userguide/registry_auth.html)
+- **GitHub Container Registry**: Use `docker login ghcr.io`
+
+<Aside>
+  For CI environments, you'll need to ensure authentication happens as part of
+  your CI pipeline before Grog runs.
+</Aside>
+
+## Defining Docker Outputs
+
+Once your Docker storage is set up, you can define Docker image outputs for your targets:
 
 ```yaml
 targets:
-  build_img:
+  - name: build_api_image
     inputs:
       - Dockerfile
-      - src/**/*.py
-    command: docker build -t some-python-image .
+      - src/**/*.go
+      - go.mod
+      - go.sum
+    command: |
+      # Build the Docker image
+      docker build -t api-service:latest .
     outputs:
-      - docker::some-local-python-image
-      - docker::registry.io/repository/some-python-image
+      # Cache the local image
+      - docker::api-service:latest
+      # Also push to a registry (optional)
+      - docker::registry.example.com/myteam/api-service:latest
 ```
 
-Grog will treat docker outputs differently if you explicitly specify a registry URL:
+### Docker Output Syntax
 
-- **Without** registry URL:
+Docker outputs use the following syntax:
 
-  - On completion of the build Grog will push the local image to the registry cache.
-  - On subsequent builds, Grog will only load the image from the registry cache if it does not exist locally.
-  - Use this for local images that you may want to use in tests or builds.
+```
+docker::[registry-url/][repository/]image-name[:tag]
+```
 
-- **With** registry URL:
-  - On completion of the build Grog will push the image tag to the registry.
-  - On subsequent builds, Grog will push the cached image to the registry tag if it does not exist yet.
-  - Use this when deploying to a remote registry.
+- If a registry URL is included, Grog will push the image to that registry
+- If no registry URL is included, Grog will only cache the image locally
+
+### How Docker Caching Works
+
+#### Local Images (without registry URL)
+
+When you specify a Docker output without a registry URL:
+
+```yaml
+outputs:
+  - docker::api-service:latest
+```
+
+- On build completion: Grog saves the local image to its cache
+- On subsequent builds: Grog restores the image from cache to your local Docker daemon if inputs haven't changed
+- Use this for images you need locally for testing or further builds
+
+#### Registry Images (with registry URL)
+
+When you specify a Docker output with a registry URL:
+
+```yaml
+outputs:
+  - docker::registry.example.com/myteam/api-service:latest
+```
+
+- On build completion: Grog saves the image to its cache and pushes it to the specified registry
+- On subsequent builds: Grog restores the image from cache and pushes it to the registry if inputs haven't changed
+- Use this for images that need to be deployed or shared with others
+
+## Using Docker Images in Dependent Targets
+
+You can use Docker images built by one target in dependent targets:
+
+```yaml
+targets:
+  - name: build_api_image
+    inputs:
+      - Dockerfile
+      - src/**/*.go
+    command: docker build -t api-service:latest .
+    outputs:
+      - docker::api-service:latest
+
+  - name: integration_test
+    dependencies:
+      - :build_api_image
+    command: |
+      # The api-service image is now available locally
+      docker run --rm api-service:latest --version
+      # Run tests against the image
+      go test -tags=integration ./tests/...
+```
+
+## Multi-platform Docker Images
+
+For building multi-platform Docker images, see the [Multi-platform Builds](/guides/multi-platform-builds) guide.
+
+## Best Practices
+
+1. **Be specific with tags**: Use specific tags rather than `latest` to avoid confusion
+2. **Include all inputs**: Make sure to list all files that affect your Docker build as inputs
+3. **Use BuildKit**: Enable Docker BuildKit for faster, more efficient builds:
+   ```yaml
+   command: |
+     DOCKER_BUILDKIT=1 docker build -t my-image:latest .
+   ```
+4. **Layer caching**: Structure your Dockerfiles to take advantage of layer caching
+5. **Consider multi-stage builds**: Use multi-stage builds to keep final images small
+6. **Registry selection**: For team environments, use a shared registry backend for better efficiency
+
+## Troubleshooting
+
+### Common Issues
+
+#### "Error: docker not found"
+
+Ensure Docker is installed and available in your PATH.
+
+#### "Error pushing to registry"
+
+Check your authentication status with:
+
+```shell
+docker login your-registry-url
+```
+
+#### "Error: image not found"
+
+Make sure your Docker build command is creating an image with the exact tag specified in your outputs.
+
+#### Slow Docker builds
+
+Consider:
+
+- Enabling BuildKit
+- Using a `.dockerignore` file
+- Optimizing your Dockerfile for better layer caching
+
+<Aside type="tip">
+  When debugging Docker caching issues, you can use `grog build --verbose` to
+  see more details about what Grog is doing with Docker images.
+</Aside>

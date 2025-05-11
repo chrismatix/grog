@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"grog/internal/config"
 	"grog/internal/model"
+	"os"
 	"os/exec"
 	"text/template"
 )
@@ -32,6 +33,14 @@ func executeTarget(ctx context.Context, target *model.Target, binToolPaths BinTo
 	}
 
 	cmd := exec.CommandContext(ctx, "sh", "-c", templatedCommand)
+
+	// Attach env variables to the existing environment
+	cmd.Env = append(os.Environ(),
+		"GROG_TARGET="+target.Label.String(),
+		"GROG_OS="+config.Global.OS,
+		"GROG_ARCH="+config.Global.Arch,
+		"GROG_PLATFORM="+config.Global.GetPlatform(),
+	)
 
 	cmd.Dir = executionPath
 

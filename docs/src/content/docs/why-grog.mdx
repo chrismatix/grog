@@ -1,27 +1,47 @@
 ---
 title: Why Grog?
-description: Learn what differentiates Grog from other build tools such as Bazel or Pants and when you should or should not use it.
+description: Learn what differentiates Grog from other build tools such as Bazel or Pants and when you should use it for your monorepo.
 ---
 
 import graph from "../../assets/grog-stat.svg";
 
-Many teams are recognizing the strong organizational value in moving to a mono repository ([see why](https://monorepo.tools/)).
-When they first do that they might start by just putting all of their projects into one place, but as complexity grows there is a need to share code and introduce interdependencies.
-Now unless you are only using a single language with a built-in solution for this it is here where most teams are stuck between a rock and a hard place:
+## The Monorepo Challenge
 
-1. **Adopting sophisticated mono-repo build tools** like Bazel or Pants.
-   These tools offer powerful features but come with steep learning curves. They introduce complex build configurations, demand strict determinism, and often require custom code for missing use cases. This level of investment can make even moderate-scale setups feel overwhelming—turning mono-repo maintenance into a full-time job.
-2. **Creating ad-hoc solutions** with scripts, Makefiles, or internal CLIs.
-   These may work initially but inevitably become fragile as your project scales. Building in custom logic to handle dependencies, execution order, or incremental runs becomes a time and resource sink.
+Many teams are recognizing the strong organizational value in moving to a monorepo ([see why](https://monorepo.tools/)).
+Initially, teams might simply place all their projects in one repository.
+However, as complexity grows and interdependencies emerge, challenges arise—especially when working with multiple languages or frameworks.
 
-<img alt="Grog use case graph" height="800" src={graph.src} width="1200" />
+At this point, most teams are stuck between a rock and a hard place:
 
-This is where **Grog** steps in—a tool designed to streamline your builds while allowing you to keep using the tools and commands you’re already familiar with.
-By focusing on efficiency and simplicity, Grog empowers your team to handle core build challenges without the overhead of larger tools.
-With Grog, the common needs of internal build systems become approachable and manageable:
+1. **Adopt sophisticated build tools** like Bazel or Pants, which require significant investment in learning and migration.
+2. **Create ad-hoc solutions** with scripts, Makefiles, or internal CLIs, which often become maintenance burdens.
 
-1. Execute builds in the correct order without over-complicating dependency management.
-2. Run builds in parallel for faster delivery.
-3. Rebuild only what’s changed, leveraging incremental updates to save time.
+<img
+  alt="Graph showing Grog's position between simple scripts and complex build systems, balancing ease of use with build optimization capabilities"
+  height="800"
+  src={graph.src}
+  width="1200"
+/>
 
-Most teams eventually reinvent these capabilities on their own—but Grog provides them in one simple, cohesive system out of the box.
+## How Grog Helps
+
+This is where **Grog** steps in—a tool designed to streamline your builds while allowing you to keep using the tools and commands you're already familiar with.
+
+By focusing on efficiency and simplicity, Grog empowers your team to handle core build challenges without the overhead of larger tools. With Grog, you get:
+
+1. **Dependency-aware execution** - Builds run in the correct order automatically, with simple dependency declarations.
+2. **Parallel execution** - Run independent builds simultaneously for faster delivery.
+3. **Incremental builds** - Rebuild only what's changed, saving valuable development time.
+
+## Why choose Grog?
+
+Most teams eventually reinvent these capabilities on their own—often through complex scripts that become difficult to maintain. Grog provides these essential features in one simple, cohesive system that's designed to grow with your needs.
+
+Grog strikes the perfect balance between simplicity and power—giving you the benefits of optimized builds without forcing you to rewrite your entire build process.
+
+## When _not_ to use Grog?
+
+Grog might not be the right fit for you, if:
+
+- You are using a single language stack that already has mature mono-repo build support (Java/Gradle, golang, JS, ...)
+- You have higher demands for performance and reproducibility AND the spare engineering resources to adopt and maintain Bazel

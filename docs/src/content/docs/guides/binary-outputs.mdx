@@ -1,41 +1,131 @@
 ---
-title: Bootstrapping
-description: An important aspect of building a reproducible build process is setting up the build tooling itself.
+title: Binary and Tool Outputs
+description: Learn how to manage build tools and executables in your Grog build process for better reproducibility.
 ---
 
-An important aspect of building a reproducible build process is installing the necessary tool chain of compilers, linters etc.
-Grog provides two simple mechanisms to facilitate that process that we will discuss below:
+import { Aside } from "@astrojs/starlight/components";
 
-- `Binary Outputs`: Targets that output an executable file can be used as a tool to build other targets.
+## Managing Build Tools
 
-  - **Advantage:** Allows caching and better reproducibility between hosts.
-  - **Disadvantage:** Many tools do not come as single portable binaries.
+An important aspect of creating a reproducible build process is properly managing the toolchain of compilers, linters, and other executables needed for your builds. Grog provides two mechanisms to help with this:
 
-- `Bin-path Outputs`: An output type that only checks if a tool is already installed on the host platform.
-  - **Advantage:** Easy to set up as you can just use the installation scripts as specified by the tool.
-  - **Disadvantage:** Worse in terms of reproducibility as we cannot verify the version or build of the tool.
+1. **Binary Outputs**: Targets that produce executable files that can be used as tools to build other targets
+
+   - **Advantage**: Enables caching and better reproducibility between hosts
+   - **Disadvantage**: Not all tools can be packaged as single portable binaries
+
+2. **Bin-path Outputs**: A special output type that verifies a tool is already installed on the host system
+   - **Advantage**: Easy to set up using standard installation scripts
+   - **Disadvantage**: Less reproducible since Grog can't verify the exact version or build of the tool
 
 ## Binary Outputs
 
-Each target can register a single `bin_output` field that has to be of type file.
-When the build completes grog will mark this file as executable and expose it dependant targets using a shell command.
-The following package illustrates how this works:
+A binary output is an executable file produced by a build target that can be used by other targets in your build graph. This approach is ideal for tools that can be compiled or packaged as a single executable.
+
+### How to Define a Binary Output
+
+Each target can specify a single `bin_output` field that points to a file output. When the build completes, Grog will:
+
+1. Mark this file as executable
+2. Make it available to dependent targets via the `$(bin :target_name)` syntax
+
+### Example: Creating and Using a Binary Tool
 
 ```yaml
 targets:
-  - name: some_build_target
-    inputs:
-      - requirements.txt
-    dependencies:
-      - :a_bin_tool
+  # Target that builds a tool
+  - name: protoc_compiler
     command: |
-      # Using the bin tool
-      $(bin :a_bin_tool) inputs
+      curl -L https://github.com/protocolbuffers/protobuf/releases/download/v3.19.4/protoc-3.19.4-linux-x86_64.zip -o protoc.zip
+      unzip protoc.zip -d protoc
+      chmod +x protoc/bin/protoc
+    outputs:
+      - protoc/include/google/protobuf/
+    bin_output: protoc/bin/protoc
 
-  # You can alos run that binary directly by running:
-  # grog run //package:a_bin_tool -- arg1 arg2
-  - name: a_bin_tool
+  # Target that uses the tool
+  - name: generate_protos
+    dependencies:
+      - :protoc_compiler
+    inputs:
+      - proto/*.proto
     command: |
-      echo "I am a binary" >> dist/bin
-    bin_output: dist/bin
+      # Use the binary tool with $(bin :target_name)
+      $(bin :protoc_compiler) --cpp_out=generated proto/*.proto
+    outputs:
+      - dir::generated
 ```
+
+### Running Binary Tools Directly
+
+You can also run binary tools directly using the `grog run` command:
+
+```shell
+# Run the tool with arguments
+grog run //package:protoc_compiler -- --help
+
+# This is equivalent to building the tool and then running it
+grog build //package:protoc_compiler
+./path/to/protoc/bin/protoc --help
+```
+
+<Aside>
+  Binary outputs are cached just like any other output, which means Grog will
+  avoid rebuilding the tool if nothing has changed, making your builds faster.
+</Aside>
+
+## Bin-path Outputs
+
+For tools that can't easily be packaged as a single binary or that require complex installation procedures, Grog provides bin-path outputs. These verify that a tool is available in the system PATH.
+
+### How to Define a Bin-path Output
+
+```yaml
+targets:
+  - name: ensure_node
+    command: |
+      # Install Node.js if not already installed
+      if ! command -v node &> /dev/null; then
+        curl -fsSL https://nodejs.org/dist/v16.15.0/node-v16.15.0-linux-x64.tar.gz | tar -xz -C /tmp
+        sudo mv /tmp/node-v16.15.0-linux-x64 /usr/local/node
+        sudo ln -s /usr/local/node/bin/node /usr/local/bin/node
+        sudo ln -s /usr/local/node/bin/npm /usr/local/bin/npm
+      fi
+    bin_path_output: node
+
+  - name: build_js
+    dependencies:
+      - :ensure_node
+    command: |
+      # Node is now guaranteed to be available
+      node build.js
+    inputs:
+      - src/**/*.js
+      - package.json
+    outputs:
+      - dist/bundle.js
+```
+
+In this example, the `ensure_node` target verifies that `node` is available in the PATH. If it's not, the command installs it. The `bin_path_output: node` tells Grog to check for the `node` command in the PATH after the build completes.
+
+### Advantages of Bin-path Outputs
+
+- Works with tools that have complex installation procedures
+- Allows using system-provided tools without rebuilding them
+- Simplifies integration with existing toolchains
+
+<Aside type="caution">
+  While bin-path outputs are convenient, they reduce build reproducibility since
+  different environments might have different versions of the tools. Consider
+  using binary outputs for critical build tools when possible.
+</Aside>
+
+## Best Practices
+
+1. **Prefer binary outputs** for critical build tools to ensure reproducibility
+2. **Use bin-path outputs** for tools with complex dependencies or installation requirements
+3. **Version your tools** explicitly in your build definitions
+4. **Consider using Docker** for tools with complex system dependencies (see [Docker Outputs](/guides/docker-outputs))
+5. **Cache tool installations** to speed up builds, especially in CI environments
+
+By properly managing your build tools with Grog, you can create more reproducible and reliable build processes across different environments.

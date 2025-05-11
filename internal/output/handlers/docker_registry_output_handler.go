@@ -112,7 +112,7 @@ func (d *DockerRegistryOutputHandler) Load(ctx context.Context, target model.Tar
 	expectedDigest, err := d.targetCache.LoadOutputMetaFile(ctx, target, output, "digest")
 	// Check if image with same digest exists locally
 	if err != nil {
-		return fmt.Errorf("failed to parse image reference %q: %w", imageName, err)
+		return fmt.Errorf("failed to load digest file %q: %w", imageName, err)
 	}
 
 	// Build the image name including the digest that we want to load

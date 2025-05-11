@@ -48,7 +48,7 @@ func TestSelectTargetsForBuild(t *testing.T) {
 		graph.AddVertex(target2)
 
 		// Create a selector with NonTestOnly filter
-		selector := New([]label.TargetPattern{pattern}, []string{testTag}, NonTestOnly)
+		selector := New([]label.TargetPattern{pattern}, []string{testTag}, []string{}, NonTestOnly)
 
 		// Call SelectTargetsForBuild
 		selected, skipped, err := selector.SelectTargetsForBuild(graph)
@@ -96,7 +96,7 @@ func TestSelectTargetsForBuild(t *testing.T) {
 		}
 
 		// Create a selector with NonTestOnly filter
-		selector := New([]label.TargetPattern{pattern}, []string{testTag}, NonTestOnly)
+		selector := New([]label.TargetPattern{pattern}, []string{testTag}, []string{}, NonTestOnly)
 
 		// Call SelectTargetsForBuild
 		_, _, err = selector.SelectTargetsForBuild(graph)
@@ -133,7 +133,7 @@ func TestSelectTargetsForBuild(t *testing.T) {
 		graph.AddVertex(target6)
 
 		// Create a selector with TestOnly filter
-		testSelector := New([]label.TargetPattern{pattern}, []string{testTag}, TestOnly)
+		testSelector := New([]label.TargetPattern{pattern}, []string{testTag}, []string{}, TestOnly)
 
 		// When TestFilter is TestOnly, only target5 should be selected.
 		selected, skipped, err := testSelector.SelectTargetsForBuild(graph)
@@ -152,7 +152,7 @@ func TestSelectTargetsForBuild(t *testing.T) {
 		target6.IsSelected = false
 
 		// Create a selector with NonTestOnly filter
-		nonTestSelector := New([]label.TargetPattern{pattern}, []string{testTag}, NonTestOnly)
+		nonTestSelector := New([]label.TargetPattern{pattern}, []string{testTag}, []string{}, NonTestOnly)
 
 		// When TestFilter is NonTestOnly, only target6 should be selected.
 		selected, skipped, err = nonTestSelector.SelectTargetsForBuild(graph)
@@ -164,6 +164,55 @@ func TestSelectTargetsForBuild(t *testing.T) {
 		}
 		if skipped != 0 {
 			t.Errorf("Expected 0 platform-skipped targets, got %d", skipped)
+		}
+	})
+	t.Run("filtering by exclude tags", func(t *testing.T) {
+		graph := dag.NewDirectedGraph()
+
+		excludeTag := "exclude_me"
+
+		// target7 has only the test tag.
+		target7 := &model.Target{
+			Label: label.TargetLabel{
+				Name:    "target7",
+				Package: "pkg",
+			},
+			Tags: []string{testTag},
+		}
+
+		// target8 has both the test tag and the exclude tag.
+		target8 := &model.Target{
+			Label: label.TargetLabel{
+				Name:    "target8",
+				Package: "pkg",
+			},
+			Tags: []string{testTag, excludeTag},
+		}
+
+		graph.AddVertex(target7)
+		graph.AddVertex(target8)
+
+		// Create a selector with an exclude tag
+		selector := New([]label.TargetPattern{pattern}, []string{testTag}, []string{excludeTag}, AllTargets)
+
+		// Only target7 should be selected, target8 should be excluded due to its exclude tag
+		selected, skipped, err := selector.SelectTargetsForBuild(graph)
+		if err != nil {
+			t.Fatalf("SelectTargetsForBuild returned unexpected error: %v", err)
+		}
+		if selected != 1 {
+			t.Errorf("Expected 1 selected target, got %d", selected)
+		}
+		if skipped != 0 {
+			t.Errorf("Expected 0 platform-skipped targets, got %d", skipped)
+		}
+
+		// Verify the correct target was selected
+		if !target7.IsSelected {
+			t.Errorf("Expected target7 to be selected")
+		}
+		if target8.IsSelected {
+			t.Errorf("Expected target8 to be excluded")
 		}
 	})
 }

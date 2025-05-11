@@ -20,16 +20,3 @@ func targetMatchesPlatform(target *model.Target) bool {
 
 	return true
 }
-
-func targetMatchesTestSelection(target *model.Target, testMode TestSelection) bool {
-	switch testMode {
-	case TestOnly:
-		return target.IsTest()
-	case NonTestOnly:
-		return !target.IsTest()
-	case AllTargets:
-		return true
-	}
-
-	return false
-}

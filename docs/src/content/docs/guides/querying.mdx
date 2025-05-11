@@ -1,124 +1,223 @@
 ---
 title: Querying Targets
-description: Learn how to use Grog's query commands to understand target interdependencies and craft CI build commands.
+description: Learn how to use Grog's query commands to understand target interdependencies and optimize your build process.
 ---
 
 import { Aside } from "@astrojs/starlight/components";
 
-<Aside type="caution">
-  This feature is not ready yet. The docs instead reflect the planned
-  implementation in the spirit of Documentation-driven Development. So let us
-  know what you think!
-</Aside>
+## Why Query Your Build Graph?
 
-Common use cases for querying your grog build graph might be:
+Understanding the relationships between your build targets is essential for optimizing your build process. Grog provides powerful querying capabilities that help you:
 
-- Only re-run targets that changed between two commits in CI.
-- Understanding the interdependencies of your target.
+- Run only the targets affected by changes in CI, saving build time
+- Understand dependencies between targets for better project organization
+- Debug build issues by tracing dependency chains
+- Create targeted build commands for specific workflows
 
-Grog provides a number of commands that can be chained or combined with tools like `jq` so that you can extract the information that you need:
+## Available Query Commands
 
-- [`grog list`](#grog-list): List all targets matching a pattern.
-- [`grog deps`](#grog-deps): Get a target's (transitive) dependencies.
-- [`grog rdeps`](#grog-rdeps): Get a target's transitive dependants ("reverse dependencies").
-- [`grog owners`](#grog-owners): Get all targets that own a set of files as an input.
-- [`grog changes`](#grog-changes): Get all targets changed since a given commit.
+Grog offers several commands that can be used individually or chained together with tools like `jq` to extract precisely the information you need:
 
-But before we go into each command individually, we need to cover the basics of how targets can be selected in grog commands.
+- [`grog list`](#grog-list): List all targets matching a pattern
+- [`grog deps`](#grog-deps): Get a target's dependencies (direct or transitive)
+- [`grog rdeps`](#grog-rdeps): Get a target's dependents ("reverse dependencies")
+- [`grog owners`](#grog-owners): Find targets that include specific files as inputs
+- [`grog changes`](#grog-changes): Identify targets affected by changes since a specific commit
 
 ## Target Selection Basics
 
-Grog commands that accept multiple targets (such as `build`, `test`, and most of the query commands on this page) accept them in the form of a target pattern.
-You can read the full specification of target patterns [here](/references/), but here are some common uses:
+Before diving into specific commands, it's important to understand how to select targets in Grog. Most query commands accept target patterns that let you specify individual targets or groups of targets.
+
+### Target Patterns
 
 ```shell
 # Reference a single target
 grog build //package:target_name
 
-# Reference all targets in package and its sub-packages:
+# Reference all targets in a package
+grog build //package:all
+
+# Reference all targets in a package and its sub-packages
 grog build //package/...
+
+# Reference a target in the current package
+grog build :target_name
 ```
 
-Additionally, you can add tags to your targets that you can then query like so:
+<Aside>
+  For a complete reference on target patterns and label syntax, see the [Labels
+  Reference](/reference/labels).
+</Aside>
+
+### Filtering by Tags
+
+You can add tags to your targets in their definitions and then filter by those tags:
 
 ```shell
-# Build all targets in the `model_training` package
-# that have at least one of the tags
+# Build all targets in the model_training package
+# that have either the "ci-only" OR "python" tag
 grog build --tag=ci-only --tag=python //model_training/...
 ```
 
 ## grog list
 
-`grog list <target-pattern>`
+```shell
+grog list [target-pattern]
+```
 
-Lists all the targets that are matched by a given target pattern (or all by default).
+Lists all targets that match the given target pattern. If no pattern is provided, it lists all targets in the repository.
+
+**Examples:**
 
 ```shell
-grog list //package/...
-# Will return
-# //package:foo
-# //package:bar
-# //package/sub-package:baz
-# ...
+# List all targets in the repository
+grog list
 
-grog list //package:...
-# Will return
-# //package:foo
-# //package:bar
+# List all targets in a specific package and its sub-packages
+grog list //services/...
+
+# List all targets in a specific package (not including sub-packages)
+grog list //services:all
+```
+
+**Output format:**
+
+```
+//package:target1
+//package:target2
+//package/subpackage:target3
+...
 ```
 
 ## grog deps
 
-`grog deps <target-label> [--transitive]`
+```shell
+grog deps <target-label> [--transitive]
+```
 
-Lists all the dependencies listed by a single target.
-When specifying `--transitive` it will return the full list of transitive dependencies.
+Lists the dependencies of a specific target. By default, it shows only direct dependencies, but with the `--transitive` flag, it shows the complete dependency tree.
+
+**Examples:**
 
 ```shell
-grog deps //package:server
-# Returns the contents of the `deps` field in your BUILD file
+# Show direct dependencies of a target
+grog deps //services/api:server
 
-grog deps --transitive //package:server
-# Recursively gets the `deps` of server's `deps`
+# Show all transitive dependencies (the complete dependency tree)
+grog deps --transitive //services/api:server
 ```
+
+This command is particularly useful for understanding what needs to be built before a specific target can be built.
 
 ## grog rdeps
 
-`grog rdeps <target-pattern> [--transitive]`
+```shell
+grog rdeps <target-pattern> [--transitive]
+```
 
-Lists all the targets that depend on the selected target patterns (basically the reverse direction of `deps`).
-Likewise `--transitive` will return the full list of transitive dependants.
+Lists all targets that depend on the specified target(s) - essentially the reverse of `deps`. The `--transitive` flag includes indirect dependents.
+
+**Examples:**
 
 ```shell
-grog rdeps //package:server
-# Returns all targets that have server in their `deps` field
+# Find all targets that directly depend on a library
+grog rdeps //libs/common:utils
 
-grog rdeps --transitive //package:server
-# Recursively gets the dependants of server's dependants
+# Find all targets that directly or indirectly depend on a library
+grog rdeps --transitive //libs/common:utils
 ```
+
+This command helps you understand the impact of changes to a target - which other targets will need to be rebuilt if this target changes.
 
 ## grog owners
 
-`grog owners <file-list/glob>`
+```shell
+grog owners <file-path-or-glob>
+```
 
-Find the build targets that "own" the provided file in the sense that they are part of their `inputs`.
+Finds all targets that include the specified file(s) in their inputs. This is useful for determining which targets need to be rebuilt when specific files change.
+
+**Examples:**
 
 ```shell
-grog owners src/app/**/*.go
-# Returns all build targets that have
-# any of the go files as their input
+# Find targets that use a specific file
+grog owners src/libs/auth/login.go
+
+# Find targets that use any Go file in a directory
+grog owners src/libs/auth/**/*.go
 ```
+
+This command is particularly helpful when you want to understand which parts of your build are affected by changes to specific files.
 
 ## grog changes
 
-`grog changes <target-pattern> [--since=<commit>] [--dependents=none|transitive]`
+```shell
+grog changes [target-pattern] [--since=<commit>] [--dependents=none|direct|transitive]
+```
 
-Returns all targets whose inputs have been modified since a given commit.
-By setting the `dependents` argument you can control if you also want to get the dependent targets that are affected by a change.
-The default is `none` which will only return the changed targets while `transitive will return all affected dependants.
+Identifies targets whose inputs have changed since a specific commit. This is extremely useful for CI pipelines where you only want to build what's changed.
+
+**Parameters:**
+
+- `--since`: The git commit to compare against (defaults to HEAD~1)
+- `--dependents`: Controls whether to include targets that depend on changed targets
+  - `none`: Only include directly changed targets (default)
+  - `direct`: Include changed targets and their direct dependents
+  - `transitive`: Include changed targets and all their dependents (direct and indirect)
+
+**Examples:**
 
 ```shell
-grog changes //server/... --since=origin/main --dependents=transitive
-# Returns all targets (and their dependants) in the server target that
-# changed compared to your local state of origin/main
+# Find all targets that changed in the current commit
+grog changes
+
+# Find all targets that changed since a specific commit
+grog changes --since=origin/main
+
+# Find all targets that changed in a specific package since a specific commit
+grog changes //services/api/... --since=origin/main
+
+# Find all targets affected by changes (including dependents)
+grog changes --since=origin/main --dependents=transitive
 ```
+
+### CI Pipeline Example
+
+This command is particularly valuable in CI pipelines. Here's an example of how you might use it in a GitHub Actions workflow:
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # Needed to access commit history
+
+      - name: Build changed targets
+        run: |
+          # Get all targets affected by changes since the merge base with main
+          CHANGED_TARGETS=$(grog changes --since=origin/main --dependents=transitive)
+
+          # If there are changed targets, build them
+          if [ -n "$CHANGED_TARGETS" ]; then
+            echo "Building changed targets: $CHANGED_TARGETS"
+            grog build $CHANGED_TARGETS
+          else
+            echo "No targets changed, skipping build"
+          fi
+```
+
+## Combining Query Commands
+
+You can combine Grog's query commands with standard Unix tools to create powerful workflows:
+
+```shell
+# Find all test targets affected by changes
+grog changes --since=origin/main --dependents=transitive | grep "_test$" | xargs grog test
+
+# Find all Docker targets that depend on a specific library
+grog rdeps --transitive //libs/common:utils | grep "docker" | xargs grog build
+```
+
+By mastering Grog's query commands, you can significantly optimize your build process and gain deeper insights into your project's structure.

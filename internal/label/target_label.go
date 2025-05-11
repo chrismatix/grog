@@ -91,6 +91,12 @@ func (t TargetLabel) String() string {
 	return "//" + t.Package + ":" + t.Name
 }
 
+// CanBeShortened returns true if the //foo/bar:bar -> //foo/bar shorthand can be used for this label.
+func (t TargetLabel) CanBeShortened() bool {
+	packageDir := strings.Split(t.Package, "/")[len(strings.Split(t.Package, "/"))-1]
+	return t.Name == packageDir
+}
+
 func (t TargetLabel) IsTest() bool {
 	return strings.HasSuffix(t.Name, "_test")
 }

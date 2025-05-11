@@ -29,7 +29,8 @@ type WorkspaceConfig struct {
 	OS   string `mapstructure:"os"`
 	Arch string `mapstructure:"arch"`
 
-	Tags []string `mapstructure:"tag"`
+	Tags        []string `mapstructure:"tag"`
+	ExcludeTags []string `mapstructure:"exclude_tag"`
 }
 
 var Global WorkspaceConfig
@@ -73,12 +74,33 @@ func (w WorkspaceConfig) GetPlatform() string {
 	return fmt.Sprintf("%s/%s", w.OS, w.Arch)
 }
 
+func (w WorkspaceConfig) hasOverlappingTags() bool {
+	for _, tag := range w.Tags {
+		for _, excludeTag := range w.ExcludeTags {
+			if tag == excludeTag {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (w WorkspaceConfig) Validate() error {
 	if w.Docker.Backend != "" &&
 		(w.Docker.Backend != DockerBackendFSTarball && w.Docker.Backend != DockerBackendRegistry) {
 		return fmt.Errorf("invalid docker backend: %s. Must be either %s or %s",
 			w.Docker.Backend, DockerBackendFSTarball, DockerBackendRegistry)
 	}
+
+	// assert that tags and exclude tags do not overlap
+	for _, tag := range w.Tags {
+		for _, excludeTag := range w.ExcludeTags {
+			if tag == excludeTag {
+				return fmt.Errorf("tag %s cannot both be selected and excluded", tag)
+			}
+		}
+	}
+
 	return nil
 }
 

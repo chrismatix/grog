@@ -8,30 +8,31 @@ import { Aside } from "@astrojs/starlight/components";
 
 ## What is Grog?
 
-Grog is an ergonomic build system inspired by tools like Pants and Bazel. It emphasizes simplicity by letting users declare build targets with file dependencies and commands. When an input file changes, Grog re-executes the affected build steps and caches results to avoid unnecessary rebuilds.
+Grog is an ergonomic build system inspired by tools like Pants and Bazel.
+It emphasizes simplicity by letting users declare build targets with file dependencies and commands. When an input file changes, Grog re-executes the affected build steps and caches results to avoid unnecessary rebuilds.
 
-Unlike some build systems, Grog remains agnostic to the actual build execution and focuses solely on incremental runs, parallel execution, and caching. It's designed to be an intermediate solution that helps teams move towards a coherent mono-repo approach by efficiently gluing together their existing build tooling using a very simple interface.
+Unlike some build systems, Grog remains agnostic to the actual build execution and focuses solely on incremental runs, parallel execution, and caching. It's designed to be an intermediate solution that helps teams move towards a coherent monorepo approach by efficiently connecting their existing build tooling using a simple interface.
 
 ## 1. Install Grog
 
 <Tabs>
   <TabItem label="MacOS">
-  ```bash
+```shell
 # Using Homebrew
 brew tap chrismatix/grog
 brew install grog
 
 # Or download the binary
 
-curl -L https://github.com/chrismatix/grog/releases/latest/download/grog-darwin-arm64 -o /usr/local/bin/grog
+curl -L https://grog.build/latest/grog-darwin-arm64 -o /usr/local/bin/grog
 chmod +x /usr/local/bin/grog
 
 ````
 </TabItem>
 <TabItem label="Linux">
-```bash
+```shell
 # Download the binary
-curl -L https://github.com/chrismatix/grog/releases/latest/download/grog-linux-amd64 -o /usr/local/bin/grog
+curl -L https://grog.build/latest/grog-linux-amd64 -o /usr/local/bin/grog
 chmod +x /usr/local/bin/grog
 ````
 
@@ -108,18 +109,18 @@ You can create these files in various formats depending on your needs:
   Save this as `BUILD.json` in your project directory.
   </TabItem>
   <TabItem label="Makefile">
-  ```make
-  # @grog
-  # inputs:
-  #   - src/**/*.js
-  #   - package.json
-  # outputs:
-  #   - dist/bundle.js
-  # dependencies:
-  #   - :generate_proto
-  #   - //path/to/other/package:target_name
-  build_app:
-    npm run build
+```make
+# @grog
+# inputs:
+#   - src/**/*.js
+#   - package.json
+# outputs:
+#   - dist/bundle.js
+# dependencies:
+#   - :generate_proto
+#   - //path/to/other/package:target_name
+build_app:
+  npm run build
 
 # @grog
 
@@ -135,6 +136,7 @@ generate_proto:
 protoc --js_out=src/generated proto/\*.proto
 
 ````
+
 Add the grog metadata comments to your `Makefile` goals to allow running them with Grog.
 </TabItem>
 <TabItem label="Pkl">
@@ -146,13 +148,13 @@ targets {
     name = "build_app"
     command = "npm run build"
     dependencies {
-      // Dependencies are labels that point to
-      // other targets that need to be built first.
+      // Dependencies are targets that need to be
+      // built first. They are defined using labels.
       ":generate_proto"
       "//path/to/other/package:target_name"
     }
     outputs {
-      "dir::src/generated"
+      "dir::dist/"
     }
   }
 
@@ -163,7 +165,7 @@ targets {
       "proto/*.proto"
     }
     outputs {
-      "test_output.txt"
+      "dir::src/generated"
     }
   }
 }
@@ -176,7 +178,7 @@ Save this as `BUILD.pkl` in your project directory.
 
 Things to note from the above examples:
 
-- Targets are referenced using [labels](/reference/labels.md).
+- Targets are referenced using [labels](/reference/labels).
 - Directory outputs are prefixed with `dir::` to indicate they are directories.
 - Command definition `command` are executed as sh scripts in the target's directory.
 
@@ -188,7 +190,7 @@ To run a build, use the `grog build` command followed by the target label:
 # Build a specific target
 grog build //path/to/package:target_name
 
-# Build all targets in a package
+# Build all targets in and below a package
 grog build //path/to/package/...
 
 # Build all targets

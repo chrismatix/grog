@@ -1,90 +1,96 @@
 ---
-title: Build configuration
-description: Learn the different ways that you can configure your builds with Grog.
+title: Build Configuration
+description: Learn the different ways to configure your builds with Grog.
 ---
 
 import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 
-As you grow your mono-repository and start to adopt more advanced tooling the configuration of your builds can get quite complex.
-In fact, one of the reasons that Grog was created was the steep learning curve of Bazel's starlark configuration language and their API for writing custom rules.
-Grog, therefore, takes a different approach to configuration that emphasizes **simplicity** and **extensibility**.
+## Configuration Approaches
 
-Grog tries to have as little opinion as possible about how you define the builds as long as each package can output a structured definition of its build targets.
-There are three different ways in which you accomplish this with Grog:
+As your monorepo grows and you adopt more advanced tooling, build configuration can become complex. One of the reasons Grog was created was to provide an alternative to the steep learning curve of tools like Bazel's Starlark configuration language.
 
-- **Static configuration:** A simple `BUILD.{json,yaml}` file that defines the build targets for each package. Great for getting started.
-- **Makefiles:** Add comments to your existing `Makefile`s that allow you to run your make goals while benefitting of grog's execution model. Great for gradually adopting grog when you already have Makefile.
-- **Pkl (recommended):** Use the [pkl](https://pkl-lang.org/) configuration language to get re-usable configuration elements. Great for scaling your build configuration and keeping things DRY.
+Grog takes a different approach to configuration that emphasizes **simplicity** and **extensibility**. It has minimal opinions about how you define builds, as long as each package can output a structured definition of its build targets.
 
-## Static configuration
+You can configure Grog builds in three different ways:
 
-The simplest way to define your build targets is to create a `BUILD.{json,yaml}` file in your package directory.
-This file defines the build targets for each package in your mono-repository.
+- **Static configuration:** Simple `BUILD.{json,yaml}` files that define build targets for each package. Great for getting started.
+- **Makefiles:** Add special comments to your existing `Makefile`s to run make goals while benefiting from Grog's execution model.
+  Perfect for gradually adopting Grog when you already use Makefiles.
+- **Pkl (recommended):** Use the [Pkl](https://pkl-lang.org/) configuration language to create reusable configuration elements.
+  Ideal for scaling your build configuration and keeping things DRY.
+
+## Static Configuration
+
+The simplest way to define your build targets is to create a `BUILD.json` or `BUILD.yaml` file in your package directory. This file defines all build targets for that package in your monorepo.
 
 <Tabs>
   <TabItem label="YAML">
-    ```yaml
-    targets:
-      - name: build_app
-        command: npm run build
-        dependencies:
-        - :generate_proto
-        - //path/to/other/package:target_name
-        inputs:
-        - src/**/*.js
-        outputs:
-        - dist/bundle.js
+```yaml
+targets:
+  - name: build_app
+    command: npm run build
+    dependencies:
+      - :generate_proto
+      - //path/to/other/package:target_name
+    inputs:
+      - src/**/*.js
+      - package.json
+    outputs:
+      - dist/bundle.js
 
-      - name: generate_proto
-        command: protoc --js_out=src/generated proto/*.proto
-        inputs:
-        - proto/*.proto
-        outputs:
-        - dir::src/generated
-    ```
-    Save this as `BUILD.yaml` in your project directory.
+- name: generate_proto
+  command: protoc --js_out=src/generated proto/\*.proto
+  inputs:
+  - proto/\*.proto
+    outputs:
+  - dir::src/generated
 
+````
+Save this as `BUILD.yaml` in your project directory.
   </TabItem>
   <TabItem label="JSON">
-  ```json
-  {
-    "targets": [
-      {
-        "name": "build_app",
-        "command": "npm run build",
-        "dependencies": [
-          ":generate_proto",
-          "//path/to/other/package:target_name"
-        ],
-        "inputs": ["src/**/*.js", "package.json"],
-        "outputs": ["dist/bundle.js"]
-      },
-      {
-        "name": "generate_proto",
-        "command": "protoc --js_out=src/generated proto/*.proto",
-        "inputs": ["proto/*.proto"],
-        "outputs": ["dir::src/generated"]
-      }
-    ]
-  }
-  ```
-  Save this as `BUILD.json` in your project directory.
+```json
+{
+  "targets": [
+    {
+      "name": "build_app",
+      "command": "npm run build",
+      "dependencies": [
+        ":generate_proto",
+        "//path/to/other/package:target_name"
+      ],
+      "inputs": ["src/**/*.js", "package.json"],
+      "outputs": ["dist/bundle.js"]
+    },
+    {
+      "name": "generate_proto",
+      "command": "protoc --js_out=src/generated proto/*.proto",
+      "inputs": ["proto/*.proto"],
+      "outputs": ["dir::src/generated"]
+    }
+  ]
+}
+````
+
+Save this as `BUILD.json` in your project directory.
+
   </TabItem>
 </Tabs>
 
-You can find a full list of the available options in the target [configuration reference](/reference/target-configuration).
+For a complete list of available options, see the [target configuration reference](/reference/target-configuration).
 
-## Makefiles
+## Makefile Integration
 
-If you make heavy use of Makefiles and want to keep it that way while still benefiting from grog's execution model, you can add comments to your existing Makefiles.
-The schema for this is very simple:
+If you already use Makefiles extensively and want to continue using them while benefiting from Grog's execution model, you can add special comments to your existing Makefiles.
 
-- Grog looks for a line that starts with `# @grog`.
-- Everything between that line and the next make goal will be parsed the same as a yaml config (see above).
+The schema is straightforward:
+
+- Grog looks for a line that starts with `# @grog`
+- Everything between that line and the next make goal is parsed as YAML configuration
 - The command will be `make <goal>`
-- If the name is left empty, the goal will be the name of the target.
+- If the name is left empty, the goal name becomes the target name
 
-See below for an example:
+Here's an example:
 
 ```Makefile
 # @grog
@@ -97,7 +103,7 @@ See below for an example:
 #   - :generate_proto
 #   - //path/to/other/package:target_name
 build_app:
-  npm run build
+	npm run build
 
 # @grog
 # inputs:
@@ -105,26 +111,28 @@ build_app:
 # outputs:
 #   - dir::src/generated
 generate_proto:
-  protoc --js_out=src/generated proto/*.proto
+	protoc --js_out=src/generated proto/*.proto
 ```
 
-This Makefile will expose the targets `build_app` and `generate_proto` to grog.
+This Makefile exposes the targets `build_app` and `generate_proto` to Grog, allowing you to run them with `grog build :build_app` or `grog build :generate_proto`.
 
-## Pkl
+## Pkl Configuration (Recommended)
 
 <Aside>
-  **Requirement**: Installing the pkl cli
-  ([link](https://pkl-lang.org/main/current/pkl-cli/index.html#installation)).
+  **Requirement**: You need to install the Pkl CLI first. See the [official
+  installation
+  guide](https://pkl-lang.org/main/current/pkl-cli/index.html#installation).
 </Aside>
 
-As your code base grows, it will become tedious to maintain consistent build configurations for each package.
-Say, for instance, that you want to have a generic java build that is the same across your entire mono-repository.
-Rather than copying (or worse) around package definitions we need a way to define target templates and _import_ them where needed.
+As your codebase grows, maintaining consistent build configurations across packages becomes tedious. For example, if you want a generic Java build process that's consistent across your entire monorepo, copying configurations between packages is error-prone and difficult to maintain.
 
-Luckily, there is a configuration language that is designed for this exact use case: [pkl](https://pkl-lang.org/).
-With pkl you can define configuration templates that can be shared within your mono-repository and even across the internet!
-Furthermore, if you install a pkl IDE plugin you can get semantic highlighting and auto-completion for your pkl files.
-See below for an example of the same build configuration as above, but using pkl:
+[Pkl](https://pkl-lang.org/) is a configuration language designed specifically for creating reusable configuration templates. With Pkl, you can:
+
+- Define configuration templates that can be shared within your monorepo or even across the internet
+- Get semantic highlighting and auto-completion with IDE plugins
+- Create modular, reusable build configurations
+
+Here's the same build configuration as above, but using Pkl:
 
 ```pkl
 amends "package://grog.build/releases/v0.1.4/grog@0.1.4#/package.pkl"
@@ -137,8 +145,12 @@ targets {
       ":generate_proto"
       "//path/to/other/package:target_name"
     }
+    inputs {
+      "src/**/*.js"
+      "package.json"
+    }
     outputs {
-      "dir::src/generated"
+      "dist/bundle.js"
     }
   }
 
@@ -149,47 +161,72 @@ targets {
       "proto/*.proto"
     }
     outputs {
-      "test_output.txt"
+      "dir::src/generated"
     }
   }
 }
 ```
 
-This is already pretty neat, because your IDE can now validate and auto-complete your configuration as you type.
-But let's try to address the problem of sharing build target templates by creating a re-usable definition of a build target.
-Say that we want to have a default setup for a Next.js project that includes `installing` and `building` the app.
-We can create a re-usable template for this:
+### Creating Reusable Build Templates
+
+One of Pkl's strengths is the ability to create reusable build templates. For example, if you want a standard setup for Next.js projects that includes installing dependencies and building the app, you can create a reusable template:
 
 ```pkl
 import "package://grog.build/releases/v0.1.4/grog@0.1.4#/package.pkl"
 
+// Create a function that returns a list of targets for a Next.js app
 function app(
   inputName: String
 ) = new Listing<package.Target> {
+  // First target: install dependencies
   new {
     name = inputName + "_install"
-    command = "npm"
+    command = "npm install"
     inputs {
       "package.json"
       "package-lock.json"
     }
+    outputs {
+      "node_modules/.package-lock.json"
+    }
   }
+
+  // Second target: build the app (depends on install)
   new {
-    name = inputName + "_test"
-    command = "build"
+    name = inputName + "_build"
+    command = "npm run build"
     dependencies {
       ":" + inputName + "_install"
+    }
+    inputs {
+      "src/**/*.js"
+      "src/**/*.jsx"
+      "src/**/*.ts"
+      "src/**/*.tsx"
+    }
+    outputs {
+      "dir::.next"
     }
   }
 }
 ```
 
-You can store this in a file called `nextjs.pkl` some-where in your repository and import it wherever you need it:
+You can store this in a file called `nextjs.pkl` somewhere in your repository and import it wherever you need it:
 
 ```pkl
 import "nextjs.pkl"
 
 targets {
-  ...nextjs.app("target-name")
+  // This will add both the install and build targets
+  // with the prefix "my-app"
+  ...nextjs.app("my-app")
+
+  // You can also add custom targets
+  new {
+    name = "custom_target"
+    command = "echo 'Hello, world!'"
+  }
 }
 ```
+
+This approach allows you to standardize build configurations across your monorepo while still allowing for customization where needed.

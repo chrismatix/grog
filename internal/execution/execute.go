@@ -92,6 +92,10 @@ func getBinToolPaths(graph *dag.DirectedTargetGraph, target *model.Target) (BinT
 			if dep.Label.Package == target.Label.Package {
 				binTools[":"+dep.Label.Name] = binToolPath
 			}
+			// Likewise allow for the //foo:foo -> //foo shorthand
+			if dep.Label.CanBeShortened() {
+				binTools["//"+dep.Label.Package] = binToolPath
+			}
 		}
 	}
 	return binTools, nil

@@ -105,43 +105,6 @@ Example `BUILD.json`:
 }
 ```
 
-### Executable BUILD files
-
-**Executable BUILD files are unix executables that write a json representation to stdout that can be parsed to the `Package` struct.**
-
-Grog does not care what language executable build files are written in as long as this is true. Therefore, they may start with a shebang. Additionally, it will be important to provide helper libraries in certain languages to make the generation of the structured output easier.
-
-**Idea:** Those helper libraries may communicate via socket with grog so that we don't even need to reserve stdout.
--> msgpack zero-mq?
-
-```python
-#!/usr/bin/env python
-import grog
-
-# Define targets for multiple components dynamically.
-components = ["alpha", "beta", "gamma"]
-for comp in components:
-    source_file = f"src/{comp}.txt"
-    output_file = f"out/{comp}.out"
-    grog.target(
-        name=f"build_{comp}",
-        deps=[],  # No dependencies for this simple example.
-        inputs=[source_file],
-        outputs=[output_file],
-        command=f"echo Processing {source_file} > {output_file}"
-    )
-
-# Conditionally define an extra target.
-if grog.env("USE_FEATURE_X") == "1":
-    grog.target(
-        name="feature_x",
-        deps=["build_alpha", "build_beta"],
-        inputs=["feature/config.json"],
-        outputs=["feature/output.txt"],
-        command="python generate_feature_x.py"
-    )
-```
-
 ### Makefile Metadata
 
 Proposal: Annotate Makefile targets with grog metadata to allow caching them and running them in parallel.
@@ -266,9 +229,8 @@ targets:
     outputs:
       - ../output.txt
       # Local or with repository
-      - docker://some-docker-tag
-      - s3://some-s3-uri
-      - some_dir/
+      - docker::some-docker-tag
+      - dir::some_dir/
       - ...
 ```
 
@@ -291,8 +253,6 @@ grog build //path/to/package:target_name
 - Relative paths are disallowed.
 
 ## Cross-platform support
-
-Grog primarily
 
 ## Glossary
 
