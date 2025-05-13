@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
+	"grog/internal/analysis"
 	"grog/internal/caching"
 	"grog/internal/caching/backends"
 	"grog/internal/config"
@@ -56,6 +57,13 @@ func runBuild(
 	testFilter selection.TestSelection,
 ) {
 	startTime := time.Now()
+	errs := analysis.CheckTargetConstraints(logger, graph.GetVertices())
+	if len(errs) > 0 {
+		for _, err := range errs {
+			logger.Errorf(err.Error())
+		}
+		os.Exit(1)
+	}
 
 	selector := selection.New(targetPatterns, config.Global.Tags, config.Global.ExcludeTags, testFilter)
 	// Select targets based on the target pattern.

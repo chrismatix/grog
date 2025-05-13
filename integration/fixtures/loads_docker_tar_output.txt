@@ -1,3 +1,4 @@
 INFO: 1 package loaded, 1 target configured.
 INFO: Selected 1 target.
+INFO: Loaded image grog-hello-world (tar)
 INFO: Build completed successfully. 1 target completed (1 cache hits).

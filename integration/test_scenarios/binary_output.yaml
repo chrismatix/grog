@@ -31,4 +31,4 @@ cases:
     args:
       - run
       - //:declares_bin_tool
-      - bar8
+      - bar

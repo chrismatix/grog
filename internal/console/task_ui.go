@@ -31,7 +31,7 @@ func StartTaskUI(ctx context.Context) (*tea.Program, chan tea.Msg) {
 
 	// Disable input since we don't need it and also to keep our signal (sigterm) handler working
 	opts := []tea.ProgramOption{tea.WithInput(nil)}
-	if !isatty.IsTerminal(os.Stdout.Fd()) {
+	if !useTea() {
 		// If we're in daemon mode don't render the TUI
 		opts = append(opts, tea.WithoutRenderer())
 	}
@@ -63,7 +63,7 @@ func StartTaskUI(ctx context.Context) (*tea.Program, chan tea.Msg) {
 }
 
 func useTea() bool {
-	return !isatty.IsTerminal(os.Stdout.Fd())
+	return isatty.IsTerminal(os.Stdout.Fd())
 }
 
 // Bubbletea Model

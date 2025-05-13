@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/fatih/color"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/dag"
@@ -14,6 +15,7 @@ import (
 	"grog/internal/worker"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 type CommandError struct {
@@ -110,6 +112,7 @@ func GetTaskFunc(
 ) worker.TaskFunc[dag.CacheResult] {
 	// taskFunc will run in the worker pool and return a bool indicating whether the target was cached
 	return func(update worker.StatusFunc) (dag.CacheResult, error) {
+		startTime := time.Now()
 		changeHash, err := hashing.GetTargetChangeHash(*target)
 		if err != nil {
 			return dag.CacheMiss, err
@@ -123,6 +126,8 @@ func GetTaskFunc(
 		}
 		target.HasCacheHit = hasCacheHit
 
+		logger := console.GetLogger(ctx)
+
 		// If either the inputs or the deps have changed we need to re-execute the target
 		// depsCached is also true when there are no deps
 		if hasCacheHit && depsCached && !target.SkipsCache() {
@@ -130,16 +135,27 @@ func GetTaskFunc(
 			loadingErr := loadCachedOutputs(ctx, registry, target)
 			if loadingErr != nil {
 				// Don't return so that we instead break out and continue executing the target
-				console.GetLogger(ctx).Errorf("failed to load outputs from cache for target %s: %v", target.Label, loadingErr)
+				logger.Errorf("failed to load outputs from cache for target %s: %v", target.Label, loadingErr)
 			} else {
+				if target.IsTest() {
+					executionTime := time.Since(startTime).Seconds()
+					logger.Infof("%s %s (cached) in %.1fs", target.Label, color.New(color.FgGreen).Sprintf("PASSED"), executionTime)
+				}
 				return dag.CacheHit, nil
 			}
 		}
 
 		update(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis()))
 		err = executeTarget(ctx, target, binToolPaths)
+		executionTime := time.Since(startTime).Seconds()
 		if err != nil {
+			logger.Infof("%s %s in %.1fs", target.Label, color.New(color.FgRed).Sprintf("FAILED"), executionTime)
 			return dag.CacheMiss, err
+		}
+
+		// If the target was a test log the result
+		if target.IsTest() {
+			logger.Infof("%s %s in %.1fs", target.Label, color.New(color.FgGreen).Sprintf("PASSED"), executionTime)
 		}
 
 		// If the target produced a bin output automatically mark it executable
