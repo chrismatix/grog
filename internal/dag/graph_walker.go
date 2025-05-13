@@ -8,13 +8,24 @@ import (
 	"sync"
 )
 
+type CacheResult int
+
+const (
+	// CacheHit found the cache data and loaded it successfully
+	CacheHit CacheResult = iota
+	// CacheSkip cache was intentionally skipped (does not invalidate downstream targets!)
+	CacheSkip
+	// CacheMiss either did not find the cache data or failed to load it or there was some other error
+	CacheMiss
+)
+
 // WalkCallback is called for each target and should return true if the target was cached
 // depsCached is true if all dependencies were cached or if there were no dependencies
-type WalkCallback func(ctx context.Context, target *model.Target, depsCached bool) (bool, error)
+type WalkCallback func(ctx context.Context, target *model.Target, depsCached bool) (CacheResult, error)
 
 type Completion struct {
 	IsSuccess   bool
-	HasCacheHit bool
+	CacheResult CacheResult
 	Err         error
 }
 
@@ -187,7 +198,6 @@ func (w *Walker) startTarget(target *model.Target, depsCached bool) {
 // - fans out ready messages to dependants (if their deps are satisfied)
 // - in case of failure, cancels all dependants (or the entire walk if failFast=true)
 func (w *Walker) onComplete(target *model.Target, completion Completion) {
-	// Lock the completions map
 	w.doneMutex.Lock()
 	defer w.doneMutex.Unlock()
 
@@ -225,7 +235,7 @@ func (w *Walker) onComplete(target *model.Target, completion Completion) {
 			if !ok || !depCompletion.IsSuccess {
 				depsDone = false
 			}
-			if !depCompletion.HasCacheHit {
+			if depCompletion.CacheResult == CacheMiss {
 				depsCached = false
 			}
 		}
@@ -259,12 +269,19 @@ func (w *Walker) vertexRoutine(
 		return
 	case depsCached := <-info.ready:
 		// call the callback
-		cached, err := w.walkCallback(ctx, target, depsCached)
+		cacheResult, err := w.walkCallback(ctx, target, depsCached)
 		if err != nil {
 			// don't account for cache hits in errors
 			info.done <- Completion{IsSuccess: false, Err: err}
 		} else {
-			info.done <- Completion{IsSuccess: true, Err: nil, HasCacheHit: depsCached && cached}
+			if cacheResult == CacheHit && depsCached == false {
+				// This should not happen and indicates an issue with the walkCallback
+				// Reason: When the deps were not cached the invalidation should
+				// propagate down the dependency chain
+				console.GetLogger(ctx).Warnf("unexpected cache hit for target %v when deps were not cached, forcing cache miss", target.Label)
+				cacheResult = CacheMiss
+			}
+			info.done <- Completion{IsSuccess: true, Err: nil, CacheResult: cacheResult}
 		}
 		return
 	}

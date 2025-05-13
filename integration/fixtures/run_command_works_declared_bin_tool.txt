@@ -1,0 +1,4 @@
+INFO: 1 package loaded, 3 targets configured.
+INFO: Selected 1 target.
+INFO: Build completed successfully. 1 target completed (0 cache hits).
+INFO: Running //:declares_bin_tool -> bin_tool.sh with args [bar]

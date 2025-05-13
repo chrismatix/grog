@@ -28,11 +28,11 @@ func TestWalkerBasic(t *testing.T) {
 	var executionOrder []label.TargetLabel
 	var mu sync.Mutex
 
-	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (bool, error) {
+	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (CacheResult, error) {
 		mu.Lock()
 		defer mu.Unlock()
 		executionOrder = append(executionOrder, target.Label)
-		return false, nil
+		return CacheMiss, nil
 	}
 
 	walker := NewWalker(graph, walkFunc, true)
@@ -87,11 +87,11 @@ func TestWalkerLinearDependency(t *testing.T) {
 	var executionOrder []label.TargetLabel
 	var mu sync.Mutex
 
-	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (bool, error) {
+	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (CacheResult, error) {
 		mu.Lock()
 		defer mu.Unlock()
 		executionOrder = append(executionOrder, target.Label)
-		return false, nil
+		return CacheMiss, nil
 	}
 
 	walker := NewWalker(graph, walkFunc, true)
@@ -166,11 +166,11 @@ func TestWalkerDiamondDependency(t *testing.T) {
 	var executedTargets []label.TargetLabel
 	var mu sync.Mutex
 
-	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (bool, error) {
+	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (CacheResult, error) {
 		mu.Lock()
 		defer mu.Unlock()
 		executedTargets = append(executedTargets, target.Label)
-		return false, nil
+		return CacheMiss, nil
 	}
 
 	walker := NewWalker(graph, walkFunc, true)
@@ -236,20 +236,20 @@ func TestWalkerFailFast(t *testing.T) {
 	target2Chan := make(chan bool)
 
 	// walkFunc that fails for target2
-	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (bool, error) {
+	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (CacheResult, error) {
 		if target.Label.Name == "target2" {
 			go func() {
 				target2Chan <- true
 			}()
-			return false, errors.New("failed to execute target2")
+			return CacheMiss, errors.New("failed to execute target2")
 		}
 		if target.Label.Name == "target3" {
 			// wait for target2 to complete to simulate a task that would take longer than target2
 			<-target2Chan
 			time.Sleep(10 * time.Millisecond)
-			return false, nil
+			return CacheMiss, nil
 		}
-		return false, nil
+		return CacheMiss, nil
 	}
 
 	walker := NewWalker(graph, walkFunc, true) // failFast = true
@@ -305,11 +305,11 @@ func TestWalkerNonFailFast(t *testing.T) {
 	_ = graph.AddEdge(target3, target4)
 
 	// walkFunc that fails for target2
-	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (bool, error) {
+	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (CacheResult, error) {
 		if target.Label.Name == "target1" {
-			return false, errors.New("failed to execute target1")
+			return CacheMiss, errors.New("failed to execute target1")
 		}
-		return false, nil
+		return CacheMiss, nil
 	}
 
 	walker := NewWalker(graph, walkFunc, false) // failFast = false

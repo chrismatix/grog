@@ -1,5 +1,7 @@
 # TODOs
 
+- [ ] Test outputs should log all passed tests (like bazel does it)
+  - What does Bazel output in CI actually look like?
 - [ ] Add `no-cache` tag
 - [ ] Add `binary-path` outputs
 - [ ] Stomp out ALL remaining potential deadlocks
@@ -17,11 +19,4 @@
 - [ ] Add shell completions for commands that run targets
 - [ ] Record a brief terminal clip using tea's vhs tape
 - [ ] Support running multiple targets with `grog run` at the same time
-
-Querying
-
-- [ ] Exclude tags
-
-Tests
-
 - [ ] Tests: Use the new synctest package to better test the execution semantic

@@ -82,20 +82,27 @@ For tools that can't easily be packaged as a single binary or that require compl
 
 ```yaml
 targets:
-  - name: ensure_node
+  - name: ensure_nvm
     command: |
-      # Install Node.js if not already installed
-      if ! command -v node &> /dev/null; then
-        curl -fsSL https://nodejs.org/dist/v16.15.0/node-v16.15.0-linux-x64.tar.gz | tar -xz -C /tmp
-        sudo mv /tmp/node-v16.15.0-linux-x64 /usr/local/node
-        sudo ln -s /usr/local/node/bin/node /usr/local/bin/node
-        sudo ln -s /usr/local/node/bin/npm /usr/local/bin/npm
-      fi
-    bin_path_output: node
+      # Download and install nvm:
+      curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+    bin_output: bin-path::nvm
+
+  - name: ensure_node_22
+    command: |
+      nvm install 22
+    bin_output: bin-path::node
+    bin_output_check:
+      # If specified, grog will run this command everytime the tool
+      # is used to check that it has the correct version
+      command: "node --version"
+      expected: "v20.11.1"
+    dependencies:
+      - :ensure_nvm
 
   - name: build_js
     dependencies:
-      - :ensure_node
+      - :ensure_node_22
     command: |
       # Node is now guaranteed to be available
       node build.js
@@ -106,7 +113,9 @@ targets:
       - dist/bundle.js
 ```
 
-In this example, the `ensure_node` target verifies that `node` is available in the PATH. If it's not, the command installs it. The `bin_path_output: node` tells Grog to check for the `node` command in the PATH after the build completes.
+In this example, the `ensure_node` target verifies that `node` is available in the PATH.
+If it's not, the command installs it.
+The `bin_output: bin-path::node` tells Grog to check for the `node` command in the `PATH` after the build completes.
 
 ### Advantages of Bin-path Outputs
 

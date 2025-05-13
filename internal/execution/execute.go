@@ -49,16 +49,16 @@ func Execute(
 	ctx = console.WithTeaLogger(ctx, program)
 
 	selectedTargetCount := len(graph.GetSelectedVertices())
-	workerPool := worker.NewTaskWorkerPool[bool](numWorkers, msgCh, selectedTargetCount)
+	workerPool := worker.NewTaskWorkerPool[dag.CacheResult](numWorkers, msgCh, selectedTargetCount)
 	workerPool.StartWorkers(ctx)
 	defer workerPool.Shutdown()
 
 	// walkCallback will be called at max parallelism by the graph walker
-	walkCallback := func(ctx context.Context, target *model.Target, depsCached bool) (bool, error) {
+	walkCallback := func(ctx context.Context, target *model.Target, depsCached bool) (dag.CacheResult, error) {
 		// get any possible bin tools that the target may use
 		binTools, err := getBinToolPaths(graph, target)
 		if err != nil {
-			return false, err
+			return dag.CacheMiss, err
 		}
 
 		// taskFunc will be run in the worker pool
@@ -107,54 +107,58 @@ func GetTaskFunc(
 	target *model.Target,
 	binToolPaths BinToolMap,
 	depsCached bool,
-) worker.TaskFunc[bool] {
+) worker.TaskFunc[dag.CacheResult] {
 	// taskFunc will run in the worker pool and return a bool indicating whether the target was cached
-	return func(update worker.StatusFunc) (bool, error) {
+	return func(update worker.StatusFunc) (dag.CacheResult, error) {
 		changeHash, err := hashing.GetTargetChangeHash(*target)
 		if err != nil {
-			return false, err
+			return dag.CacheMiss, err
 		}
 		target.ChangeHash = changeHash
 
 		update(fmt.Sprintf("%s: checking cache.", target.Label))
 		hasCacheHit, err := registry.HasCacheHit(ctx, *target)
 		if err != nil {
-			return false, err
+			return dag.CacheMiss, err
 		}
 		target.HasCacheHit = hasCacheHit
 
 		// If either the inputs or the deps have changed we need to re-execute the target
 		// depsCached is also true when there are no deps
-		if hasCacheHit && depsCached {
+		if hasCacheHit && depsCached && !target.SkipsCache() {
 			update(fmt.Sprintf("%s: cache hit. loading outputs.", target.Label))
 			loadingErr := loadCachedOutputs(ctx, registry, target)
 			if loadingErr != nil {
 				// Don't return so that we instead break out and continue executing the target
 				console.GetLogger(ctx).Errorf("failed to load outputs from cache for target %s: %v", target.Label, loadingErr)
 			} else {
-				return true, nil
+				return dag.CacheHit, nil
 			}
 		}
 
 		update(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis()))
 		err = executeTarget(ctx, target, binToolPaths)
 		if err != nil {
-			return false, err
+			return dag.CacheMiss, err
 		}
 
 		// If the target produced a bin output automatically mark it executable
 		err = markBinOutputExecutable(target)
 		if err != nil {
-			return false, err
+			return dag.CacheMiss, err
+		}
+
+		if target.SkipsCache() {
+			return dag.CacheSkip, nil
 		}
 
 		// Write outputs to the cache:
 		update(fmt.Sprintf("%s complete. writing outputs...", target.Label))
 		err = registry.WriteOutputs(ctx, *target)
 		if err != nil {
-			return false, fmt.Errorf("build completed but failed to write outputs to cache for target %s:\n%w", target.Label, err)
+			return dag.CacheMiss, fmt.Errorf("build completed but failed to write outputs to cache for target %s:\n%w", target.Label, err)
 		}
-		return false, nil
+		return dag.CacheMiss, nil
 	}
 }
 

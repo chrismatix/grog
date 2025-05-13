@@ -12,17 +12,23 @@ cases:
   - name: run_command_fails
     args:
       - run
-      - //:defines_bin_tool
+      - //:creates_bin_tool
     expect_fail: true
 
   - name: run_command_works
     args:
       - run
-      - //:defines_bin_tool
+      - //:creates_bin_tool
       - foo
 
   - name: run_command_works_rel_path
     args:
       - run
-      - :defines_bin_tool
+      - :creates_bin_tool
       - foo
+
+  - name: run_command_works_declared_bin_tool
+    args:
+      - run
+      - //:declares_bin_tool
+      - bar8

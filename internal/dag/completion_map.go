@@ -21,7 +21,7 @@ func (c CompletionMap) SuccessCount() (int, int) {
 	for _, completion := range c {
 		if completion.IsSuccess {
 			successCount++
-			if completion.HasCacheHit {
+			if completion.CacheResult == CacheHit {
 				cacheHits++
 			}
 		}
