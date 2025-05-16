@@ -1,0 +1,4 @@
+module output_check
+
+command: String
+expected_output: String

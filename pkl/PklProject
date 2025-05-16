@@ -12,11 +12,3 @@ package {
 
   license = "MIT"
 }
-
-// https://github.com/chrismatix/grog/releases/download/v0.1.0/pkl@0.1.0.zip
-// How do apple host their pkl packages with vanity url?
-// For toml they have "packageUri": "package://pkg.pkl-lang.org/pkl-pantry/pkl.toml@1.0.0"
-// https://pkg.pkl-lang.org/pkl-pantry/pkl.toml@1.0.0
-// redirects to
-// https://github.com/apple/pkl-pantry/releases/download/pkl.toml@1.0.0/pkl.toml@1.0.0
-// Their zip url is just directly to the releases page because not user-facing

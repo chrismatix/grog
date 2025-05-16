@@ -145,6 +145,7 @@ func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg Packa
 			Outputs:      parsedOutputs,
 			BinOutput:    parsedBinOutput,
 			Platform:     target.Platform,
+			OutputChecks: target.OutputChecks,
 			Tags:         target.Tags,
 		}
 	}

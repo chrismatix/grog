@@ -14,7 +14,7 @@ An important aspect of creating a reproducible build process is properly managin
    - **Advantage**: Enables caching and better reproducibility between hosts
    - **Disadvantage**: Not all tools can be packaged as single portable binaries
 
-2. **Bin-path Outputs**: A special output type that verifies a tool is already installed on the host system
+2. **Output Checks**: Allows checking if some program is already installed on the host by running user-defined commands
    - **Advantage**: Easy to set up using standard installation scripts
    - **Disadvantage**: Less reproducible since Grog can't verify the exact version or build of the tool
 
@@ -74,11 +74,19 @@ grog build //package:protoc_compiler
   avoid rebuilding the tool if nothing has changed, making your builds faster.
 </Aside>
 
-## Bin-path Outputs
+## Output checks
 
-For tools that can't easily be packaged as a single binary or that require complex installation procedures, Grog provides bin-path outputs. These verify that a tool is available in the system PATH.
+For tools that can't easily be packaged as a single binary or that require complex installation procedures, Grog provides output checks.
+With output checks you can tell grog to assert that a certain command is available in the path at a certain version.
 
-### How to Define a Bin-path Output
+This is the life-cycle of a target's execution with output checks:
+
+- Always run the output checks to see if the condition is already satisfied.
+- If it isn't, execute the target and run the checks again to see if the target successfully installed the tool.
+
+It is therefore recommended to keep output checks as light and fast as possible.
+
+### How to Define Output Checks
 
 ```yaml
 targets:
@@ -86,17 +94,21 @@ targets:
     command: |
       # Download and install nvm:
       curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
-    bin_output: bin-path::nvm
+    output_checks:
+      # The target will fail if this command
+      # returns a non-zero exit code
+      - command: "nvm --version"
 
   - name: ensure_node_22
     command: |
       nvm install 22
-    bin_output: bin-path::node
-    bin_output_check:
+    output_checks:
       # If specified, grog will run this command everytime the tool
       # is used to check that it has the correct version
-      command: "node --version"
-      expected: "v20.11.1"
+      - command: "node --version"
+        expected_output: "v20.11.1"
+      - command: "npm --version"
+        expected_output: "10.2.4"
     dependencies:
       - :ensure_nvm
 
@@ -115,24 +127,23 @@ targets:
 
 In this example, the `ensure_node` target verifies that `node` is available in the PATH.
 If it's not, the command installs it.
-The `bin_output: bin-path::node` tells Grog to check for the `node` command in the `PATH` after the build completes.
 
-### Advantages of Bin-path Outputs
+### Advantages of Output Checks
 
 - Works with tools that have complex installation procedures
 - Allows using system-provided tools without rebuilding them
 - Simplifies integration with existing toolchains
 
 <Aside type="caution">
-  While bin-path outputs are convenient, they reduce build reproducibility since
-  different environments might have different versions of the tools. Consider
+  While output checks are convenient, they reduce build reproducibility since
+  they rely on inspecting the state of your platform superficially. Consider
   using binary outputs for critical build tools when possible.
 </Aside>
 
 ## Best Practices
 
 1. **Prefer binary outputs** for critical build tools to ensure reproducibility
-2. **Use bin-path outputs** for tools with complex dependencies or installation requirements
+2. **Use output checks** for tools with complex dependencies or installation requirements
 3. **Version your tools** explicitly in your build definitions
 4. **Consider using Docker** for tools with complex system dependencies (see [Docker Outputs](/guides/docker-outputs))
 5. **Cache tool installations** to speed up builds, especially in CI environments

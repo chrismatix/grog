@@ -17,6 +17,7 @@ type Target struct {
 	Outputs      []Output            `json:"outputs,omitempty"`
 	Platform     *PlatformConfig     `json:"platform,omitempty"`
 	Tags         []string            `json:"tags,omitempty"`
+	OutputChecks []OutputCheck       `json:"output_checks,omitempty"`
 
 	// BinOutput is always a path to a binary file
 	BinOutput Output `json:"bin_output,omitempty"`
@@ -31,6 +32,11 @@ type Target struct {
 type PlatformConfig struct {
 	OS   []string `json:"os,omitempty" yaml:"os,omitempty" pkl:"os"`
 	Arch []string `json:"arch,omitempty" yaml:"arch,omitempty" pkl:"arch"`
+}
+
+type OutputCheck struct {
+	Command        string `json:"command" yaml:"command" pkl:"command"`
+	ExpectedOutput string `json:"expected_output,omitempty" yaml:"expected_output,omitempty" pkl:"expected_output"`
 }
 
 func (t *Target) AllOutputs() []Output {

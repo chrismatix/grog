@@ -128,9 +128,14 @@ func GetTaskFunc(
 
 		logger := console.GetLogger(ctx)
 
+		outputCheckErr := runOutputChecks(ctx, target, binToolPaths)
+		if outputCheckErr != nil {
+			logger.Debugf("running target due to output check error: %v", outputCheckErr)
+		}
+
 		// If either the inputs or the deps have changed we need to re-execute the target
 		// depsCached is also true when there are no deps
-		if hasCacheHit && depsCached && !target.SkipsCache() {
+		if hasCacheHit && depsCached && !target.SkipsCache() && outputCheckErr == nil {
 			update(fmt.Sprintf("%s: cache hit. loading outputs.", target.Label))
 			loadingErr := loadCachedOutputs(ctx, registry, target)
 			if loadingErr != nil {
@@ -151,6 +156,11 @@ func GetTaskFunc(
 		if err != nil {
 			logger.Infof("%s %s in %.1fs", target.Label, color.New(color.FgRed).Sprintf("FAILED"), executionTime)
 			return dag.CacheMiss, err
+		}
+
+		// Run output checks again to see if they match now
+		if outputCheckErr = runOutputChecks(ctx, target, binToolPaths); outputCheckErr != nil {
+			return dag.CacheMiss, outputCheckErr
 		}
 
 		// If the target was a test log the result

@@ -60,6 +60,34 @@ func executeTarget(ctx context.Context, target *model.Target, binToolPaths BinTo
 	return nil
 }
 
+// runTargetCommand runs a single shell command in the context of a target
+func runTargetCommand(
+	ctx context.Context,
+	target *model.Target,
+	binToolPaths BinToolMap,
+	command string,
+) ([]byte, error) {
+	executionPath := config.GetPathAbsoluteToWorkspaceRoot(target.Label.Package)
+	templatedCommand, err := getCommand(binToolPaths, command)
+	if err != nil {
+		return nil, err
+	}
+
+	cmd := exec.CommandContext(ctx, "sh", "-c", templatedCommand)
+
+	// Attach env variables to the existing environment
+	cmd.Env = append(os.Environ(),
+		"GROG_TARGET="+target.Label.String(),
+		"GROG_OS="+config.Global.OS,
+		"GROG_ARCH="+config.Global.Arch,
+		"GROG_PLATFORM="+config.Global.GetPlatform(),
+	)
+
+	cmd.Dir = executionPath
+
+	return cmd.CombinedOutput()
+}
+
 func getCommand(toolMap BinToolMap, command string) (string, error) {
 	tmpl, err := template.New("binCommand").Parse(binTemplate)
 	if err != nil {

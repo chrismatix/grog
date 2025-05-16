@@ -8,10 +8,10 @@ import { Aside } from "@astrojs/starlight/components";
 
 ## What is Grog?
 
-Grog is an ergonomic build system inspired by tools like Pants and Bazel.
-It emphasizes simplicity by letting users declare build targets with file dependencies and commands. When an input file changes, Grog re-executes the affected build steps and caches results to avoid unnecessary rebuilds.
+**Grog** is a lightweight build orchestrator that runs your existing commands in parallel—rebuilding only what’s changed—to give small teams instant speedups with zero new DSL.
 
-Unlike some build systems, Grog remains agnostic to the actual build execution and focuses solely on incremental runs, parallel execution, and caching. It's designed to be an intermediate solution that helps teams move towards a coherent monorepo approach by efficiently connecting their existing build tooling using a simple interface.
+Unlike some build systems, Grog remains agnostic to the actual build execution and focuses solely on incremental runs, parallel execution, and caching.
+It's designed to be an intermediate solution that helps teams move towards a coherent monorepo approach by efficiently connecting their existing build tooling using a simple interface.
 
 ## 1. Install Grog
 

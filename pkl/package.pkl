@@ -1,6 +1,7 @@
 module package
 
 import "platform.pkl"
+import "output_check.pkl"
 
 class Target {
   name: String
@@ -9,6 +10,7 @@ class Target {
   inputs:  Listing<String>(isDistinct)
   outputs: Listing<String>(isDistinct)
   bin_output: String?
+  output_checks: Listing<output_check>?
 
   // Target Filtering
   tags: Listing<String>(isDistinct)
