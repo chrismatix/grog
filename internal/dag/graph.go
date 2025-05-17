@@ -75,8 +75,11 @@ func (g *DirectedTargetGraph) AddEdge(from, to *model.Target) error {
 	if from == to {
 		return fmt.Errorf("cannot add self-loop for target %s", from.Label)
 	}
-	if !g.hasVertex(from) || !g.hasVertex(to) {
-		return errors.New("both vertices must exist in the graph")
+	if !g.hasVertex(from) {
+		return fmt.Errorf("vertex %s does not exist in the graph", from.Label)
+	}
+	if !g.hasVertex(to) {
+		return fmt.Errorf("vertex %s does not exist in the graph", from.Label)
 	}
 	g.outEdges[from.Label] = append(g.outEdges[from.Label], to)
 	g.inEdges[to.Label] = append(g.inEdges[to.Label], from)

@@ -1,7 +1,8 @@
 targets:
   - name: docker_output
     command: |
-      docker build -t grog-hello-world .
+      # Force the platform so that we get th same sha
+      docker build --platform=linux/amd64 -t grog-hello-world .
     inputs:
       - script.sh
     outputs:

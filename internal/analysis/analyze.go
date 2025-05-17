@@ -14,6 +14,9 @@ func BuildGraph(targets model.TargetMap) (*dag.DirectedTargetGraph, error) {
 	for _, target := range targets {
 		for _, depLabel := range target.Dependencies {
 			dep := targets[depLabel]
+			if dep == nil {
+				return &dag.DirectedTargetGraph{}, fmt.Errorf("dependency %s of target %s not found", depLabel, target.Label)
+			}
 
 			err := graph.AddEdge(dep, target)
 			if err != nil {

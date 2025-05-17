@@ -3,6 +3,7 @@ name: Update Homebrew Formula
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 jobs:
   update-homebrew:
@@ -71,13 +72,16 @@ jobs:
           end
           EOF
 
-      - name: Clone Homebrew tap
-        run: |
-          git clone https://github.com/chrismatix/homebrew-grog.git tap
-          cp formula/grog.rb tap/Formula/grog.rb
+      - name: Checkout tap
+        uses: actions/checkout@v4
+        with:
+          repository: chrismatix/homebrew-grog
+          path: tap
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create PR
         run: |
+          cp formula/grog.rb tap/Formula/grog.rb
           cd tap
           git config user.name "github-actions"
           git config user.email "actions@github.com"
