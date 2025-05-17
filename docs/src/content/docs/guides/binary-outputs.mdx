@@ -74,6 +74,34 @@ grog build //package:protoc_compiler
   avoid rebuilding the tool if nothing has changed, making your builds faster.
 </Aside>
 
+### Defining Build Scripts
+
+Not all binary tools have a build step.
+Say, for instance, that you have a shell or python script that you want to use as a grog build tool.
+To do so all you need to do is omit the command field and add the `no-cache` attribute to ensure that grog does not store the script file in its cache.
+Here is what that could look like:
+
+```yaml
+targets:
+  # Assuming that this script exists in
+  # the same directory as the build filr
+  - name: protoc_compiler_script
+    bin_output: compile.sh
+
+  - name: generate_protos
+    dependencies:
+      - :protoc_compiler_script
+    inputs:
+      - proto/*.proto
+    command: |
+      # Use the binary tool with $(bin :target_name)
+      $(bin :protoc_compiler_script) --cpp_out=generated proto/*.proto
+    outputs:
+      - dir::generated
+```
+
+This makes it easy to share scripts across your workspace without having to invoke them by their relative file path.
+
 ## Output checks
 
 For tools that can't easily be packaged as a single binary or that require complex installation procedures, Grog provides output checks.

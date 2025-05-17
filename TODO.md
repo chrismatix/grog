@@ -1,10 +1,5 @@
-# TODOs
+'# TODOs
 
-- [ ] Test outputs should log all passed tests (like bazel does it)
-  - What does Bazel output in CI actually look like?
-- [ ] Add `no-cache` tag
-- [ ] Add `binary-path` outputs
-- [ ] Stomp out ALL remaining potential deadlocks
 - [ ] Gzip the docker tarballs (?)
 - [ ] Add `grog info`
 - [ ] Add golangci-lint

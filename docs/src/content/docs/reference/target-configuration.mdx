@@ -45,6 +45,7 @@ A unique identifier for the target within its package. This forms part of the ta
 ### command
 
 The shell command or script to execute. This can be a single line or a multi-line script using YAML's `|` syntax or equivalent in other formats.
+The command is optional which can be useful, for instance, when defining executable scripts ([read more](/guides/binary-outputs)).
 
 ### inputs
 
@@ -80,10 +81,20 @@ This is particularly useful for multi-platform builds (see [docs](/guides/multi-
 
 The `platform` field has two sub-fields:
 
-- `os`: List of operating systems where this target can run (e.g., "linux", "darwin", "windows")
+- `os`: List of operating systems where this target can run (e.g., "linux", "darwin")
 - `arch`: List of CPU architectures where this target can run (e.g., "amd64", "arm64")
 
 When a target has platform constraints defined:
 
 1. Grog checks the current host's OS and architecture
 2. Targets that don't match the current platform are skipped
+
+### tags
+
+Tags is a list of unique strings that can be used to group and query targets.
+There are a few reserved tags that alter the way grog treats a target:
+
+| Tag Name            | Effect                                                                                                                                                |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| no-cache            | Always re-run this target and never cache its outputs. The cache of targets that depend on a target tagged with `no-cache` is not affected by this.   |
+| multiplatform-cache | By default grog separates target caches by the host platform. Adding this tag causes grog to store the outputs at the same cache key across platforms |

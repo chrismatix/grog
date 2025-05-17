@@ -59,6 +59,15 @@ func (t *Target) SkipsCache() bool {
 	return false
 }
 
+func (t *Target) IsMultiplatformCache() bool {
+	for _, tag := range t.Tags {
+		if tag == "multiplatform-cache" {
+			return true
+		}
+	}
+	return false
+}
+
 func (t *Target) GetDepsString() []string {
 	stringDeps := make([]string, len(t.Dependencies))
 	for i, dep := range t.Dependencies {

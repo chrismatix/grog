@@ -6,18 +6,27 @@ cases:
     args:
       - build
       - :docker_output
+    tags:
+      # Add this tag so that the output is consistent
+      - multiplatform-cache
 
   - name: loads_docker_registry_output
     args:
       - build
       - :docker_output
+    tags:
+      - multiplatform-cache
 
   - name: creates_remote_docker_registry_output
     args:
       - build
       - :remote_docker_output_succeeds
+    tags:
+      - multiplatform-cache
 
   - name: loads_remote_docker_registry_output
     args:
       - build
       - :remote_docker_output_succeeds
+    tags:
+      - multiplatform-cache
