@@ -65,8 +65,6 @@ func (rw *RemoteWrapper) Get(ctx context.Context, path, key string) (io.ReadClos
 			logger := console.GetLogger(ctx)
 			logger.Errorf("Failed to store file in local cache after retrieving from remote: %v", err)
 		}
-		// Close the reader after storing the content locally
-		reader.Close()
 	}()
 	return io.NopCloser(teeReader), nil
 }

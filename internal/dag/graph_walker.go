@@ -52,6 +52,7 @@ type Walker struct {
 
 	// Set to true if failFast was triggered
 	failFastTriggered bool
+	allCancel         context.CancelFunc
 
 	// Concurrency
 	// doneMutex protects completions
@@ -99,6 +100,9 @@ func (w *Walker) Walk(
 		return nil, errors.New("walk callback is nil")
 	}
 
+	ctx, cancelFunc := context.WithCancel(ctx)
+	w.allCancel = cancelFunc
+
 	// populate info map
 	for _, vertex := range w.graph.vertices {
 		if !vertex.IsSelected {
@@ -115,10 +119,6 @@ func (w *Walker) Walk(
 			ready:  readyCh,
 			cancel: cancelCh,
 		}
-
-		w.wait.Add(1)
-		// start a fanout channel for each vertex
-		go w.onCompletionWorker(ctx, vertex, doneCh, cancelCh)
 
 		w.wait.Add(1)
 		// start all routines
@@ -144,28 +144,11 @@ func (w *Walker) Walk(
 		logger.Debugf(
 			"context cancelled, cancelling all workers",
 		)
-		w.cancelAll()
-		return w.completions, ctx.Err()
-	}
-}
-
-func (w *Walker) onCompletionWorker(
-	ctx context.Context,
-	target *model.Target,
-	doneCh chan Completion,
-	cancelCh chan struct{},
-) {
-	// always decrement wait group
-	defer w.wait.Done()
-	select {
-	case <-cancelCh:
-		// close this worker when the vertex routine is cancelled (e.g. due to failFast)
-		return
-	case completion := <-doneCh:
-		w.onComplete(target, completion)
-		return
-	case <-ctx.Done():
-		return
+		if w.failFastTriggered {
+			return w.completions, nil
+		} else {
+			return w.completions, ctx.Err()
+		}
 	}
 }
 
@@ -213,6 +196,7 @@ func (w *Walker) onComplete(target *model.Target, completion Completion) {
 		// If failFast is true, cancel the entire walk
 		if w.failFast {
 			w.failFastTriggered = true
+			w.allCancel()
 			w.cancelAll()
 		} else {
 			// Cancel *all* descendants if the target failed
@@ -263,7 +247,6 @@ func (w *Walker) vertexRoutine(
 	// always decrement wait group
 	defer w.wait.Done()
 
-	// listen to all events
 	select {
 	case <-info.cancel:
 		return
@@ -271,8 +254,12 @@ func (w *Walker) vertexRoutine(
 		// call the callback
 		cacheResult, err := w.walkCallback(ctx, target, depsCached)
 		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				// Cancelling externally or via failFast leaves target uncompleted
+				return
+			}
 			// don't account for cache hits in errors
-			info.done <- Completion{IsSuccess: false, Err: err}
+			w.onComplete(target, Completion{IsSuccess: false, Err: err})
 		} else {
 			if cacheResult == CacheHit && depsCached == false {
 				// This should not happen and indicates an issue with the walkCallback
@@ -281,7 +268,7 @@ func (w *Walker) vertexRoutine(
 				console.GetLogger(ctx).Warnf("unexpected cache hit for target %v when deps were not cached, forcing cache miss", target.Label)
 				cacheResult = CacheMiss
 			}
-			info.done <- Completion{IsSuccess: true, Err: nil, CacheResult: cacheResult}
+			w.onComplete(target, Completion{IsSuccess: true, Err: nil, CacheResult: cacheResult})
 		}
 		return
 	}

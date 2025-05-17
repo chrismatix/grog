@@ -125,6 +125,7 @@ func runBuild(
 
 	buildErrors := completionMap.GetErrors()
 	successCount, cacheHits := completionMap.SuccessCount()
+
 	if len(buildErrors) > 0 {
 		logger.Errorf("%s failed. %s completed (%d cache hits), %d failed:",
 			goal,

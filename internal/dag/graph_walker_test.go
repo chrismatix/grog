@@ -258,7 +258,7 @@ func TestWalkerFailFast(t *testing.T) {
 	completionMap, err := walker.Walk(ctx)
 
 	if err != nil {
-		t.Fatalf("Returned error should not be nil, got %v", err)
+		t.Fatalf("Returned error should be nil, got %v", err)
 	}
 
 	// target2 should have failed

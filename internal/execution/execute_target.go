@@ -47,6 +47,11 @@ func executeTarget(ctx context.Context, target *model.Target, binToolPaths BinTo
 	cmdOut, err := cmd.CombinedOutput()
 
 	if err != nil {
+		if ctx.Err() != nil {
+			// bubble up cancellation error
+			return ctx.Err()
+		}
+
 		var exitError *exec.ExitError
 		if errors.As(err, &exitError) {
 			return &CommandError{

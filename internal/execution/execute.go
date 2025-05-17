@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fatih/color"
@@ -151,10 +152,15 @@ func GetTaskFunc(
 		}
 
 		update(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis()))
+		logger.Debugf("running target %s: %s", target.Label, target.CommandEllipsis())
 		err = executeTarget(ctx, target, binToolPaths)
 		executionTime := time.Since(startTime).Seconds()
+
 		if err != nil {
-			logger.Infof("%s %s in %.1fs", target.Label, color.New(color.FgRed).Sprintf("FAILED"), executionTime)
+
+			if target.IsTest() && !errors.Is(err, context.Canceled) {
+				logger.Infof("%s %s in %.1fs", target.Label, color.New(color.FgRed).Sprintf("FAILED"), executionTime)
+			}
 			return dag.CacheMiss, err
 		}
 

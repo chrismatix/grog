@@ -6,4 +6,4 @@ targets:
     dependencies:
       - :target_1
   - name: target_3
-    command: "sleep 0.1 && echo 'this should run with --fail-fast=false'"
+    command: "sleep 1 && echo 'this should run with --fail-fast=false'"
