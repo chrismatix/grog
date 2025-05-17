@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go.uber.org/zap"
 	"grog/internal/label"
 	"grog/internal/model"
 )
@@ -175,56 +174,6 @@ func (g *DirectedTargetGraph) HasCycle() bool {
 	}
 
 	return false // No cycle detected in the entire graph
-}
-
-// ToJSON serializes the directed graph to a JSON representation for debugging.
-func (g *DirectedTargetGraph) ToJSON() (string, error) {
-	type Edge struct {
-		From string `json:"from"`
-		To   string `json:"to"`
-	}
-
-	type GraphJSON struct {
-		Vertices []string `json:"vertices"`
-		Edges    []Edge   `json:"edges"`
-	}
-
-	graphJSON := GraphJSON{
-		Vertices: make([]string, 0, len(g.vertices)),
-		Edges:    []Edge{},
-	}
-
-	// Add vertices
-	for _, vertex := range g.vertices {
-		graphJSON.Vertices = append(graphJSON.Vertices, vertex.Label.String())
-	}
-
-	// Add edges
-	for from, toList := range g.outEdges {
-		for _, to := range toList {
-			graphJSON.Edges = append(graphJSON.Edges, Edge{
-				From: from.String(),
-				To:   to.Label.String(),
-			})
-		}
-	}
-
-	// Serialize to JSON
-	jsonData, err := json.MarshalIndent(graphJSON, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("failed to serialize graph to JSON: %w", err)
-	}
-
-	return string(jsonData), nil
-}
-
-func (g *DirectedTargetGraph) LogGraphJSON(logger *zap.SugaredLogger) {
-	jsonStr, err := g.ToJSON()
-	if err != nil {
-		logger.Debugf("failed to serialize graph to JSON: %v", err)
-		return
-	}
-	logger.Debugf("graph: %s", jsonStr)
 }
 
 // GraphJSON is a helper struct for JSON serialization

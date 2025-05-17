@@ -112,7 +112,6 @@ func runBuild(
 	}
 
 	if err != nil {
-		graph.LogGraphJSON(logger)
 		logger.Errorf("execution failed: %v", err)
 		os.Exit(1)
 	}

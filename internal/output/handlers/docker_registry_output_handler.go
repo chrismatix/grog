@@ -256,15 +256,15 @@ func (d *DockerRegistryOutputHandler) loadToRemote(
 
 // isNotFound is a helper that determines whether an error indicates a 404 Not Found status.
 func isNotFound(err error) bool {
-	var terr *transport.Error
-	if errors.As(err, &terr) {
+	var transportErr *transport.Error
+	if errors.As(err, &transportErr) {
 		// Straight 404 at the HTTP layer:
-		if terr.StatusCode == http.StatusNotFound {
+		if transportErr.StatusCode == http.StatusNotFound {
 			return true
 		}
 		// Some registries return a 404 with a JSON body like:
 		//   {"errors":[{"code":"MANIFEST_UNKNOWN", …}]}
-		for _, diag := range terr.Errors {
+		for _, diag := range transportErr.Errors {
 			if diag.Code == transport.ManifestUnknownErrorCode {
 				return true
 			}

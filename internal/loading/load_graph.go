@@ -34,9 +34,7 @@ func MustLoadGraphForBuild(ctx context.Context, logger *zap.SugaredLogger) *dag.
 func MustLoadGraphForQuery(ctx context.Context, logger *zap.SugaredLogger) *dag.DirectedTargetGraph {
 	packages, err := LoadPackages(ctx)
 	if err != nil {
-		logger.Fatalf(
-			"could not load packages: %v",
-			err)
+		logger.Fatalf("could not load packages: %v", err)
 	}
 
 	targets, err := model.TargetMapFromPackages(packages)

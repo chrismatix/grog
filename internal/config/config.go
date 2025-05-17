@@ -74,17 +74,6 @@ func (w WorkspaceConfig) GetPlatform() string {
 	return fmt.Sprintf("%s/%s", w.OS, w.Arch)
 }
 
-func (w WorkspaceConfig) hasOverlappingTags() bool {
-	for _, tag := range w.Tags {
-		for _, excludeTag := range w.ExcludeTags {
-			if tag == excludeTag {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func (w WorkspaceConfig) Validate() error {
 	if w.Docker.Backend != "" &&
 		(w.Docker.Backend != DockerBackendFSTarball && w.Docker.Backend != DockerBackendRegistry) {

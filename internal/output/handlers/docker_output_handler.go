@@ -73,8 +73,6 @@ func (d *DockerOutputHandler) Write(ctx context.Context, target model.Target, ou
 	if err != nil {
 		// Ensure the pipe reader is closed even if WriteFileStream fails
 		pr.Close()
-		// If the error came from the tarball writing goroutine, it will be returned here
-		// If WriteFileStream itself failed, that error is returned
 		return fmt.Errorf("failed to write tarball stream to cache for image %q: %w", imageName, err)
 	}
 

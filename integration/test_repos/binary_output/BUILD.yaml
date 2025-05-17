@@ -24,6 +24,9 @@ targets:
       fi
       EOF
     bin_output: dist/bin
+    output_checks:
+      - command: "echo 'Hello World'"
+        expected: "Hello World"
 
   # It is also possible to just declare an existing file
   # as a bin output and use that
@@ -31,14 +34,5 @@ targets:
     bin_output: bin_tool.sh
     tags:
       - "no-cache"
-
-    # Installs one more tools on the host machine
-  # Cache-hit when we find the binary on the path
-  # -> These cannot be cached remotely
-#  - name: a_bin_path_tool
-#    command: curl -LsSf https://astral.sh/uv/install.sh | sh
-#
-#      brew install grog
-#    outputs:
-#      - bin-path::uv
-#      - bin-path::grog
+    output_checks:
+      - command: "which sh"
