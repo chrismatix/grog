@@ -136,18 +136,27 @@ func GetTaskFunc(
 
 		// If either the inputs or the deps have changed we need to re-execute the target
 		// depsCached is also true when there are no deps
-		if hasCacheHit && depsCached && !target.SkipsCache() && outputCheckErr == nil {
-			update(fmt.Sprintf("%s: cache hit. loading outputs.", target.Label))
-			loadingErr := loadCachedOutputs(ctx, registry, target)
-			if loadingErr != nil {
-				// Don't return so that we instead break out and continue executing the target
-				logger.Errorf("failed to load outputs from cache for target %s: %v", target.Label, loadingErr)
-			} else {
-				if target.IsTest() {
-					executionTime := time.Since(startTime).Seconds()
-					logger.Infof("%s %s (cached) in %.1fs", target.Label, color.New(color.FgGreen).Sprintf("PASSED"), executionTime)
+		if depsCached {
+			if hasCacheHit && outputCheckErr == nil {
+				update(fmt.Sprintf("%s: cache hit. loading outputs.", target.Label))
+				loadingErr := loadCachedOutputs(ctx, registry, target)
+				if loadingErr != nil {
+					// Don't return so that we instead break out and continue executing the target
+					logger.Errorf("failed to load outputs from cache for target %s: %v", target.Label, loadingErr)
+				} else {
+					if target.IsTest() {
+						executionTime := time.Since(startTime).Seconds()
+						logger.Infof("%s %s (cached) in %.1fs", target.Label, color.New(color.FgGreen).Sprintf("PASSED"), executionTime)
+					}
+					return dag.CacheHit, nil
 				}
-				return dag.CacheHit, nil
+
+			} else if outputCheckErr == nil && len(target.OutputChecks) > 0 && len(target.AllOutputs()) == 0 {
+				// Target passed the output checks and there are no outputs that are not cached
+				// -> we can skip executing this target
+				// TODO the conditions are getting quite messy here
+				logger.Debugf("skipping target %s due to passed output checks", target.Label)
+				return dag.CacheSkip, nil
 			}
 		}
 
@@ -157,7 +166,6 @@ func GetTaskFunc(
 		executionTime := time.Since(startTime).Seconds()
 
 		if err != nil {
-
 			if target.IsTest() && !errors.Is(err, context.Canceled) {
 				logger.Infof("%s %s in %.1fs", target.Label, color.New(color.FgRed).Sprintf("FAILED"), executionTime)
 			}

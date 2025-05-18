@@ -2,14 +2,9 @@ package handlers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"grog/internal/caching"
-	"net/http"
-	"strings"
-
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/model"
@@ -104,41 +99,13 @@ func (d *DockerRegistryOutputHandler) Write(ctx context.Context, target model.Ta
 
 // Load pulls the Docker image from the remote registry and writes it into the local Docker daemon.
 func (d *DockerRegistryOutputHandler) Load(ctx context.Context, target model.Target, output model.Output) error {
-	// Check if the image reference suggests a remote or a local image
-	// - If remote: Push the cached image to that registry
-	// - If local: Pull the cached image to the local daemon
 	imageName := output.Identifier
-	// Check if the digest is present locally
+	// Get expected image digest
 	expectedDigest, err := d.targetCache.LoadOutputMetaFile(ctx, target, output, "digest")
-	// Check if image with same digest exists locally
 	if err != nil {
 		return fmt.Errorf("failed to load digest file %q: %w", imageName, err)
 	}
 
-	// Build the image name including the digest that we want to load
-	ref, err := name.ParseReference(imageName)
-	if err != nil {
-		return fmt.Errorf("failed to parse image reference %q: %w", output.Identifier, err)
-	}
-
-	// Check if the user specified a remote registry, if so, we need to push to that registry
-	// go-containerregistry automatically adds docker.io as the default registry.
-	// So to check if the image is remote, we need to check if the registry is different from docker.io
-	// or if the user explicitly specified docker.io as the registry.
-	isRemote := ref.Context().RegistryStr() != name.DefaultRegistry || strings.Contains(imageName, name.DefaultRegistry)
-	if isRemote {
-		return d.loadToRemote(ctx, target, output, expectedDigest)
-	} else {
-		return d.loadToDaemon(ctx, target, output, expectedDigest)
-	}
-}
-
-func (d *DockerRegistryOutputHandler) loadToDaemon(
-	ctx context.Context,
-	target model.Target,
-	output model.Output,
-	expectedDigest string,
-) error {
 	logger := console.GetLogger(ctx)
 	localImageName := output.Identifier
 
@@ -146,6 +113,7 @@ func (d *DockerRegistryOutputHandler) loadToDaemon(
 	if err != nil {
 		return fmt.Errorf("failed to parse local image tag %q: %w", localImageName, err)
 	}
+
 	// Ensure that we are only looking locally
 	localTag.Repository = name.Repository{}
 	if img, err := daemon.Image(localTag, daemon.WithContext(ctx)); err == nil {
@@ -183,92 +151,4 @@ func (d *DockerRegistryOutputHandler) loadToDaemon(
 	logger.Debugf("successfully loaded Docker image %s from registry tag %s", localImageName, remoteTag)
 	logger.Infof("Loaded image %s from registry", localImageName)
 	return nil
-}
-
-func (d *DockerRegistryOutputHandler) loadToRemote(
-	ctx context.Context,
-	target model.Target,
-	output model.Output,
-	expectedDigest string,
-) error {
-	logger := console.GetLogger(ctx)
-
-	// 1) Prepare the destination tag (the "real" remote we want to push to)
-	destTag, err := name.NewTag(output.Identifier)
-	if err != nil {
-		return fmt.Errorf("invalid destination tag %q: %w", output.Identifier, err)
-	}
-
-	// 2) HEAD the remote tag to see if it already points at the correct digest
-	logger.Debugf("checking remote tag %s", destTag)
-	desc, err := remote.Head(
-		destTag,
-		remote.WithAuthFromKeychain(authn.DefaultKeychain),
-		remote.WithContext(ctx),
-	)
-	if err == nil {
-		// tag exists — compare digests
-		if desc.Digest.String() == expectedDigest {
-			logger.Debugf("remote %s already at digest %s, skipping push", destTag, expectedDigest)
-			return nil
-		}
-		logger.Debugf(
-			"remote %s digest mismatch (%s != %s), will re-push",
-			destTag, desc.Digest, expectedDigest,
-		)
-	} else if !isNotFound(err) {
-		// some other error
-		return fmt.Errorf("error checking remote %s: %w", destTag, err)
-	} else {
-		logger.Debugf("remote %s not found, pushing", destTag)
-	}
-
-	// 3) Pull from the *cache* registry
-	cacheName := d.cacheImageName(target, output)
-	cacheTag, err := name.NewTag(cacheName)
-	if err != nil {
-		return fmt.Errorf("invalid cache tag %q: %w", cacheName, err)
-	}
-	logger.Debugf("pulling from cache %s", cacheTag)
-	img, err := remote.Image(
-		cacheTag,
-		remote.WithAuthFromKeychain(authn.DefaultKeychain),
-		remote.WithContext(ctx),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to pull cached image %q: %w", cacheTag, err)
-	}
-
-	// 4) Push into the real remote
-	logger.Debugf("pushing image to %s", destTag)
-	if err := remote.Write(
-		destTag,
-		img,
-		remote.WithAuthFromKeychain(authn.DefaultKeychain),
-		remote.WithContext(ctx),
-	); err != nil {
-		return fmt.Errorf("failed to push image to %s: %w", destTag, err)
-	}
-
-	logger.Infof("successfully pushed %s at digest %s", destTag, expectedDigest)
-	return nil
-}
-
-// isNotFound is a helper that determines whether an error indicates a 404 Not Found status.
-func isNotFound(err error) bool {
-	var transportErr *transport.Error
-	if errors.As(err, &transportErr) {
-		// Straight 404 at the HTTP layer:
-		if transportErr.StatusCode == http.StatusNotFound {
-			return true
-		}
-		// Some registries return a 404 with a JSON body like:
-		//   {"errors":[{"code":"MANIFEST_UNKNOWN", …}]}
-		for _, diag := range transportErr.Errors {
-			if diag.Code == transport.ManifestUnknownErrorCode {
-				return true
-			}
-		}
-	}
-	return false
 }

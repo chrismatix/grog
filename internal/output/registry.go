@@ -71,6 +71,10 @@ func (r *Registry) mustGetHandler(outputType string) handlers.Handler {
 }
 
 func (r *Registry) HasCacheHit(ctx context.Context, target model.Target) (bool, error) {
+	if target.SkipsCache() {
+		return false, nil
+	}
+
 	// check for the default file system key (for empty outputs)
 	cacheHit, err := r.targetCache.HasCacheExistsFile(ctx, target)
 	if err != nil {

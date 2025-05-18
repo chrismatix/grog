@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"grog/internal/model"
+	"strings"
 )
 
 func runOutputChecks(ctx context.Context, target *model.Target, binToolPaths BinToolMap) error {
@@ -14,8 +15,8 @@ func runOutputChecks(ctx context.Context, target *model.Target, binToolPaths Bin
 				target.Label, err, check.Command)
 		}
 
-		if check.ExpectedOutput != "" && check.ExpectedOutput != string(output) {
-			return fmt.Errorf("output check failed: expected %s, got %s\ncommand %s",
+		if check.ExpectedOutput != "" && strings.TrimSpace(check.ExpectedOutput) != strings.TrimSpace(string(output)) {
+			return fmt.Errorf("output check failed: expected '%s', got '%s'\ncommand %s",
 				check.ExpectedOutput, output, check.Command)
 		}
 	}

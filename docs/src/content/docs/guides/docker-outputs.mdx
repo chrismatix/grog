@@ -108,48 +108,7 @@ targets:
     outputs:
       # Cache the local image
       - docker::api-service:latest
-      # Also push to a registry (optional)
-      - docker::registry.example.com/myteam/api-service:latest
 ```
-
-### Docker Output Syntax
-
-Docker outputs use the following syntax:
-
-```
-docker::[registry-url/][repository/]image-name[:tag]
-```
-
-- If a registry URL is included, Grog will push the image to that registry
-- If no registry URL is included, Grog will only cache the image locally
-
-### How Docker Caching Works
-
-#### Local Images (without registry URL)
-
-When you specify a Docker output without a registry URL:
-
-```yaml
-outputs:
-  - docker::api-service:latest
-```
-
-- On build completion: Grog saves the local image to its cache
-- On subsequent builds: Grog restores the image from cache to your local Docker daemon if inputs haven't changed
-- Use this for images you need locally for testing or further builds
-
-#### Registry Images (with registry URL)
-
-When you specify a Docker output with a registry URL:
-
-```yaml
-outputs:
-  - docker::registry.example.com/myteam/api-service:latest
-```
-
-- On build completion: Grog saves the image to its cache and pushes it to the specified registry
-- On subsequent builds: Grog restores the image from cache and pushes it to the registry if inputs haven't changed
-- Use this for images that need to be deployed or shared with others
 
 ## Using Docker Images in Dependent Targets
 
@@ -178,49 +137,3 @@ targets:
 ## Multi-platform Docker Images
 
 For building multi-platform Docker images, see the [Multi-platform Builds](/guides/multi-platform-builds) guide.
-
-## Best Practices
-
-1. **Be specific with tags**: Use specific tags rather than `latest` to avoid confusion
-2. **Include all inputs**: Make sure to list all files that affect your Docker build as inputs
-3. **Use BuildKit**: Enable Docker BuildKit for faster, more efficient builds:
-   ```yaml
-   command: |
-     DOCKER_BUILDKIT=1 docker build -t my-image:latest .
-   ```
-4. **Layer caching**: Structure your Dockerfiles to take advantage of layer caching
-5. **Consider multi-stage builds**: Use multi-stage builds to keep final images small
-6. **Registry selection**: For team environments, use a shared registry backend for better efficiency
-
-## Troubleshooting
-
-### Common Issues
-
-#### "Error: docker not found"
-
-Ensure Docker is installed and available in your PATH.
-
-#### "Error pushing to registry"
-
-Check your authentication status with:
-
-```shell
-docker login your-registry-url
-```
-
-#### "Error: image not found"
-
-Make sure your Docker build command is creating an image with the exact tag specified in your outputs.
-
-#### Slow Docker builds
-
-Consider:
-
-- Enabling BuildKit
-- Using a `.dockerignore` file
-- Optimizing your Dockerfile for better layer caching
-
-<Aside type="tip">
-  When debugging Docker caching issues, you can use `grog build --verbose` to
-  see more details about what Grog is doing with Docker images.
-</Aside>

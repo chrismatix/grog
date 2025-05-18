@@ -12,20 +12,20 @@ At this point, most teams are stuck between a rock and a hard place:
 1. **Adopt sophisticated build tools** like Bazel or Pants.
 2. **Create ad-hoc solutions** with scripts, Makefiles, or internal CLIs.
 
-Put briefly, adopting Bazel requires lots of resources and is almost certainly overkill for small to medium-sized teams.
-Grog instead offers the building blocks(parallelization and caching) that ease the pain of the second approach while remaining flexible.
-Below we will explore when and why Grog is and is not a better solution than more sophisticated build tooling or rolling your own scripts.
+Adopting Bazel requires lots of resources and is almost certainly overkill for small to medium-sized teams.
+Grog instead offers the building blocks(parallelization and caching) that ease the pain while remaining flexible.
+Below we explore when and why Grog is and is not a better solution than more sophisticated build tooling or rolling your own scripts.
 
 ## Why Bazel can be overkill
 
 Bazel is Google’s battle-tested, open-source build system that guarantees hermetic, reproducible builds—no matter how large your codebase grows. Its lightning-fast caching, fine-grained dependency tracking, and parallel execution make every build predictable and snappy. That said, in smaller teams you often hit a few common roadblocks:
 
 1. **Steep learning curve**
-   Bazel uses its own Starlark-based BUILD language and enforces a specific workspace layout. Engineers can spend several weeks just getting comfortable writing and tuning BUILD files, macros, and custom rules before they move beyond “hello world.”
+   Bazel uses its own Starlark-based BUILD language and enforces a specific workspace layout. You can spend several weeks just getting comfortable writing and tuning BUILD files, macros, and custom rules before moving beyond “hello world.”
 2. **Lagging tooling support**
    While Bazel has first-class integrations for C++, Java, and Go, adding or updating rules for newer languages or frameworks can be tricky.
    You’ll frequently find yourself writing and maintaining custom rules or waiting on the community for updates.
-   Even simple things like building a Docker image can become quite tricky with Bazel
+   Even simple things like building a Docker image can become quite tricky with Bazel.
 3. **Infrastructure demands**
    To unlock remote caching and distributed execution, you need dedicated servers (or a managed service), plus someone to provision, monitor, and troubleshoot them. Small teams often lack the headcount or budget to run a full-blown buildfarm.
 

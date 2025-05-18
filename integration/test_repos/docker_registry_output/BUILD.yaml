@@ -3,16 +3,9 @@ targets:
     command: |
       # Force the platform so that we get th same sha
       docker buildx build --platform=linux/amd64 -t grog-hello-world .
+      docker tag grog-hello-world us-central1-docker.pkg.dev/grog-457510/grog-cache/grog-hello-world
     inputs:
       - script.sh
     outputs:
       - docker::grog-hello-world
-
-  - name: remote_docker_output_succeeds
-    command: |
-      docker tag grog-hello-world us-central1-docker.pkg.dev/grog-457510/grog-cache/grog-hello-world
-      docker push us-central1-docker.pkg.dev/grog-457510/grog-cache/grog-hello-world
-    dependencies:
-      - :docker_output
-    outputs:
       - docker::us-central1-docker.pkg.dev/grog-457510/grog-cache/grog-hello-world

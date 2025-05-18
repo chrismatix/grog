@@ -98,7 +98,7 @@ func (t TargetLabel) CanBeShortened() bool {
 }
 
 func (t TargetLabel) IsTest() bool {
-	return strings.HasSuffix(t.Name, "_test")
+	return strings.HasSuffix(t.Name, "test")
 }
 
 func PrintSorted(labels []TargetLabel) {
