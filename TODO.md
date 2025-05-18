@@ -1,7 +1,5 @@
 # TODOs
 
-- [ ] Remove remote docker registry caching
-- [ ] ]
 - [ ] Gzip the docker tarballs (?)
 - [ ] Add `grog info`
 - [ ] Add golangci-lint

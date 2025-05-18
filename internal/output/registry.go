@@ -71,11 +71,7 @@ func (r *Registry) mustGetHandler(outputType string) handlers.Handler {
 }
 
 func (r *Registry) HasCacheHit(ctx context.Context, target model.Target) (bool, error) {
-	if target.SkipsCache() {
-		return false, nil
-	}
-
-	// check for the default file system key (for empty outputs)
+	// check for the default file system key for checking if the inputs changed
 	cacheHit, err := r.targetCache.HasCacheExistsFile(ctx, target)
 	if err != nil {
 		return false, err
@@ -83,6 +79,11 @@ func (r *Registry) HasCacheHit(ctx context.Context, target model.Target) (bool, 
 	// short-circuit
 	if !cacheHit {
 		return false, nil
+	}
+
+	if target.SkipsCache() {
+		// Ignore the outputs but still use the cache exists file to check if inputs changed
+		return cacheHit, nil
 	}
 
 	foundMiss := atomic.Bool{}
@@ -109,6 +110,10 @@ func (r *Registry) HasCacheHit(ctx context.Context, target model.Target) (bool, 
 func (r *Registry) WriteOutputs(ctx context.Context, target model.Target) error {
 	if err := r.targetCache.WriteCacheExistsFile(ctx, target); err != nil {
 		return err
+	}
+
+	if target.SkipsCache() {
+		return nil
 	}
 
 	outputs := target.AllOutputs()

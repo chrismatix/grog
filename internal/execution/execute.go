@@ -136,8 +136,15 @@ func GetTaskFunc(
 
 		// If either the inputs or the deps have changed we need to re-execute the target
 		// depsCached is also true when there are no deps
-		if depsCached {
-			if hasCacheHit && outputCheckErr == nil {
+		if depsCached && outputCheckErr == nil {
+			if target.HasOutputChecksOnly() {
+				// Special type of target that only has output checks but no in- and outputs
+				// In this case the output checks (and the dependencies) are the only thing affecting re-running
+				logger.Debugf("skipping target %s due to passed output checks", target.Label)
+				return dag.CacheSkip, nil
+			}
+
+			if hasCacheHit {
 				update(fmt.Sprintf("%s: cache hit. loading outputs.", target.Label))
 				loadingErr := loadCachedOutputs(ctx, registry, target)
 				if loadingErr != nil {
@@ -151,13 +158,16 @@ func GetTaskFunc(
 					return dag.CacheHit, nil
 				}
 
-			} else if outputCheckErr == nil && len(target.OutputChecks) > 0 && len(target.AllOutputs()) == 0 {
-				// Target passed the output checks and there are no outputs that are not cached
-				// -> we can skip executing this target
-				// TODO the conditions are getting quite messy here
-				logger.Debugf("skipping target %s due to passed output checks", target.Label)
-				return dag.CacheSkip, nil
+			} else {
+				logger.Debugf("running target %s due to cache miss", target.Label)
 			}
+		}
+
+		if !depsCached {
+			logger.Debugf("running target %s due to changed dependencis", target.Label)
+		}
+		if outputCheckErr != nil {
+			logger.Debugf("running target %s due to output check error", target.Label)
 		}
 
 		update(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis()))
@@ -186,10 +196,6 @@ func GetTaskFunc(
 		err = markBinOutputExecutable(target)
 		if err != nil {
 			return dag.CacheMiss, err
-		}
-
-		if target.SkipsCache() {
-			return dag.CacheSkip, nil
 		}
 
 		// Write outputs to the cache:

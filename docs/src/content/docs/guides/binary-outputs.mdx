@@ -102,7 +102,7 @@ targets:
 
 This makes it easy to share scripts across your workspace without having to invoke them by their relative file path.
 
-## Output checks
+## Output Checks
 
 For tools that can't easily be packaged as a single binary or that require complex installation procedures, Grog provides output checks.
 With output checks you can tell grog to assert that a certain command is available in the path at a certain version.
@@ -155,6 +155,11 @@ targets:
 
 In this example, the `ensure_node` target verifies that `node` is available in the PATH.
 If it's not, the command installs it.
+
+<Aside type="caution">
+  Specifying either inputs or outputs will cause the target to be rebuilt
+  whenever inputs change even when the output checks pass.
+</Aside>
 
 ### Advantages of Output Checks
 

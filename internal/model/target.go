@@ -108,6 +108,13 @@ func (t *Target) OutputDefinitions() []string {
 	return definitions
 }
 
+// HasOutputChecksOnly checks if this is a special type of target that only had output checks
+// and no in or outputs. In that case the output checks are the only thing that should determine
+// if a target needs to be run (
+func (t *Target) HasOutputChecksOnly() bool {
+	return len(t.OutputChecks) > 0 && len(t.AllOutputs()) == 0 && len(t.Inputs) == 0
+}
+
 // Alias to avoid infinite recursion in MarshalJSON
 type targetAlias Target
 
