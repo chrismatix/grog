@@ -1,5 +1,6 @@
 # TODOs
 
+- [ ] Change Hash should take the dependency change hashes (and not their labels) into account!
 - [ ] Gzip the docker tarballs (?)
 - [ ] Add `grog info`
 - [ ] Add golangci-lint

@@ -79,19 +79,19 @@ func TestDirectedTargetGraph_GetInEdges(t *testing.T) {
 	graph.AddEdge(target1, target2)
 	graph.AddEdge(target3, target2)
 
-	inEdges, err := graph.GetInEdges(target2)
+	inEdges, err := graph.GetDependencies(target2)
 	if err != nil {
-		t.Fatalf("GetInEdges failed: %v", err)
+		t.Fatalf("GetDependencies failed: %v", err)
 	}
 
 	expectedInEdges := []*model.Target{target1, target3}
 	if !reflect.DeepEqual(inEdges, expectedInEdges) {
-		t.Errorf("GetInEdges returned incorrect inEdges. Expected %v, got %v", expectedInEdges, inEdges)
+		t.Errorf("GetDependencies returned incorrect inEdges. Expected %v, got %v", expectedInEdges, inEdges)
 	}
 
-	_, err = graph.GetInEdges(&model.Target{Label: label.TargetLabel{Name: "nonExistent"}})
+	_, err = graph.GetDependencies(&model.Target{Label: label.TargetLabel{Name: "nonExistent"}})
 	if err == nil {
-		t.Errorf("GetInEdges should have returned an error for non-existent vertex")
+		t.Errorf("GetDependencies should have returned an error for non-existent vertex")
 	}
 }
 
@@ -108,19 +108,19 @@ func TestDirectedTargetGraph_GetOutEdges(t *testing.T) {
 	graph.AddEdge(target2, target1)
 	graph.AddEdge(target2, target3)
 
-	outEdges, err := graph.GetOutEdges(target2)
+	outEdges, err := graph.GetDependants(target2)
 	if err != nil {
-		t.Fatalf("GetOutEdges failed: %v", err)
+		t.Fatalf("GetDependants failed: %v", err)
 	}
 
 	expectedOutEdges := []*model.Target{target1, target3} //Two edges added in AddEdge test
 	if !reflect.DeepEqual(outEdges, expectedOutEdges) {
-		t.Errorf("GetOutEdges returned incorrect outEdges. Expected %v, got %v", expectedOutEdges, outEdges)
+		t.Errorf("GetDependants returned incorrect outEdges. Expected %v, got %v", expectedOutEdges, outEdges)
 	}
 
-	_, err = graph.GetOutEdges(&model.Target{Label: label.TargetLabel{Name: "nonExistent"}})
+	_, err = graph.GetDependants(&model.Target{Label: label.TargetLabel{Name: "nonExistent"}})
 	if err == nil {
-		t.Errorf("GetOutEdges should have returned an error for non-existent vertex")
+		t.Errorf("GetDependants should have returned an error for non-existent vertex")
 	}
 }
 

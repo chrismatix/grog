@@ -64,6 +64,23 @@ func Execute(
 			return dag.CacheMiss, err
 		}
 
+		dependencies, err := graph.GetDependencies(target)
+		if err != nil {
+			return dag.CacheMiss, err
+		}
+
+		dependencyHashes := make([]string, len(dependencies))
+		for index, dep := range dependencies {
+			dependencyHashes[index] = dep.ChangeHash
+		}
+
+		// Set the change hash that will determine if the target changed
+		changeHash, err := hashing.GetTargetChangeHash(*target, dependencyHashes)
+		if err != nil {
+			return dag.CacheMiss, err
+		}
+		target.ChangeHash = changeHash
+
 		// taskFunc will be run in the worker pool
 		taskFunc := GetTaskFunc(ctx, registry, target, binTools, depsCached)
 		// awaits execution of taskFunc
@@ -77,7 +94,7 @@ func Execute(
 
 // getBinToolPaths From all the direct dependencies of a target, get their bin_output if defined
 func getBinToolPaths(graph *dag.DirectedTargetGraph, target *model.Target) (BinToolMap, error) {
-	deps, err := graph.GetInEdges(target)
+	deps, err := graph.GetDependencies(target)
 	if err != nil {
 		return nil, err
 	}
@@ -114,11 +131,6 @@ func GetTaskFunc(
 	// taskFunc will run in the worker pool and return a bool indicating whether the target was cached
 	return func(update worker.StatusFunc) (dag.CacheResult, error) {
 		startTime := time.Now()
-		changeHash, err := hashing.GetTargetChangeHash(*target)
-		if err != nil {
-			return dag.CacheMiss, err
-		}
-		target.ChangeHash = changeHash
 
 		update(fmt.Sprintf("%s: checking cache.", target.Label))
 		hasCacheHit, err := registry.HasCacheHit(ctx, *target)
@@ -223,6 +235,10 @@ func markBinOutputExecutable(target *model.Target) error {
 }
 
 func loadCachedOutputs(ctx context.Context, registry *output.Registry, target *model.Target) error {
+	if target.SkipsCache() {
+		return nil
+	}
+
 	err := registry.LoadOutputs(ctx, *target)
 	if err != nil {
 		return fmt.Errorf("failed to read outputs from cache for target %s: %w", target.Label, err)

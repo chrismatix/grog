@@ -86,18 +86,14 @@ func (g *DirectedTargetGraph) AddEdge(from, to *model.Target) error {
 	return nil
 }
 
-// GetInEdges returns a list of vertices pointing to the given vertex.
-// In the context of build targets these would be the dependencies
-func (g *DirectedTargetGraph) GetInEdges(target *model.Target) ([]*model.Target, error) {
+func (g *DirectedTargetGraph) GetDependencies(target *model.Target) ([]*model.Target, error) {
 	if !g.hasVertex(target) {
 		return nil, errors.New("vertex not found")
 	}
 	return g.inEdges[target.Label], nil
 }
 
-// GetOutEdges returns a list of vertices pointing from the given vertex.
-// In the context of build targets these would be the targets that depend on the given target.
-func (g *DirectedTargetGraph) GetOutEdges(target *model.Target) ([]*model.Target, error) {
+func (g *DirectedTargetGraph) GetDependants(target *model.Target) ([]*model.Target, error) {
 	if !g.hasVertex(target) {
 		return nil, errors.New("vertex not found")
 	}

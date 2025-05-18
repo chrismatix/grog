@@ -3,7 +3,6 @@ targets:
     dependencies:
       - :creates_bin_tool
       - :declares_bin_tool
-    #      - :a_bin_path_tool
     command: |
       # Using the bin tool
       $(bin :creates_bin_tool) foo
@@ -31,6 +30,8 @@ targets:
   # It is also possible to just declare an existing file
   # as a bin output and use that
   - name: declares_bin_tool
+    inputs:
+      - bin_tool.sh
     bin_output: bin_tool.sh
     tags:
       - "no-cache"

@@ -96,5 +96,5 @@ There are a few reserved tags that alter the way grog treats a target:
 
 | Tag Name            | Effect                                                                                                                                                |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| no-cache            | Always re-run this target and never cache its outputs. The cache of targets that depend on a target tagged with `no-cache` is not affected by this.   |
+| no-cache            | Outputs will neither be stored in nor loaded from the cache backend.                                                                                  |
 | multiplatform-cache | By default grog separates target caches by the host platform. Adding this tag causes grog to store the outputs at the same cache key across platforms |

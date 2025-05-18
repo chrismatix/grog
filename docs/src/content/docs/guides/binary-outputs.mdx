@@ -86,6 +86,8 @@ targets:
   # Assuming that this script exists in
   # the same directory as the build filr
   - name: protoc_compiler_script
+    inputs:
+      - compile.sh
     bin_output: compile.sh
 
   - name: generate_protos

@@ -44,7 +44,7 @@ var RDepsCmd = &cobra.Command{
 				rDeps = append(rDeps, descendant.Label)
 			}
 		} else {
-			dependants, err := graph.GetOutEdges(target)
+			dependants, err := graph.GetDependants(target)
 			if err != nil {
 				logger.Fatalf("could not get in edges: %v", err)
 			}

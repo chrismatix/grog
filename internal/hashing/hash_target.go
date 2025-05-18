@@ -10,8 +10,9 @@ import (
 )
 
 // GetTargetChangeHash computes the hash that tells us if a target has changed.
-func GetTargetChangeHash(target model.Target) (string, error) {
-	targetDefinitionHash, err := hashTargetDefinition(target)
+// dependencyHashes are the change hashes of the direct dependencies
+func GetTargetChangeHash(target model.Target, dependencyHashes []string) (string, error) {
+	targetDefinitionHash, err := hashTargetDefinition(target, dependencyHashes)
 	if err != nil {
 		return "", err
 	}
@@ -22,14 +23,14 @@ func GetTargetChangeHash(target model.Target) (string, error) {
 }
 
 // hashTargetDefinition computes the xxhash hash of a single file.
-func hashTargetDefinition(target model.Target) (string, error) {
+func hashTargetDefinition(target model.Target, dependencyHashes []string) (string, error) {
 	hasher := xxhash.New()
 
 	_, err := hasher.WriteString(target.Label.String())
 	_, err = hasher.WriteString(target.Command)
 	_, err = hasher.WriteString(sorted(target.Inputs))
 	_, err = hasher.WriteString(sorted(target.OutputDefinitions()))
-	_, err = hasher.WriteString(sorted(target.GetDepsString()))
+	_, err = hasher.WriteString(sorted(dependencyHashes))
 	if !target.IsMultiplatformCache() {
 		_, err = hasher.WriteString(config.Global.GetPlatform())
 	}

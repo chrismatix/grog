@@ -58,7 +58,7 @@ func (s *Selector) selectAllAncestorsForBuild(
 	depChain []string,
 	target *model.Target,
 ) error {
-	inEdges, err := graph.GetInEdges(target)
+	inEdges, err := graph.GetDependencies(target)
 	if err != nil {
 		return err
 	}
