@@ -9,6 +9,7 @@ Available Commands:
   deps        Lists (transitive) dependencies of a target.
   graph       Outputs the target dependency graph
   help        Help about any command
+  info        Prints information about the grog cli and workspace.
   list        Lists targets by pattern.
   owners      Lists targets that own the specified files as inputs.
   rdeps       Lists (transitive) dependants (reverse dependencies) of a target.

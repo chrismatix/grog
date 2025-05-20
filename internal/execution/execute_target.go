@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"grog/internal/config"
+	"grog/internal/console"
 	"grog/internal/model"
 	"os"
 	"os/exec"
@@ -62,6 +63,11 @@ func runTargetCommand(
 
 	cmd := exec.CommandContext(ctx, "sh", "-c", templatedCommand)
 
+	gitHash, err := config.GetGitHash()
+	if err != nil {
+		console.GetLogger(ctx).Debugf("failed to get git hash: %v", err)
+	}
+
 	// Attach env variables to the existing environment
 	cmd.Env = append(os.Environ(),
 		"GROG_TARGET="+target.Label.String(),
@@ -69,6 +75,7 @@ func runTargetCommand(
 		"GROG_ARCH="+config.Global.Arch,
 		"GROG_PLATFORM="+config.Global.GetPlatform(),
 		"GROG_PACKAGE="+target.Label.Package,
+		"GROG_GIT_HASH="+gitHash,
 	)
 
 	cmd.Dir = executionPath

@@ -12,4 +12,8 @@ targets {
     inputs { "src/*.txt" }
     command = "cat src/source_1.txt"
   }
+  new {
+    name = "foo_no_command_test"
+    inputs { "src/*.txt" }
+  }
 }

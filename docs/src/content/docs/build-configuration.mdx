@@ -39,7 +39,7 @@ targets:
       - dist/bundle.js
 
 - name: generate_proto
-  command: protoc --js_out=src/generated proto/\*.proto
+  command: "protoc --js_out=src/generated proto/\*.proto"
   inputs:
   - proto/\*.proto
     outputs:
@@ -126,16 +126,16 @@ This Makefile exposes the targets `build_app` and `generate_proto` to Grog, allo
 
 As your codebase grows, maintaining consistent build configurations across packages becomes tedious. For example, if you want a generic Java build process that's consistent across your entire monorepo, copying configurations between packages is error-prone and difficult to maintain.
 
-[Pkl](https://pkl-lang.org/) is a configuration language designed specifically for creating reusable configuration templates. With Pkl, you can:
+[Pkl](https://pkl-lang.org/) is a configuration language designed specifically for creating reusable configuration macros. With Pkl, you can:
 
-- Define configuration templates that can be shared within your monorepo or even across the internet
+- Define configuration macros that can be shared within your monorepo or even across the internet
 - Get semantic highlighting and auto-completion with IDE plugins
 - Create modular, reusable build configurations
 
 Here's the same build configuration as above, but using Pkl:
 
 ```pkl
-amends "package://grog.build/releases/v0.1.4/grog@0.1.4#/package.pkl"
+amends "package://grog.build/releases/v0.2.2/grog@0.2.2#/package.pkl"
 
 targets {
   new {
@@ -167,45 +167,45 @@ targets {
 }
 ```
 
-### Creating Reusable Build Templates
+### Creating Reusable Build Macros
 
-One of Pkl's strengths is the ability to create reusable build templates. For example, if you want a standard setup for Next.js projects that includes installing dependencies and building the app, you can create a reusable template:
+One of Pkl's strengths is the ability to create reusable build macros.
+For example, if you want a standard setup for Next.js projects that includes installing dependencies and building the app, you can create a reusable macro:
 
 ```pkl
-import "package://grog.build/releases/v0.1.4/grog@0.1.4#/package.pkl"
+import "package://grog.build/releases/v0.2.2/grog@0.2.2#/package.pkl"
 
-// Create a function that returns a list of targets for a Next.js app
-function app(
-  inputName: String
-) = new Listing<package.Target> {
-  // First target: install dependencies
-  new {
-    name = inputName + "_install"
-    command = "npm install"
-    inputs {
-      "package.json"
-      "package-lock.json"
-    }
-    outputs {
-      "node_modules/.package-lock.json"
-    }
-  }
+// Create a function that returns
+// a list of targets for a Next.js app
+// using pkl's class-as-a-function pattern
+class App {
+  app_name: String
 
-  // Second target: build the app (depends on install)
-  new {
-    name = inputName + "_build"
-    command = "npm run build"
-    dependencies {
-      ":" + inputName + "_install"
+  fixed targets: Listing<package.Target> = new Listing<package.Target> {
+    new {
+      name = app_name + "_install"
+      command = "npm install"
+      inputs {
+        "package.json"
+        "package-lock.json"
+      }
     }
-    inputs {
-      "src/**/*.js"
-      "src/**/*.jsx"
-      "src/**/*.ts"
-      "src/**/*.tsx"
-    }
-    outputs {
-      "dir::.next"
+
+    new {
+      name = app_name + "_build"
+      command = "npm run build"
+      dependencies {
+        ":" + app_name + "_install"
+      }
+      inputs {
+        "src/**/*.js"
+        "src/**/*.jsx"
+        "src/**/*.ts"
+        "src/**/*.tsx"
+      }
+      outputs {
+        "dir::.next"
+      }
     }
   }
 }
@@ -219,7 +219,9 @@ import "nextjs.pkl"
 targets {
   // This will add both the install and build targets
   // with the prefix "my-app"
-  ...nextjs.app("my-app")
+  ...(nextjs.App) {
+    app_name = "my-app"
+  }.targets
 
   // You can also add custom targets
   new {

@@ -20,16 +20,7 @@ This guide covers how to set up Docker caching, configure storage backends, and 
 
 ## Setting Up Docker Caching
 
-### 1. Enable Docker Support
-
-First, add the following configuration to your `grog.toml` file at the root of your repository:
-
-```toml
-[docker]
-enabled = true
-```
-
-### 2. Choose a Storage Backend
+### Choose a Storage Backend
 
 Grog supports two storage backends for Docker images:
 
@@ -39,7 +30,6 @@ The filesystem backend stores Docker images as tarballs using your configured (r
 
 ```toml
 [docker]
-enabled = true
 backend = "tarball"  # This is the default, so it's optional
 ```
 
@@ -60,7 +50,6 @@ The registry backend stores Docker images in a Docker registry:
 
 ```toml
 [docker]
-enabled = true
 backend = "registry"
 registry_url = "https://your-registry-url"
 ```

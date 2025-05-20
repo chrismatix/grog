@@ -1,13 +1,7 @@
 # TODOs
 
-- [ ] Change Hash should take the dependency change hashes (and not their labels) into account!
-- [ ] Inputs should ignore gitignored files
-- [ ] Gzip the docker tarballs (?)
-- [ ] Add `grog info`
 - [ ] Add `grog check`
 - [ ] Add golangci-lint
-- [ ] Only replace outputs when they have changed -> Will require tracking hashes in a separate, small file
-  - [ ] Benchmark if this is even necessary for single files and directories
 - [ ] Allow running target labels relative to the current directory
 - [ ] Add s3 caching Option
 - [ ] The Output Registry should warn when a target is overwriting another's outputs

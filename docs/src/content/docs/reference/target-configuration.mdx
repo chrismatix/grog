@@ -47,15 +47,34 @@ A unique identifier for the target within its package. This forms part of the ta
 The shell command or script to execute. This can be a single line or a multi-line script using YAML's `|` syntax or equivalent in other formats.
 The command is optional which can be useful, for instance, when defining executable scripts ([read more](/guides/binary-outputs)).
 
+Grog also injects the following environment variables into the target's environment:
+
+| Variable Name   | Description                                                         |
+| --------------- | ------------------------------------------------------------------- |
+| `GROG_TARGET`   | The full label of the target. E.g. `//path/to/package:target_name`) |
+| `GROG_OS`       | The grog binary's target operating system. E.g. `linux`.            |
+| `GROG_ARCH`     | The grog binary's target architecture. E.g. `amd64`.                |
+| `GROG_PLATFORM` | The grog binary's target platform. E.g. `linux/amd64`.              |
+| `GROG_PACKAGE`  | The path to the package directory. E.g. `path/to/package`.          |
+| `GROG_GIT_HASH` | The output of `git rev-parse HEAD`. Useful for tagging artifacts.   |
+
 ### inputs
 
-A list of files or glob patterns that Grog monitors for changes. When any input file changes, the target will be rebuilt.
+A list of files or glob patterns that Grog monitors for changes.
+When any input file changes, the target will be rebuilt.
 
 Common glob patterns:
 
 - `src/**/*.js` - All JavaScript files in the src directory and its subdirectories
 - `*.{png,jpg}` - All PNG and JPG files in the current directory
 - `go.mod` - A specific file
+
+<Aside type="caution">
+  If your input glob matches some of your output files, Grog will always
+  re-build the target. Therefore, it is important to declare all outputs (Grog
+  will warn if there is an overlap) and to avoid using globs that match your
+  output files.
+</Aside>
 
 ### outputs
 

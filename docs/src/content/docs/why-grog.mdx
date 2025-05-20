@@ -9,7 +9,7 @@ However, as complexity grows and interdependencies emerge, challenges arise—es
 
 At this point, most teams are stuck between a rock and a hard place:
 
-1. **Adopt sophisticated build tools** like Bazel or Pants.
+1. **Adopt sophisticated build tools** like [Bazel](https://bazel.build/) or [Pants](https://www.pantsbuild.org/).
 2. **Create ad-hoc solutions** with scripts, Makefiles, or internal CLIs.
 
 Adopting Bazel requires lots of resources and is almost certainly overkill for small to medium-sized teams.
@@ -33,9 +33,9 @@ While Pants offers a more ergonomic approach with first-class Docker and Python 
 
 ## Grog's Philosophy
 
-Bazel and Pants are this complicated and tricky to adopt not because their author are sadistic, but because reproducibility is a tough problem that requires constraints on what a build command can do.
+Bazel and Pants are this complicated and tricky to adopt not because their author are sadistic, but because reproducibility is a challenging problem that requires constraints on what a build command can do.
 
-Grog on the other hand takes a simpler more "grug-brained" approach:
+Grog on the other hand takes a simpler more ["grug-brained"](https://grugbrain.dev/) approach:
 Grog doesn’t impose a custom build language or sandboxing layer.
 Instead, it treats each build step as a simple command you already know.
 Grog scans your declared inputs, hashes them, and only re-runs a target when one of its inputs has changed.

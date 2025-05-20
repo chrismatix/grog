@@ -23,7 +23,7 @@ TODO: We don't yet check that a parent package does not include inputs from chil
 
 // CheckTargetConstraints checks that the paths defined by each target are valid
 // logs any warnings on the way
-func CheckTargetConstraints(_ *zap.SugaredLogger, targetMap model.TargetMap) (errs []error) {
+func CheckTargetConstraints(logger *zap.SugaredLogger, targetMap model.TargetMap) (errs []error) {
 	// iterate over targets in alphabetical order for consistent logging
 	for _, target := range targetMap.TargetsAlphabetically() {
 		inputRelativeError := checkInputPathsRelative(target)
@@ -31,6 +31,10 @@ func CheckTargetConstraints(_ *zap.SugaredLogger, targetMap model.TargetMap) (er
 
 		outputsError := checkOutputsAreWithinRepository(target)
 		errs = append(errs, outputsError...)
+
+		if target.IsTest() && target.Command == "" {
+			logger.Warnf("target %s is a test target but has no command", target.Label)
+		}
 	}
 
 	return
