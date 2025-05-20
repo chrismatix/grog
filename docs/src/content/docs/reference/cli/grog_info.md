@@ -1,23 +1,19 @@
 ---
-title: "grog build"
+title: "grog info"
 ---
 
-## grog build
+## grog info
 
-Loads the user configuration and executes build targets
-
-### Synopsis
-
-Loads the user configuration, checks which targets need to be rebuilt based on file hashes, builds the dependency graph, and executes targets.
+Prints information about the grog cli and workspace.
 
 ```
-grog build [flags]
+grog info [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for build
+  -h, --help   help for info
 ```
 
 ### Options inherited from parent commands

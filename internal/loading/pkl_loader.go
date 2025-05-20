@@ -18,13 +18,15 @@ func (pl PklLoader) FileNames() []string {
 }
 
 // getEvaluator lazily loads and caches the evaluator
-func (pl PklLoader) getEvaluator() (pkl.Evaluator, error) {
+func (pl PklLoader) getEvaluator(ctx context.Context) (pkl.Evaluator, error) {
 	if pl.evaluator == nil {
-		evaluator, err := pkl.NewEvaluator(context.Background(), pkl.PreconfiguredOptions, withEnv(map[string]string{
-			"GROG_OS":       config.Global.OS,
-			"GROG_ARCH":     config.Global.Arch,
-			"GROG_PLATFORM": config.Global.GetPlatform(),
-		}))
+		evaluator, err := pkl.NewEvaluator(ctx,
+			pkl.PreconfiguredOptions,
+			withEnv(map[string]string{
+				"GROG_OS":       config.Global.OS,
+				"GROG_ARCH":     config.Global.Arch,
+				"GROG_PLATFORM": config.Global.GetPlatform(),
+			}))
 		if err != nil {
 			return nil, err
 		}
@@ -50,7 +52,7 @@ func withEnv(envVars map[string]string) func(*pkl.EvaluatorOptions) {
 func (pl PklLoader) Load(ctx context.Context, filePath string) (PackageDTO, bool, error) {
 	var pkg PackageDTO
 
-	evaluator, err := pl.getEvaluator()
+	evaluator, err := pl.getEvaluator(ctx)
 	if err != nil {
 		console.GetLogger(ctx).Debugf("failed to get evaluator: %v", err)
 		return pkg, false, fmt.Errorf("found a BUILD.pkl file but the `pkl` cli is not available. " +

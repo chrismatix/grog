@@ -157,3 +157,49 @@ func (fsc *FileSystemCache) Clear(ctx context.Context, expunge bool) error {
 
 	return os.RemoveAll(fsc.workspaceCacheDir)
 }
+
+// GetWorkspaceCacheSize returns the size of the workspace cache in bytes
+func (fsc *FileSystemCache) GetWorkspaceCacheSize() (int64, error) {
+	fsc.mutex.RLock()
+	defer fsc.mutex.RUnlock()
+
+	var size int64
+	err := filepath.Walk(fsc.workspaceCacheDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return nil
+	})
+
+	if err != nil {
+		return 0, err
+	}
+
+	return size, nil
+}
+
+func (fsc *FileSystemCache) GetWorkspaceCacheSizeBytes() (int64, error) {
+	return getDirectorySizeBytes(fsc.workspaceCacheDir)
+}
+
+func (fsc *FileSystemCache) GetCacheSizeBytes() (int64, error) {
+	return getDirectorySizeBytes(config.Global.Root)
+}
+
+func getDirectorySizeBytes(path string) (int64, error) {
+	var size int64
+	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return nil
+	})
+
+	return size, err
+}

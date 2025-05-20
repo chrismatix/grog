@@ -26,25 +26,7 @@ type templateData struct {
 type BinToolMap map[string]string
 
 func executeTarget(ctx context.Context, target *model.Target, binToolPaths BinToolMap) error {
-	executionPath := config.GetPathAbsoluteToWorkspaceRoot(target.Label.Package)
-	templatedCommand, err := getCommand(binToolPaths, target.Command)
-	if err != nil {
-		return err
-	}
-
-	cmd := exec.CommandContext(ctx, "sh", "-c", templatedCommand)
-
-	// Attach env variables to the existing environment
-	cmd.Env = append(os.Environ(),
-		"GROG_TARGET="+target.Label.String(),
-		"GROG_OS="+config.Global.OS,
-		"GROG_ARCH="+config.Global.Arch,
-		"GROG_PLATFORM="+config.Global.GetPlatform(),
-	)
-
-	cmd.Dir = executionPath
-
-	cmdOut, err := cmd.CombinedOutput()
+	cmdOut, err := runTargetCommand(ctx, target, binToolPaths, target.Command)
 
 	if err != nil {
 		if ctx.Err() != nil {

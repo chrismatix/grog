@@ -34,7 +34,7 @@ func Stamp(version string, commit string, buildDate string) {
 	RootCmd.Version = version
 
 	RootCmd.SetVersionTemplate(fmt.Sprintf(
-		"Grog version %s (%s) built on %s",
+		"%s (%s) built on %s",
 		version,
 		commit,
 		buildDate,
@@ -93,6 +93,7 @@ func init() {
 	RootCmd.AddCommand(cmds.VersionCmd)
 	RootCmd.AddCommand(cmds.GraphCmd)
 	RootCmd.AddCommand(cmds.ListCmd)
+	RootCmd.AddCommand(cmds.InfoCmd)
 	cmds.AddDepsCmd(RootCmd)
 	cmds.AddRDepsCmd(RootCmd)
 	cmds.AddOwnersCmd(RootCmd)
