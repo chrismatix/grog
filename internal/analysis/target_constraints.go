@@ -33,7 +33,11 @@ func CheckTargetConstraints(logger *zap.SugaredLogger, targetMap model.TargetMap
 		errs = append(errs, outputsError...)
 
 		if target.IsTest() && target.Command == "" {
-			logger.Warnf("target %s is a test target but has no command", target.Label)
+			errs = append(errs, fmt.Errorf("target %s is a test target but has no command", target.Label))
+		}
+
+		if len(target.Inputs) == 0 && len(target.Dependencies) == 0 && len(target.OutputChecks) == 0 {
+			logger.Warnf("target %s has no inputs, dependencies or output checks causing it to run only once", target.Label)
 		}
 	}
 

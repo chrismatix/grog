@@ -1,9 +1,13 @@
 targets:
   - name: target_1
     command: "echo 'failed' && exit 1"
+    inputs:
+      - "foo.txt"
   - name: target_2
     command: ""
     dependencies:
       - :target_1
   - name: target_3
     command: "sleep 1 && echo 'this should run with --fail-fast=false'"
+    inputs:
+      - "foo.txt"

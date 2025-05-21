@@ -1,5 +1,4 @@
-INFO: 2 packages loaded, 5 targets configured.
-WARN: target //foo:foo_no_command_test is a test target but has no command
+INFO: 2 packages loaded, 4 targets configured.
 INFO: Selected 1 target.
 INFO: //foo:foo_test PASSED in 0.0s
 INFO: Test completed successfully. 1 target completed (0 cache hits).

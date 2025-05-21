@@ -94,6 +94,7 @@ func init() {
 	RootCmd.AddCommand(cmds.GraphCmd)
 	RootCmd.AddCommand(cmds.ListCmd)
 	RootCmd.AddCommand(cmds.InfoCmd)
+	RootCmd.AddCommand(cmds.CheckCmd)
 	cmds.AddDepsCmd(RootCmd)
 	cmds.AddRDepsCmd(RootCmd)
 	cmds.AddOwnersCmd(RootCmd)

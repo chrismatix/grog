@@ -28,7 +28,7 @@ var BuildCmd = &cobra.Command{
 	Use:   "build",
 	Short: "Loads the user configuration and executes build targets",
 	Long:  `Loads the user configuration, checks which targets need to be rebuilt based on file hashes, builds the dependency graph, and executes targets.`,
-	Args:  cobra.MaximumNArgs(1), // Optional argument for target pattern
+	Args:  cobra.ArbitraryArgs, // Optional argument for target pattern
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := setupCommand()
 

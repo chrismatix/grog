@@ -134,7 +134,7 @@ As your codebase grows, maintaining consistent build configurations across packa
 
 Here's the same build configuration as above, but using Pkl:
 
-```pkl
+```Pkl
 amends "package://grog.build/releases/v0.2.2/grog@0.2.2#/package.pkl"
 
 targets {
@@ -172,7 +172,7 @@ targets {
 One of Pkl's strengths is the ability to create reusable build macros.
 For example, if you want a standard setup for Next.js projects that includes installing dependencies and building the app, you can create a reusable macro:
 
-```pkl
+```Pkl
 import "package://grog.build/releases/v0.2.2/grog@0.2.2#/package.pkl"
 
 // Create a function that returns
@@ -213,7 +213,7 @@ class App {
 
 You can store this in a file called `nextjs.pkl` somewhere in your repository and import it wherever you need it:
 
-```pkl
+```Pkl
 import "nextjs.pkl"
 
 targets {

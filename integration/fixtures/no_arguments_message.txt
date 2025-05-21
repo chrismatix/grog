@@ -4,6 +4,7 @@ Usage:
 Available Commands:
   build       Loads the user configuration and executes build targets
   changes     Lists targets whose inputs have been modified since a given commit.
+  check       Loads the build graph and runs basic consistency checks.
   clean       Removes build outputs and clears the cache
   completion  Generate the autocompletion script for the specified shell
   deps        Lists (transitive) dependencies of a target.

@@ -1,19 +1,23 @@
 ---
-title: "grog owners"
+title: "grog check"
 ---
 
-## grog owners
+## grog check
 
-Lists targets that own the specified files as inputs.
+Loads the build graph and runs basic consistency checks.
+
+### Synopsis
+
+Loads the the build graph and performs the same consistency checks as 'grog build' without actually building anything.
 
 ```
-grog owners [flags]
+grog check [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for owners
+  -h, --help   help for check
 ```
 
 ### Options inherited from parent commands

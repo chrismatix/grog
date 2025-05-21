@@ -1,3 +1,7 @@
 INFO: 2 packages loaded, 5 targets configured.
+WARN: target //:arch_guard has no inputs, dependencies or output checks causing it to run only once
+WARN: target //:os_guard has no inputs, dependencies or output checks causing it to run only once
+WARN: target //pkg:foo has no inputs, dependencies or output checks causing it to run only once
+WARN: target //pkg:foo_platform has no inputs, dependencies or output checks causing it to run only once
 INFO: Selected 5 targets.
 INFO: Build completed successfully. 5 targets completed (0 cache hits).

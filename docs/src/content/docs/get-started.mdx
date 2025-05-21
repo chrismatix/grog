@@ -8,9 +8,10 @@ import { Aside } from "@astrojs/starlight/components";
 
 ## What is Grog?
 
-**Grog** is a lightweight build orchestrator that runs your existing commands in parallel—rebuilding only what’s changed—to give small teams instant speedups with zero new DSL.
+**Grog** is a lightweight build orchestrator that runs your existing commands in parallel —rebuilding only what’s changed— while caching the results for future runs.
+It's designed to be a simple and lightweight alternative to existing build systems like [Bazel](https://bazel.build/), [Buck](https://buckbuild.com/), and [Pants](https://www.pantsbuild.org/).
 
-Unlike some build systems, Grog remains agnostic to the actual build execution and focuses solely on incremental runs, parallel execution, and caching.
+Unlike those build systems, Grog remains agnostic to the actual build execution and focuses solely on incremental runs, parallel execution, and caching.
 It's designed to be an intermediate solution that helps teams move towards a coherent monorepo approach by efficiently connecting their existing build tooling using a simple interface.
 
 ## 1. Install Grog
@@ -52,8 +53,9 @@ Refer to the [configuration reference](/reference/configuration) to see all avai
 
 ## 3. Define BUILD Files
 
-Grog provides a wide array of build file formats to define your build targets.
-You can create these files in various formats depending on your needs:
+`BUILD` files define your build targets.
+Each target is a **command** that runs when its file **inputs** or **dependencies** change.
+Grog provides a wide array of build file formats:
 
 <Tabs>
   <TabItem label="YAML">
@@ -128,7 +130,7 @@ Add the grog metadata comments to your `Makefile` goals to allow running them wi
 </TabItem>
 <TabItem label="Pkl">
 ```Pkl
-amends "package://grog.build/releases/v0.1.4/grog@0.1.4#/package.pkl"
+amends "package://grog.build/releases/v0.2.2/grog@0.2.2#/package.pkl"
 
 targets {
   new {

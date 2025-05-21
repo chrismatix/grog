@@ -1,6 +1,10 @@
 name: simple json builds
 repo: simple_json
 cases:
+  - name: run_checks
+    args:
+      - check
+
   # This should only build foo
   - name: build_only_foo
     args:

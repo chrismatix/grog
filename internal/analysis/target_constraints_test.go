@@ -70,7 +70,7 @@ func TestCheckPathConstraints(t *testing.T) {
 					Label: label.TL("", "target1"),
 				},
 			},
-			expectWarningCount: 0,
+			expectWarningCount: 1,
 			expectErrorCount:   0,
 		},
 		{
