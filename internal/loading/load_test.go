@@ -29,6 +29,7 @@ func TestResolveInputs(t *testing.T) {
 	testCases := []struct {
 		name            string
 		inputs          []string
+		excludeInputs   []string
 		expected        []string
 		createTestFiles func(tmpDir string)
 		expectedError   bool
@@ -125,6 +126,55 @@ func TestResolveInputs(t *testing.T) {
 			expected:      []string{".file1"},
 			expectedError: false,
 		},
+		{
+			name:          "ExcludeSingleFile",
+			inputs:        []string{"*.txt"},
+			excludeInputs: []string{"file2.txt"},
+			createTestFiles: func(tmpDir string) {
+				createFile(tmpDir, "file1.txt", "content1")
+				createFile(tmpDir, "file2.txt", "content2")
+				createFile(tmpDir, "file3.txt", "content3")
+			},
+			expected:      []string{"file1.txt", "file3.txt"},
+			expectedError: false,
+		},
+		{
+			name:          "ExcludeGlob",
+			inputs:        []string{"**/*.txt"},
+			excludeInputs: []string{"subdir/*.txt"},
+			createTestFiles: func(tmpDir string) {
+				createFile(tmpDir, "file1.txt", "content1")
+				createFile(tmpDir, "subdir/file2.txt", "content2")
+				createFile(tmpDir, "subdir/file3.txt", "content3")
+				createFile(tmpDir, "subdir/nested/file4.txt", "content4")
+			},
+			expected:      []string{"file1.txt", "subdir/nested/file4.txt"},
+			expectedError: false,
+		},
+		{
+			name:          "ExcludeMultiplePatterns",
+			inputs:        []string{"**/*.txt"},
+			excludeInputs: []string{"**/file2.txt", "**/file4.txt"},
+			createTestFiles: func(tmpDir string) {
+				createFile(tmpDir, "file1.txt", "content1")
+				createFile(tmpDir, "file2.txt", "content2")
+				createFile(tmpDir, "subdir/file3.txt", "content3")
+				createFile(tmpDir, "subdir/file4.txt", "content4")
+			},
+			expected:      []string{"file1.txt", "subdir/file3.txt"},
+			expectedError: false,
+		},
+		{
+			name:          "ExcludeAll",
+			inputs:        []string{"*.txt"},
+			excludeInputs: []string{"*.txt"},
+			createTestFiles: func(tmpDir string) {
+				createFile(tmpDir, "file1.txt", "content1")
+				createFile(tmpDir, "file2.txt", "content2")
+			},
+			expected:      []string{},
+			expectedError: false,
+		},
 	}
 
 	testLogger := zaptest.NewLogger(t).Sugar()
@@ -141,7 +191,7 @@ func TestResolveInputs(t *testing.T) {
 			tc.createTestFiles(tmpDir)
 
 			// Execute the function.
-			actual, err := resolveInputs(testLogger, tmpDir, tc.inputs)
+			actual, err := resolveInputs(testLogger, tmpDir, tc.inputs, tc.excludeInputs)
 
 			if tc.expectedError {
 				if err == nil {

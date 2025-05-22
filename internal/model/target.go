@@ -14,6 +14,7 @@ type Target struct {
 	Command      string              `json:"cmd"`
 	Dependencies []label.TargetLabel `json:"dependencies,omitempty"`
 	Inputs       []string            `json:"inputs,omitempty"`
+	ExcludeInputs []string           `json:"exclude_inputs,omitempty"`
 	Outputs      []Output            `json:"outputs,omitempty"`
 	Platform     *PlatformConfig     `json:"platform,omitempty"`
 	Tags         []string            `json:"tags,omitempty"`

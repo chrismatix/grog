@@ -1,6 +1,6 @@
 # TODOs
 
-- [ ] Add `grog check`
+- [ ] Add exclude_inputs
 - [ ] Add golangci-lint
 - [ ] Allow running target labels relative to the current directory
 - [ ] Add s3 caching Option

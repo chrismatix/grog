@@ -214,7 +214,7 @@ You can combine Grog's query commands with standard Unix tools to create powerfu
 
 ```shell
 # Find all test targets affected by changes
-grog changes --since=origin/main --dependents=transitive | grep "_test$" | xargs grog test
+grog changes --since=origin/main --dependents=transitive | grep "test$" | xargs grog test
 
 # Find all Docker targets that depend on a specific library
 grog rdeps --transitive //libs/common:utils | grep "docker" | xargs grog build

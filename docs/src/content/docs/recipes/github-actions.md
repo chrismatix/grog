@@ -209,7 +209,7 @@ jobs:
             BASE_COMMIT=$(git rev-parse HEAD~1)
           fi
 
-          CHANGED_TESTS=$(grog changes --since=$BASE_COMMIT --dependents=transitive | grep "_test$")
+          CHANGED_TESTS=$(grog changes --since=$BASE_COMMIT --dependents=transitive | grep "test$")
 
           if [ -n "$CHANGED_TESTS" ]; then
             echo "Running changed tests: $CHANGED_TESTS"
@@ -386,7 +386,7 @@ jobs:
       - name: Run changed tests
         if: steps.changes.outputs.targets != ''
         run: |
-          CHANGED_TESTS=$(echo "${{ steps.changes.outputs.targets }}" | grep "_test$" || true)
+          CHANGED_TESTS=$(echo "${{ steps.changes.outputs.targets }}" | grep "test$" || true)
           if [ -n "$CHANGED_TESTS" ]; then
             grog test $CHANGED_TESTS
           else

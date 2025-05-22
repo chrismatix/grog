@@ -9,6 +9,7 @@ type TargetDTO struct {
 	Command      string   `json:"command" yaml:"command" pkl:"command"`
 	Dependencies []string `json:"dependencies,omitempty" yaml:"dependencies,omitempty" pkl:"dependencies"`
 	Inputs       []string `json:"inputs,omitempty" yaml:"inputs,omitempty" pkl:"inputs"`
+	ExcludeInputs []string `json:"exclude_inputs,omitempty" yaml:"exclude_inputs,omitempty" pkl:"exclude_inputs"`
 	Outputs      []string `json:"outputs,omitempty" yaml:"outputs,omitempty" pkl:"outputs"`
 	BinOutput    string   `json:"bin_output" yaml:"bin_output" pkl:"bin_output"`
 

@@ -19,21 +19,22 @@ Grog uses this information to ensure incremental, cached, and parallel builds.
 
 ## Fields Reference
 
-| Field        | Type           | Required? | Description                                                            |
-| ------------ | -------------- | --------- | ---------------------------------------------------------------------- |
-| name         | string         | yes       | Unique identifier for the target within its package                    |
-| command      | string         | yes       | Shell command or script to execute in the target's package directory   |
-| inputs       | string[]       | no        | File paths or glob patterns that, when changed, will trigger a rebuild |
-| outputs      | string[]       | no        | Files or directories produced by the target                            |
-| dependencies | label[]        | no        | Labels of other targets that must be built before this one             |
-| platform     | PlatformConfig | no        | OS and architecture constraints for where this target can run          |
-| tags         | string[]       | no        | Metadata tags that affect target behavior (e.g., "no-cache")           |
-| bin_output   | Output         | no        | Specifically identifies a binary output from the target                |
+| Field          | Type           | Description                                                            |
+| -------------- | -------------- | ---------------------------------------------------------------------- |
+| name           | string         | Unique identifier for the target within its package                    |
+| command        | string         | Shell command or script to execute in the target's package directory   |
+| inputs         | string[]       | File paths or glob patterns that, when changed, will trigger a rebuild |
+| exclude_inputs | string[]       | File paths or glob patterns to exclude from inputs                     |
+| outputs        | string[]       | Files or directories produced by the target                            |
+| dependencies   | label[]        | Labels of other targets that must be built before this one             |
+| platform       | PlatformConfig | OS and architecture constraints for where this target can run          |
+| tags           | string[]       | Metadata tags that affect target behavior (e.g., "no-cache")           |
+| bin_output     | Output         | Specifically identifies a binary output from the target                |
 
 <Aside type="note">
-  Targets with names ending in `_test` are automatically treated as test
-  targets. They will be executed with `grog test` but not with `grog build`
-  unless explicitly requested.
+  Targets with names ending in `test` are automatically treated as test targets.
+  They will be executed with `grog test` but not with `grog build` unless
+  explicitly requested.
 </Aside>
 
 ## Field Details
@@ -74,6 +75,20 @@ Common glob patterns:
   re-build the target. Therefore, it is important to declare all outputs (Grog
   will warn if there is an overlap) and to avoid using globs that match your
   output files.
+</Aside>
+
+### exclude_inputs
+
+A list of files or glob patterns to exclude from the resolved `inputs`. This is useful when you want to include a broad pattern in `inputs` but exclude specific files or subdirectories.
+
+Examples:
+
+- If `inputs` includes `src/**/*.js` but you want to exclude test files, you can add `src/**/*.test.js` to `exclude_inputs`
+- If `inputs` includes all files in a directory but you want to exclude specific files, you can list them in `exclude_inputs`
+
+<Aside type="note">
+  The exclusion happens after all input patterns are resolved, so you can
+  exclude specific files that were matched by glob patterns.
 </Aside>
 
 ### outputs

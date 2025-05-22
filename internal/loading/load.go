@@ -111,7 +111,7 @@ func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg Packa
 			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", target.Name, pkg.SourceFilePath)
 		}
 
-		resolvedInputs, err := resolveInputs(logger, absolutePackagePath, target.Inputs)
+		resolvedInputs, err := resolveInputs(logger, absolutePackagePath, target.Inputs, target.ExcludeInputs)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve inputs for target %s: %w", targetLabel, err)
 		}
@@ -138,15 +138,16 @@ func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg Packa
 		}
 
 		targets[targetLabel] = &model.Target{
-			Label:        targetLabel,
-			Command:      target.Command,
-			Dependencies: deps,
-			Inputs:       resolvedInputs,
-			Outputs:      parsedOutputs,
-			BinOutput:    parsedBinOutput,
-			Platform:     target.Platform,
-			OutputChecks: target.OutputChecks,
-			Tags:         target.Tags,
+			Label:         targetLabel,
+			Command:       target.Command,
+			Dependencies:  deps,
+			Inputs:        resolvedInputs,
+			ExcludeInputs: target.ExcludeInputs,
+			Outputs:       parsedOutputs,
+			BinOutput:     parsedBinOutput,
+			Platform:      target.Platform,
+			OutputChecks:  target.OutputChecks,
+			Tags:          target.Tags,
 		}
 	}
 
@@ -160,10 +161,12 @@ func resolveInputs(
 	logger *zap.SugaredLogger,
 	absolutePackagePath string,
 	inputs []string,
+	excludeInputs []string,
 ) ([]string, error) {
 	var resolvedInputs []string
 	fsys := os.DirFS(absolutePackagePath)
 
+	// First, resolve all input patterns
 	for _, input := range inputs {
 		if !strings.ContainsAny(input, "*?[{") {
 			// Nothing to resolve - no special glob characters
@@ -171,16 +174,47 @@ func resolveInputs(
 			continue
 		}
 
-		// Match files using doublestar
 		matches, err := doublestar.Glob(fsys, input)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve glob pattern %s: %w", input, err)
 		}
 		logger.Debugf("Resolved glob pattern %s in %s to %v", input, absolutePackagePath, matches)
 
-		// Append matched files to the resolvedInputs
 		resolvedInputs = append(resolvedInputs, matches...)
 	}
 
-	return resolvedInputs, nil
+	// If there are no exclusions, return early
+	if len(excludeInputs) == 0 {
+		return resolvedInputs, nil
+	}
+
+	// Resolve exclusion patterns
+	var excludedPaths []string
+	for _, excludePattern := range excludeInputs {
+		matches, err := doublestar.Glob(fsys, excludePattern)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve exclusion glob pattern %s: %w", excludePattern, err)
+		}
+		logger.Debugf("Resolved exclusion glob pattern %s in %s to %v", excludePattern, absolutePackagePath, matches)
+
+		excludedPaths = append(excludedPaths, matches...)
+	}
+
+	// Create a map for faster lookup of excluded paths
+	excludeMap := make(map[string]bool)
+	for _, path := range excludedPaths {
+		excludeMap[path] = true
+	}
+
+	var filteredInputs []string
+	for _, input := range resolvedInputs {
+		if !excludeMap[input] {
+			filteredInputs = append(filteredInputs, input)
+		}
+	}
+
+	logger.Debugf("Filtered %d inputs to %d after applying %d exclusions",
+		len(resolvedInputs), len(filteredInputs), len(excludedPaths))
+
+	return filteredInputs, nil
 }
