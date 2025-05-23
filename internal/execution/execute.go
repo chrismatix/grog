@@ -51,7 +51,22 @@ func Execute(
 	// Attach the tea logger to the context
 	ctx = console.WithTeaLogger(ctx, program)
 
-	selectedTargetCount := len(graph.GetSelectedVertices())
+	// Get selected vertices and create a TestLogger for them
+	selectedVertices := graph.GetSelectedVertices()
+	selectedTargetCount := len(selectedVertices)
+
+	// Create a list of target labels for the TestLogger
+	targetLabels := make([]string, selectedTargetCount)
+	for i, target := range selectedVertices {
+		targetLabels[i] = target.Label.String()
+	}
+
+	// Create a TestLogger with the target labels
+	testLogger := console.NewTestLogger(targetLabels, 0) // 0 means use default terminal width
+
+	// Add the TestLogger to the context
+	ctx = context.WithValue(ctx, console.TestLoggerKey{}, testLogger)
+
 	workerPool := worker.NewTaskWorkerPool[dag.CacheResult](numWorkers, msgCh, selectedTargetCount)
 	workerPool.StartWorkers(ctx)
 	defer workerPool.Shutdown()
@@ -165,7 +180,11 @@ func GetTaskFunc(
 				} else {
 					if target.IsTest() {
 						executionTime := time.Since(startTime).Seconds()
-						logger.Infof("%s %s (cached) in %.1fs", target.Label, color.New(color.FgGreen).Sprintf("PASSED"), executionTime)
+						if testLogger := console.GetTestLogger(ctx); testLogger != nil {
+							testLogger.LogTestPassedCached(logger, target.Label.String(), executionTime)
+						} else {
+							logger.Infof("%s %s (cached) in %.1fs", target.Label, color.New(color.FgGreen).Sprintf("PASSED"), executionTime)
+						}
 					}
 					return dag.CacheHit, nil
 				}
@@ -189,7 +208,11 @@ func GetTaskFunc(
 
 		if err != nil {
 			if target.IsTest() && !errors.Is(err, context.Canceled) {
-				logger.Infof("%s %s in %.1fs", target.Label, color.New(color.FgRed).Sprintf("FAILED"), executionTime)
+				if testLogger := console.GetTestLogger(ctx); testLogger != nil {
+					testLogger.LogTestFailed(logger, target.Label.String(), executionTime)
+				} else {
+					logger.Infof("%s %s in %.1fs", target.Label, color.New(color.FgRed).Sprintf("FAILED"), executionTime)
+				}
 			}
 			return dag.CacheMiss, err
 		}
@@ -201,7 +224,11 @@ func GetTaskFunc(
 
 		// If the target was a test log the result
 		if target.IsTest() {
-			logger.Infof("%s %s in %.1fs", target.Label, color.New(color.FgGreen).Sprintf("PASSED"), executionTime)
+			if testLogger := console.GetTestLogger(ctx); testLogger != nil {
+				testLogger.LogTestPassed(logger, target.Label.String(), executionTime)
+			} else {
+				logger.Infof("%s %s in %.1fs", target.Label, color.New(color.FgGreen).Sprintf("PASSED"), executionTime)
+			}
 		}
 
 		// If the target produced a bin output automatically mark it executable
