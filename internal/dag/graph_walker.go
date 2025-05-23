@@ -36,6 +36,8 @@ type vertexInfo struct {
 	ready chan bool // sends depsCached
 	// vertex routine receives this when it is supposed to stop
 	cancel chan struct{}
+
+	cancelOnce sync.Once
 }
 
 // Walker walks the graph in topological order.
@@ -156,13 +158,12 @@ func (w *Walker) Walk(
 func (w *Walker) cancelTarget(target *model.Target) {
 	w.vertexMutex.Lock()
 	defer w.vertexMutex.Unlock()
-	// skip if already cancelled/completed
-	if _, ok := w.completions[target]; ok {
-		return
-	}
+
 	// cancel the vertex routine
 	if info, ok := w.vertexInfoMap[target]; ok {
-		close(info.cancel)
+		info.cancelOnce.Do(func() {
+			close(info.cancel)
+		})
 	}
 }
 

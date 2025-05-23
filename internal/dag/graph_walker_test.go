@@ -358,3 +358,58 @@ func TestWalkerEdgeCases(t *testing.T) {
 		}
 	})
 }
+
+// Test that when two failing parents share a single child, cancelTarget
+// is only invoked once per vertex (no double-close panic).
+func TestNoDoubleCancel(t *testing.T) {
+	// Create three targets: two parents (t1, t2) and one shared child (t3).
+	target1 := GetTarget("target1")
+	target2 := GetTarget("target2")
+	target3 := GetTarget("target3")
+
+	// Build graph: t3 depends on both t1 and t2.
+	graph := NewDirectedGraphFromTargets(target1, target2, target3)
+	_ = graph.AddEdge(target1, target3)
+	_ = graph.AddEdge(target2, target3)
+
+	// walkFunc fails for both parents, succeeds (but never starts) for the child.
+	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (CacheResult, error) {
+		if target.Label.Name == "target1" || target.Label.Name == "target2" {
+			return CacheMiss, errors.New("intentional failure: " + target.Label.Name)
+		}
+		return CacheMiss, nil
+	}
+
+	// Non-failFast mode will invoke cancelTarget on the shared child twice
+	// if there is no protection against double-close. This test ensures no panic.
+	walker := NewWalker(graph, walkFunc, false)
+
+	// Should not panic, and should return a normal completion map.
+	cm, err := walker.Walk(context.Background())
+	if err != nil {
+		t.Fatalf("expected Walk to complete without error, got %v", err)
+	}
+
+	// Only the two failing parents should appear in the completion map.
+	if len(cm) != 2 {
+		t.Errorf("expected 2 entries in completion map, got %d", len(cm))
+	}
+	if _, ok := cm[target3]; ok {
+		t.Errorf("expected target3 not to be in completions map")
+	}
+
+	// Verify both parents are present and marked as failed.
+	for _, p := range []*model.Target{target1, target2} {
+		c, found := cm[p]
+		if !found {
+			t.Errorf("expected %s in completion map", p.Label)
+			continue
+		}
+		if c.IsSuccess {
+			t.Errorf("expected %s to have failed", p.Label)
+		}
+		if c.Err == nil {
+			t.Errorf("expected %s to carry an error", p.Label)
+		}
+	}
+}

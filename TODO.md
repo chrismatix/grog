@@ -1,6 +1,6 @@
 # TODOs
 
-- [ ] Add exclude_inputs
+- [ ] Add output streaming
 - [ ] Add golangci-lint
 - [ ] Allow running target labels relative to the current directory
 - [ ] Add s3 caching Option
