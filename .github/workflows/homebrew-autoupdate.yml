@@ -8,6 +8,8 @@ on:
 jobs:
   update-homebrew:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - uses: actions/checkout@v4
@@ -77,7 +79,7 @@ jobs:
         with:
           repository: chrismatix/homebrew-grog
           path: tap
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ env.GH_TOKEN }}
 
       - name: Create PR
         run: |
@@ -91,4 +93,4 @@ jobs:
           git push origin update-grog-${{ github.ref_name }}
           gh pr create --fill --title "Update grog formula to ${VERSION}"
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ env.GH_TOKEN }}

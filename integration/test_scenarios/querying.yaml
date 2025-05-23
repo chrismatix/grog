@@ -9,6 +9,11 @@ cases:
       - --tag=tag1
       - --tag=non-existent
 
+  - name: list_by_exclude_tags
+    args:
+      - list
+      - --exclude-tag=tag1
+
   - name: build_by_tags
     args:
       - build

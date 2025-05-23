@@ -27,9 +27,7 @@ var ListCmd = &cobra.Command{
 
 		graph := loading.MustLoadGraphForQuery(ctx, logger)
 		selector := selection.New(targetPatterns, config.Global.Tags, config.Global.ExcludeTags, selection.AllTargets)
-		if err := selector.SelectTargets(graph); err != nil {
-			logger.Fatalf("target selection failed: %v", err)
-		}
+		selector.SelectTargets(graph)
 
 		graph.LogSelectedVertices()
 	},

@@ -79,6 +79,8 @@ func init() {
 	// tags
 	RootCmd.PersistentFlags().StringSlice("tag", []string{}, "Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar")
 	err = viper.BindPFlag("tag", RootCmd.PersistentFlags().Lookup("tag"))
+	RootCmd.PersistentFlags().StringSlice("exclude-tag", []string{}, "Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar")
+	err = viper.BindPFlag("exclude_tag", RootCmd.PersistentFlags().Lookup("exclude-tag"))
 
 	// enable_caching
 	RootCmd.PersistentFlags().Bool("enable-cache", true, "Enable cache")
