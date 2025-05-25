@@ -2,7 +2,6 @@
 
 - [ ] Add output streaming
 - [ ] Add golangci-lint
-- [ ] Allow running target labels relative to the current directory
 - [ ] Add s3 caching Option
 - [ ] The Output Registry should warn when a target is overwriting another's outputs
 - [ ] Logging: Create a diagnotics module that we attach to the context and that - on failure - will always write all the diagnostics to the grog root

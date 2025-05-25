@@ -69,7 +69,6 @@ func Execute(
 
 	workerPool := worker.NewTaskWorkerPool[dag.CacheResult](numWorkers, msgCh, selectedTargetCount)
 	workerPool.StartWorkers(ctx)
-	defer workerPool.Shutdown()
 
 	// walkCallback will be called at max parallelism by the graph walker
 	walkCallback := func(ctx context.Context, target *model.Target, depsCached bool) (dag.CacheResult, error) {
@@ -98,7 +97,6 @@ func Execute(
 
 		// taskFunc will be run in the worker pool
 		taskFunc := GetTaskFunc(ctx, registry, target, binTools, depsCached)
-		// awaits execution of taskFunc
 		return workerPool.Run(taskFunc)
 	}
 
@@ -143,7 +141,6 @@ func GetTaskFunc(
 	binToolPaths BinToolMap,
 	depsCached bool,
 ) worker.TaskFunc[dag.CacheResult] {
-	// taskFunc will run in the worker pool and return a bool indicating whether the target was cached
 	return func(update worker.StatusFunc) (dag.CacheResult, error) {
 		startTime := time.Now()
 
@@ -222,7 +219,6 @@ func GetTaskFunc(
 			return dag.CacheMiss, outputCheckErr
 		}
 
-		// If the target was a test log the result
 		if target.IsTest() {
 			if testLogger := console.GetTestLogger(ctx); testLogger != nil {
 				testLogger.LogTestPassed(logger, target.Label.String(), executionTime)

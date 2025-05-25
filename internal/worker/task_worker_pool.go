@@ -177,10 +177,3 @@ func (twp *TaskWorkerPool[T]) Run(task TaskFunc[T]) (T, error) {
 	result := <-resultCh
 	return result.Return, result.Error
 }
-
-func (twp *TaskWorkerPool[T]) Shutdown() {
-	twp.mu.Lock()
-	defer twp.mu.Unlock()
-	twp.closed = true
-	close(twp.jobCh)
-}
