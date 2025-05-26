@@ -88,8 +88,6 @@ func init() {
 	viper.SetDefault("enable_cache", true)
 
 	// Register subcommands
-	RootCmd.AddCommand(cmds.BuildCmd)
-	RootCmd.AddCommand(cmds.TestCmd)
 	RootCmd.AddCommand(cmds.RunCmd)
 	RootCmd.AddCommand(cmds.GetCleanCmd())
 	RootCmd.AddCommand(cmds.VersionCmd)
@@ -97,6 +95,8 @@ func init() {
 	RootCmd.AddCommand(cmds.ListCmd)
 	RootCmd.AddCommand(cmds.InfoCmd)
 	RootCmd.AddCommand(cmds.CheckCmd)
+	cmds.AddTestCmd(RootCmd)
+	cmds.AddBuildCmd(RootCmd)
 	cmds.AddDepsCmd(RootCmd)
 	cmds.AddRDepsCmd(RootCmd)
 	cmds.AddOwnersCmd(RootCmd)

@@ -8,6 +8,10 @@ import (
 	"grog/internal/selection"
 )
 
+var testOptions struct {
+	streamLogs bool
+}
+
 var TestCmd = &cobra.Command{
 	Use:   "test",
 	Short: "Loads the user configuration and executes test targets",
@@ -28,6 +32,17 @@ var TestCmd = &cobra.Command{
 
 		graph := loading.MustLoadGraphForBuild(ctx, logger)
 
-		runBuild(ctx, logger, targetPatterns, graph, selection.TestOnly)
+		runBuild(ctx, logger, targetPatterns, graph, selection.TestOnly, testOptions.streamLogs)
 	},
+}
+
+func AddTestCmd(rootCmd *cobra.Command) {
+	TestCmd.Flags().BoolVarP(
+		&testOptions.streamLogs,
+		"stream-logs",
+		"t",
+		false,
+		"Forward target build logs to stdout/-err")
+
+	rootCmd.AddCommand(TestCmd)
 }

@@ -162,6 +162,10 @@ func (twp *TaskWorkerPool[T]) NumWorkers() int {
 }
 
 func (twp *TaskWorkerPool[T]) Run(task TaskFunc[T]) (T, error) {
+	if twp.closed {
+		var zero T
+		return zero, fmt.Errorf("worker pool is closed")
+	}
 	twp.mu.Lock()
 	taskId := twp.nextTaskId
 	twp.nextTaskId++
@@ -176,4 +180,9 @@ func (twp *TaskWorkerPool[T]) Run(task TaskFunc[T]) (T, error) {
 	// Wait for the result.
 	result := <-resultCh
 	return result.Return, result.Error
+}
+
+func (twp *TaskWorkerPool[T]) Shutdown() {
+	twp.closed = true
+	close(twp.jobCh)
 }

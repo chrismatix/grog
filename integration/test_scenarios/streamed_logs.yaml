@@ -1,0 +1,13 @@
+name: streamed output
+repo: simple_pkl
+cases:
+  - name: stream_build_outputs
+    args:
+      - build
+      - --stream-logs
+
+  - name: stream_test_outputs
+    args:
+      - test
+      - --stream-logs
+      - //foo/...

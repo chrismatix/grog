@@ -9,7 +9,7 @@ import (
 
 func runOutputChecks(ctx context.Context, target *model.Target, binToolPaths BinToolMap) error {
 	for _, check := range target.OutputChecks {
-		output, err := runTargetCommand(ctx, target, binToolPaths, check.Command)
+		output, err := runTargetCommand(ctx, target, binToolPaths, check.Command, false)
 		if err != nil {
 			return fmt.Errorf("output check failed for target %s: %w\ncommand %s",
 				target.Label, err, check.Command)

@@ -9,6 +9,7 @@ import (
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/model"
+	"io"
 	"os"
 	"os/exec"
 	"text/template"
@@ -26,8 +27,13 @@ type templateData struct {
 // BinToolMap Maps target label to tool a binary path
 type BinToolMap map[string]string
 
-func executeTarget(ctx context.Context, target *model.Target, binToolPaths BinToolMap) error {
-	cmdOut, err := runTargetCommand(ctx, target, binToolPaths, target.Command)
+func executeTarget(
+	ctx context.Context,
+	target *model.Target,
+	binToolPaths BinToolMap,
+	streamLogs bool,
+) error {
+	cmdOut, err := runTargetCommand(ctx, target, binToolPaths, target.Command, streamLogs)
 
 	if err != nil {
 		if ctx.Err() != nil {
@@ -54,6 +60,7 @@ func runTargetCommand(
 	target *model.Target,
 	binToolPaths BinToolMap,
 	command string,
+	streamLogs bool,
 ) ([]byte, error) {
 	executionPath := config.GetPathAbsoluteToWorkspaceRoot(target.Label.Package)
 	templatedCommand, err := getCommand(binToolPaths, command)
@@ -77,10 +84,24 @@ func runTargetCommand(
 		"GROG_PACKAGE="+target.Label.Package,
 		"GROG_GIT_HASH="+gitHash,
 	)
-
 	cmd.Dir = executionPath
 
-	return cmd.CombinedOutput()
+	var buffer bytes.Buffer
+
+	if program := console.GetTeaProgram(ctx); program != nil && streamLogs {
+		teaWriter := console.TeaWriter{Program: program}
+		multiOut := io.MultiWriter(&buffer, teaWriter)
+		cmd.Stdout = multiOut
+		cmd.Stderr = multiOut
+	} else {
+		cmd.Stdout = &buffer
+		cmd.Stderr = &buffer
+	}
+
+	if cmdErr := cmd.Run(); cmdErr != nil {
+		return buffer.Bytes(), cmdErr
+	}
+	return buffer.Bytes(), nil
 }
 
 func getCommand(toolMap BinToolMap, command string) (string, error) {

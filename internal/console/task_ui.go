@@ -36,7 +36,7 @@ func StartTaskUI(ctx context.Context) (*tea.Program, chan tea.Msg) {
 		opts = append(opts, tea.WithoutRenderer())
 	}
 
-	// Start the Bubbletea program.
+	// Start the Bubbletea Program.
 	p := tea.NewProgram(initialModel(msgCh), opts...)
 
 	go func() {
@@ -54,7 +54,7 @@ func StartTaskUI(ctx context.Context) (*tea.Program, chan tea.Msg) {
 			return
 		case err := <-errCh:
 			if err != nil {
-				fmt.Println("Failed to start Bubble Tea program:", err)
+				fmt.Println("Failed to start Bubble Tea Program:", err)
 			}
 		}
 	}()

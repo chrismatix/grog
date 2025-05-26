@@ -1,15 +1,23 @@
 package console
 
 import (
+	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
 	"strings"
 )
 
-// teaWriter small helper so that we can use a tea.Program as a sync for zap
-type teaWriter struct{ program *tea.Program }
+// TeaWriter small helper so that we can use a tea.Program as a sync for zap
+type TeaWriter struct{ Program *tea.Program }
 
-func (w teaWriter) Write(b []byte) (int, error) {
-	w.program.Println(strings.TrimRight(string(b), "\n"))
+func (w TeaWriter) Write(b []byte) (int, error) {
+	outStr := strings.TrimRight(string(b), "\n")
+	if useTea() {
+		w.Program.Println(outStr)
+	} else {
+		// Log directly to stdout in non-tty (e.g. CI) environments
+		fmt.Println(outStr)
+	}
+
 	return len(b), nil
 }
-func (w teaWriter) Sync() error { return nil }
+func (w TeaWriter) Sync() error { return nil }

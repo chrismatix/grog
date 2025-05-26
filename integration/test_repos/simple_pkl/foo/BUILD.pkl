@@ -4,12 +4,25 @@ targets {
   new {
     name = "foo"
     inputs { "src/*.txt" }
-    command = "cat src/source_1.txt src/source_2.txt > output.txt"
+    command = """
+      echo "Hello streamed output"
+      cat src/source_1.txt src/source_2.txt > output.txt
+    """
     outputs { "output.txt" }
   }
   new {
     name = "foo_test"
+    dependencies {
+      ":foo"
+    }
     inputs { "src/*.txt" }
-    command = "cat src/source_1.txt"
+    command = """
+      mkdir -p dist
+      echo "Hello test streamed output"
+      cat src/source_1.txt > dist/test_output.txt
+    """
+    outputs {
+      "dist/test_output.txt"
+    }
   }
 }

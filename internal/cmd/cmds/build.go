@@ -24,6 +24,10 @@ import (
 	"time"
 )
 
+var buildOptions struct {
+	streamLogs bool
+}
+
 var BuildCmd = &cobra.Command{
 	Use:   "build",
 	Short: "Loads the user configuration and executes build targets",
@@ -44,17 +48,29 @@ var BuildCmd = &cobra.Command{
 
 		graph := loading.MustLoadGraphForBuild(ctx, logger)
 
-		runBuild(ctx, logger, targetPatterns, graph, selection.NonTestOnly)
+		runBuild(ctx, logger, targetPatterns, graph, selection.NonTestOnly, buildOptions.streamLogs)
 	},
 }
 
-// runBuild runs the build/test command with the given target pattern
+func AddBuildCmd(rootCmd *cobra.Command) {
+	BuildCmd.Flags().BoolVarP(
+		&buildOptions.streamLogs,
+		"stream-logs",
+		"t",
+		false,
+		"Forward target build logs to stdout/-err")
+
+	rootCmd.AddCommand(BuildCmd)
+}
+
+// runBuild runs the build/test command for the given target pattern
 func runBuild(
 	ctx context.Context,
 	logger *zap.SugaredLogger,
 	targetPatterns []label.TargetPattern,
 	graph *dag.DirectedTargetGraph,
 	testFilter selection.TestSelection,
+	streamLogs bool,
 ) {
 	startTime := time.Now()
 	errs := analysis.CheckTargetConstraints(logger, graph.GetVertices())
@@ -102,7 +118,7 @@ func runBuild(
 	targetCache := caching.NewTargetCache(cache)
 	registry := output.NewRegistry(targetCache)
 
-	completionMap, err := execution.Execute(ctx, registry, graph, failFast)
+	completionMap, err := execution.Execute(ctx, registry, graph, failFast, streamLogs)
 
 	elapsedTime := time.Since(startTime).Seconds()
 	// Mostly used to keep our test fixtures deterministic

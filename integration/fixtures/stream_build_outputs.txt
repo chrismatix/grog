@@ -1,0 +1,4 @@
+INFO: 2 packages loaded, 4 targets configured.
+INFO: Selected 2 targets.
+Hello streamed output
+INFO: Build completed successfully. 2 targets completed (0 cache hits).

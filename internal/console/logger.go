@@ -16,8 +16,8 @@ func InitLogger() *zap.SugaredLogger {
 	return InitLoggerWithTea(nil)
 }
 
-// InitLoggerWithTea returns a new logger that writes to the given program.
-// Leave the program empty to write to stdout
+// InitLoggerWithTea returns a new logger that writes to the given Program.
+// Leave the Program empty to write to stdout
 func InitLoggerWithTea(program *tea.Program) *zap.SugaredLogger {
 	logPath := config.Global.LogOutputPath
 	if logPath == "" {
@@ -79,7 +79,7 @@ func InitLoggerWithTea(program *tea.Program) *zap.SugaredLogger {
 	if program != nil && useTea() {
 		teaCore := zapcore.NewCore(
 			zapcore.NewConsoleEncoder(encoderConfig),
-			zapcore.AddSync(teaWriter{program}),
+			zapcore.AddSync(TeaWriter{program}),
 			level,
 		)
 
@@ -105,9 +105,12 @@ func WithLogger(ctx context.Context, logger *zap.SugaredLogger) context.Context 
 	return context.WithValue(ctx, ctxLoggerKey{}, logger)
 }
 
-// WithTeaLogger returns a new context with a tea logger
+type programKey struct{}
+
+// WithTeaLogger returns a new context with a tea logger and the tea Program
 func WithTeaLogger(ctx context.Context, program *tea.Program) context.Context {
-	return context.WithValue(ctx, ctxLoggerKey{}, InitLoggerWithTea(program))
+	loggerCtx := context.WithValue(ctx, ctxLoggerKey{}, InitLoggerWithTea(program))
+	return context.WithValue(loggerCtx, programKey{}, program)
 }
 
 func GetLogger(ctx context.Context) *zap.SugaredLogger {
@@ -117,6 +120,13 @@ func GetLogger(ctx context.Context) *zap.SugaredLogger {
 	logger := InitLogger()
 	logger.Debugf("no logger found in context, using default logger. This is probably a bug.")
 	return logger
+}
+
+func GetTeaProgram(ctx context.Context) *tea.Program {
+	if program, ok := ctx.Value(programKey{}).(*tea.Program); ok {
+		return program
+	}
+	return nil
 }
 
 // WarnOnError is a helper for warning when some defer cleanup

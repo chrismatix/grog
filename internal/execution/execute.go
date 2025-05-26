@@ -35,6 +35,7 @@ func Execute(
 	registry *output.Registry,
 	graph *dag.DirectedTargetGraph,
 	failFast bool,
+	streamLogs bool,
 ) (dag.CompletionMap, error) {
 	numWorkers := config.Global.NumWorkers
 	stdLogger := console.GetLogger(ctx)
@@ -69,6 +70,7 @@ func Execute(
 
 	workerPool := worker.NewTaskWorkerPool[dag.CacheResult](numWorkers, msgCh, selectedTargetCount)
 	workerPool.StartWorkers(ctx)
+	defer workerPool.Shutdown()
 
 	// walkCallback will be called at max parallelism by the graph walker
 	walkCallback := func(ctx context.Context, target *model.Target, depsCached bool) (dag.CacheResult, error) {
@@ -96,7 +98,7 @@ func Execute(
 		target.ChangeHash = changeHash
 
 		// taskFunc will be run in the worker pool
-		taskFunc := GetTaskFunc(ctx, registry, target, binTools, depsCached)
+		taskFunc := GetTaskFunc(ctx, registry, target, binTools, depsCached, streamLogs)
 		return workerPool.Run(taskFunc)
 	}
 
@@ -140,6 +142,7 @@ func GetTaskFunc(
 	target *model.Target,
 	binToolPaths BinToolMap,
 	depsCached bool,
+	streamLogs bool,
 ) worker.TaskFunc[dag.CacheResult] {
 	return func(update worker.StatusFunc) (dag.CacheResult, error) {
 		startTime := time.Now()
@@ -200,7 +203,7 @@ func GetTaskFunc(
 
 		update(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis()))
 		logger.Debugf("running target %s: %s", target.Label, target.CommandEllipsis())
-		err = executeTarget(ctx, target, binToolPaths)
+		err = executeTarget(ctx, target, binToolPaths, streamLogs)
 		executionTime := time.Since(startTime).Seconds()
 
 		if err != nil {

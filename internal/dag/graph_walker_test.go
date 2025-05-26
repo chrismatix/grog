@@ -233,26 +233,27 @@ func TestWalkerFailFast(t *testing.T) {
 	// target1 depends on target2
 	// target3 is independent
 	_ = graph.AddEdge(target2, target1)
-	target2Chan := make(chan bool)
 
 	// walkFunc that fails for target2
 	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (CacheResult, error) {
 		if target.Label.Name == "target2" {
-			go func() {
-				target2Chan <- true
-			}()
 			return CacheMiss, errors.New("failed to execute target2")
 		}
 		if target.Label.Name == "target3" {
-			// wait for target2 to complete to simulate a task that would take longer than target2
-			<-target2Chan
-			time.Sleep(10 * time.Millisecond)
-			return CacheMiss, nil
+			select {
+			case <-ctx.Done():
+				// target2 should fail and trigger the context cancellation
+				return CacheMiss, ctx.Err()
+			case <-time.After(1 * time.Second):
+				// If it doesn't we mark this target as successful instead
+				// which fails the test further down
+				return CacheHit, nil
+			}
 		}
 		return CacheMiss, nil
 	}
 
-	walker := NewWalker(graph, walkFunc, true) // failFast = true
+	walker := NewWalker(graph, walkFunc, true)
 
 	ctx := context.Background()
 	completionMap, err := walker.Walk(ctx)
@@ -273,7 +274,7 @@ func TestWalkerFailFast(t *testing.T) {
 		t.Errorf("Expected target2 to have an error")
 	}
 
-	// target1 might or might not have started, but should not be successful
+	// target1 might or might not have started but should not be successful
 	_, ok = completionMap[target1]
 	if ok {
 		t.Errorf("target1 should not have been processed")
