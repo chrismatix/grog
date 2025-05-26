@@ -5,13 +5,13 @@ import "grog/internal/model"
 // TargetDTO is used for deserializing a target in a loader.
 // The target is used internally is in model.Target.
 type TargetDTO struct {
-	Name         string   `json:"name" yaml:"name" pkl:"name"`
-	Command      string   `json:"command" yaml:"command" pkl:"command"`
-	Dependencies []string `json:"dependencies,omitempty" yaml:"dependencies,omitempty" pkl:"dependencies"`
-	Inputs       []string `json:"inputs,omitempty" yaml:"inputs,omitempty" pkl:"inputs"`
+	Name          string   `json:"name" yaml:"name" pkl:"name"`
+	Command       string   `json:"command" yaml:"command" pkl:"command"`
+	Dependencies  []string `json:"dependencies,omitempty" yaml:"dependencies,omitempty" pkl:"dependencies"`
+	Inputs        []string `json:"inputs,omitempty" yaml:"inputs,omitempty" pkl:"inputs"`
 	ExcludeInputs []string `json:"exclude_inputs,omitempty" yaml:"exclude_inputs,omitempty" pkl:"exclude_inputs"`
-	Outputs      []string `json:"outputs,omitempty" yaml:"outputs,omitempty" pkl:"outputs"`
-	BinOutput    string   `json:"bin_output" yaml:"bin_output" pkl:"bin_output"`
+	Outputs       []string `json:"outputs,omitempty" yaml:"outputs,omitempty" pkl:"outputs"`
+	BinOutput     string   `json:"bin_output" yaml:"bin_output" pkl:"bin_output"`
 
 	OutputChecks []model.OutputCheck `json:"output_checks,omitempty" yaml:"output_checks,omitempty" pkl:"output_checks"`
 
@@ -32,4 +32,9 @@ type PackageDTO struct {
 	SourceFilePath string
 
 	Targets []*TargetDTO `json:"targets" yaml:"targets" pkl:"targets"`
+
+	// DefaultPlatform specifies the platform selector at the package level.
+	// This serves as the default for target-level platform selectors.
+	// If a target specifies its own platform selector, it overrides this default.
+	DefaultPlatform *model.PlatformConfig `json:"default_platform,omitempty" yaml:"default_platform,omitempty" pkl:"default_platform"`
 }

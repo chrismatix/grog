@@ -1,5 +1,6 @@
 # TODOs
 
+- [ ] Allow specifying a default package platform selector
 - [ ] Log failed tests on command interrupt
 - [ ] Add output streaming
 - [ ] Add shell completions for commands that run targets

@@ -95,14 +95,16 @@ When a target doesn't match the current host's platform, Grog will skip it autom
 You can specify platform requirements using the `platform` field:
 
 ```yaml
+default_platform:
+  os:
+    - linux
+  arch:
+    - amd64
+
 targets:
+  # default_platform is applied here
   - name: build_linux_amd64
     command: go build -o dist/myapp-linux-amd64 ./cmd/myapp
-    platform:
-      os:
-        - linux
-      arch:
-        - amd64
     inputs:
       - cmd/**/*.go
       - go.mod
@@ -111,6 +113,7 @@ targets:
 
   - name: build_darwin_arm64
     command: go build -o dist/myapp-darwin-arm64 ./cmd/myapp
+    # This overrides default_platform
     platform:
       os:
         - darwin

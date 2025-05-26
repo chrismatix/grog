@@ -17,5 +17,6 @@ class Target {
   platform: platform?
 }
 
+default_platform: platform?
 
 targets: Listing<Target>(isDistinctBy((it) -> it.name))
