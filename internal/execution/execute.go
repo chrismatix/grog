@@ -80,10 +80,7 @@ func Execute(
 			return dag.CacheMiss, err
 		}
 
-		dependencies, err := graph.GetDependencies(target)
-		if err != nil {
-			return dag.CacheMiss, err
-		}
+		dependencies := graph.GetDependencies(target)
 
 		dependencyHashes := make([]string, len(dependencies))
 		for index, dep := range dependencies {
@@ -109,10 +106,7 @@ func Execute(
 
 // getBinToolPaths From all the direct dependencies of a target, get their bin_output if defined
 func getBinToolPaths(graph *dag.DirectedTargetGraph, target *model.Target) (BinToolMap, error) {
-	deps, err := graph.GetDependencies(target)
-	if err != nil {
-		return nil, err
-	}
+	deps := graph.GetDependencies(target)
 
 	binTools := make(map[string]string, 0)
 	for _, dep := range deps {

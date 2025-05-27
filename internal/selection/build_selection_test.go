@@ -135,7 +135,7 @@ func TestSelectTargetsForBuild(t *testing.T) {
 		// Create a selector with TestOnly filter
 		testSelector := New([]label.TargetPattern{pattern}, []string{testTag}, []string{}, TestOnly)
 
-		// When TestFilter is TestOnly, only target5 should be selected.
+		// When TargetType is TestOnly, only target5 should be selected.
 		selected, skipped, err := testSelector.SelectTargetsForBuild(graph)
 		if err != nil {
 			t.Fatalf("SelectTargetsForBuild returned unexpected error: %v", err)
@@ -154,7 +154,7 @@ func TestSelectTargetsForBuild(t *testing.T) {
 		// Create a selector with NonTestOnly filter
 		nonTestSelector := New([]label.TargetPattern{pattern}, []string{testTag}, []string{}, NonTestOnly)
 
-		// When TestFilter is NonTestOnly, only target6 should be selected.
+		// When TargetType is NonTestOnly, only target6 should be selected.
 		selected, skipped, err = nonTestSelector.SelectTargetsForBuild(graph)
 		if err != nil {
 			t.Fatalf("SelectTargetsForBuild returned unexpected error: %v", err)

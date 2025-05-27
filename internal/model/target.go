@@ -119,6 +119,14 @@ func (t *Target) HasOutputChecksOnly() bool {
 	return len(t.OutputChecks) > 0 && len(t.AllOutputs()) == 0 && len(t.Inputs) == 0
 }
 
+func PrintSortedLabels(targets []*Target) {
+	labels := make([]label.TargetLabel, len(targets))
+	for i, target := range targets {
+		labels[i] = target.Label
+	}
+	label.PrintSorted(labels)
+}
+
 // Alias to avoid infinite recursion in MarshalJSON
 type targetAlias Target
 

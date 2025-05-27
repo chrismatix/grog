@@ -1,9 +1,5 @@
 INFO: 1 package loaded, 3 targets configured.
 INFO: Selected 3 targets.
-INFO: //:target_3: checking cache.
-INFO: //:target_1: checking cache.
-INFO: //:target_1: "echo 'failed' && exit 1"
-INFO: //:target_3: "sleep 1 && echo 'this should run with --fail-fast=false'"
 ERROR: Build failed. 0 targets completed (0 cache hits), 1 failed:
 ---------------------------------
 ERROR: Target //:target_1 failed with exit code 1:

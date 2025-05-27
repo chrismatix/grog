@@ -17,6 +17,18 @@ targets {
   }
 
   new {
+    name = "foo_test"
+    command = "echo 'hello foo_test'"
+    dependencies {
+      ":foo"
+    }
+
+    tags {
+      "tag2"
+    }
+  }
+
+  new {
     name = "bar"
     command = "echo 'hello foo'"
     inputs {

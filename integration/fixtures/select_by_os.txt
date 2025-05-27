@@ -4,7 +4,4 @@ WARN: target //:os_guard has no inputs, dependencies or output checks causing it
 WARN: target //pkg:foo has no inputs, dependencies or output checks causing it to run only once
 WARN: target //pkg:foo_platform has no inputs, dependencies or output checks causing it to run only once
 INFO: Selected 1 target.
-INFO: //:os_guard: checking cache.
-INFO: //:os_guard: "echo 'hello world'"
-INFO: //:os_guard complete. writing outputs...
 INFO: Build completed successfully. 1 target completed (0 cache hits).

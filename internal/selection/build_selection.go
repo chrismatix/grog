@@ -58,12 +58,7 @@ func (s *Selector) selectAllAncestorsForBuild(
 	depChain []string,
 	target *model.Target,
 ) error {
-	inEdges, err := graph.GetDependencies(target)
-	if err != nil {
-		return err
-	}
-
-	for _, ancestor := range inEdges {
+	for _, ancestor := range graph.GetDependencies(target) {
 		depChain = append(depChain, ancestor.Label.String())
 		if !targetMatchesPlatform(ancestor) {
 			depChainStr := strings.Join(depChain[1:], " -> ")

@@ -1,9 +1,3 @@
 INFO: 1 package loaded, 3 targets configured.
 INFO: Selected 3 targets.
-INFO: //:creates_bin_tool: checking cache.
-INFO: //:declares_bin_tool: checking cache.
-INFO: //:creates_bin_tool: cache hit. loading outputs.
-INFO: //:declares_bin_tool: cache hit. loading outputs.
-INFO: //:uses_bin_tool: checking cache.
-INFO: //:uses_bin_tool: cache hit. loading outputs.
 INFO: Build completed successfully. 3 targets completed (3 cache hits).

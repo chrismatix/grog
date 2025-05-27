@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"grog/internal/analysis"
 	"grog/internal/caching"
@@ -69,7 +68,7 @@ func runBuild(
 	logger *zap.SugaredLogger,
 	targetPatterns []label.TargetPattern,
 	graph *dag.DirectedTargetGraph,
-	testFilter selection.TestSelection,
+	testFilter selection.TargetTypeSelection,
 	streamLogs bool,
 ) {
 	startTime := time.Now()
@@ -122,8 +121,7 @@ func runBuild(
 
 	elapsedTime := time.Since(startTime).Seconds()
 	// Mostly used to keep our test fixtures deterministic
-	logExecutionTime := viper.GetBool("disable_time_logging")
-	if !logExecutionTime {
+	if !config.Global.DisableNonDeterministicLogging {
 		logger.Infof("Elapsed time: %.3fs", elapsedTime)
 	}
 

@@ -2,7 +2,6 @@ package dag
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"grog/internal/label"
 	"grog/internal/model"
@@ -86,18 +85,12 @@ func (g *DirectedTargetGraph) AddEdge(from, to *model.Target) error {
 	return nil
 }
 
-func (g *DirectedTargetGraph) GetDependencies(target *model.Target) ([]*model.Target, error) {
-	if !g.hasVertex(target) {
-		return nil, errors.New("vertex not found")
-	}
-	return g.inEdges[target.Label], nil
+func (g *DirectedTargetGraph) GetDependencies(target *model.Target) []*model.Target {
+	return g.inEdges[target.Label]
 }
 
-func (g *DirectedTargetGraph) GetDependants(target *model.Target) ([]*model.Target, error) {
-	if !g.hasVertex(target) {
-		return nil, errors.New("vertex not found")
-	}
-	return g.outEdges[target.Label], nil
+func (g *DirectedTargetGraph) GetDependants(target *model.Target) []*model.Target {
+	return g.outEdges[target.Label]
 }
 
 // GetDescendants returns a list of vertices that are descendants (dependants) of the given vertex.
@@ -114,8 +107,8 @@ func (g *DirectedTargetGraph) GetDescendants(target *model.Target) []*model.Targ
 	return descendants
 }
 
-// GetAncestors returns a list of vertices that are ancestors (dependencies) of the given vertex.
-// // Recurses via the inEdges of each vertex.
+// GetAncestors returns a list of vertices that are ancestors (transitive dependencies) of the given vertex.
+// Recurses via the inEdges of each vertex.
 func (g *DirectedTargetGraph) GetAncestors(target *model.Target) []*model.Target {
 	var ancestors []*model.Target
 	for _, ancestor := range g.inEdges[target.Label] {

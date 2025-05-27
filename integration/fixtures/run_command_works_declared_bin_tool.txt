@@ -1,6 +1,4 @@
 INFO: 1 package loaded, 3 targets configured.
 INFO: Selected 1 target.
-INFO: //:declares_bin_tool: checking cache.
-INFO: //:declares_bin_tool: cache hit. loading outputs.
 INFO: Build completed successfully. 1 target completed (1 cache hits).
 INFO: Running //:declares_bin_tool -> bin_tool.sh with args [bar]

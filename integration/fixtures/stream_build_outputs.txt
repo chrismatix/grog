@@ -1,10 +1,4 @@
 INFO: 2 packages loaded, 4 targets configured.
 INFO: Selected 2 targets.
-INFO: //foo:foo: checking cache.
-INFO: //foo:foo: "echo "Hello streamed output"..."
 Hello streamed output
-INFO: //foo:foo complete. writing outputs...
-INFO: //bar:bar: checking cache.
-INFO: //bar:bar: "cat source.txt ../foo/output.txt > output.txt && cat source.txt ../..."
-INFO: //bar:bar complete. writing outputs...
 INFO: Build completed successfully. 2 targets completed (0 cache hits).

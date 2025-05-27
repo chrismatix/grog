@@ -13,6 +13,11 @@ cases:
     args:
       - list
       - --exclude-tag=tag1
+  #
+  #  - name: list_by_target_type
+  #    args:
+  #      - list
+  #      - --target-type=test
 
   - name: build_by_tags
     args:
@@ -44,7 +49,7 @@ cases:
   - name: rdeps_intransitive
     args:
       - rdeps
-      - //package_1:bar # Only depended on by foo
+      - //package_1:bar # Only depended on by foo_test
 
   - name: rdeps_transitive
     args:
@@ -68,7 +73,7 @@ cases:
       - --since=5e79b3bc4fc7f1978e78f917126710989bf0deaa
 
   - name: changes_transitive
-    # Also returns //package_1:foo as a dependent on bar
+    # Also returns //package_1:foo_test as a dependent on bar
     args:
       - changes
       - --dependents=transitive

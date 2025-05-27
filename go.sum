@@ -20,8 +20,6 @@ cloud.google.com/go/storage v1.51.0 h1:ZVZ11zCiD7b3k+cH5lQs/qcNaoSz3U9I0jgwVzqDl
 cloud.google.com/go/storage v1.51.0/go.mod h1:YEJfu/Ki3i5oHC/7jyTgsGZwdQ8P9hqMqvpi5kRKGgc=
 cloud.google.com/go/trace v1.11.3 h1:c+I4YFjxRQjvAhRmSsmjpASUKq88chOX854ied0K/pE=
 cloud.google.com/go/trace v1.11.3/go.mod h1:pt7zCYiDSQjC9Y2oqCsh9jF4GStB/hmjrYLsxRR27q8=
-github.com/AlexBeauchemin/gobadge v0.4.0 h1:sB4By4arpEKQBOZLi3bqUtkbN+vYlVeCcASGiorZjZ8=
-github.com/AlexBeauchemin/gobadge v0.4.0/go.mod h1:lIoylAEacZg5bm3AkLXX1+jaGzrl/RFmwTthS2mNeh4=
 github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c h1:udKWzYgxTojEKWjV8V+WSxDXJ4NFATAsZjh8iIbsQIg=
 github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c/go.mod h1:xomTg63KZ2rFqZQzSB4Vz2SUXa1BpHTVz9L5PTmPC4E=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.25.0 h1:3c8yed4lgqTt+oTQ+JNMDo+F4xprBf+O/il4ZC0nRLw=

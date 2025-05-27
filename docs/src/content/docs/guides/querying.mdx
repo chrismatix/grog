@@ -59,13 +59,41 @@ You can add tags to your targets in their definitions and then filter by those t
 grog build --tag=ci-only --tag=python //model_training/...
 ```
 
+### Filtering by Target Type
+
+You can filter targets by their type using the `--target-type` flag:
+
+```shell
+# List all test targets in the repository
+grog list --target-type=test
+
+# List all non-test targets in the repository
+grog list --target-type=no_test
+
+# List all targets with binary outputs in the repository
+grog list --target-type=bin_output
+
+# List all targets (default behavior)
+grog list --target-type=all
+```
+
+The `--target-type` flag is available for all query commands: `list`, `deps`, `rdeps`, and `changes`.
+
 ## grog list
 
 ```shell
-grog list [target-pattern]
+grog list [target-pattern] [--target-type=<type>]
 ```
 
 Lists all targets that match the given target pattern. If no pattern is provided, it lists all targets in the repository.
+
+**Parameters:**
+
+- `--target-type`: Filter targets by type (all, test, no_test, bin_output)
+  - `all`: Include all targets (default)
+  - `test`: Include only test targets
+  - `no_test`: Include only non-test targets
+  - `bin_output`: Include only targets with binary outputs
 
 **Examples:**
 
@@ -78,6 +106,12 @@ grog list //services/...
 
 # List all targets in a specific package (not including sub-packages)
 grog list //services:all
+
+# List all test targets in the repository
+grog list --target-type=test
+
+# List all targets with binary outputs in a specific package
+grog list //services/... --target-type=bin_output
 ```
 
 **Output format:**
@@ -92,10 +126,19 @@ grog list //services:all
 ## grog deps
 
 ```shell
-grog deps <target-label> [--transitive]
+grog deps <target-label> [--transitive] [--target-type=<type>]
 ```
 
 Lists the dependencies of a specific target. By default, it shows only direct dependencies, but with the `--transitive` flag, it shows the complete dependency tree.
+
+**Parameters:**
+
+- `--transitive`: Include all transitive dependencies of the target
+- `--target-type`: Filter dependencies by type (all, test, no_test, bin_output)
+  - `all`: Include all dependencies (default)
+  - `test`: Include only test dependencies
+  - `no_test`: Include only non-test dependencies
+  - `bin_output`: Include only dependencies with binary outputs
 
 **Examples:**
 
@@ -105,6 +148,12 @@ grog deps //services/api:server
 
 # Show all transitive dependencies (the complete dependency tree)
 grog deps --transitive //services/api:server
+
+# Show only test dependencies
+grog deps //services/api:server --target-type=test
+
+# Show only dependencies with binary outputs
+grog deps --transitive //services/api:server --target-type=bin_output
 ```
 
 This command is particularly useful for understanding what needs to be built before a specific target can be built.
@@ -112,10 +161,19 @@ This command is particularly useful for understanding what needs to be built bef
 ## grog rdeps
 
 ```shell
-grog rdeps <target-pattern> [--transitive]
+grog rdeps <target-pattern> [--transitive] [--target-type=<type>]
 ```
 
 Lists all targets that depend on the specified target(s) - essentially the reverse of `deps`. The `--transitive` flag includes indirect dependents.
+
+**Parameters:**
+
+- `--transitive`: Include all transitive dependents of the target
+- `--target-type`: Filter dependents by type (all, test, no_test, bin_output)
+  - `all`: Include all dependents (default)
+  - `test`: Include only test dependents
+  - `no_test`: Include only non-test dependents
+  - `bin_output`: Include only dependents with binary outputs
 
 **Examples:**
 
@@ -125,6 +183,12 @@ grog rdeps //libs/common:utils
 
 # Find all targets that directly or indirectly depend on a library
 grog rdeps --transitive //libs/common:utils
+
+# Find all test targets that depend on a library
+grog rdeps //libs/common:utils --target-type=test
+
+# Find all targets with binary outputs that depend on a library
+grog rdeps --transitive //libs/common:utils --target-type=bin_output
 ```
 
 This command helps you understand the impact of changes to a target - which other targets will need to be rebuilt if this target changes.
@@ -152,7 +216,7 @@ This command is particularly helpful when you want to understand which parts of 
 ## grog changes
 
 ```shell
-grog changes [target-pattern] [--since=<commit>] [--dependents=none|direct|transitive]
+grog changes [target-pattern] [--since=<commit>] [--dependents=none|direct|transitive] [--target-type=<type>]
 ```
 
 Identifies targets whose inputs have changed since a specific commit. This is extremely useful for CI pipelines where you only want to build what's changed.
@@ -164,6 +228,11 @@ Identifies targets whose inputs have changed since a specific commit. This is ex
   - `none`: Only include directly changed targets (default)
   - `direct`: Include changed targets and their direct dependents
   - `transitive`: Include changed targets and all their dependents (direct and indirect)
+- `--target-type`: Filter targets by type (all, test, no_test, bin_output)
+  - `all`: Include all targets (default)
+  - `test`: Include only test targets
+  - `no_test`: Include only non-test targets
+  - `bin_output`: Include only targets with binary outputs
 
 **Examples:**
 
@@ -179,6 +248,12 @@ grog changes //services/api/... --since=origin/main
 
 # Find all targets affected by changes (including dependents)
 grog changes --since=origin/main --dependents=transitive
+
+# Find all test targets affected by changes
+grog changes --since=origin/main --target-type=test
+
+# Find all targets with binary outputs affected by changes
+grog changes --since=origin/main --target-type=bin_output
 ```
 
 ### CI Pipeline Example
@@ -213,11 +288,17 @@ jobs:
 You can combine Grog's query commands with standard Unix tools to create powerful workflows:
 
 ```shell
-# Find all test targets affected by changes
+# Find all test targets affected by changes (using grep)
 grog changes --since=origin/main --dependents=transitive | grep "test$" | xargs grog test
+
+# Find all test targets affected by changes (using --target-type)
+grog changes --since=origin/main --dependents=transitive --target-type=test | xargs grog test
 
 # Find all Docker targets that depend on a specific library
 grog rdeps --transitive //libs/common:utils | grep "docker" | xargs grog build
+
+# Find all targets with binary outputs that depend on a specific library
+grog rdeps --transitive //libs/common:utils --target-type=bin_output | xargs grog build
 ```
 
 By mastering Grog's query commands, you can significantly optimize your build process and gain deeper insights into your project's structure.

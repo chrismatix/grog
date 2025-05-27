@@ -31,6 +31,12 @@ type WorkspaceConfig struct {
 
 	Tags        []string `mapstructure:"tag"`
 	ExcludeTags []string `mapstructure:"exclude_tag"`
+
+	// Internal configs
+	// Used for integration testing:
+	// Due to the concurrent nature of grog's execution we don't want to include
+	// logs that don't have a guaranteed order
+	DisableNonDeterministicLogging bool `mapstructure:"disable_non_deterministic_logging"`
 }
 
 var Global WorkspaceConfig

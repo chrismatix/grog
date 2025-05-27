@@ -8,6 +8,10 @@ import (
 	"grog/internal/selection"
 )
 
+var listOptions struct {
+	targetType string
+}
+
 var ListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "Lists targets by pattern.",
@@ -26,9 +30,22 @@ var ListCmd = &cobra.Command{
 		}
 
 		graph := loading.MustLoadGraphForQuery(ctx, logger)
-		selector := selection.New(targetPatterns, config.Global.Tags, config.Global.ExcludeTags, selection.AllTargets)
+
+		targetTypeFilter, err := selection.StringToTargetTypeSelection(listOptions.targetType)
+		if err != nil {
+			logger.Fatalf(err.Error())
+		}
+		selector := selection.New(targetPatterns, config.Global.Tags, config.Global.ExcludeTags, targetTypeFilter)
 		selector.SelectTargets(graph)
 
 		graph.LogSelectedVertices()
 	},
+}
+
+func init() {
+	ListCmd.Flags().StringVar(
+		&listOptions.targetType,
+		"target-type",
+		"all",
+		"Filter targets by type (all, test, no_test, bin_output)")
 }

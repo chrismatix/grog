@@ -17,7 +17,8 @@ func setupCommand() (context.Context, *zap.SugaredLogger) {
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		select {
-		case <-signalChan:
+		case sig := <-signalChan:
+			console.GetLogger(ctx).Infof("Received signal %v, exiting...", sig)
 			cancel()
 		case <-ctx.Done():
 		}

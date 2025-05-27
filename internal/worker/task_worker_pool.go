@@ -122,7 +122,7 @@ func (twp *TaskWorkerPool[T]) setTaskState(workerId int, status string, logLevel
 	twp.mu.Lock()
 	defer twp.mu.Unlock()
 	state, ok := twp.taskState[workerId]
-	if !console.UseTea() {
+	if logToStdout() {
 		// If we are not using bubble tea, just print the status to stdout
 		twp.logger.Logf(logLevel, status)
 		return
@@ -136,6 +136,10 @@ func (twp *TaskWorkerPool[T]) setTaskState(workerId int, status string, logLevel
 	state.Status = status
 	twp.taskState[workerId] = state
 	twp.flushState()
+}
+
+func logToStdout() bool {
+	return !console.UseTea() && !config.Global.DisableNonDeterministicLogging
 }
 
 // setTaskState updates the task state from a worker

@@ -4,12 +4,14 @@ go 1.24
 
 require (
 	cloud.google.com/go/storage v1.51.0
+	github.com/alitto/pond/v2 v2.3.4
 	github.com/apple/pkl-go v0.10.0
 	github.com/bmatcuk/doublestar/v4 v4.8.1
 	github.com/boyter/gocodewalker v1.4.0
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/charmbracelet/bubbletea v1.3.4
 	github.com/fatih/color v1.18.0
+	github.com/google/go-cmp v0.7.0
 	github.com/google/go-containerregistry v0.20.3
 	github.com/mattn/go-isatty v0.0.20
 	github.com/spf13/cobra v1.9.1
@@ -27,13 +29,11 @@ require (
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
 	cloud.google.com/go/iam v1.4.1 // indirect
 	cloud.google.com/go/monitoring v1.24.0 // indirect
-	github.com/AlexBeauchemin/gobadge v0.4.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.25.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.51.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.51.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
-	github.com/alitto/pond/v2 v2.3.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/charmbracelet/colorprofile v0.3.0 // indirect

@@ -124,10 +124,10 @@ func initConfig() error {
 	// Set defaults here
 	viper.SetDefault("fail_fast", false)
 	viper.SetDefault("log_level", "info")
+	viper.SetDefault("disable_non_deterministic_logging", false)
 	viper.SetDefault("os", runtime.GOOS)
 	viper.SetDefault("arch", runtime.GOARCH)
 
-	// Read in config
 	if err := viper.ReadInConfig(); err != nil {
 		return err
 	}
@@ -137,7 +137,6 @@ func initConfig() error {
 		return fmt.Errorf("Failed to parse config: %v\n", err)
 	}
 
-	// Read config
 	logger := console.InitLogger()
 	logger.Debugf("Using config file: %s", viper.ConfigFileUsed())
 	logger.Debugf("Running on %s", config.Global.GetPlatform())

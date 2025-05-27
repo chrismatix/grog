@@ -1,2 +1,4 @@
 //package_1:bar
+//package_1:foo
+//package_1:foo_test
 //package_2:package_2

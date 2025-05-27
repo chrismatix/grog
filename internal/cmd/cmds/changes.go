@@ -11,11 +11,13 @@ import (
 	"grog/internal/label"
 	"grog/internal/loading"
 	"grog/internal/model"
+	"grog/internal/selection"
 )
 
 var changesOptions struct {
 	since      string
 	dependents string
+	targetType string
 }
 
 var ChangesCmd = &cobra.Command{
@@ -106,15 +108,21 @@ var ChangesCmd = &cobra.Command{
 
 		// Deduplicate targets
 		uniqueLabels := make(map[label.TargetLabel]bool)
-		var finalLabels []label.TargetLabel
+		var deduplicatedTargets []*model.Target
 		for _, target := range resultTargets {
 			if !uniqueLabels[target.Label] {
 				uniqueLabels[target.Label] = true
-				finalLabels = append(finalLabels, target.Label)
+				deduplicatedTargets = append(deduplicatedTargets, target)
 			}
 		}
 
-		label.PrintSorted(finalLabels)
+		targetTypeFilter, err := selection.StringToTargetTypeSelection(changesOptions.targetType)
+		if err != nil {
+			logger.Fatalf(err.Error())
+		}
+		selector := selection.New(nil, config.Global.Tags, config.Global.Tags, targetTypeFilter)
+
+		model.PrintSortedLabels(selector.FilterTargets(deduplicatedTargets))
 	},
 }
 
@@ -170,6 +178,12 @@ func AddChangesCmd(rootCmd *cobra.Command) {
 		"dependents",
 		"none",
 		"Whether to include dependents of changed targets (none or transitive)")
+
+	ChangesCmd.Flags().StringVar(
+		&changesOptions.targetType,
+		"target-type",
+		"all",
+		"Filter targets by type (all, test, no_test, bin_output)")
 
 	rootCmd.AddCommand(ChangesCmd)
 }

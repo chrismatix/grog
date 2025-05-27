@@ -5,10 +5,13 @@ import (
 	"grog/internal/config"
 	"grog/internal/label"
 	"grog/internal/loading"
+	"grog/internal/model"
+	"grog/internal/selection"
 )
 
 var depsOptions struct {
 	transitive bool
+	targetType string
 }
 
 var DepsCmd = &cobra.Command{
@@ -38,16 +41,22 @@ var DepsCmd = &cobra.Command{
 			logger.Fatalf("could not find target %s", targetLabel)
 		}
 
-		var deps []label.TargetLabel
+		var dependencies []*model.Target
 		if depsOptions.transitive {
-			for _, ancestor := range graph.GetAncestors(target) {
-				deps = append(deps, ancestor.Label)
-			}
+			dependencies = graph.GetAncestors(target)
 		} else {
-			deps = target.Dependencies
+			dependencies = graph.GetDependencies(target)
 		}
 
-		label.PrintSorted(deps)
+		// Filter by target type
+		targetTypeFilter, err := selection.StringToTargetTypeSelection(depsOptions.targetType)
+		if err != nil {
+			logger.Fatalf(err.Error())
+		}
+		selector := selection.New(nil, config.Global.Tags, config.Global.ExcludeTags, targetTypeFilter)
+		filteredDeps := selector.FilterTargets(dependencies)
+
+		model.PrintSortedLabels(filteredDeps)
 	},
 }
 
@@ -58,6 +67,12 @@ func AddDepsCmd(rootCmd *cobra.Command) {
 		"t",
 		false,
 		"Include all transitive dependencies of the target")
+
+	DepsCmd.Flags().StringVar(
+		&depsOptions.targetType,
+		"target-type",
+		"all",
+		"Filter targets by type (all, test, no_test, bin_output)")
 
 	rootCmd.AddCommand(DepsCmd)
 }

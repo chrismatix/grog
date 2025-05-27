@@ -5,10 +5,13 @@ import (
 	"grog/internal/config"
 	"grog/internal/label"
 	"grog/internal/loading"
+	"grog/internal/model"
+	"grog/internal/selection"
 )
 
 var rDepsOptions struct {
 	transitive bool
+	targetType string
 }
 
 var RDepsCmd = &cobra.Command{
@@ -38,23 +41,21 @@ var RDepsCmd = &cobra.Command{
 			logger.Fatalf("could not find target %s", targetLabel)
 		}
 
-		var rDeps []label.TargetLabel
+		var rDeps []*model.Target
 		if rDepsOptions.transitive {
-			for _, descendant := range graph.GetDescendants(target) {
-				rDeps = append(rDeps, descendant.Label)
-			}
+			rDeps = graph.GetDescendants(target)
 		} else {
-			dependants, err := graph.GetDependants(target)
-			if err != nil {
-				logger.Fatalf("could not get in edges: %v", err)
-			}
-
-			for _, dependant := range dependants {
-				rDeps = append(rDeps, dependant.Label)
-			}
+			rDeps = graph.GetDependants(target)
 		}
 
-		label.PrintSorted(rDeps)
+		targetTypeFilter, err := selection.StringToTargetTypeSelection(rDepsOptions.targetType)
+		if err != nil {
+			logger.Fatalf(err.Error())
+		}
+		selector := selection.New(nil, config.Global.Tags, config.Global.ExcludeTags, targetTypeFilter)
+		filteredRDeps := selector.FilterTargets(rDeps)
+
+		model.PrintSortedLabels(filteredRDeps)
 	},
 }
 
@@ -65,6 +66,12 @@ func AddRDepsCmd(rootCmd *cobra.Command) {
 		"t",
 		false,
 		"Include all transitive dependants of the target")
+
+	RDepsCmd.Flags().StringVar(
+		&rDepsOptions.targetType,
+		"target-type",
+		"all",
+		"Filter targets by type (all, test, no_test, bin_output)")
 
 	rootCmd.AddCommand(RDepsCmd)
 }

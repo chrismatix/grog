@@ -181,7 +181,7 @@ func runBinary(args []string, repoPath string, extraEnvVars []string) ([]byte, e
 		return nil, err
 	}
 	cmd.Env = append(os.Environ(), "GOCOVERDIR="+coverDir)
-	cmd.Env = append(cmd.Env, "GROG_DISABLE_TIME_LOGGING=true")
+	cmd.Env = append(cmd.Env, "GROG_DISABLE_NON_DETERMINISTIC_LOGGING=true")
 	for _, envVar := range extraEnvVars {
 		cmd.Env = append(cmd.Env, envVar)
 	}
