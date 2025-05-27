@@ -11,14 +11,14 @@ import (
 type Target struct {
 	Label label.TargetLabel `json:"label"`
 
-	Command      string              `json:"cmd"`
-	Dependencies []label.TargetLabel `json:"dependencies,omitempty"`
-	Inputs       []string            `json:"inputs,omitempty"`
-	ExcludeInputs []string           `json:"exclude_inputs,omitempty"`
-	Outputs      []Output            `json:"outputs,omitempty"`
-	Platform     *PlatformConfig     `json:"platform,omitempty"`
-	Tags         []string            `json:"tags,omitempty"`
-	OutputChecks []OutputCheck       `json:"output_checks,omitempty"`
+	Command       string              `json:"cmd"`
+	Dependencies  []label.TargetLabel `json:"dependencies,omitempty"`
+	Inputs        []string            `json:"inputs,omitempty"`
+	ExcludeInputs []string            `json:"exclude_inputs,omitempty"`
+	Outputs       []Output            `json:"outputs,omitempty"`
+	Platform      *PlatformConfig     `json:"platform,omitempty"`
+	Tags          []string            `json:"tags,omitempty"`
+	OutputChecks  []OutputCheck       `json:"output_checks,omitempty"`
 
 	// BinOutput is always a path to a binary file
 	BinOutput Output `json:"bin_output,omitempty"`
@@ -78,9 +78,12 @@ func (t *Target) GetDepsString() []string {
 }
 
 func (t *Target) CommandEllipsis() string {
-	firstLine := strings.SplitN(t.Command, "\n", 2)[0]
+	lines := strings.SplitN(t.Command, "\n", 2)
+	firstLine := strings.TrimLeft(lines[0], " ")
 	if len(firstLine) > 70 {
 		return firstLine[:67] + "..."
+	} else if len(lines) > 1 {
+		return firstLine + "..."
 	}
 	return firstLine
 }

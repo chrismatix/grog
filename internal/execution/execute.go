@@ -68,7 +68,7 @@ func Execute(
 	// Add the TestLogger to the context
 	ctx = context.WithValue(ctx, console.TestLoggerKey{}, testLogger)
 
-	workerPool := worker.NewTaskWorkerPool[dag.CacheResult](numWorkers, msgCh, selectedTargetCount)
+	workerPool := worker.NewTaskWorkerPool[dag.CacheResult](stdLogger, numWorkers, msgCh, selectedTargetCount)
 	workerPool.StartWorkers(ctx)
 	defer workerPool.Shutdown()
 

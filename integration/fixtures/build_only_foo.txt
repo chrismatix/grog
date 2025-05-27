@@ -1,3 +1,6 @@
 INFO: 2 packages loaded, 4 targets configured.
 INFO: Selected 1 target.
+INFO: //foo:foo: checking cache.
+INFO: //foo:foo: "cat src/source_1.txt src/source_2.txt > output.txt"
+INFO: //foo:foo complete. writing outputs...
 INFO: Build completed successfully. 1 target completed (0 cache hits).

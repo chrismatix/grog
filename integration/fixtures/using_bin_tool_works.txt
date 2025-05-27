@@ -1,3 +1,12 @@
 INFO: 1 package loaded, 3 targets configured.
 INFO: Selected 3 targets.
+INFO: //:creates_bin_tool: checking cache.
+INFO: //:declares_bin_tool: checking cache.
+INFO: //:creates_bin_tool: "mkdir -p dist..."
+INFO: //:declares_bin_tool: ""
+INFO: //:declares_bin_tool complete. writing outputs...
+INFO: //:creates_bin_tool complete. writing outputs...
+INFO: //:uses_bin_tool: checking cache.
+INFO: //:uses_bin_tool: "# Using the bin tool..."
+INFO: //:uses_bin_tool complete. writing outputs...
 INFO: Build completed successfully. 3 targets completed (0 cache hits).

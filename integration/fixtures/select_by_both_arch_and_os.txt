@@ -4,4 +4,19 @@ WARN: target //:os_guard has no inputs, dependencies or output checks causing it
 WARN: target //pkg:foo has no inputs, dependencies or output checks causing it to run only once
 WARN: target //pkg:foo_platform has no inputs, dependencies or output checks causing it to run only once
 INFO: Selected 5 targets.
+INFO: //:arch_guard: checking cache.
+INFO: //:arch_guard: "echo 'hello world'"
+INFO: //:os_guard: checking cache.
+INFO: //pkg:foo: checking cache.
+INFO: //:os_guard: "echo 'hello world'"
+INFO: //pkg:foo_platform: checking cache.
+INFO: //pkg:foo_platform: "echo 'hello world'"
+INFO: //pkg:foo: "echo 'hello world'"
+INFO: //pkg:foo complete. writing outputs...
+INFO: //:arch_guard complete. writing outputs...
+INFO: //:os_guard complete. writing outputs...
+INFO: //pkg:foo_platform complete. writing outputs...
+INFO: //:bar: checking cache.
+INFO: //:bar: "echo 'hello world'"
+INFO: //:bar complete. writing outputs...
 INFO: Build completed successfully. 5 targets completed (0 cache hits).

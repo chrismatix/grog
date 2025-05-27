@@ -1,4 +1,11 @@
 INFO: 2 packages loaded, 4 targets configured.
 INFO: Selected 3 targets.
+INFO: //foo:foo: checking cache.
+INFO: //foo:foo: cache hit. loading outputs.
+INFO: //bar:bar: checking cache.
+INFO: //bar:bar: cache hit. loading outputs.
+INFO: //bar:bar_test: checking cache.
+INFO: //bar:bar_test: "cat output.txt && echo 'some text' >> output.txt && cp output.txt t..."
 INFO: //bar:bar_test PASSED in 0.0s
+INFO: //bar:bar_test complete. writing outputs...
 INFO: Test completed successfully. 3 targets completed (2 cache hits).

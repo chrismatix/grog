@@ -3,6 +3,7 @@ package config
 import (
 	"crypto/sha256"
 	"fmt"
+	"github.com/fatih/color"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,7 +26,8 @@ func GetWorkspaceCachePrefix(workspaceDir string) string {
 func MustFindWorkspaceRoot() string {
 	cwd, err := os.Getwd()
 	if err != nil {
-		panic(fmt.Sprintf("failed to get current working directory: %v", err))
+		fmt.Printf("%s failed to get current working directory: %v\n", color.RedString("FATAL:"), err)
+		os.Exit(1)
 	}
 
 	for {
@@ -33,7 +35,8 @@ func MustFindWorkspaceRoot() string {
 		if _, err := os.Stat(configPath); err == nil {
 			return cwd
 		} else if !os.IsNotExist(err) {
-			panic(fmt.Sprintf("failed to check for grog.toml: %v", err))
+			fmt.Printf("%s failed to check for grog.toml: %v\n", color.RedString("FATAL:"), err)
+			os.Exit(1)
 		}
 
 		parent := filepath.Dir(cwd)
@@ -43,7 +46,9 @@ func MustFindWorkspaceRoot() string {
 		cwd = parent
 	}
 
-	panic("grog.toml not found in any parent directory. Is this a grog workspace?")
+	fmt.Printf("%s grog.toml not found in any parent directory. Is this a grog workspace?\n", color.RedString("FATAL:"))
+	os.Exit(1)
+	return "" // unreachable but needed to satisfy compiler
 }
 
 func GetPathRelativeToWorkspaceRoot(path string) (string, error) {

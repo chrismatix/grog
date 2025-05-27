@@ -5,6 +5,8 @@ import (
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fatih/color"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"grog/internal/config"
 	"grog/internal/console"
 	"runtime"
@@ -31,6 +33,7 @@ type job[T any] struct {
 // TaskWorkerPool runs tasks that return T with a fixed number of workers,
 // reporting progress to the tea UI
 type TaskWorkerPool[T any] struct {
+	logger     *zap.SugaredLogger
 	maxWorkers int
 	// totalTasks total number of tasks to run (0 for unlimited)
 	totalTasks int
@@ -51,11 +54,17 @@ type TaskWorkerPool[T any] struct {
 	closed bool
 }
 
-func NewTaskWorkerPool[T any](maxWorkers int, msgCh chan tea.Msg, totalTasks int) *TaskWorkerPool[T] {
+func NewTaskWorkerPool[T any](
+	logger *zap.SugaredLogger,
+	maxWorkers int,
+	msgCh chan tea.Msg,
+	totalTasks int,
+) *TaskWorkerPool[T] {
 	if maxWorkers < 1 {
 		maxWorkers = runtime.NumCPU()
 	}
 	return &TaskWorkerPool[T]{
+		logger:     logger,
 		maxWorkers: maxWorkers,
 		totalTasks: totalTasks,
 		jobCh:      make(chan job[T]),
@@ -85,14 +94,14 @@ func (twp *TaskWorkerPool[T]) worker(ctx context.Context, workerId int) {
 				// Channel closed, exit worker
 				return
 			}
-			twp.setTaskState(workerId, fmt.Sprintf("Starting task %d on worker %d", j.id+1, workerId))
+			twp.setTaskState(workerId, fmt.Sprintf("Starting task %d on worker %d", j.id+1, workerId), zapcore.DebugLevel)
 			// Run the task, passing a callback to update progress.
 			result, err := j.task(func(status string) {
 				taskStatus := status
 				if isDebug {
 					taskStatus = fmt.Sprintf("%s (worker %d)", status, workerId)
 				}
-				twp.setTaskState(workerId, taskStatus)
+				twp.setTaskState(workerId, taskStatus, zapcore.InfoLevel)
 			})
 
 			if j.result != nil {
@@ -108,10 +117,16 @@ func (twp *TaskWorkerPool[T]) worker(ctx context.Context, workerId int) {
 }
 
 // setTaskState updates the task state from a worker
-func (twp *TaskWorkerPool[T]) setTaskState(workerId int, status string) {
+// when we are not using tea (i.e. in ci) the task state is logged directly
+func (twp *TaskWorkerPool[T]) setTaskState(workerId int, status string, logLevel zapcore.Level) {
 	twp.mu.Lock()
 	defer twp.mu.Unlock()
 	state, ok := twp.taskState[workerId]
+	if !console.UseTea() {
+		// If we are not using bubble tea, just print the status to stdout
+		twp.logger.Logf(logLevel, status)
+		return
+	}
 	if !ok {
 		twp.taskState[workerId] = console.TaskState{Status: status, StartedAtSec: time.Now().Unix()}
 		twp.flushState()
@@ -183,6 +198,8 @@ func (twp *TaskWorkerPool[T]) Run(task TaskFunc[T]) (T, error) {
 }
 
 func (twp *TaskWorkerPool[T]) Shutdown() {
+	twp.mu.Lock()
+	defer twp.mu.Unlock()
 	twp.closed = true
 	close(twp.jobCh)
 }

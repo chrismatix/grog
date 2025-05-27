@@ -11,7 +11,7 @@ type TeaWriter struct{ Program *tea.Program }
 
 func (w TeaWriter) Write(b []byte) (int, error) {
 	outStr := strings.TrimRight(string(b), "\n")
-	if useTea() {
+	if UseTea() {
 		w.Program.Println(outStr)
 	} else {
 		// Log directly to stdout in non-tty (e.g. CI) environments

@@ -1,5 +1,6 @@
 # TODOs
 
+- [ ] Add support for `grog.ci.toml`
 - [ ] Allow specifying a default package platform selector
 - [ ] Log failed tests on command interrupt
 - [ ] Add output streaming

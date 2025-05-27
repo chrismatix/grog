@@ -1,5 +1,10 @@
 INFO: 2 packages loaded, 4 targets configured.
 INFO: Selected 2 targets.
+INFO: //foo:foo: checking cache.
+INFO: //foo:foo: cache hit. loading outputs.
+INFO: //foo:foo_test: checking cache.
+INFO: //foo:foo_test: "mkdir -p dist..."
 Hello test streamed output
 INFO: //foo:foo_test PASSED in 0.0s
+INFO: //foo:foo_test complete. writing outputs...
 INFO: Test completed successfully. 2 targets completed (1 cache hits).

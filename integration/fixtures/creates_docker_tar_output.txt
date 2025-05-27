@@ -1,3 +1,6 @@
 INFO: 1 package loaded, 1 target configured.
 INFO: Selected 1 target.
+INFO: //:docker_output: checking cache.
+INFO: //:docker_output: "docker build -t grog-hello-world ...."
+INFO: //:docker_output complete. writing outputs...
 INFO: Build completed successfully. 1 target completed (0 cache hits).

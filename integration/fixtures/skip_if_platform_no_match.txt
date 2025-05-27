@@ -4,4 +4,7 @@ WARN: target //:os_guard has no inputs, dependencies or output checks causing it
 WARN: target //pkg:foo has no inputs, dependencies or output checks causing it to run only once
 WARN: target //pkg:foo_platform has no inputs, dependencies or output checks causing it to run only once
 INFO: Selected 1 target (1 target not matching test-os/test-arch host).
+INFO: //pkg:foo: checking cache.
+INFO: //pkg:foo: "echo 'hello world'"
+INFO: //pkg:foo complete. writing outputs...
 INFO: Build completed successfully. 1 target completed (0 cache hits).
