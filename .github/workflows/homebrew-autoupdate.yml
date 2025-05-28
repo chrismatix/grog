@@ -83,6 +83,7 @@ jobs:
         with:
           repository: chrismatix/homebrew-grog
           path: tap
+          persist-credentials: "false"
           token: ${{ env.GH_TOKEN }}
 
       - name: Create PR
