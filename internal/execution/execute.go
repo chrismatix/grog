@@ -195,9 +195,13 @@ func GetTaskFunc(
 			logger.Debugf("running target %s due to output check error", target.Label)
 		}
 
-		update(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis()))
-		logger.Debugf("running target %s: %s", target.Label, target.CommandEllipsis())
-		err = executeTarget(ctx, target, binToolPaths, streamLogs)
+		if target.Command != "" {
+			update(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis()))
+			logger.Debugf("running target %s: %s", target.Label, target.CommandEllipsis())
+			err = executeTarget(ctx, target, binToolPaths, streamLogs)
+		} else {
+			logger.Debugf("skpped target %s due to no command", target.Label)
+		}
 		executionTime := time.Since(startTime).Seconds()
 
 		if err != nil {

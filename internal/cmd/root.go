@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -49,7 +50,6 @@ func init() {
 	viper.Set("workspace_root", workspaceRoot)
 
 	// Set up Viper
-	viper.SetConfigName("grog")
 	viper.SetConfigType("toml")
 	viper.SetEnvPrefix("GROG")
 	viper.AddConfigPath(workspaceRoot)                     // search in workspace root
@@ -57,7 +57,7 @@ func init() {
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_")) // allow FLAG-NAME to map to ENV VAR_NAME
 	viper.AutomaticEnv()                                   // read in environment variables that match
 
-	// Set default cache directory
+	// Set default global root directory
 	viper.SetDefault("root", filepath.Join(os.Getenv("HOME"), ".grog"))
 
 	// Options:
@@ -87,14 +87,19 @@ func init() {
 	err = viper.BindPFlag("enable_cache", RootCmd.PersistentFlags().Lookup("enable-cache"))
 	viper.SetDefault("enable_cache", true)
 
+	// select profiles
+	RootCmd.PersistentFlags().String("profile", "", "Select a configuration profile to use")
+	err = viper.BindPFlag("profile", RootCmd.PersistentFlags().Lookup("profile"))
+	viper.SetDefault("profile", "")
+
 	// Register subcommands
 	RootCmd.AddCommand(cmds.RunCmd)
-	RootCmd.AddCommand(cmds.GetCleanCmd())
 	RootCmd.AddCommand(cmds.VersionCmd)
 	RootCmd.AddCommand(cmds.GraphCmd)
 	RootCmd.AddCommand(cmds.ListCmd)
 	RootCmd.AddCommand(cmds.InfoCmd)
 	RootCmd.AddCommand(cmds.CheckCmd)
+	cmds.AddCleanCmd(RootCmd)
 	cmds.AddTestCmd(RootCmd)
 	cmds.AddBuildCmd(RootCmd)
 	cmds.AddDepsCmd(RootCmd)
@@ -128,8 +133,29 @@ func initConfig() error {
 	viper.SetDefault("os", runtime.GOOS)
 	viper.SetDefault("arch", runtime.GOARCH)
 
-	if err := viper.ReadInConfig(); err != nil {
-		return err
+	names := []string{"grog"}
+	if os.Getenv("CI") == "1" {
+		names = append([]string{"grog.ci"}, names...)
+	}
+	if viper.GetString("profile") != "" {
+		names = append([]string{"grog." + viper.GetString("profile")}, names...)
+	}
+
+	var found bool
+	for _, name := range names {
+		viper.SetConfigName(name)
+		if err := viper.ReadInConfig(); err != nil {
+			var configFileNotFoundError viper.ConfigFileNotFoundError
+			if errors.As(err, &configFileNotFoundError) {
+				continue
+			}
+			return err
+		}
+		found = true
+		break
+	}
+	if !found {
+		return fmt.Errorf("no grog config file found (tried: %v)", names)
 	}
 
 	// Merge all config sources into struct

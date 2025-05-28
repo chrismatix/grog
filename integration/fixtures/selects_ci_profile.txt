@@ -1,0 +1,1 @@
+[32mINFO:[0m Workspace cache cleaned successfully.

@@ -1,0 +1,14 @@
+name: select profiles
+repo: profiles
+cases:
+  - name: selects_ci_profile
+    args:
+      # Any command with colored output
+      - clean
+    env_vars:
+      - "CI=1"
+
+  - name: selects_profile_by_flag
+    args:
+      - --profile=dev
+      - clean

@@ -140,9 +140,9 @@ func WarnOnError(ctx context.Context, fn func() error) {
 
 func MustApplyColorSetting() {
 	colorSetting := viper.GetString("color")
-	if colorSetting == "yes" {
+	if colorSetting == "yes" || colorSetting == "1" {
 		color.NoColor = false
-	} else if colorSetting == "no" {
+	} else if colorSetting == "no" || colorSetting == "0" {
 		color.NoColor = true
 		// No need to explicitly handle "auto" as the color package will
 		// automatically detect if it is a TTY or not.

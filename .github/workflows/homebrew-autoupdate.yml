@@ -13,7 +13,7 @@ jobs:
       pull-requests: write
 
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PAT_TOKEN: ${{ secrets.HOMEBREW_PAT }}
 
     steps:
       - uses: actions/checkout@v4
@@ -26,7 +26,7 @@ jobs:
             const release = await github.rest.repos.getReleaseByTag({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              tag: context.payload.release.tag_name,
+              tag: context.ref.replace(/^refs\/tags\//, ""),
             });
             return release.data;
 
@@ -83,9 +83,10 @@ jobs:
         with:
           repository: chrismatix/homebrew-grog
           path: tap
-          token: ${{ env.GH_TOKEN }}
+          token: ${{ env.PAT_TOKEN }}
+          persist-credentials: false
 
-      - name: Create PR
+      - name: Commit & PR
         run: |
           cp formula/grog.rb tap/Formula/grog.rb
           cd tap
@@ -95,6 +96,7 @@ jobs:
           git add Formula/grog.rb
           git commit -m "Update grog formula to ${VERSION}"
           git push origin update-grog-${{ github.ref_name }}
+          gh auth login --with-token <<< "${{ env.PAT_TOKEN }}"
           gh pr create --fill --title "Update grog formula to ${VERSION}"
         env:
-          GH_TOKEN: ${{ env.GH_TOKEN }}
+          GH_TOKEN: ${{ env.PAT_TOKEN }}
