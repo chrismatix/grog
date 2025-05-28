@@ -26,7 +26,7 @@ jobs:
             const release = await github.rest.repos.getReleaseByTag({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              tag: context.payload.release.tag_name,
+              tag: "v0.5.1",
             });
             return release.data;
 
