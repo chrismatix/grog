@@ -1,0 +1,14 @@
+amends ".../pkl/package.pkl"
+
+targets {
+  new {
+    name = "build_pex"
+    inputs {
+      "build_pex.sh"
+    }
+    bin_output = "build_pex.sh"
+    tags {
+      "no-cache"
+    }
+  }
+}

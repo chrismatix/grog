@@ -1,0 +1,6 @@
+targets:
+  - name: test
+    command: uv run pytest
+    inputs:
+      - format/**/*.py
+      - tests/**/*.py

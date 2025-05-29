@@ -1,4 +1,5 @@
+import time
 
-# dummy test
 def test_make_sarcastic():
+    time.sleep(1)
     assert True

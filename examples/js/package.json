@@ -1,0 +1,16 @@
+{
+  "name": "js-monorepo-example",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "next.js"
+  ],
+  "scripts": {
+    "build": "grog build :build_all",
+    "dev": "grog build :dev"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}

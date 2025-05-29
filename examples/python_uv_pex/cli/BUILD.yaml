@@ -1,0 +1,17 @@
+targets:
+  - name: pex
+    # Use the script file scripts/build_pex.sh as a tool
+    command: $(bin //scripts:build_pex)
+    dependencies:
+      - //scripts:build_pex
+    inputs:
+      - main.py
+      - "cli/**/*.py"
+    outputs: [ "dir::dist/" ]
+
+  - name: image
+    command: docker build -t cli .
+    dependencies:
+      - :pex
+    outputs:
+      - docker::cli

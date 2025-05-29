@@ -1,0 +1,23 @@
+targets:
+  - name: build
+    inputs:
+      - "src/**/*.ts"
+      - "src/**/*.tsx"
+      - "package.json"
+      - "tsconfig.json"
+    command: npm run build
+    outputs:
+      - dir::dist/
+
+  - name: test
+    inputs:
+      - "src/**/*.ts"
+      - "src/**/*.tsx"
+      - "tests/**/*.test.ts"
+      - "tests/**/*.test.tsx"
+      - "jest.config.js"
+      - "tests/setup.js"
+      - "package.json"
+    command: npm test
+    dependencies:
+      - :build

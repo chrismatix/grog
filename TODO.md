@@ -1,11 +1,13 @@
 # TODOs
 
+
 - [ ] Implement enable_cache
 - [ ] Figure out a way to only load docker images when needed
   - https://bazel.build/reference/command-line-reference#common_options-flag--remote_download_all
   - This but instead only load outputs when their **direct** dependants changed
-- [ ] Add support for `grog.ci.toml`
-- [ ] Allow specifying a default package platform selector
+- [ ] Make sure that sigterm always kills embedded commands after a grace period
+- [x] Add support for `grog.ci.toml`
+- [x] Allow specifying a default package platform selector
 - [ ] Log failed tests on command interrupt
 - [ ] Add output streaming
 - [ ] Add shell completions for commands that run targets

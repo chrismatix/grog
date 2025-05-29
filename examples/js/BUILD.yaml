@@ -1,0 +1,6 @@
+targets:
+  - name: install
+    command: npm install
+    inputs:
+      - "package.json"
+      - "package-lock.json"

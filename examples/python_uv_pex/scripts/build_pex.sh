@@ -2,32 +2,14 @@
 
 set -euo pipefail
 
-# Check if the argument (local package path) is provided
-if [ -z "$1" ]; then
-  echo "Usage: $0 <local_package_path>"
-  exit 1
-fi
-
-# Navigate to the specified package path
-PACKAGE_PATH="$1"
-
-DIST_DIR="$PACKAGE_PATH"/dist
+DIST_DIR=/dist
 
 # If we don't clear the target bin pex will keep
 # adding to the old archive!
 rm -r "$DIST_DIR" || echo "no dist dir found. creating"
 echo "Cleared dist directory $DIST_DIR"
 
-if [ -d "$PACKAGE_PATH" ]; then
-  cd "$PACKAGE_PATH" || { echo "Failed to cd into $PACKAGE_PATH"; exit 1; }
-else
-  echo "Directory $PACKAGE_PATH does not exist."
-  exit 1
-fi
-
-
-
-echo "Building the pex file for $PACKAGE_PATH"
+echo "Building the pex file"
 
 # Generate the package specific requirements txt
 uv pip compile pyproject.toml --universal -o dist/requirements.txt --quiet

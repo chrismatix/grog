@@ -2,6 +2,12 @@ targets:
   - name: build
     inputs:
       - "app/**/*.tsx"
+      - "package.json"
     command: npm run build
+    dependencies:
+      - //:install
+      - //packages/ui-components:build
+      - //packages/utils:build
+      - //packages/theme:build
     outputs:
       - dir::.next/

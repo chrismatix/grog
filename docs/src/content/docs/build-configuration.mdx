@@ -135,7 +135,7 @@ As your codebase grows, maintaining consistent build configurations across packa
 Here's the same build configuration as above, but using Pkl:
 
 ```Pkl
-amends "package://grog.build/releases/v0.2.2/grog@0.2.2#/package.pkl"
+amends "package://grog.build/releases/v0.5.1/grog@0.5.1#/package.pkl"
 
 targets {
   new {
@@ -173,7 +173,7 @@ One of Pkl's strengths is the ability to create reusable build macros.
 For example, if you want a standard setup for Next.js projects that includes installing dependencies and building the app, you can create a reusable macro:
 
 ```Pkl
-import "package://grog.build/releases/v0.2.2/grog@0.2.2#/package.pkl"
+import "package://grog.build/releases/v0.5.1/grog@0.5.1#/package.pkl"
 
 // Create a function that returns
 // a list of targets for a Next.js app

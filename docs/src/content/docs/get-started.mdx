@@ -11,8 +11,11 @@ import { Aside } from "@astrojs/starlight/components";
 **Grog** is a lightweight build orchestrator that runs your existing commands in parallel —rebuilding only what’s changed— while caching the results for future runs.
 It's designed to be a simple and lightweight alternative to existing build systems like [Bazel](https://bazel.build/), [Buck](https://buckbuild.com/), and [Pants](https://www.pantsbuild.org/).
 
-Unlike those build systems, Grog remains agnostic to the actual build execution and focuses solely on incremental runs, parallel execution, and caching.
-It's designed to be an intermediate solution that helps teams move towards a coherent monorepo approach by efficiently connecting their existing build tooling using a simple interface.
+Unlike those build systems, Grog remains agnostic to the actual build execution.
+This means that you can keep using your existing scripts, Makefile rules, NPM commands, or any CLI you love—while grog transparently handles change detection, (remote) caching, and concurrent execution.
+This allows small teams to get an immediate boost to their monorepo productivity without having to buy into a complex tool.
+
+Read more in [Why Grog?](/why-grog).
 
 ## 1. Install Grog
 
@@ -24,7 +27,6 @@ brew tap chrismatix/grog
 brew install grog
 
 # Or download the binary
-
 curl -L https://grog.build/latest/grog-darwin-arm64 -o /usr/local/bin/grog
 chmod +x /usr/local/bin/grog
 
@@ -124,13 +126,21 @@ Grog provides a wide array of build file formats:
 build_app:
   npm run build
 
+# @grog
+# inputs:
+#   - proto/*.proto
+# outputs:
+#   - dir::src/generated
+generate_proto:
+  protoc --js_out=src/generated proto/*.proto
+
 ````
 
 Add the grog metadata comments to your `Makefile` goals to allow running them with Grog.
 </TabItem>
 <TabItem label="Pkl">
 ```Pkl
-amends "package://grog.build/releases/v0.2.2/grog@0.2.2#/package.pkl"
+amends "package://grog.build/releases/v0.5.1/grog@0.5.1#/package.pkl"
 
 targets {
   new {
@@ -207,12 +217,11 @@ You can find the complete target configuration reference [here](/reference/targe
 Inputs are files that your build target depends on. When any of these files change, Grog will re-run the target's command.
 You can specify inputs using file paths or glob patterns:
 
-```text
-"inputs": [
-  "src/**/*.js",
-  "package.json",
-  "assets/*.{png,jpg}"
-]
+```yaml
+inputs:
+  - "src/**/*.js"
+  - package.json
+  - "assets/*.{png,jpg}"
 ```
 
 - `src/**/*.js` - All JavaScript files in src directory and subdirectories
@@ -233,11 +242,10 @@ This allows it to detect changes and only rebuild when necessary.
 Dependencies are other targets that must be built before the current target.
 This creates a directed acyclic graph (DAG) of build steps:
 
-```text
-"dependencies": [
-  "generate_proto",
-  "//lib:build_lib"
-]
+```yaml
+dependencies:
+  - :generate_proto
+  - //lib:build_lib
 ```
 
 - `generate_proto` - A dependency on another target in the same package
@@ -254,12 +262,11 @@ When you specify dependencies:
 Outputs are artifacts that your build target produces and who you might want to share between machines using a remote cache.
 Grog, therefore, caches these outputs and restores them when possible to avoid unnecessary rebuilds.
 
-```text
-"outputs": [
-  "dist/bundle.js",
-  "dir::dist/assets/",
-  "docker::some-image"
-]
+```yaml
+outputs:
+  - dist/bundle.js
+  - dir::dist/assets/
+  - docker::some-image
 ```
 
 - `dist/bundle.js` - A file output
