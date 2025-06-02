@@ -2,13 +2,13 @@ name: select profiles
 repo: profiles
 cases:
   - name: selects_ci_profile
-    args:
+    grog_args:
       # Any command with colored output
       - clean
     env_vars:
       - "CI=1"
 
   - name: selects_profile_by_flag
-    args:
+    grog_args:
       - --profile=dev
       - clean

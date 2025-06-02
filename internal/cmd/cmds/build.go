@@ -47,7 +47,15 @@ var BuildCmd = &cobra.Command{
 
 		graph := loading.MustLoadGraphForBuild(ctx, logger)
 
-		runBuild(ctx, logger, targetPatterns, graph, selection.NonTestOnly, buildOptions.streamLogs)
+		runBuild(
+			ctx,
+			logger,
+			targetPatterns,
+			graph,
+			selection.NonTestOnly,
+			buildOptions.streamLogs,
+			config.Global.GetLoadOutputsMode(),
+		)
 	},
 }
 
@@ -70,6 +78,7 @@ func runBuild(
 	graph *dag.DirectedTargetGraph,
 	testFilter selection.TargetTypeSelection,
 	streamLogs bool,
+	loadOutputsMode config.LoadOutputsMode,
 ) {
 	startTime := time.Now()
 	errs := analysis.CheckTargetConstraints(logger, graph.GetVertices())
@@ -117,7 +126,8 @@ func runBuild(
 	targetCache := caching.NewTargetCache(cache)
 	registry := output.NewRegistry(targetCache)
 
-	completionMap, err := execution.Execute(ctx, registry, graph, failFast, streamLogs)
+	executor := execution.NewExecutor(registry, graph, failFast, streamLogs, loadOutputsMode)
+	completionMap, executionErr := executor.Execute(ctx)
 
 	elapsedTime := time.Since(startTime).Seconds()
 	// Mostly used to keep our test fixtures deterministic
@@ -125,9 +135,12 @@ func runBuild(
 		logger.Infof("Elapsed time: %.3fs", elapsedTime)
 	}
 
-	if err != nil {
+	if executionErr != nil {
 		logger.Errorf("execution failed: %v", err)
-		os.Exit(1)
+		// If this is a cancellation error continue printing out any collected errors
+		if !errors.Is(executionErr, context.Canceled) || completionMap == nil {
+			os.Exit(1)
+		}
 	}
 
 	// small helper for logging
@@ -165,11 +178,10 @@ func runBuild(
 				logger.Errorf("Target %s failed: %v", target.Label, completion.Err)
 			}
 		}
-		os.Exit(1)
+	} else if executionErr == nil {
+		logger.Infof("%s completed successfully. %s completed (%d cache hits).",
+			goal,
+			console.FCountTargets(successCount),
+			cacheHits)
 	}
-
-	logger.Infof("%s completed successfully. %s completed (%d cache hits).",
-		goal,
-		console.FCountTargets(successCount),
-		cacheHits)
 }

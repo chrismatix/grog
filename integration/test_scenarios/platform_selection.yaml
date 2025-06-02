@@ -2,7 +2,7 @@ name: platform selection
 repo: platform_selection
 cases:
   - name: skip_if_platform_no_match
-    args:
+    grog_args:
       - build
       - //pkg/...
     env_vars:
@@ -12,28 +12,28 @@ cases:
       - "GROG_ARCH=test-arch"
 
   - name: select_by_os
-    args:
+    grog_args:
       - build
       - //:os_guard
     env_vars:
       - "GROG_OS=made-up-os"
 
   - name: select_by_arch
-    args:
+    grog_args:
       - build
       - //:arch_guard
     env_vars:
       - "GROG_ARCH=made-up-arch"
 
   - name: select_by_both_arch_and_os
-    args:
+    grog_args:
       - build
     env_vars:
       - "GROG_OS=made-up-os"
       - "GROG_ARCH=made-up-arch"
 
   - name: dep_platform_mismatch_should_fail
-    args:
+    grog_args:
       - build
       - :bar
     expect_fail: true

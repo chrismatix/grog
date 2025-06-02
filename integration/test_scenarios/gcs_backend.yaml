@@ -3,13 +3,13 @@ repo: gcs_backend
 requires_creds: true
 cases:
   - name: should_write_to_gcs
-    args:
+    grog_args:
       - build
 
   - name: should_only_clean_local_cache
-    args:
+    grog_args:
       - clean
 
   - name: should_restore_from_gcs
-    args:
+    grog_args:
       - build

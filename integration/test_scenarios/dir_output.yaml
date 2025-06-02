@@ -2,10 +2,10 @@ name: Directory outputs
 repo: dir_output
 cases:
   - name: creates_directory_output
-    args:
+    grog_args:
       - build
 
   # This loads the directory output from the cache
   - name: loads_directory_output
-    args:
+    grog_args:
       - build

@@ -2,10 +2,10 @@ name: Simple json test dependencies
 repo: simple_json
 cases:
   - name: test_bar_should_build_deps
-    args:
+    grog_args:
       - test
       - //bar:bar_test
   - name: test_foo_does_not_build_targets
-    args:
+    grog_args:
       - test
       - //foo:foo_test

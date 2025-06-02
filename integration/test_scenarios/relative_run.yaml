@@ -3,6 +3,6 @@ repo: simple_pkl/foo
 cases:
   # This should only build foo
   - name: pkl_build_only_foo
-    args:
+    grog_args:
       - build
       - foo

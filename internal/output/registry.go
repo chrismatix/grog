@@ -6,6 +6,7 @@ import (
 	"github.com/alitto/pond/v2"
 	"grog/internal/caching"
 	"grog/internal/config"
+	"grog/internal/maps"
 	"grog/internal/model"
 	"grog/internal/output/handlers"
 	"runtime"
@@ -15,10 +16,14 @@ import (
 
 // Registry manages the available output handlers
 type Registry struct {
-	handlers    map[string]handlers.Handler
-	targetCache *caching.TargetCache
-	pool        pond.Pool
-	mu          sync.RWMutex
+	handlers     map[string]handlers.Handler
+	targetCache  *caching.TargetCache
+	pool         pond.Pool
+	handlerMutex sync.RWMutex
+
+	// Features like load_outputs=minimal may load outputs concurrently
+	// In this case we want to make sure that that only happens once per target
+	targetMutexMap *maps.MutexMap
 }
 
 // NewRegistry creates a new registry with default handlers
@@ -26,8 +31,9 @@ func NewRegistry(
 	targetCache *caching.TargetCache,
 ) *Registry {
 	r := &Registry{
-		handlers:    make(map[string]handlers.Handler),
-		targetCache: targetCache,
+		handlers:       make(map[string]handlers.Handler),
+		targetCache:    targetCache,
+		targetMutexMap: maps.NewMutexMap(),
 		pool: pond.NewPool(
 			runtime.NumCPU() * 2,
 		),
@@ -50,8 +56,8 @@ func NewRegistry(
 
 // Register adds a new output handler to the registry
 func (r *Registry) Register(handler handlers.Handler) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.handlerMutex.Lock()
+	defer r.handlerMutex.Unlock()
 
 	if _, ok := r.handlers[string(handler.Type())]; ok {
 		panic(fmt.Sprintf("handler for type %s already registered", handler.Type()))
@@ -61,8 +67,8 @@ func (r *Registry) Register(handler handlers.Handler) {
 
 // GetHandler retrieves a handler by type
 func (r *Registry) mustGetHandler(outputType string) handlers.Handler {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	r.handlerMutex.RLock()
+	defer r.handlerMutex.RUnlock()
 	handler, exists := r.handlers[outputType]
 	if !exists {
 		panic(fmt.Sprintf("handler for type %s not registered", outputType))
@@ -70,9 +76,11 @@ func (r *Registry) mustGetHandler(outputType string) handlers.Handler {
 	return handler
 }
 
-func (r *Registry) HasCacheHit(ctx context.Context, target model.Target) (bool, error) {
+func (r *Registry) HasCacheHit(ctx context.Context, target *model.Target) (bool, error) {
+	r.targetMutexMap.Lock(target.Label.String())
+	defer r.targetMutexMap.Unlock(target.Label.String())
 	// check for the default file system key for checking if the inputs changed
-	cacheHit, err := r.targetCache.HasCacheExistsFile(ctx, target)
+	cacheHit, err := r.targetCache.HasCacheExistsFile(ctx, *target)
 	if err != nil {
 		return false, err
 	}
@@ -92,7 +100,7 @@ func (r *Registry) HasCacheHit(ctx context.Context, target model.Target) (bool, 
 		localOutputRef := outputRef
 		task := r.pool.SubmitErr(func() error {
 			handler := r.mustGetHandler(localOutputRef.Type)
-			handlerCacheHit, handlerErr := handler.Has(ctx, target, localOutputRef)
+			handlerCacheHit, handlerErr := handler.Has(ctx, *target, localOutputRef)
 			if handlerErr != nil {
 				return fmt.Errorf("error checking for output %s with %s handler: %w", localOutputRef, handler.Type(), handlerErr)
 			}
@@ -107,8 +115,10 @@ func (r *Registry) HasCacheHit(ctx context.Context, target model.Target) (bool, 
 	return !foundMiss.Load(), nil
 }
 
-func (r *Registry) WriteOutputs(ctx context.Context, target model.Target) error {
-	if err := r.targetCache.WriteCacheExistsFile(ctx, target); err != nil {
+func (r *Registry) WriteOutputs(ctx context.Context, target *model.Target) error {
+	r.targetMutexMap.Lock(target.Label.String())
+	defer r.targetMutexMap.Unlock(target.Label.String())
+	if err := r.targetCache.WriteCacheExistsFile(ctx, *target); err != nil {
 		return err
 	}
 
@@ -122,7 +132,7 @@ func (r *Registry) WriteOutputs(ctx context.Context, target model.Target) error 
 	for _, outputRef := range outputs {
 		localOutputRef := outputRef
 		task := r.pool.SubmitErr(func() error {
-			return r.mustGetHandler(localOutputRef.Type).Write(ctx, target, localOutputRef)
+			return r.mustGetHandler(localOutputRef.Type).Write(ctx, *target, localOutputRef)
 		})
 		tasks = append(tasks, task)
 	}
@@ -133,17 +143,25 @@ func (r *Registry) WriteOutputs(ctx context.Context, target model.Target) error 
 		}
 	}
 	return nil
-
 }
 
-func (r *Registry) LoadOutputs(ctx context.Context, target model.Target) error {
+// LoadOutputs loads the outputs for a target once using target.OutputsLoaded
+func (r *Registry) LoadOutputs(ctx context.Context, target *model.Target) error {
+	r.targetMutexMap.Lock(target.Label.String())
+	defer r.targetMutexMap.Unlock(target.Label.String())
+
+	if target.OutputsLoaded {
+		// Outputs are already loaded, nothing to do
+		return nil
+	}
+
 	outputs := target.AllOutputs()
 
 	var tasks []pond.Task
 	for _, outputRef := range outputs {
 		localOutputRef := outputRef
 		task := r.pool.SubmitErr(func() error {
-			return r.mustGetHandler(localOutputRef.Type).Load(ctx, target, localOutputRef)
+			return r.mustGetHandler(localOutputRef.Type).Load(ctx, *target, localOutputRef)
 		})
 		tasks = append(tasks, task)
 	}
@@ -153,10 +171,12 @@ func (r *Registry) LoadOutputs(ctx context.Context, target model.Target) error {
 			return err
 		}
 	}
+
+	target.OutputsLoaded = true
 	// Why this is needed:
 	// - When restoring from the remote cache we copy every file to the local cache
 	// - However, we don't explicitly restore the cache exists file
 	// TODO here we should only write the local cache exists file but it feels like the wrong place to do this
 	// since the output registry should not have to know about the file cache
-	return r.targetCache.WriteLocalCacheExistsFile(ctx, target)
+	return r.targetCache.WriteLocalCacheExistsFile(ctx, *target)
 }

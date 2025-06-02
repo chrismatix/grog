@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"text/template"
+	"time"
 )
 
 //go:embed run_sh.sh.tmpl
@@ -69,6 +70,7 @@ func runTargetCommand(
 	}
 
 	cmd := exec.CommandContext(ctx, "sh", "-c", templatedCommand)
+	cmd.WaitDelay = 1 * time.Second // cancellation grace tim
 
 	gitHash, err := config.GetGitHash()
 	if err != nil {

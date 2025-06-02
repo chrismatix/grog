@@ -1,0 +1,31 @@
+amends ".../pkl/package.pkl"
+
+targets {
+  new {
+    name = "target_a"
+    command = "echo 'data for output 1' > output_1.txt"
+    outputs {
+      "output_1.txt"
+    }
+  }
+
+  new {
+    name = "target_b"
+    command = "cat output_1.txt > output_2.txt"
+    outputs {
+      "output_2.txt"
+    }
+  }
+
+  new {
+    name = "target_c"
+    command = "cat output_2.txt > output_3.txt"
+    inputs {
+      "ignored_input.txt"
+      "output_2.txt"
+    }
+    outputs {
+      "output_3.txt"
+    }
+  }
+}

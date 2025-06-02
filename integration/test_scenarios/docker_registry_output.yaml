@@ -3,7 +3,7 @@ repo: docker_registry_output
 requires_creds: true
 cases:
   - name: creates_docker_registry_output
-    args:
+    grog_args:
       - build
       - :docker_output
     tags:
@@ -11,7 +11,7 @@ cases:
       - multiplatform-cache
 
   - name: loads_docker_registry_output
-    args:
+    grog_args:
       - build
       - :docker_output
     tags:

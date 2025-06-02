@@ -76,6 +76,11 @@ func init() {
 	RootCmd.PersistentFlags().Bool("fail-fast", false, "Fail fast on first error")
 	err = viper.BindPFlag("fail_fast", RootCmd.PersistentFlags().Lookup("fail-fast"))
 
+	// load_outputs
+	RootCmd.PersistentFlags().String("load-outputs", "all", "Level of output loading for cached targets. One of: all, minimal.")
+	err = viper.BindPFlag("load_outputs", RootCmd.PersistentFlags().Lookup("load-outputs"))
+	viper.SetDefault("load_outputs", "all")
+
 	// tags
 	RootCmd.PersistentFlags().StringSlice("tag", []string{}, "Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar")
 	err = viper.BindPFlag("tag", RootCmd.PersistentFlags().Lookup("tag"))
@@ -127,11 +132,12 @@ func initConfig() error {
 	}
 
 	// Set defaults here
-	viper.SetDefault("fail_fast", false)
 	viper.SetDefault("log_level", "info")
+	viper.SetDefault("load_outputs", "all")
 	viper.SetDefault("disable_non_deterministic_logging", false)
 	viper.SetDefault("os", runtime.GOOS)
 	viper.SetDefault("arch", runtime.GOARCH)
+	viper.SetDefault("load_outputs", "all")
 
 	names := []string{"grog"}
 	if os.Getenv("CI") == "1" {
@@ -158,7 +164,7 @@ func initConfig() error {
 		return fmt.Errorf("no grog config file found (tried: %v)", names)
 	}
 
-	// Merge all config sources into struct
+	// Merge all config sources into the global
 	if err := viper.Unmarshal(&config.Global); err != nil {
 		return fmt.Errorf("Failed to parse config: %v\n", err)
 	}

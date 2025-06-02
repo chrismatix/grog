@@ -24,6 +24,8 @@ type Target struct {
 	BinOutput Output `json:"bin_output,omitempty"`
 	// Whether this target is selected for execution.
 	IsSelected bool `json:"is_selected,omitempty"`
+	// Whether the outputs for this target were already loaded in the current execution
+	OutputsLoaded bool `json:"outputs_loaded,omitempty"`
 
 	// ChangeHash is the combined hash of the target definition and its input files
 	ChangeHash  string `json:"change_hash,omitempty"`

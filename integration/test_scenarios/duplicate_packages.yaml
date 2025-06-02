@@ -2,6 +2,6 @@ name: duplicate package definition
 repo: duplicate_package_definition
 cases:
   - name: duplicate_package_definition
-    args:
+    grog_args:
       - build
     expect_fail: true

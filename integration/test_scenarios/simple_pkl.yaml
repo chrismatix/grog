@@ -3,21 +3,21 @@ repo: simple_pkl
 cases:
   # This should only build foo
   - name: pkl_build_only_foo
-    args:
+    grog_args:
       - build
       - //foo
 
   # This should select foo as well
   - name: pkl_build_bar_should_also_build_foo
-    args:
+    grog_args:
       - build
       - //bar
 
   - name: pkl_test_bar_should_build_deps
-    args:
+    grog_args:
       - test
       - //bar:bar_test
   - name: pkl_test_foo_does_not_build_targets
-    args:
+    grog_args:
       - test
       - //foo:foo_test

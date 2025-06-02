@@ -15,6 +15,7 @@ root = "/path/to/grog/root"
 # Execution Settings
 fail_fast = true # Exit immediately when encountering an issue
 num_workers = 4
+load_outputs = "minimal"
 
 # Logging Settings
 log_level = "info"
@@ -41,3 +42,6 @@ For instance, to set or override the `fail_fast` option set `GROG_FAIL_FAST=fals
 - **num_workers**: Number of concurrent workers for parallel task execution. Defaults to the number of CPUs.
 - **log_level**: Determines verbosity of logging (e.g., "debug", "info"). Defaults to `info`.
 - **enable_cache**: Controls whether caching is enabled. Defaults to `true`.
+- **load_outputs**: Determines what outputs are loaded from the cache. Available options are:
+  - `all` (default): Load all outputs from the cache.
+  - `minimal`: Only load outputs of a target if a **direct dependendant** needs to be re-built. This setting is useful to save bandwidth and disk space in CI settings.

@@ -2,17 +2,17 @@ name: simple json builds
 repo: simple_json
 cases:
   - name: run_checks
-    args:
+    grog_args:
       - check
 
   # This should only build foo
   - name: build_only_foo
-    args:
+    grog_args:
       - build
       - //foo
 
   # This should select foo as well
   - name: build_bar_should_also_build_foo
-    args:
+    grog_args:
       - build
       - //bar

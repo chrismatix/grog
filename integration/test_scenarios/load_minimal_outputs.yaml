@@ -1,0 +1,24 @@
+name: Load minimal outputs
+repo: load_minimal_outputs
+cases:
+  # Get rid of any residual outputs
+  - name: clear_outputs
+    setup_command: "rm *.txt || exit 0"
+
+  - name: load_minimal_outputs_build_all
+    grog_args:
+      - build
+
+  # Clear all outputs so that we can verify that they are not loaded
+  - name: clear_outputs
+    setup_command: "rm *.txt"
+
+  - name: load_minimal_outputs_rebuild_all
+    grog_args:
+      - --load-outputs=minimal
+      - build
+
+  - name: assert_outputs_were_not_loaded
+    setup_command: |
+      # Fails if there are any .txt files in the current directory
+      ls *.txt >/dev/null 2>&1 && exit 1 || exit 0

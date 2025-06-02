@@ -4,42 +4,42 @@ cases:
   # List
   ###
   - name: list_by_tags
-    args:
+    grog_args:
       - list
       - --tag=tag1
       - --tag=non-existent
 
   - name: list_by_exclude_tags
-    args:
+    grog_args:
       - list
       - --exclude-tag=tag1
   #
   #  - name: list_by_target_type
-  #    args:
+  #    grog_args:
   #      - list
   #      - --target-type=test
 
   - name: build_by_tags
-    args:
+    grog_args:
       - build
       - --tag=tag1
       - --tag=non-existent
 
   # This should only match and not recurse
   - name: list_by_pattern
-    args:
+    grog_args:
       - list
       - //package_1/...
 
   # Deps
   ###
   - name: deps_intransitive
-    args:
+    grog_args:
       - deps
       - //package_2
 
   - name: deps_transitive
-    args:
+    grog_args:
       - deps
       - --transitive
       - //package_2
@@ -47,12 +47,12 @@ cases:
   # RDeps
   ###
   - name: rdeps_intransitive
-    args:
+    grog_args:
       - rdeps
       - //package_1:bar # Only depended on by foo_test
 
   - name: rdeps_transitive
-    args:
+    grog_args:
       - rdeps
       - --transitive
       - //package_1:bar
@@ -60,7 +60,7 @@ cases:
   # Owners
   ###
   - name: file_owners
-    args:
+    grog_args:
       - owners
       - package_1/source.txt
 
@@ -68,13 +68,13 @@ cases:
   - name: changes_no_transitive
     # Returns //package_1:bar for the source file change
     # Returns //package_2 for the build file change
-    args:
+    grog_args:
       - changes
       - --since=5e79b3bc4fc7f1978e78f917126710989bf0deaa
 
   - name: changes_transitive
     # Also returns //package_1:foo_test as a dependent on bar
-    args:
+    grog_args:
       - changes
       - --dependents=transitive
       - --since=5e79b3bc4fc7f1978e78f917126710989bf0deaa

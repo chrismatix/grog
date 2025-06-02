@@ -11,8 +11,10 @@ type WorkspaceConfig struct {
 	WorkspaceRoot string `mapstructure:"workspace_root"`
 
 	// Execution
-	FailFast   bool `mapstructure:"fail_fast"`
-	NumWorkers int  `mapstructure:"num_workers"`
+	FailFast    bool   `mapstructure:"fail_fast"`
+	NumWorkers  int    `mapstructure:"num_workers"`
+	LoadOutputs string `mapstructure:"load_outputs"`
+
 	// Logging
 	LogLevel      string `mapstructure:"log_level"`
 	LogOutputPath string `mapstructure:"log_output_path"`
@@ -96,7 +98,23 @@ func (w WorkspaceConfig) Validate() error {
 		}
 	}
 
+	// Validate LoadOutputs
+	//_, err := ParseLoadOutputsMode(w.LoadOutputs)
+	//if err != nil {
+	//	return err
+	//}
+
 	return nil
+}
+
+func (w WorkspaceConfig) GetLoadOutputsMode() LoadOutputsMode {
+	mode, err := ParseLoadOutputsMode(w.LoadOutputs)
+	if err != nil {
+		// This should never happen because we validate the value in Validate()
+		// But just in case, return the default value
+		return LoadOutputsAll
+	}
+	return mode
 }
 
 type CacheBackend string

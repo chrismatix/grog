@@ -47,18 +47,23 @@ func loadFixture(t *testing.T, testName string) (string, error) {
 type TestTable struct {
 	Name  string `yaml:"name"`
 	Repo  string `yaml:"repo"`
-	Cases []TestCase
+	Cases []TestStep
 
 	// Only run this test when REQUIRES_CREDS is set
 	// (for tests that require cloud credentials)
 	RequiresCreds bool `yaml:"requires_creds"`
 }
-type TestCase struct {
+
+// TestStep defines a single test step
+// It can either run a grog command using GrogArgs or some other command using SetupCommand
+// If SetupCommand is defined and GrogArgs is empty the step will only run the setup command (without fixtures)
+type TestStep struct {
 	// Names must be unique as they determine the fixture file name
-	Name       string   `yaml:"name"`
-	Args       []string `yaml:"args"`
-	EnvVars    []string `yaml:"env_vars"`
-	ExpectFail bool     `yaml:"expect_fail"`
+	Name         string   `yaml:"name"`
+	SetupCommand string   `yaml:"setup_command"`
+	GrogArgs     []string `yaml:"grog_args"`
+	EnvVars      []string `yaml:"env_vars"`
+	ExpectFail   bool     `yaml:"expect_fail"`
 }
 
 func TestCliArgs(t *testing.T) {
@@ -109,6 +114,23 @@ func TestCliArgs(t *testing.T) {
 
 			testCaseNames := make(map[string]bool)
 			for _, tc := range tt.Cases {
+				// Run the setup command if it is defined
+				if tc.SetupCommand != "" {
+					output, err := runSetupCommand(tc.SetupCommand, tt.Repo)
+					if err != nil {
+						t.Fatalf(
+							"could not run setup command %s on repo %s: %v\nCommand output:\n%s",
+							tc.SetupCommand,
+							tt.Repo,
+							err,
+							output)
+					}
+
+					if len(tc.GrogArgs) == 0 {
+						// Skip the test step if the setup command only runs
+						continue
+					}
+				}
 
 				// Check for duplicate test case names
 				if _, ok := testCaseNames[tc.Name]; ok {
@@ -118,7 +140,7 @@ func TestCliArgs(t *testing.T) {
 
 				t.Run(tc.Name, func(t *testing.T) {
 
-					output, err = runBinary(tc.Args, tt.Repo, tc.EnvVars)
+					output, err = runBinary(tc.GrogArgs, tt.Repo, tc.EnvVars)
 
 					if err != nil && !tc.ExpectFail {
 						fmt.Printf("Command ouput: %s\n", output)
@@ -189,6 +211,15 @@ func runBinary(args []string, repoPath string, extraEnvVars []string) ([]byte, e
 	// Uncomment to enable debug logging
 	// TODO move to makefile flag
 	// cmd.Env = append(cmd.Env, "LOG_LEVEL=debug")
+	cmd.Dir = repoPath
+	return cmd.CombinedOutput()
+}
+
+func runSetupCommand(command string, repoPath string) ([]byte, error) {
+	repoPath = filepath.Join("./integration/test_repos", repoPath)
+	fmt.Printf("Running setup command: %s in directory: %s\n", command, repoPath)
+
+	cmd := exec.Command("sh", "-c", command)
 	cmd.Dir = repoPath
 	return cmd.CombinedOutput()
 }

@@ -2,33 +2,33 @@ name: Binary outputs
 repo: binary_output
 cases:
   - name: using_bin_tool_works
-    args:
+    grog_args:
       - build
 
   - name: using_bin_tool_works_with_cache
-    args:
+    grog_args:
       - build
 
   - name: run_command_fails
-    args:
+    grog_args:
       - run
       - //:creates_bin_tool
     expect_fail: true
 
   - name: run_command_works
-    args:
+    grog_args:
       - run
       - //:creates_bin_tool
       - foo
 
   - name: run_command_works_rel_path
-    args:
+    grog_args:
       - run
       - :creates_bin_tool
       - foo
 
   - name: run_command_works_declared_bin_tool
-    args:
+    grog_args:
       - run
       - //:declares_bin_tool
       - bar

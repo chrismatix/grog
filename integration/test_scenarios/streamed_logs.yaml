@@ -2,12 +2,12 @@ name: streamed output
 repo: simple_pkl
 cases:
   - name: stream_build_outputs
-    args:
+    grog_args:
       - build
       - --stream-logs
 
   - name: stream_test_outputs
-    args:
+    grog_args:
       - test
       - --stream-logs
       - //foo/...

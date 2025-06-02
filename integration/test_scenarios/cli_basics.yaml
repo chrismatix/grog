@@ -2,11 +2,11 @@ name: cli basics
 repo: simple_json
 cases:
   - name: build_all_color
-    args:
+    grog_args:
       - --color=yes
       - build
   - name: target_pattern_not_matched
-    args:
+    grog_args:
       - --color=yes
       - build
       - //unknown_target

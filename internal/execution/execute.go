@@ -29,14 +29,32 @@ func (e *CommandError) Error() string {
 	return fmt.Sprintf("target %s failed with exit code %d: %s", e.TargetLabel, e.ExitCode, e.Output)
 }
 
-// Execute executes the targets in the given graph and returns the completion map
-func Execute(
-	ctx context.Context,
+type Executor struct {
+	registry        *output.Registry
+	graph           *dag.DirectedTargetGraph
+	failFast        bool
+	streamLogs      bool
+	loadOutputsMode config.LoadOutputsMode
+}
+
+func NewExecutor(
 	registry *output.Registry,
 	graph *dag.DirectedTargetGraph,
 	failFast bool,
 	streamLogs bool,
-) (dag.CompletionMap, error) {
+	loadOutputsMode config.LoadOutputsMode,
+) *Executor {
+	return &Executor{
+		registry:        registry,
+		graph:           graph,
+		failFast:        failFast,
+		streamLogs:      streamLogs,
+		loadOutputsMode: loadOutputsMode,
+	}
+}
+
+// Execute executes the targets in the given graph and returns the completion map
+func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	numWorkers := config.Global.NumWorkers
 	stdLogger := console.GetLogger(ctx)
 
@@ -53,7 +71,7 @@ func Execute(
 	ctx = console.WithTeaLogger(ctx, program)
 
 	// Get selected vertices and create a TestLogger for them
-	selectedVertices := graph.GetSelectedVertices()
+	selectedVertices := e.graph.GetSelectedVertices()
 	selectedTargetCount := len(selectedVertices)
 
 	// Create a list of target labels for the TestLogger
@@ -75,12 +93,12 @@ func Execute(
 	// walkCallback will be called at max parallelism by the graph walker
 	walkCallback := func(ctx context.Context, target *model.Target, depsCached bool) (dag.CacheResult, error) {
 		// get any possible bin tools that the target may use
-		binTools, err := getBinToolPaths(graph, target)
+		binTools, err := getBinToolPaths(e.graph, target)
 		if err != nil {
 			return dag.CacheMiss, err
 		}
 
-		dependencies := graph.GetDependencies(target)
+		dependencies := e.graph.GetDependencies(target)
 
 		dependencyHashes := make([]string, len(dependencies))
 		for index, dep := range dependencies {
@@ -95,11 +113,11 @@ func Execute(
 		target.ChangeHash = changeHash
 
 		// taskFunc will be run in the worker pool
-		taskFunc := GetTaskFunc(ctx, registry, target, binTools, depsCached, streamLogs)
+		taskFunc := e.getTaskFunc(ctx, target, binTools, depsCached)
 		return workerPool.Run(taskFunc)
 	}
 
-	walker := dag.NewWalker(graph, walkCallback, failFast)
+	walker := dag.NewWalker(e.graph, walkCallback, e.failFast)
 	completionMap, err := walker.Walk(ctx)
 	return completionMap, err
 }
@@ -130,19 +148,17 @@ func getBinToolPaths(graph *dag.DirectedTargetGraph, target *model.Target) (BinT
 	return binTools, nil
 }
 
-func GetTaskFunc(
+func (e *Executor) getTaskFunc(
 	ctx context.Context,
-	registry *output.Registry,
 	target *model.Target,
 	binToolPaths BinToolMap,
 	depsCached bool,
-	streamLogs bool,
 ) worker.TaskFunc[dag.CacheResult] {
 	return func(update worker.StatusFunc) (dag.CacheResult, error) {
 		startTime := time.Now()
 
 		update(fmt.Sprintf("%s: checking cache.", target.Label))
-		hasCacheHit, err := registry.HasCacheHit(ctx, *target)
+		hasCacheHit, err := e.registry.HasCacheHit(ctx, target)
 		if err != nil {
 			return dag.CacheMiss, err
 		}
@@ -153,41 +169,42 @@ func GetTaskFunc(
 		outputCheckErr := runOutputChecks(ctx, target, binToolPaths)
 		if outputCheckErr != nil {
 			logger.Debugf("running target due to output check error: %v", outputCheckErr)
+		} else if depsCached == true && target.HasOutputChecksOnly() {
+			// Special type of target that only has output checks but no in- and outputs
+			// In this case the output checks (and the dependencies) are the only thing affecting re-running
+			logger.Debugf("skipping target %s due to passed output checks", target.Label)
+			return dag.CacheSkip, nil
 		}
 
 		// If either the inputs or the deps have changed we need to re-execute the target
 		// depsCached is also true when there are no deps
-		if depsCached && outputCheckErr == nil {
-			if target.HasOutputChecksOnly() {
-				// Special type of target that only has output checks but no in- and outputs
-				// In this case the output checks (and the dependencies) are the only thing affecting re-running
-				logger.Debugf("skipping target %s due to passed output checks", target.Label)
-				return dag.CacheSkip, nil
+		if depsCached && hasCacheHit {
+			if e.loadOutputsMode == config.LoadOutputsMinimal {
+				logger.Debugf("%s: skipped loading outputs because load_outputs=minimal", target.Label)
+				return dag.CacheHit, nil
 			}
 
-			if hasCacheHit {
-				update(fmt.Sprintf("%s: cache hit. loading outputs.", target.Label))
-				loadingErr := loadCachedOutputs(ctx, registry, target)
-				if loadingErr != nil {
-					// Don't return so that we instead break out and continue executing the target
-					logger.Errorf("failed to load outputs from cache for target %s: %v", target.Label, loadingErr)
-				} else {
-					if target.IsTest() {
-						executionTime := time.Since(startTime).Seconds()
-						if testLogger := console.GetTestLogger(ctx); testLogger != nil {
-							testLogger.LogTestPassedCached(logger, target.Label.String(), executionTime)
-						} else {
-							logger.Infof("%s %s (cached) in %.1fs", target.Label, color.New(color.FgGreen).Sprintf("PASSED"), executionTime)
-						}
-					}
-					return dag.CacheHit, nil
-				}
-
+			update(fmt.Sprintf("%s: cache hit. loading outputs.", target.Label))
+			loadingErr := e.loadCachedOutputs(ctx, target)
+			if loadingErr != nil {
+				// Don't return so that we instead break out and continue executing the target
+				logger.Errorf("failed to load outputs from cache for target %s: %v", target.Label, loadingErr)
 			} else {
-				logger.Debugf("running target %s due to cache miss", target.Label)
+				if target.IsTest() {
+					executionTime := time.Since(startTime).Seconds()
+					if testLogger := console.GetTestLogger(ctx); testLogger != nil {
+						testLogger.LogTestPassedCached(logger, target.Label.String(), executionTime)
+					} else {
+						logger.Infof("%s %s (cached) in %.1fs", target.Label, color.New(color.FgGreen).Sprintf("PASSED"), executionTime)
+					}
+				}
+				return dag.CacheHit, nil
 			}
 		}
 
+		if !hasCacheHit {
+			logger.Debugf("running target %s due to cache miss", target.Label)
+		}
 		if !depsCached {
 			logger.Debugf("running target %s due to changed dependencis", target.Label)
 		}
@@ -195,12 +212,16 @@ func GetTaskFunc(
 			logger.Debugf("running target %s due to output check error", target.Label)
 		}
 
+		if loadDepsErr := e.loadDependenciesIfNecessary(ctx, target); loadDepsErr != nil {
+			return dag.CacheMiss, loadDepsErr
+		}
+
 		if target.Command != "" {
 			update(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis()))
 			logger.Debugf("running target %s: %s", target.Label, target.CommandEllipsis())
-			err = executeTarget(ctx, target, binToolPaths, streamLogs)
+			err = executeTarget(ctx, target, binToolPaths, e.streamLogs)
 		} else {
-			logger.Debugf("skpped target %s due to no command", target.Label)
+			logger.Debugf("skipped target %s due to no command", target.Label)
 		}
 		executionTime := time.Since(startTime).Seconds()
 
@@ -228,7 +249,7 @@ func GetTaskFunc(
 			}
 		}
 
-		// If the target produced a bin output automatically mark it executable
+		// If the target produced a bin output automatically mark it as executable
 		err = markBinOutputExecutable(target)
 		if err != nil {
 			return dag.CacheMiss, err
@@ -236,12 +257,39 @@ func GetTaskFunc(
 
 		// Write outputs to the cache:
 		update(fmt.Sprintf("%s complete. writing outputs...", target.Label))
-		err = registry.WriteOutputs(ctx, *target)
+		err = e.registry.WriteOutputs(ctx, target)
 		if err != nil {
 			return dag.CacheMiss, fmt.Errorf("build completed but failed to write outputs to cache for target %s:\n%w", target.Label, err)
 		}
 		return dag.CacheMiss, nil
 	}
+}
+
+func (e *Executor) loadCachedOutputs(ctx context.Context, target *model.Target) error {
+	if target.SkipsCache() {
+		return nil
+	}
+
+	err := e.registry.LoadOutputs(ctx, target)
+	if err != nil {
+		return fmt.Errorf("failed to read outputs from cache for target %s: %w", target.Label, err)
+	}
+	return nil
+}
+
+func (e *Executor) loadDependenciesIfNecessary(ctx context.Context, target *model.Target) error {
+	if e.loadOutputsMode != config.LoadOutputsMinimal {
+		return nil
+	}
+
+	for _, dep := range e.graph.GetDependencies(target) {
+		err := e.loadCachedOutputs(ctx, dep)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func markBinOutputExecutable(target *model.Target) error {
@@ -255,17 +303,5 @@ func markBinOutputExecutable(target *model.Target) error {
 		return fmt.Errorf("failed to mark binary output as executable for target %s: %w", target.Label, err)
 	}
 
-	return nil
-}
-
-func loadCachedOutputs(ctx context.Context, registry *output.Registry, target *model.Target) error {
-	if target.SkipsCache() {
-		return nil
-	}
-
-	err := registry.LoadOutputs(ctx, *target)
-	if err != nil {
-		return fmt.Errorf("failed to read outputs from cache for target %s: %w", target.Label, err)
-	}
 	return nil
 }
