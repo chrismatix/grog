@@ -70,7 +70,7 @@ func runTargetCommand(
 	}
 
 	cmd := exec.CommandContext(ctx, "sh", "-c", templatedCommand)
-	cmd.WaitDelay = 1 * time.Second // cancellation grace tim
+	cmd.WaitDelay = 1 * time.Second // cancellation grace time
 
 	gitHash, err := config.GetGitHash()
 	if err != nil {
@@ -91,7 +91,7 @@ func runTargetCommand(
 	var buffer bytes.Buffer
 
 	if program := console.GetTeaProgram(ctx); program != nil && streamLogs {
-		teaWriter := console.TeaWriter{Program: program}
+		teaWriter := console.NewTeaWriter(program)
 		multiOut := io.MultiWriter(&buffer, teaWriter)
 		cmd.Stdout = multiOut
 		cmd.Stderr = multiOut

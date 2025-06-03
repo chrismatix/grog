@@ -113,8 +113,8 @@ func (w *Walker) Walk(
 		}
 
 		doneCh := make(chan Completion, 1)
-		readyCh := make(chan bool)
-		cancelCh := make(chan struct{})
+		readyCh := make(chan bool, 1)
+		cancelCh := make(chan struct{}, 1)
 
 		w.vertexInfoMap[vertex] = &vertexInfo{
 			done:   doneCh,
@@ -146,6 +146,7 @@ func (w *Walker) Walk(
 		logger.Debugf(
 			"context cancelled, cancelling all workers",
 		)
+		w.cancelAll()
 		// We must still await all walker routines
 		w.wait.Wait()
 		if w.failFastTriggered {

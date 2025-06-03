@@ -136,11 +136,12 @@ func runBuild(
 	}
 
 	if executionErr != nil {
-		logger.Errorf("execution failed: %v", err)
 		// If this is a cancellation error continue printing out any collected errors
 		if !errors.Is(executionErr, context.Canceled) || completionMap == nil {
 			os.Exit(1)
+			return
 		}
+		logger.Errorf("execution failed: %s", executionErr)
 	}
 
 	// small helper for logging
@@ -149,15 +150,15 @@ func runBuild(
 		goal = "Test"
 	}
 
-	buildErrors := completionMap.GetErrors()
+	executionErrors := completionMap.GetErrors()
 	successCount, cacheHits := completionMap.SuccessCount()
 
-	if len(buildErrors) > 0 {
+	if len(executionErrors) > 0 {
 		logger.Errorf("%s failed. %s completed (%d cache hits), %d failed:",
 			goal,
 			console.FCountTargets(successCount),
 			cacheHits,
-			len(buildErrors))
+			len(executionErrors))
 
 		for target, completion := range completionMap {
 			if completion.IsSuccess {
@@ -178,10 +179,15 @@ func runBuild(
 				logger.Errorf("Target %s failed: %v", target.Label, completion.Err)
 			}
 		}
-	} else if executionErr == nil {
+		os.Exit(1)
+	}
+
+	if executionErr == nil {
 		logger.Infof("%s completed successfully. %s completed (%d cache hits).",
 			goal,
 			console.FCountTargets(successCount),
 			cacheHits)
+	} else {
+		os.Exit(1)
 	}
 }

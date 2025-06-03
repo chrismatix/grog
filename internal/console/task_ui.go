@@ -30,7 +30,7 @@ func StartTaskUI(ctx context.Context) (*tea.Program, chan tea.Msg) {
 	msgCh := make(chan tea.Msg, 100)
 
 	// Disable input since we don't need it and also to keep our signal (sigterm) handler working
-	opts := []tea.ProgramOption{tea.WithInput(nil)}
+	opts := []tea.ProgramOption{tea.WithInput(nil), tea.WithoutSignalHandler()}
 	if !UseTea() {
 		// If we're in daemon mode don't render the TUI
 		opts = append(opts, tea.WithoutRenderer())

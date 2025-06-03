@@ -1,0 +1,3 @@
+targets:
+  - name: sleep_target
+    command: sleep 60

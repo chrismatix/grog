@@ -79,7 +79,7 @@ func InitLoggerWithTea(program *tea.Program) *zap.SugaredLogger {
 	if program != nil && UseTea() {
 		teaCore := zapcore.NewCore(
 			zapcore.NewConsoleEncoder(encoderConfig),
-			zapcore.AddSync(TeaWriter{program}),
+			zapcore.AddSync(NewTeaWriter(program)),
 			level,
 		)
 
