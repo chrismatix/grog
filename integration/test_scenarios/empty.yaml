@@ -2,3 +2,7 @@ name: empty repo
 repo: empty
 cases:
   - name: no_arguments_message
+  - name: info_command
+    grog_args:
+      - info
+    skip_fixture: true

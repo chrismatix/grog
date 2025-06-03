@@ -16,3 +16,13 @@ cases:
       - :docker_output
     tags:
       - multiplatform-cache
+
+  - name: remove_local_docker_image
+    setup_command: docker rmi grog-hello-world
+
+  - name: loads_remote_docker_registry_output
+    grog_args:
+      - build
+      - :docker_output
+    tags:
+      - multiplatform-cache

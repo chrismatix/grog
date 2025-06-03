@@ -11,3 +11,8 @@ cases:
       - build
       - //unknown_target
     expect_fail: true
+
+  - name: version_command_works
+    grog_args:
+      - version
+    skip_fixture: true

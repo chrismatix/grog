@@ -1,0 +1,5 @@
+targets:
+  - name: foo
+    command: exit 0
+    output_checks:
+      - command: "exit 1"

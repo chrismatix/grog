@@ -1,4 +1,4 @@
-INFO: 1 package loaded, 2 targets configured.
-INFO: Selected 2 targets.
-INFO: successfully pushed us-central1-docker.pkg.dev/grog-457510/grog-cache/grog-hello-world at digest sha256:34eb6454ff849b2d0450f016b775152beefc290a45ee24ec69ff2bf86217e6d2
-INFO: Build completed successfully. 2 targets completed (2 cache hits).
+INFO: 1 package loaded, 1 target configured.
+INFO: Selected 1 target.
+INFO: Loaded image grog-hello-world from registry
+INFO: Build completed successfully. 1 target completed (1 cache hits).

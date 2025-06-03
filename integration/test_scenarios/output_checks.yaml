@@ -1,0 +1,7 @@
+name: Output Checks
+repo: output_checks
+cases:
+  - name: output_checks_fail
+    grog_args:
+      - build
+    expect_fail: true

@@ -64,6 +64,9 @@ type TestStep struct {
 	GrogArgs     []string `yaml:"grog_args"`
 	EnvVars      []string `yaml:"env_vars"`
 	ExpectFail   bool     `yaml:"expect_fail"`
+	// Some tests have machine-specific outputs which makes
+	// fixture checking difficult.
+	SkipFixture bool `yaml:"skip_fixture"`
 }
 
 func TestCliArgs(t *testing.T) {
@@ -145,6 +148,10 @@ func TestCliArgs(t *testing.T) {
 					if err != nil && !tc.ExpectFail {
 						fmt.Printf("Command ouput: %s\n", output)
 						t.Fatal(err)
+					}
+
+					if tc.SkipFixture {
+						return
 					}
 
 					if *updateAll {
