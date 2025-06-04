@@ -6,6 +6,7 @@ import (
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fatih/color"
+	"grog/internal/caching"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/dag"
@@ -30,14 +31,17 @@ func (e *CommandError) Error() string {
 }
 
 type Executor struct {
+	targetCache     *caching.TargetCache
 	registry        *output.Registry
 	graph           *dag.DirectedTargetGraph
 	failFast        bool
 	streamLogs      bool
 	loadOutputsMode config.LoadOutputsMode
+	targetHasher    *hashing.TargetHasher
 }
 
 func NewExecutor(
+	targetCache *caching.TargetCache,
 	registry *output.Registry,
 	graph *dag.DirectedTargetGraph,
 	failFast bool,
@@ -45,11 +49,13 @@ func NewExecutor(
 	loadOutputsMode config.LoadOutputsMode,
 ) *Executor {
 	return &Executor{
+		targetCache:     targetCache,
 		registry:        registry,
 		graph:           graph,
 		failFast:        failFast,
 		streamLogs:      streamLogs,
 		loadOutputsMode: loadOutputsMode,
+		targetHasher:    hashing.NewTargetHasher(graph),
 	}
 }
 
@@ -98,19 +104,10 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 			return dag.CacheMiss, err
 		}
 
-		dependencies := e.graph.GetDependencies(target)
-
-		dependencyHashes := make([]string, len(dependencies))
-		for index, dep := range dependencies {
-			dependencyHashes[index] = dep.ChangeHash
-		}
-
-		// Set the change hash that will determine if the target changed
-		changeHash, err := hashing.GetTargetChangeHash(*target, dependencyHashes)
+		err = e.targetHasher.SetTargetChangeHash(target)
 		if err != nil {
 			return dag.CacheMiss, err
 		}
-		target.ChangeHash = changeHash
 
 		// taskFunc will be run in the worker pool
 		taskFunc := e.getTaskFunc(ctx, target, binTools, depsCached)
@@ -176,9 +173,19 @@ func (e *Executor) getTaskFunc(
 			return dag.CacheSkip, nil
 		}
 
+		// Check if the target is tainted
+		isTainted, taintedErr := e.targetCache.IsTainted(ctx, *target)
+		if taintedErr != nil {
+			logger.Errorf("Failed to check if target %s is tainted: %v", target.Label, taintedErr)
+		}
+
+		if isTainted {
+			logger.Debugf("running target %s due to being tainted", target.Label)
+		}
+
 		// If either the inputs or the deps have changed we need to re-execute the target
 		// depsCached is also true when there are no deps
-		if depsCached && hasCacheHit {
+		if depsCached && hasCacheHit && !isTainted {
 			if e.loadOutputsMode == config.LoadOutputsMinimal {
 				logger.Debugf("%s: skipped loading outputs because load_outputs=minimal", target.Label)
 				return dag.CacheHit, nil
@@ -261,6 +268,14 @@ func (e *Executor) getTaskFunc(
 		if err != nil {
 			return dag.CacheMiss, fmt.Errorf("build completed but failed to write outputs to cache for target %s:\n%w", target.Label, err)
 		}
+
+		if isTainted {
+			err = e.targetCache.RemoveTaint(ctx, *target)
+			if err != nil {
+				logger.Errorf("Failed to remove taint from target %s: %v", target.Label, err)
+			}
+		}
+
 		return dag.CacheMiss, nil
 	}
 }
@@ -282,6 +297,10 @@ func (e *Executor) loadDependenciesIfNecessary(ctx context.Context, target *mode
 		return nil
 	}
 
+	console.GetLogger(ctx).Debugf(
+		"loading dependency outputs for target %s.",
+		target.Label,
+	)
 	for _, dep := range e.graph.GetDependencies(target) {
 		err := e.loadCachedOutputs(ctx, dep)
 		if err != nil {

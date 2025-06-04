@@ -20,6 +20,9 @@ targets {
   new {
     name = "target_c"
     command = "cat output_2.txt > output_3.txt"
+    dependencies {
+      ":target_b"
+    }
     inputs {
       "ignored_input.txt"
       "output_2.txt"

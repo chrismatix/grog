@@ -104,6 +104,7 @@ func init() {
 	RootCmd.AddCommand(cmds.ListCmd)
 	RootCmd.AddCommand(cmds.InfoCmd)
 	RootCmd.AddCommand(cmds.CheckCmd)
+	RootCmd.AddCommand(cmds.TaintCmd)
 	cmds.AddCleanCmd(RootCmd)
 	cmds.AddTestCmd(RootCmd)
 	cmds.AddBuildCmd(RootCmd)

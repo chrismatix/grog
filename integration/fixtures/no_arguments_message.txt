@@ -2,21 +2,22 @@ Usage:
   grog [command]
 
 Available Commands:
-  build       Loads the user configuration and executes build targets
+  build       Loads the user configuration and executes build targets.
   changes     Lists targets whose inputs have been modified since a given commit.
   check       Loads the build graph and runs basic consistency checks.
-  clean       Removes build outputs and clears the cache
+  clean       Removes build outputs and clears the cache.
   completion  Generate the autocompletion script for the specified shell
   deps        Lists (transitive) dependencies of a target.
-  graph       Outputs the target dependency graph
+  graph       Outputs the target dependency graph.
   help        Help about any command
   info        Prints information about the grog cli and workspace.
   list        Lists targets by pattern.
   owners      Lists targets that own the specified files as inputs.
   rdeps       Lists (transitive) dependants (reverse dependencies) of a target.
-  run         Builds and runs a single target's binary output
-  test        Loads the user configuration and executes test targets
-  version     Print the version info
+  run         Builds and runs a single target's binary output.
+  taint       Taints targets by pattern to force execution regardless of cache status.
+  test        Loads the user configuration and executes test targets.
+  version     Print the version info.
 
 Flags:
       --color string          Set color output (yes, no, or auto) (default "auto")

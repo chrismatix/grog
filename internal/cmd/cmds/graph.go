@@ -14,7 +14,7 @@ var graphOptions struct {
 
 var GraphCmd = &cobra.Command{
 	Use:   "graph",
-	Short: "Outputs the target dependency graph",
+	Short: "Outputs the target dependency graph.",
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := setupCommand()
 

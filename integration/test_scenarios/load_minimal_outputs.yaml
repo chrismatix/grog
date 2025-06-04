@@ -22,3 +22,18 @@ cases:
     setup_command: |
       # Fails if there are any .txt files in the current directory
       ls *.txt >/dev/null 2>&1 && exit 1 || exit 0
+
+  - name: taint_top_level_output
+    grog_args:
+      - taint
+      - //:target_c
+
+  - name: load_minimal_outputs_rebuild_tainted
+    grog_args:
+      - --load-outputs=minimal
+      - build
+
+  - name: assert_only_necessary_outputs_were_loaded
+    setup_command: |
+      # Fails if output_1.txt does not exist but output_2.txt and output_3.txt exist
+      [ ! -f output_1.txt ] && [ -f output_2.txt ] && [ -f output_3.txt ] || exit 1

@@ -14,7 +14,7 @@ var testOptions struct {
 
 var TestCmd = &cobra.Command{
 	Use:   "test",
-	Short: "Loads the user configuration and executes test targets",
+	Short: "Loads the user configuration and executes test targets.",
 	Long:  `Loads the user configuration, checks which targets need to be rebuilt based on file hashes, builds the dependency graph, and executes targets.`,
 	Args:  cobra.ArbitraryArgs, // Optional argument for target pattern
 	Run: func(cmd *cobra.Command, args []string) {

@@ -1,0 +1,62 @@
+package cmds
+
+import (
+	"github.com/spf13/cobra"
+	"grog/internal/caching"
+	"grog/internal/caching/backends"
+	"grog/internal/config"
+	"grog/internal/console"
+	"grog/internal/hashing"
+	"grog/internal/label"
+	"grog/internal/loading"
+	"grog/internal/selection"
+)
+
+var TaintCmd = &cobra.Command{
+	Use:   "taint",
+	Short: "Taints targets by pattern to force execution regardless of cache status.",
+	Args:  cobra.MinimumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		ctx, logger := setupCommand()
+
+		currentPackagePath, err := config.Global.GetCurrentPackage()
+		if err != nil {
+			logger.Fatalf("could not get current package: %v", err)
+		}
+
+		targetPatterns, err := label.ParsePatternsOrMatchAll(currentPackagePath, args)
+		if err != nil {
+			logger.Fatalf("could not parse target pattern: %v", err)
+		}
+
+		graph := loading.MustLoadGraphForQuery(ctx, logger)
+
+		selector := selection.New(targetPatterns, config.Global.Tags, config.Global.ExcludeTags, selection.AllTargets)
+		selector.SelectTargets(graph)
+
+		selectedVertices := graph.GetSelectedVertices()
+
+		// Initialize cache
+		cache, err := backends.GetCacheBackend(ctx, config.Global.Cache)
+		if err != nil {
+			logger.Fatalf("could not instantiate cache: %v", err)
+		}
+		targetCache := caching.NewTargetCache(cache)
+
+		taintedCount := 0
+		targetHasher := hashing.NewTargetHasher(graph)
+		for _, target := range selectedVertices {
+			// In order for the cache key to be correct the ChangeHash needs to be set
+			err := targetHasher.SetTargetChangeHash(target)
+			err = targetCache.Taint(ctx, *target)
+			if err != nil {
+				logger.Errorf("Failed to taint target %s: %v", target.Label, err)
+				continue
+			}
+			taintedCount++
+			logger.Debugf("Tainted target: %s", target.Label)
+		}
+
+		logger.Infof("Tainted %s", console.FCountTargets(taintedCount))
+	},
+}

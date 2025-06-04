@@ -13,7 +13,7 @@ import (
 
 var RunCmd = &cobra.Command{
 	Use:   "run",
-	Short: "Builds and runs a single target's binary output",
+	Short: "Builds and runs a single target's binary output.",
 	Args:  cobra.ArbitraryArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := setupCommand()

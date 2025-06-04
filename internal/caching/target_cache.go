@@ -17,6 +17,10 @@ import (
 // (useful when there are no outputs to verify, but we want to keep the directory)
 const existsFileKey = "__grog_exists__"
 
+// taintedFileKey is the key used to mark a target as tainted
+// (forcing it to execute regardless of cache status)
+const taintedFileKey = "__grog_tainted"
+
 type TargetCache struct {
 	backend backends.CacheBackend
 }
@@ -34,6 +38,7 @@ func (tc *TargetCache) GetBackend() backends.CacheBackend {
 // CachePath returns the path in the backend where the target backend data is stored
 // -> {targetPackagePath}/{targetName}_cache_{targetInputHash}
 // the key, i.e. {outputHash} or {outputHash}.meta must be supplied separately
+// TODO this should fail if the change hash is empty
 func (tc *TargetCache) CachePath(target model.Target) string {
 	return fmt.Sprintf(
 		"%s/%s_cache_%s",
@@ -164,4 +169,19 @@ func (tc *TargetCache) WriteLocalCacheExistsFile(ctx context.Context, target mod
 
 	// Default to just writing to whatever cache we have
 	return tc.backend.Set(ctx, tc.CachePath(target), existsFileKey, bytes.NewReader([]byte{}))
+}
+
+// Taint marks a target as tainted, forcing it to execute regardless of cache status
+func (tc *TargetCache) Taint(ctx context.Context, target model.Target) error {
+	return tc.backend.Set(ctx, tc.CachePath(target), taintedFileKey, bytes.NewReader([]byte{}))
+}
+
+// IsTainted checks if a target is tainted
+func (tc *TargetCache) IsTainted(ctx context.Context, target model.Target) (bool, error) {
+	return tc.backend.Exists(ctx, tc.CachePath(target), taintedFileKey)
+}
+
+// RemoveTaint removes the taint from a target
+func (tc *TargetCache) RemoveTaint(ctx context.Context, target model.Target) error {
+	return tc.backend.Delete(ctx, tc.CachePath(target), taintedFileKey)
 }

@@ -10,7 +10,7 @@ var expunge bool
 
 var CleanCmd = &cobra.Command{
 	Use:   "clean",
-	Short: "Removes build outputs and clears the cache",
+	Short: "Removes build outputs and clears the cache.",
 	Long:  `Removes build outputs and clears the cache.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := setupCommand()

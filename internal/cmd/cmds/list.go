@@ -13,9 +13,10 @@ var listOptions struct {
 }
 
 var ListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "Lists targets by pattern.",
-	Args:  cobra.ArbitraryArgs, // Optional argument for target pattern
+	Use:     "list",
+	Aliases: []string{"ls"},
+	Short:   "Lists targets by pattern.",
+	Args:    cobra.ArbitraryArgs, // Optional argument for target pattern
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := setupCommand()
 
