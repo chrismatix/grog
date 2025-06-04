@@ -3,6 +3,7 @@ package cmds
 import (
 	"fmt"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"grog/internal/caching/backends"
 	"grog/internal/config"
 	"os"
@@ -30,6 +31,7 @@ var InfoCmd = &cobra.Command{
 		fmt.Fprintf(writer, "Version:\t%s\n", version)
 		fmt.Fprintf(writer, "Platform:\t%s\n", platform)
 		fmt.Fprintf(writer, "Workspace:\t%s\n", config.Global.WorkspaceRoot)
+		fmt.Fprintf(writer, "Config:\t%s\n", viper.ConfigFileUsed())
 		fmt.Fprintf(writer, "Grog root:\t%s\n", config.Global.Root)
 
 		workspaceCacheSizeBytes, err := fsCache.GetWorkspaceCacheSizeBytes()

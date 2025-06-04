@@ -1,7 +1,7 @@
 # TODOs
 
 
-- [ ] Implement enable_cache
+- [ ] Let bubbletea own all the input so that we can disable enter etc.
 - [x] Figure out a way to only load docker images when needed
   - https://bazel.build/reference/command-line-reference#common_options-flag--remote_download_all
   - This but instead only load outputs when their **direct** dependants changed

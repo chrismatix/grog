@@ -7,6 +7,7 @@ cases:
 
   - name: load_minimal_outputs_build_all
     grog_args:
+      - --load-outputs=all
       - build
 
   # Clear all outputs so that we can verify that they are not loaded
@@ -15,7 +16,7 @@ cases:
 
   - name: load_minimal_outputs_rebuild_all
     grog_args:
-      - --load-outputs=minimal
+    # load_outputs=minimal is set in the grog.toml
       - build
 
   - name: assert_outputs_were_not_loaded
@@ -30,7 +31,6 @@ cases:
 
   - name: load_minimal_outputs_rebuild_tainted
     grog_args:
-      - --load-outputs=minimal
       - build
 
   - name: assert_only_necessary_outputs_were_loaded
