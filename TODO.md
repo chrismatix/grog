@@ -7,6 +7,7 @@
   - This but instead only load outputs when their **direct** dependants changed
 - [x] Make sure that sigterm always kills embedded commands after a grace period
   - It didn't work when running something like `npm run dev` inside the command
+- [ ] get coverage above 90%
 - [ ] Add shell completions for commands that run targets
 - [ ] Add golangci-lint
 - [ ] Add s3 caching Option

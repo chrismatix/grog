@@ -1,0 +1,13 @@
+name: enable_cache_flag
+repo: simple_pkl
+cases:
+  - name: enable_cache_first_build
+    grog_args:
+      - build
+    env_vars:
+      - "GROG_ENABLE_CACHE=0"
+
+  - name: enable_cache_second_build
+    grog_args:
+      - --enable-cache=false
+      - build

@@ -20,6 +20,7 @@ type Registry struct {
 	targetCache  *caching.TargetCache
 	pool         pond.Pool
 	handlerMutex sync.RWMutex
+	enableCache  bool
 
 	// Features like load_outputs=minimal may load outputs concurrently
 	// In this case we want to make sure that that only happens once per target
@@ -29,11 +30,13 @@ type Registry struct {
 // NewRegistry creates a new registry with default handlers
 func NewRegistry(
 	targetCache *caching.TargetCache,
+	enableCache bool,
 ) *Registry {
 	r := &Registry{
 		handlers:       make(map[string]handlers.Handler),
 		targetCache:    targetCache,
 		targetMutexMap: maps.NewMutexMap(),
+		enableCache:    enableCache,
 		pool: pond.NewPool(
 			runtime.NumCPU() * 2,
 		),
@@ -77,6 +80,9 @@ func (r *Registry) mustGetHandler(outputType string) handlers.Handler {
 }
 
 func (r *Registry) HasCacheHit(ctx context.Context, target *model.Target) (bool, error) {
+	if !r.enableCache {
+		return false, nil
+	}
 	r.targetMutexMap.Lock(target.Label.String())
 	defer r.targetMutexMap.Unlock(target.Label.String())
 	// check for the default file system key for checking if the inputs changed
@@ -116,6 +122,10 @@ func (r *Registry) HasCacheHit(ctx context.Context, target *model.Target) (bool,
 }
 
 func (r *Registry) WriteOutputs(ctx context.Context, target *model.Target) error {
+	if !r.enableCache {
+		return nil
+	}
+
 	r.targetMutexMap.Lock(target.Label.String())
 	defer r.targetMutexMap.Unlock(target.Label.String())
 	if err := r.targetCache.WriteCacheExistsFile(ctx, *target); err != nil {
@@ -147,6 +157,9 @@ func (r *Registry) WriteOutputs(ctx context.Context, target *model.Target) error
 
 // LoadOutputs loads the outputs for a target once using target.OutputsLoaded
 func (r *Registry) LoadOutputs(ctx context.Context, target *model.Target) error {
+	if !r.enableCache {
+		return nil
+	}
 	r.targetMutexMap.Lock(target.Label.String())
 	defer r.targetMutexMap.Unlock(target.Label.String())
 

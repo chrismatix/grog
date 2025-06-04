@@ -36,6 +36,7 @@ type Executor struct {
 	graph           *dag.DirectedTargetGraph
 	failFast        bool
 	streamLogs      bool
+	enableCache     bool
 	loadOutputsMode config.LoadOutputsMode
 	targetHasher    *hashing.TargetHasher
 }
@@ -187,6 +188,7 @@ func (e *Executor) getTaskFunc(
 		// depsCached is also true when there are no deps
 		if depsCached && hasCacheHit && !isTainted {
 			if e.loadOutputsMode == config.LoadOutputsMinimal {
+				update(fmt.Sprintf("%s: skipped loading outputs because load_outputs=minimal.", target.Label))
 				logger.Debugf("%s: skipped loading outputs because load_outputs=minimal", target.Label)
 				return dag.CacheHit, nil
 			}

@@ -124,7 +124,7 @@ func runBuild(
 		logger.Fatalf("could not instantiate cache: %v", err)
 	}
 	targetCache := caching.NewTargetCache(cache)
-	registry := output.NewRegistry(targetCache)
+	registry := output.NewRegistry(targetCache, config.Global.EnableCache)
 
 	executor := execution.NewExecutor(targetCache, registry, graph, failFast, streamLogs, loadOutputsMode)
 	completionMap, executionErr := executor.Execute(ctx)
