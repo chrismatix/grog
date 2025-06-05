@@ -29,8 +29,7 @@ type TaskStateMsg struct {
 func StartTaskUI(ctx context.Context) (*tea.Program, chan tea.Msg) {
 	msgCh := make(chan tea.Msg, 100)
 
-	// Disable input since we don't need it and also to keep our signal (sigterm) handler working
-	opts := []tea.ProgramOption{tea.WithInput(nil), tea.WithoutSignalHandler()}
+	var opts []tea.ProgramOption
 	if !UseTea() {
 		// If we're in daemon mode don't render the TUI
 		opts = append(opts, tea.WithoutRenderer())
@@ -112,6 +111,12 @@ func tickEvery() tea.Cmd {
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch castMsg := msg.(type) {
+	case tea.KeyMsg:
+		switch castMsg.String() {
+		// React to ctrl+c
+		case "ctrl+c":
+			return m, tea.Quit
+		}
 	case HeaderMsg:
 		m.header = string(castMsg)
 	case TaskStateMsg:
