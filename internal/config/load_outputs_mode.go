@@ -12,15 +12,6 @@ const (
 	LoadOutputsMinimal
 )
 
-func (m LoadOutputsMode) String() string {
-	switch m {
-	case LoadOutputsAll:
-		return "all"
-	default:
-		return "minimal"
-	}
-}
-
 // ParseLoadOutputsMode converts a string to a LoadOutputsMode
 // Returns an error if the string is not a valid mode
 func ParseLoadOutputsMode(s string) (LoadOutputsMode, error) {

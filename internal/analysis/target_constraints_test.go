@@ -3,7 +3,6 @@ package analysis
 import (
 	"github.com/stretchr/testify/assert"
 	"grog/internal/config"
-	"grog/internal/console"
 	"grog/internal/output"
 	"os"
 	"testing"
@@ -168,7 +167,7 @@ func TestCheckPathConstraints(t *testing.T) {
 			// Check returned errors count
 			errorCount := len(errs)
 			if errorCount != tt.expectErrorCount {
-				t.Errorf("expected %d errors, got %d %s", tt.expectErrorCount, errorCount, console.FormatErrors(errs))
+				t.Errorf("expected %d errors, got %d %s", tt.expectErrorCount, errorCount, errs)
 			}
 
 			// Cleanup

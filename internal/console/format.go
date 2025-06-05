@@ -54,11 +54,3 @@ func getMessagePrefix(level zapcore.Level) string {
 
 	return levelText
 }
-
-func FormatErrors(errs []error) string {
-	var errStr string
-	for _, err := range errs {
-		errStr += err.Error() + "\n"
-	}
-	return errStr
-}

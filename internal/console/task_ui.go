@@ -32,7 +32,7 @@ func StartTaskUI(ctx context.Context) (*tea.Program, chan tea.Msg) {
 	var opts []tea.ProgramOption
 	if !UseTea() {
 		// If we're in daemon mode don't render the TUI
-		opts = append(opts, tea.WithoutRenderer())
+		opts = append(opts, tea.WithInput(nil), tea.WithoutRenderer())
 	}
 
 	// Start the Bubbletea Program.
