@@ -1,22 +1,18 @@
 ---
-title: "grog check"
+title: "grog taint"
 ---
-## grog check
+## grog taint
 
-Loads the build graph and runs basic consistency checks.
-
-### Synopsis
-
-Loads the the build graph and performs the same consistency checks as 'grog build' without actually building anything.
+Taints targets by pattern to force execution regardless of cache status.
 
 ```
-grog check [flags]
+grog taint [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for check
+  -h, --help   help for taint
 ```
 
 ### Options inherited from parent commands

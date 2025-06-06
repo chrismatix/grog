@@ -120,7 +120,7 @@ var ChangesCmd = &cobra.Command{
 		if err != nil {
 			logger.Fatalf(err.Error())
 		}
-		selector := selection.New(nil, config.Global.Tags, config.Global.Tags, targetTypeFilter)
+		selector := selection.New(nil, config.Global.Tags, config.Global.ExcludeTags, targetTypeFilter)
 
 		model.PrintSortedLabels(selector.FilterTargets(deduplicatedTargets))
 	},

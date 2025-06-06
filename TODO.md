@@ -1,6 +1,8 @@
 # TODOs
 
 
+- [ ] Add `mermaid` as an output format for graphs
+  - using https://github.com/TyphonHill/go-mermaid
 - [ ] get coverage above 90%
 - [ ] Add shell completions for commands that run targets
 - [ ] Add golangci-lint
