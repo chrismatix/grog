@@ -118,6 +118,12 @@ func (r *Registry) HasCacheHit(ctx context.Context, target *model.Target) (bool,
 		tasks = append(tasks, task)
 	}
 
+	for _, t := range tasks {
+		if err := t.Wait(); err != nil {
+			return false, err
+		}
+	}
+
 	return !foundMiss.Load(), nil
 }
 
