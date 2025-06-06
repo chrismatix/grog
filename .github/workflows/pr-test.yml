@@ -1,0 +1,61 @@
+name: PR Test
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    # Add "id-token" for the google authentication
+    permissions:
+      contents: "read"
+      id-token: "write"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: "0"
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.24
+
+      - name: Authenticate with GCloud
+        id: "auth"
+        uses: "google-github-actions/auth@v2"
+        with:
+          project_id: grog-457510
+          workload_identity_provider: projects/546356038464/locations/global/workloadIdentityPools/grog-pool/providers/github
+          service_account: grog-ci@grog-457510.iam.gserviceaccount.com
+
+      - name: "Set up Cloud SDK"
+        uses: "google-github-actions/setup-gcloud@v2"
+
+      - name: "Use gcloud CLI"
+        run: gcloud info
+
+      - name: Configure Docker
+        id: "configure-docker"
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev
+
+      - name: Install dependencies
+        run: |
+          go mod tidy
+          go install gotest.tools/gotestsum@latest
+
+      - name: Install pkl
+        run: |
+          curl -L -o pkl-bin 'https://github.com/apple/pkl/releases/download/0.28.2/pkl-linux-amd64'
+          chmod +x pkl-bin
+          sudo mv pkl-bin /usr/local/bin/pkl
+
+          pkl --version
+
+      - name: Build and test
+        run: make test
