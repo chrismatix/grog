@@ -91,6 +91,7 @@ var RunCmd = &cobra.Command{
 		logger.Infof("Running %s -> %s with args %s", runTarget.Label, runTarget.BinOutput.Identifier, userCommandArgs)
 
 		runCommand := exec.Command(binOutputPath, userCommandArgs...)
+		runCommand.Env = execution.GetExtendedTargetEnv(ctx, runTarget)
 		runCommand.Stdout = os.Stdout
 		runCommand.Stderr = os.Stderr
 

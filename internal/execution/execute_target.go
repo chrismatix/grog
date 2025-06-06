@@ -10,7 +10,6 @@ import (
 	"grog/internal/console"
 	"grog/internal/model"
 	"io"
-	"os"
 	"os/exec"
 	"text/template"
 	"time"
@@ -72,20 +71,8 @@ func runTargetCommand(
 	cmd := exec.CommandContext(ctx, "sh", "-c", templatedCommand)
 	cmd.WaitDelay = 1 * time.Second // cancellation grace time
 
-	gitHash, err := config.GetGitHash()
-	if err != nil {
-		console.GetLogger(ctx).Debugf("failed to get git hash: %v", err)
-	}
-
 	// Attach env variables to the existing environment
-	cmd.Env = append(os.Environ(),
-		"GROG_TARGET="+target.Label.String(),
-		"GROG_OS="+config.Global.OS,
-		"GROG_ARCH="+config.Global.Arch,
-		"GROG_PLATFORM="+config.Global.GetPlatform(),
-		"GROG_PACKAGE="+target.Label.Package,
-		"GROG_GIT_HASH="+gitHash,
-	)
+	cmd.Env = GetExtendedTargetEnv(ctx, target)
 	cmd.Dir = executionPath
 
 	var buffer bytes.Buffer
@@ -104,6 +91,22 @@ func runTargetCommand(
 		return buffer.Bytes(), cmdErr
 	}
 	return buffer.Bytes(), nil
+}
+
+func GetExtendedTargetEnv(ctx context.Context, target *model.Target) []string {
+	gitHash, err := config.GetGitHash()
+	if err != nil {
+		console.GetLogger(ctx).Debugf("failed to get git hash: %v", err)
+	}
+
+	return []string{
+		"GROG_TARGET=" + target.Label.String(),
+		"GROG_OS=" + config.Global.OS,
+		"GROG_ARCH=" + config.Global.Arch,
+		"GROG_PLATFORM=" + config.Global.GetPlatform(),
+		"GROG_PACKAGE=" + target.Label.Package,
+		"GROG_GIT_HASH=" + gitHash,
+	}
 }
 
 func getCommand(toolMap BinToolMap, command string) (string, error) {
