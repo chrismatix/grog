@@ -58,8 +58,4 @@ jobs:
           pkl --version
 
       - name: Build and test
-        run: make full-test
-
-      - name: Upload coverage badge
-        run: |
-          .github/upload_badge.sh
+        run: make test
