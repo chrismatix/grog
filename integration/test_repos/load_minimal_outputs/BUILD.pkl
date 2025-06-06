@@ -12,6 +12,9 @@ targets {
   new {
     name = "target_b"
     command = "cat output_1.txt > output_2.txt"
+    dependencies {
+      ":target_a"
+    }
     outputs {
       "output_2.txt"
     }
@@ -29,6 +32,20 @@ targets {
     }
     outputs {
       "output_3.txt"
+    }
+  }
+
+  new {
+    name = "runnable_target"
+    inputs {
+      "hello_world.sh"
+    }
+    bin_output = "hello_world.sh"
+    dependencies {
+      ":target_b"
+    }
+    tags {
+      "no-cache"
     }
   }
 }

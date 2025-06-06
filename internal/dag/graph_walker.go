@@ -82,9 +82,9 @@ Walk For each vertex generate an info payload containing
 
 Procedure:
 - Start all routines that do not have dependencies
-- For each routine there is a fanout onCompletionWorker that listens for its doneCh
+- For each routine there is a fanout onComplete function
 - When it receives a doneCh it marks the worker as completed
-- The onCompletionWorker then checks for each *dependant* if all their dependencies are satisfied
+- The onComplete then checks for each *dependant* if all their dependencies are satisfied
 - If that is the case we send a message to the dependant's readyCh to start them
 - In case of failure we cancel them and in case of failFast we cancel all outstanding targets
 

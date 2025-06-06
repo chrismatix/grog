@@ -12,6 +12,7 @@ type WorkspaceConfig struct {
 
 	// Execution
 	FailFast    bool   `mapstructure:"fail_fast"`
+	StreamLogs  bool   `mapstructure:"stream_logs"`
 	NumWorkers  int    `mapstructure:"num_workers"`
 	LoadOutputs string `mapstructure:"load_outputs"`
 
@@ -99,10 +100,10 @@ func (w WorkspaceConfig) Validate() error {
 	}
 
 	// Validate LoadOutputs
-	//_, err := ParseLoadOutputsMode(w.LoadOutputs)
-	//if err != nil {
-	//	return err
-	//}
+	_, err := ParseLoadOutputsMode(w.LoadOutputs)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

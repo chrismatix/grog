@@ -23,10 +23,6 @@ import (
 	"time"
 )
 
-var buildOptions struct {
-	streamLogs bool
-}
-
 var BuildCmd = &cobra.Command{
 	Use:   "build",
 	Short: "Loads the user configuration and executes build targets.",
@@ -53,20 +49,13 @@ var BuildCmd = &cobra.Command{
 			targetPatterns,
 			graph,
 			selection.NonTestOnly,
-			buildOptions.streamLogs,
+			config.Global.StreamLogs,
 			config.Global.GetLoadOutputsMode(),
 		)
 	},
 }
 
 func AddBuildCmd(rootCmd *cobra.Command) {
-	BuildCmd.Flags().BoolVarP(
-		&buildOptions.streamLogs,
-		"stream-logs",
-		"t",
-		false,
-		"Forward target build logs to stdout/-err")
-
 	rootCmd.AddCommand(BuildCmd)
 }
 

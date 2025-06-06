@@ -1,0 +1,6 @@
+INFO: 1 package loaded, 4 targets configured.
+WARN: target //:target_a has no inputs, dependencies or output checks causing it to run only once
+INFO: Selected 3 targets.
+INFO: Build completed successfully. 3 targets completed (3 cache hits).
+INFO: Loading outputs of direct dependencies due to load_outputs=minimal
+INFO: Running //:runnable_target -> hello_world.sh with args []

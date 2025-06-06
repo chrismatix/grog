@@ -8,10 +8,6 @@ import (
 	"grog/internal/selection"
 )
 
-var testOptions struct {
-	streamLogs bool
-}
-
 var TestCmd = &cobra.Command{
 	Use:   "test",
 	Short: "Loads the user configuration and executes test targets.",
@@ -38,19 +34,12 @@ var TestCmd = &cobra.Command{
 			targetPatterns,
 			graph,
 			selection.TestOnly,
-			testOptions.streamLogs,
+			config.Global.StreamLogs,
 			config.Global.GetLoadOutputsMode(),
 		)
 	},
 }
 
 func AddTestCmd(rootCmd *cobra.Command) {
-	TestCmd.Flags().BoolVarP(
-		&testOptions.streamLogs,
-		"stream-logs",
-		"t",
-		false,
-		"Forward target build logs to stdout/-err")
-
 	rootCmd.AddCommand(TestCmd)
 }

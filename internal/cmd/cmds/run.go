@@ -2,9 +2,13 @@ package cmds
 
 import (
 	"github.com/spf13/cobra"
+	"grog/internal/caching"
+	"grog/internal/caching/backends"
 	"grog/internal/config"
+	"grog/internal/execution"
 	"grog/internal/label"
 	"grog/internal/loading"
+	"grog/internal/output"
 	"grog/internal/selection"
 	"os"
 	"os/exec"
@@ -63,6 +67,23 @@ var RunCmd = &cobra.Command{
 			config.Global.GetLoadOutputsMode(),
 		)
 
+		// If we ran in load_outputs=mininal mode we might still need to load more outputs
+		if config.Global.GetLoadOutputsMode() == config.LoadOutputsMinimal {
+
+			cache, err := backends.GetCacheBackend(ctx, config.Global.Cache)
+			if err != nil {
+				logger.Fatalf("could not instantiate cache: %v", err)
+			}
+			targetCache := caching.NewTargetCache(cache)
+			registry := output.NewRegistry(targetCache, config.Global.EnableCache)
+
+			executor := execution.NewExecutor(targetCache, registry, graph, config.Global.FailFast, config.Global.StreamLogs, config.Global.GetLoadOutputsMode())
+			logger.Infof("Loading outputs of direct dependencies due to load_outputs=minimal")
+			err = executor.LoadDependencyOutputs(ctx, runTarget)
+			if err != nil {
+				logger.Fatalf("could not load dependencies: %v", err)
+			}
+		}
 		// Run the target output
 		binOutputPath := config.GetPathAbsoluteToWorkspaceRoot(
 			filepath.Join(runTarget.Label.Package, runTarget.BinOutput.Identifier),

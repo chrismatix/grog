@@ -11,7 +11,7 @@ cases:
       - build
 
   # Clear all outputs so that we can verify that they are not loaded
-  - name: clear_outputs
+  - name: load_minimal_outputs_clear_outputs
     setup_command: "rm *.txt"
 
   - name: load_minimal_outputs_rebuild_all
@@ -32,8 +32,22 @@ cases:
   - name: load_minimal_outputs_rebuild_tainted
     grog_args:
       - build
+      - //:target_c
 
-  - name: assert_only_necessary_outputs_were_loaded
+  - name: assert_only_necessary_build_outputs_were_loaded
     setup_command: |
       # Fails if output_1.txt does not exist but output_2.txt and output_3.txt exist
       [ ! -f output_1.txt ] && [ -f output_2.txt ] && [ -f output_3.txt ] || exit 1
+
+  - name: load_minimal_outputs_clear_outputs_2
+    setup_command: "rm *.txt"
+
+  - name: load_minimal_outputs_run_target
+    grog_args:
+      - run
+      - //:runnable_target
+
+  - name: assert_only_necessary_run_outputs_were_loaded
+    setup_command: |
+      # Fails if any output other than 2 (dependency of the runnable target) exists
+      [ ! -f output_1.txt ] && [ -f output_2.txt ] && [ ! -f output_3.txt ] || exit 1

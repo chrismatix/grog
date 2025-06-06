@@ -221,8 +221,11 @@ func (e *Executor) getTaskFunc(
 			logger.Debugf("running target %s due to output check error", target.Label)
 		}
 
-		if loadDepsErr := e.loadDependenciesIfNecessary(ctx, target); loadDepsErr != nil {
-			return dag.CacheMiss, loadDepsErr
+		if e.loadOutputsMode == config.LoadOutputsMinimal {
+			update(fmt.Sprintf("%s: loading dependency outputs (load_outputs=minimal).", target.Label))
+			if loadDepsErr := e.LoadDependencyOutputs(ctx, target); loadDepsErr != nil {
+				return dag.CacheMiss, loadDepsErr
+			}
 		}
 
 		if target.Command != "" {
@@ -294,11 +297,7 @@ func (e *Executor) loadCachedOutputs(ctx context.Context, target *model.Target) 
 	return nil
 }
 
-func (e *Executor) loadDependenciesIfNecessary(ctx context.Context, target *model.Target) error {
-	if e.loadOutputsMode != config.LoadOutputsMinimal {
-		return nil
-	}
-
+func (e *Executor) LoadDependencyOutputs(ctx context.Context, target *model.Target) error {
 	console.GetLogger(ctx).Debugf(
 		"loading dependency outputs for target %s.",
 		target.Label,
