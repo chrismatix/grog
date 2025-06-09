@@ -69,10 +69,14 @@ func (p *makefileParser) parse() (PackageDTO, bool, error) {
 		if strings.HasPrefix(trimmed, "# @grog") {
 			targetsFound = true
 
+			// Record the line number where the annotation starts in case of an error.
+			annotationStartLine := lineCount
+
 			// Collect the subsequent comment lines.
 			var annotationLines []string
 			var annotationLineNumbers []int
 
+			foundTarget := false
 			for p.scanner.Scan() {
 				lineCount++
 				nextLine := p.scanner.Text()
@@ -90,9 +94,14 @@ func (p *makefileParser) parse() (PackageDTO, bool, error) {
 					if err := p.handleTarget(annotationLines, annotationLineNumbers, nextLine); err != nil {
 						return p.pkg, targetsFound, err
 					}
+					foundTarget = true
 					// Break out of the loop.
 					break
 				}
+			}
+
+			if !foundTarget {
+				return p.pkg, targetsFound, fmt.Errorf("annotation starting at line %d is not followed by a target", annotationStartLine)
 			}
 		}
 	}
