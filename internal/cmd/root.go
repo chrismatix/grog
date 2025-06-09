@@ -143,6 +143,7 @@ func initConfig() error {
 	viper.SetDefault("os", runtime.GOOS)
 	viper.SetDefault("arch", runtime.GOARCH)
 	viper.SetDefault("load_outputs", "all")
+	viper.SetDefault("cache.gcs.shared_cache", true)
 
 	names := []string{"grog"}
 	if os.Getenv("CI") == "1" {

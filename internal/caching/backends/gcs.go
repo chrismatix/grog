@@ -9,6 +9,7 @@ import (
 	"grog/internal/config"
 	"grog/internal/console"
 	"io"
+	"path/filepath"
 	"strings"
 )
 
@@ -46,7 +47,15 @@ func NewGCSCache(
 	}
 
 	workspaceDir := config.Global.WorkspaceRoot
-	workspacePrefix := strings.Trim(config.GetWorkspaceCachePrefix(workspaceDir), "/")
+	var workspacePrefix string
+
+	if cacheConfig.SharedCache {
+		// If shared cache is enabled, use only the directory name
+		workspacePrefix = filepath.Base(workspaceDir)
+	} else {
+		// If shared cache is disabled, use the full path hash
+		workspacePrefix = strings.Trim(config.GetWorkspaceCachePrefix(workspaceDir), "/")
+	}
 
 	logger := console.GetLogger(ctx)
 	logger.Debugf("Instantiated GCS cache at bucket %s with prefix %s and workspace dir %s",

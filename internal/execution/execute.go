@@ -232,6 +232,7 @@ func (e *Executor) getTaskFunc(
 			update(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis()))
 			logger.Debugf("running target %s: %s", target.Label, target.CommandEllipsis())
 			err = executeTarget(ctx, target, binToolPaths, e.streamLogs)
+			logger.Debugf("target execution returned error %s: %s", target.Label, err)
 		} else {
 			logger.Debugf("skipped target %s due to no command", target.Label)
 		}

@@ -30,7 +30,10 @@ backend = "gcs"
 bucket = "<bucket-name>"
 prefix = "<prefix-for-cache-files>" # optional default: '/'
 credentials_file = "<path-to-google-credentials-json>" # optional
+shared_cache = true # optional default: true
 ```
+
+The `shared_cache` option controls whether the cache is shared between different hosts. When enabled (default), the cache uses only the directory name of your workspace for cache isolation, allowing different machines with the same repository name to share cache entries. When disabled, the cache uses a hash of the full workspace path, which isolates caches between different machines even if they have the same repository name.
 
 import { Aside } from "@astrojs/starlight/components";
 

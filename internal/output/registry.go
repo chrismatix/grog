@@ -158,6 +158,8 @@ func (r *Registry) WriteOutputs(ctx context.Context, target *model.Target) error
 			return err
 		}
 	}
+
+	target.OutputsLoaded = true
 	return nil
 }
 
