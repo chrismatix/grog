@@ -4,6 +4,7 @@ targets:
     command: $(bin //scripts:build_pex)
     dependencies:
       - //scripts:build_pex
+      - //lib/format
     inputs:
       - main.py
       - "cli/**/*.py"

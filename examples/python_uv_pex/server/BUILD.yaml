@@ -4,6 +4,7 @@ targets:
     command: $(bin //scripts:build_pex)
     dependencies:
       - //scripts:build_pex
+      - //lib/format
     inputs:
       - main.py
       - server/**/*.py
@@ -18,6 +19,8 @@ targets:
 
   - name: test
     command: uv run pytest
+    dependencies:
+      - //lib/format
     inputs:
       - server/**/*.py
       - tests/**/*.py

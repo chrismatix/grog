@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/sergi/go-diff/diffmatchpatch"
 	"gopkg.in/yaml.v3"
 	"os"
 	"os/exec"
@@ -170,7 +171,9 @@ func TestCliArgs(t *testing.T) {
 					}
 
 					if !reflect.DeepEqual(actual, expected) {
-						t.Fatalf("actual:\n%s\nexpected:\n%s", actual, expected)
+						dmp := diffmatchpatch.New()
+						diffs := dmp.DiffMain(actual, expected, false)
+						t.Fatalf("outputs do not match. Diff:\n%s\nactual:\n%s\nexpected:\n%s", dmp.DiffPrettyText(diffs), actual, expected)
 					}
 				})
 			}

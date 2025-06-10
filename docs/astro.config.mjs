@@ -3,10 +3,14 @@ import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import starlightThemeRapide from "starlight-theme-rapide";
 import * as fs from "node:fs";
+import mermaid from 'astro-mermaid';
 
 // https://astro.build/config
 export default defineConfig({
   integrations: [
+    mermaid({
+      theme: "base"
+    }),
     starlight({
       title: "Grog Docs",
       plugins: [starlightThemeRapide()],

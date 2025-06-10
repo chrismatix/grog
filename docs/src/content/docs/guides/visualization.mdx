@@ -1,0 +1,185 @@
+---
+title: Visualization
+description: Visualize your build graph and dependencies with the `grog graph` command.
+---
+
+Visualizing your build graph can be a great way of documenting your project's interdependencies or to trace down a specific build issue.
+Grog provides a `grog graph` command to visualize your build graph.
+Below we will walk through the three different output formats that are supported:
+
+- [Tree](#tree) (default)
+- [Mermaid](#mermaid)
+- [JSON](#json)
+
+All examples will be based on the Python [example repository](https://github.com/chrismatix/grog/tree/main/examples/python_uv_pex) which contains a library that is shared by a server and a cli target.
+
+## Mermaid
+
+Running `grog graph -o mermaid` will generate a mermaid graph like this one:
+
+```mermaid
+---
+title: python_uv_pex dependency graph
+config:
+theme: default
+maxTextSize: 50000
+maxEdges: 500
+fontSize: 16
+---
+flowchart BT
+0@{ shape: rect, label: "//cli:image"}
+style 0 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+1@{ shape: rect, label: "//cli:pex"}
+style 1 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+2@{ shape: rect, label: "//lib/format:format"}
+style 2 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+3@{ shape: rect, label: "//lib/format:test"}
+style 3 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+4@{ shape: rect, label: "//scripts:build_pex"}
+style 4 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+5@{ shape: rect, label: "//server:image"}
+style 5 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+6@{ shape: rect, label: "//server:pex"}
+style 6 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+7@{ shape: rect, label: "//server:test"}
+style 7 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+1 --> 0
+2 --> 1
+2 --> 6
+2 --> 7
+4 --> 1
+4 --> 6
+6 --> 5
+
+
+```
+
+Each node represents a Grog target and each edge represents a dependency.
+
+We can isolate a part of the graph by passing a target pattern to the graph command:
+
+```shell
+grog graph -o mermaid //server/...
+```
+
+This will return the subgraph containing all the targets in the `server` package only:
+
+```mermaid
+---
+title: python_uv_pex dependency graph
+config:
+    theme: default
+    maxTextSize: 50000
+    maxEdges: 500
+    fontSize: 16
+---
+flowchart BT
+    0@{ shape: rect, label: "//server:image"}
+    style 0 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+    1@{ shape: rect, label: "//server:pex"}
+    style 1 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+    2@{ shape: rect, label: "//server:test"}
+    style 2 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+    1 --> 0
+```
+
+This is useful for isolating the dependencies of a particular part of your repository.
+If you also want to see the dependencies of the targets in the subgraph, you can pass the `--transitive` flag:
+
+```shell
+grog graph -t -o mermaid //server/...
+```
+
+```mermaid
+---
+title: python_uv_pex dependency graph
+config:
+    theme: default
+    maxTextSize: 50000
+    maxEdges: 500
+    fontSize: 16
+---
+flowchart BT
+    0@{ shape: rect, label: "//lib/format:format"}
+style 0 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+1@{ shape: rect, label: "//scripts:build_pex"}
+style 1 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+2@{ shape: rect, label: "//server:image"}
+style 2 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+3@{ shape: rect, label: "//server:pex"}
+style 3 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+4@{ shape: rect, label: "//server:test"}
+style 4 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+0 --> 3
+0 --> 4
+1 --> 3
+3 --> 2
+```
+
+Lastly, for the mermaid outputs only you can also add the file inputs as nodes to the graph:
+
+```shell
+grog graph --mermaid-inputs-as-nodes -o mermaid //server/...
+```
+
+```mermaid
+---
+title: python_uv_pex dependency graph
+config:
+    theme: default
+    maxTextSize: 50000
+    maxEdges: 500
+    fontSize: 16
+---
+flowchart BT
+    0@{ shape: rect, label: "//server:image"}
+style 0 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+1@{ shape: rect, label: "//server:pex"}
+style 1 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+2@{ shape: rect, label: "main.py"}
+style 2 fill:#FFF8E1,stroke:#FB8C00,stroke-width:2,stroke-dasharray:6 3
+3@{ shape: rect, label: "server/**/*.py"}
+style 3 fill:#FFF8E1,stroke:#FB8C00,stroke-width:2,stroke-dasharray:6 3
+4@{ shape: rect, label: "//server:test"}
+style 4 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+5@{ shape: rect, label: "server/**/*.py"}
+style 5 fill:#FFF8E1,stroke:#FB8C00,stroke-width:2,stroke-dasharray:6 3
+6@{ shape: rect, label: "tests/**/*.py"}
+style 6 fill:#FFF8E1,stroke:#FB8C00,stroke-width:2,stroke-dasharray:6 3
+2 -.-> 1
+3 -.-> 1
+5 -.-> 4
+6 -.-> 4
+1 --> 0
+
+```
+
+## Tree (default)
+
+When specifying `-o tree` as an output format, the graph will be printed as an ASCII tree.
+The output also supports the `--transitive` flag and looks like so:
+
+```shell
+grog graph -o tree
+```
+
+```
+//cli:image
+╰── //cli:pex
+    ├── //lib/format:format
+    ╰── //scripts:build_pex
+//lib/format:test
+//server:image
+╰── //server:pex
+    ├── //lib/format:format
+    ╰── //scripts:build_pex
+//server:test
+╰── //lib/format:format
+```
+
+The roots of the tree are the targets that have no dependencies.
+As you can see, this means that unlike with the mermaid output dependencies can appear more than once in the output.
+
+## JSON
+
+Supplying `-o json` as an output format will print a single-line JSON that contains the target list in a field `vertices` and the edges in a field `edges`.

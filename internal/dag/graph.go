@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"grog/internal/label"
 	"grog/internal/model"
+	"sort"
 )
 
 // DirectedTargetGraph represents a directed graph of build targets.
@@ -223,6 +224,7 @@ func (g *DirectedTargetGraph) MarshalJSON() ([]byte, error) {
 		for _, to := range toList {
 			toLabels = append(toLabels, to.Label.String())
 		}
+		sort.Strings(toLabels)
 		graphJSON.Edges[fromLabel.String()] = toLabels
 	}
 
