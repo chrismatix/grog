@@ -1,0 +1,64 @@
+name: graph visualization
+repo: graph
+cases:
+  # Tree
+  ###
+  - name: graph_default_tree
+    grog_args:
+      - graph
+
+  - name: graph_tree_selection
+    grog_args:
+      - graph
+      - -o
+      - tree
+      - //package_2/...
+
+  - name: graph_tree_selection_transitive
+    grog_args:
+      - graph
+      - -o
+      - tree
+      - -t
+      - //package_2/...
+
+  # Json
+  ###
+  - name: graph_json
+    grog_args:
+      - graph
+      - -o
+      - json
+
+  # Mermaid
+  ###
+  - name: graph_mermaid_all
+    grog_args:
+      - graph
+      - -o
+      - mermaid
+
+  - name: graph_mermaid_selection
+    grog_args:
+      - graph
+      - -o
+      - mermaid
+      - -t
+      - //package_1/...
+
+  - name: graph_mermaid_selection_transitive
+    grog_args:
+      - graph
+      - -o
+      - mermaid
+      - -t
+      - //package_2
+
+  - name: graph_mermaid_selection_transitive_input_nodes
+    grog_args:
+      - graph
+      - -o
+      - mermaid
+      - -t
+      - -m
+      - //package_2

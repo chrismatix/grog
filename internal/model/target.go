@@ -20,6 +20,8 @@ type Target struct {
 	Tags          []string            `json:"tags,omitempty"`
 	OutputChecks  []OutputCheck       `json:"output_checks,omitempty"`
 
+	// UnresolvedInputs are the inputs as specified by the user (no glob resolving)
+	UnresolvedInputs []string `json:"-"`
 	// BinOutput is always a path to a binary file
 	BinOutput Output `json:"bin_output,omitempty"`
 	// Whether this target is selected for execution.

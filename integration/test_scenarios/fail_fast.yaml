@@ -1,10 +1,6 @@
 name: fail fast tests
 repo: fail_fast
 cases:
-  - name: fail_fast_graph
-    grog_args:
-      - graph
-
   # This should error immediately and not run target 3
   - name: fail_fast
     grog_args:

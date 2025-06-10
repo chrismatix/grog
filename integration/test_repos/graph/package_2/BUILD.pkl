@@ -1,0 +1,28 @@
+amends ".../pkl/package.pkl"
+
+targets {
+  new {
+    name = "package_2"
+    command = "echo 'hello git changes'"
+    dependencies {
+      "//package_1:foo"
+    }
+  }
+
+  new {
+    name = "package_3"
+    command = "exit 0"
+    dependencies {
+      "//package_1:foo"
+      ":package_2"
+    }
+  }
+
+  new {
+    name = "package_4"
+    command = "exit 0"
+    inputs {
+      "*.txt"
+    }
+  }
+}

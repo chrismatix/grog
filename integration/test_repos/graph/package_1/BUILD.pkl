@@ -1,0 +1,44 @@
+amends ".../pkl/package.pkl"
+
+targets {
+  new {
+    name = "foo"
+    command = "echo 'hello foo'"
+    inputs {
+      "source.txt"
+    }
+    dependencies {
+      ":bar"
+    }
+    tags {
+      "test-tag"
+    }
+  }
+
+  new {
+    name = "foo_test"
+    command = "echo 'hello foo_test'"
+    dependencies {
+      ":foo"
+    }
+    platform {
+      os {
+        "linux"
+      }
+    }
+  }
+
+  new {
+    name = "bar"
+    command = "echo 'hello foo'"
+    inputs {
+      "*.txt"
+    }
+
+    platform {
+      arch {
+        "amd64"
+      }
+    }
+  }
+}

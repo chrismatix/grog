@@ -1,0 +1,27 @@
+---
+title: graph dependency graph
+config:
+    theme: default
+    maxTextSize: 50000
+    maxEdges: 500
+    fontSize: 16
+---
+flowchart BT
+    0@{ shape: rect, label: "//package_1:bar"}
+    style 0 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+    1@{ shape: rect, label: "//package_1:foo"}
+    style 1 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+    2@{ shape: rect, label: "//package_1:foo_test"}
+    style 2 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+    3@{ shape: rect, label: "//package_2:package_2"}
+    style 3 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+    4@{ shape: rect, label: "//package_2:package_3"}
+    style 4 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+    5@{ shape: rect, label: "//package_2:package_4"}
+    style 5 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+    0 --> 1
+    1 --> 2
+    1 --> 3
+    1 --> 4
+    3 --> 4
+

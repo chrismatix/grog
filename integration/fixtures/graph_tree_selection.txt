@@ -1,0 +1,3 @@
+//package_2:package_3
+╰── //package_2:package_2
+//package_2:package_4

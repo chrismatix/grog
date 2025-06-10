@@ -51,6 +51,10 @@ func (g *DirectedTargetGraph) GetVertices() model.TargetMap {
 	return g.vertices
 }
 
+func (g *DirectedTargetGraph) GetOutEdges() map[label.TargetLabel][]*model.Target {
+	return g.outEdges
+}
+
 func (g *DirectedTargetGraph) GetSelectedVertices() []*model.Target {
 	// Filter selected vertices and return them
 	var selectedVertices []*model.Target
@@ -60,6 +64,32 @@ func (g *DirectedTargetGraph) GetSelectedVertices() []*model.Target {
 		}
 	}
 	return selectedVertices
+}
+
+// GetSelectedSubgraph returns a new graph containing only selected vertices and edges between them.
+// The returned graph preserves the edge relationships between selected vertices from the original graph.
+func (g *DirectedTargetGraph) GetSelectedSubgraph() *DirectedTargetGraph {
+	subgraph := NewDirectedGraph()
+
+	// Add all selected vertices
+	for _, vertex := range g.vertices {
+		if vertex.IsSelected {
+			subgraph.AddVertex(vertex)
+		}
+	}
+
+	// Add edges between selected vertices
+	for fromLabel, toList := range g.outEdges {
+		if g.vertices[fromLabel].IsSelected {
+			for _, to := range toList {
+				if to.IsSelected {
+					subgraph.AddEdge(g.vertices[fromLabel], to)
+				}
+			}
+		}
+	}
+
+	return subgraph
 }
 
 // AddVertex idempotently adds a new vertex to the graph.

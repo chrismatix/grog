@@ -1,0 +1,24 @@
+---
+title: graph dependency graph
+config:
+    theme: default
+    maxTextSize: 50000
+    maxEdges: 500
+    fontSize: 16
+---
+flowchart BT
+    0@{ shape: rect, label: "//package_1:bar"}
+    style 0 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+    1@{ shape: rect, label: "*.txt"}
+    style 1 fill:#FFF8E1,stroke:#FB8C00,stroke-width:2,stroke-dasharray:6 3
+    2@{ shape: rect, label: "//package_1:foo"}
+    style 2 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+    3@{ shape: rect, label: "source.txt"}
+    style 3 fill:#FFF8E1,stroke:#FB8C00,stroke-width:2,stroke-dasharray:6 3
+    4@{ shape: rect, label: "//package_2:package_2"}
+    style 4 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+    1 -.-> 0
+    3 -.-> 2
+    0 --> 2
+    2 --> 4
+
