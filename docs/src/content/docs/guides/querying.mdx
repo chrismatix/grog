@@ -79,6 +79,13 @@ grog list --target-type=all
 
 The `--target-type` flag is available for all query commands: `list`, `deps`, `rdeps`, and `changes`.
 
+### Platform Selection
+
+By default, all querying commands hide platforms that are marked as incompatible with the current platform.
+See [here](/guides/multi-platform-builds#platform-selectors) for the platform selection docs.
+
+To bypass platform selectors, pass the `--all-platforms`, (shorthand: `-a`) flag.
+
 ## grog list
 
 ```shell

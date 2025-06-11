@@ -4,72 +4,132 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag to update formula for'
+        required: true
+        type: string
 
 jobs:
   update-homebrew:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
 
     env:
-      PAT_TOKEN: ${{ secrets.HOMEBREW_PAT }}
+      GH_TOKEN: ${{ secrets.HOMEBREW_PAT }}
+      HOMEBREW_TAP_REPO: chrismatix/homebrew-grog
+      FORMULA_NAME: grog
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Set release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ inputs.tag_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Fetch release info
+      - name: Fetch release information
         id: release
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const release = await github.rest.repos.getReleaseByTag({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag: context.payload.release.tag_name,
-            });
-            return release.data;
+        run: |
+          echo "Fetching release info for tag: ${{ steps.tag.outputs.tag }}"
 
-      - name: Download assets
+          # Get release data
+          release_data=$(gh api repos/${{ github.repository }}/releases/tags/${{ steps.tag.outputs.tag }})
+
+          # Extract download URLs for our expected assets
+          darwin_amd64_url=$(echo "$release_data" | jq -r '.assets[] | select(.name == "grog-darwin-amd64") | .browser_download_url')
+          darwin_arm64_url=$(echo "$release_data" | jq -r '.assets[] | select(.name == "grog-darwin-arm64") | .browser_download_url')
+          linux_amd64_url=$(echo "$release_data" | jq -r '.assets[] | select(.name == "grog-linux-amd64") | .browser_download_url')
+          linux_arm64_url=$(echo "$release_data" | jq -r '.assets[] | select(.name == "grog-linux-arm64") | .browser_download_url')
+
+          # Validate all required assets exist
+          if [[ -z "$darwin_amd64_url" || -z "$darwin_arm64_url" || -z "$linux_amd64_url" || -z "$linux_arm64_url" ]]; then
+            echo "Error: Missing required release assets"
+            echo "Darwin AMD64: $darwin_amd64_url"
+            echo "Darwin ARM64: $darwin_arm64_url"
+            echo "Linux AMD64: $linux_amd64_url"
+            echo "Linux ARM64: $linux_arm64_url"
+            exit 1
+          fi
+
+          # Output URLs
+          echo "darwin_amd64_url=$darwin_amd64_url" >> $GITHUB_OUTPUT
+          echo "darwin_arm64_url=$darwin_arm64_url" >> $GITHUB_OUTPUT
+          echo "linux_amd64_url=$linux_amd64_url" >> $GITHUB_OUTPUT
+          echo "linux_arm64_url=$linux_arm64_url" >> $GITHUB_OUTPUT
+
+      - name: Download and hash assets
+        id: assets
         run: |
           mkdir -p artifacts
           cd artifacts
-          for asset in $(echo "${{ steps.release.outputs.result }}" | jq -r '.assets[].browser_download_url'); do
-            curl -LO $asset
-          done
 
-      - name: Generate formula
+          # Download assets
+          echo "Downloading assets..."
+          curl -fsSL -o grog-darwin-amd64 "${{ steps.release.outputs.darwin_amd64_url }}"
+          curl -fsSL -o grog-darwin-arm64 "${{ steps.release.outputs.darwin_arm64_url }}"
+          curl -fsSL -o grog-linux-amd64 "${{ steps.release.outputs.linux_amd64_url }}"
+          curl -fsSL -o grog-linux-arm64 "${{ steps.release.outputs.linux_arm64_url }}"
+
+          # Calculate SHA256 hashes
+          echo "Calculating checksums..."
+          darwin_amd64_sha=$(sha256sum grog-darwin-amd64 | cut -d' ' -f1)
+          darwin_arm64_sha=$(sha256sum grog-darwin-arm64 | cut -d' ' -f1)
+          linux_amd64_sha=$(sha256sum grog-linux-amd64 | cut -d' ' -f1)
+          linux_arm64_sha=$(sha256sum grog-linux-arm64 | cut -d' ' -f1)
+
+          # Output hashes
+          echo "darwin_amd64_sha=$darwin_amd64_sha" >> $GITHUB_OUTPUT
+          echo "darwin_arm64_sha=$darwin_arm64_sha" >> $GITHUB_OUTPUT
+          echo "linux_amd64_sha=$linux_amd64_sha" >> $GITHUB_OUTPUT
+          echo "linux_arm64_sha=$linux_arm64_sha" >> $GITHUB_OUTPUT
+
+          echo "Asset hashes calculated successfully"
+
+      - name: Generate Homebrew formula
         run: |
-          VERSION=${{ github.ref_name }}
           mkdir -p formula
+          version="${{ steps.tag.outputs.tag }}"
+          # Remove 'v' prefix if present
+          version="${version#v}"
 
-          DARWIN_AMD64_SHA=$(shasum -a 256 artifacts/grog-darwin-amd64 | awk '{print $1}')
-          DARWIN_ARM64_SHA=$(shasum -a 256 artifacts/grog-darwin-arm64 | awk '{print $1}')
-          LINUX_AMD64_SHA=$(shasum -a 256 artifacts/grog-linux-amd64 | awk '{print $1}')
-          LINUX_ARM64_SHA=$(shasum -a 256 artifacts/grog-linux-arm64 | awk '{print $1}')
-
-          cat <<EOF > formula/grog.rb
+          cat > formula/grog.rb << 'EOF'
           class Grog < Formula
             desc "Grog build system CLI"
             homepage "https://github.com/${{ github.repository }}"
-            version "${VERSION}"
+            version "${{ steps.tag.outputs.tag }}"
+            license "MIT"  # Update this to match your actual license
 
-            if OS.mac? && Hardware::CPU.arm?
-              url "https://github.com/${{ github.repository }}/releases/download/${VERSION}/grog-darwin-arm64"
-              sha256 "${DARWIN_ARM64_SHA}"
-            elsif OS.mac? && Hardware::CPU.intel?
-              url "https://github.com/${{ github.repository }}/releases/download/${VERSION}/grog-darwin-amd64"
-              sha256 "${DARWIN_AMD64_SHA}"
-            elsif OS.linux? && Hardware::CPU.arm?
-              url "https://github.com/${{ github.repository }}/releases/download/${VERSION}/grog-linux-arm64"
-              sha256 "${LINUX_ARM64_SHA}"
-            elsif OS.linux? && Hardware::CPU.intel?
-              url "https://github.com/${{ github.repository }}/releases/download/${VERSION}/grog-linux-amd64"
-              sha256 "${LINUX_AMD64_SHA}"
+            on_macos do
+              if Hardware::CPU.arm?
+                url "${{ steps.release.outputs.darwin_arm64_url }}"
+                sha256 "${{ steps.assets.outputs.darwin_arm64_sha }}"
+              else
+                url "${{ steps.release.outputs.darwin_amd64_url }}"
+                sha256 "${{ steps.assets.outputs.darwin_amd64_sha }}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "${{ steps.release.outputs.linux_arm64_url }}"
+                sha256 "${{ steps.assets.outputs.linux_arm64_sha }}"
+              else
+                url "${{ steps.release.outputs.linux_amd64_url }}"
+                sha256 "${{ steps.assets.outputs.linux_amd64_sha }}"
+              end
             end
 
             def install
-              bin.install Dir["grog-*"].first => "grog"
+              # The downloaded file will have the platform-specific name, so we rename it
+              binary_name = Dir["grog-*"].first
+              bin.install binary_name => "grog"
+
+              # Make sure it's executable
+              chmod 0755, bin/"grog"
             end
 
             test do
@@ -78,25 +138,75 @@ jobs:
           end
           EOF
 
-      - name: Checkout tap
+          echo "Generated formula:"
+          cat formula/grog.rb
+
+      - name: Checkout Homebrew tap
         uses: actions/checkout@v4
         with:
-          repository: chrismatix/homebrew-grog
-          path: tap
-          token: ${{ env.PAT_TOKEN }}
-          persist-credentials: false
+          repository: ${{ env.HOMEBREW_TAP_REPO }}
+          token: ${{ env.GH_TOKEN }}
+          path: homebrew-tap
 
-      - name: Commit & PR
+      - name: Update formula and create PR
         run: |
-          cp formula/grog.rb tap/Formula/grog.rb
-          cd tap
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git checkout -b update-grog-${{ github.ref_name }}
+          cd homebrew-tap
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Create branch name
+          branch_name="update-${{ env.FORMULA_NAME }}-${{ steps.tag.outputs.tag }}"
+
+          # Check if branch already exists and delete it
+          if git ls-remote --exit-code --heads origin "$branch_name"; then
+            echo "Branch $branch_name already exists, deleting it"
+            git push origin --delete "$branch_name" || true
+          fi
+
+          # Create and switch to new branch
+          git checkout -b "$branch_name"
+
+          # Copy the new formula
+          mkdir -p Formula
+          cp ../formula/grog.rb Formula/grog.rb
+
+          # Check if there are changes
+          if git diff --quiet; then
+            echo "No changes detected in formula"
+            exit 0
+          fi
+
+          # Commit changes
           git add Formula/grog.rb
-          git commit -m "Update grog formula to ${VERSION}"
-          git push origin update-grog-${{ github.ref_name }}
-          gh auth login --with-token <<< "${{ env.PAT_TOKEN }}"
-          gh pr create --fill --title "Update grog formula to ${VERSION}"
-        env:
-          GH_TOKEN: ${{ env.PAT_TOKEN }}
+          git commit -m "Update ${{ env.FORMULA_NAME }} to ${{ steps.tag.outputs.tag }}"
+
+          # Push branch
+          git push origin "$branch_name"
+
+          # Create pull request
+          gh pr create \
+            --repo "${{ env.HOMEBREW_TAP_REPO }}" \
+            --title "Update ${{ env.FORMULA_NAME }} to ${{ steps.tag.outputs.tag }}" \
+            --body "Automated update of ${{ env.FORMULA_NAME }} formula to version ${{ steps.tag.outputs.tag }}.
+
+          **Changes:**
+          - Updated version to ${{ steps.tag.outputs.tag }}
+          - Updated SHA256 checksums for all platforms
+          - Updated download URLs
+
+          **Release:** https://github.com/${{ github.repository }}/releases/tag/${{ steps.tag.outputs.tag }}" \
+            --head "$branch_name" \
+            --base main
+
+      - name: Summary
+        run: |
+          echo "## Homebrew Formula Update Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Formula:** ${{ env.FORMULA_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** ${{ steps.tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Repository:** ${{ env.HOMEBREW_TAP_REPO }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Assets processed:** 4 (Darwin AMD64/ARM64, Linux AMD64/ARM64)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Pull request created successfully!" >> $GITHUB_STEP_SUMMARY

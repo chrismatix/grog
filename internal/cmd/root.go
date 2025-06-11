@@ -76,6 +76,10 @@ func init() {
 	RootCmd.PersistentFlags().Bool("fail-fast", false, "Fail fast on first error")
 	err = viper.BindPFlag("fail_fast", RootCmd.PersistentFlags().Lookup("fail-fast"))
 
+	// all_platforms
+	RootCmd.PersistentFlags().BoolP("all-platforms", "a", false, "Select all platforms (bypasses platform selectors)")
+	err = viper.BindPFlag("all_platforms", RootCmd.PersistentFlags().Lookup("all-platforms"))
+
 	// stream_logs
 	RootCmd.PersistentFlags().Bool("stream-logs", false, "Forward all target build/test logs to stdout/-err")
 	err = viper.BindPFlag("stream_logs", RootCmd.PersistentFlags().Lookup("stream-logs"))

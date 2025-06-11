@@ -71,6 +71,11 @@ When you run `grog build`, Grog will:
 
 This allows you to define all platform variants in a single build file, but only build the ones appropriate for the current environment.
 
+### Skipping platform selectors
+
+There may be scenarios where you want to skip platform selectors.
+To do so, pass the `--all-platforms`, (shorthand: `-a`) flag to build and querying commands.
+
 ### Handling Dependencies with Platform Selectors
 
 When a target depends on a platform-specific target, Grog enforces platform compatibility:

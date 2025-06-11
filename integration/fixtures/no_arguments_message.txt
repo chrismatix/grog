@@ -20,6 +20,7 @@ Available Commands:
   version     Print the version info.
 
 Flags:
+  -a, --all-platforms         Select all platforms (bypasses platform selectors)
       --color string          Set color output (yes, no, or auto) (default "auto")
       --debug                 Enable debug logging
       --enable-cache          Enable cache (default true)

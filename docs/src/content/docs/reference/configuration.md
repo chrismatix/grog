@@ -17,6 +17,9 @@ fail_fast = true # Exit immediately when encountering an issue
 num_workers = 4
 load_outputs = "minimal"
 
+# Target Selection
+all_platforms = false
+
 # Logging Settings
 log_level = "info"
 
@@ -44,4 +47,5 @@ For instance, to set or override the `fail_fast` option set `GROG_FAIL_FAST=fals
 - **enable_cache**: Controls whether caching is enabled. Defaults to `true`.
 - **load_outputs**: Determines what outputs are loaded from the cache. Available options are:
   - `all` (default): Load all outputs from the cache.
-  - `minimal`: Only load outputs of a target if a **direct dependendant** needs to be re-built. This setting is useful to save bandwidth and disk space in CI settings.
+  - `minimal`: Only load outputs of a target if a **direct dependant** needs to be re-built. This setting is useful to save bandwidth and disk space in CI settings.
+- **all_platforms**: When set to `true` skips the platform selection step and builds all targets for all platforms ([read more](/guides/querying)).

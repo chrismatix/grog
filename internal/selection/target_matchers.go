@@ -7,6 +7,10 @@ import (
 )
 
 func targetMatchesPlatform(target *model.Target) bool {
+	if config.Global.AllPlatforms {
+		return true
+	}
+
 	if target.Platform == nil {
 		return true
 	}

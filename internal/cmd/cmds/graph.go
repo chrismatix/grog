@@ -57,6 +57,10 @@ var GraphCmd = &cobra.Command{
 			logger.Fatalf("could not build graph: %v", err)
 		}
 
+		// TODO make this explicitly configurable
+		// Graphing by default should ignore platform selectors as it is more about documentation
+		// and not execution.
+		config.Global.AllPlatforms = true
 		selector := selection.New(targetPatterns, config.Global.Tags, config.Global.ExcludeTags, selection.AllTargets)
 		selector.SelectTargets(graph)
 

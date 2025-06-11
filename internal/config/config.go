@@ -20,6 +20,9 @@ type WorkspaceConfig struct {
 	LogLevel      string `mapstructure:"log_level"`
 	LogOutputPath string `mapstructure:"log_output_path"`
 
+	// Matching
+	AllPlatforms bool `mapstructure:"all_platforms"`
+
 	// Caching
 	EnableCache bool        `mapstructure:"enable_cache"`
 	Cache       CacheConfig `mapstructure:"cache"`
