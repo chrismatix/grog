@@ -2,7 +2,6 @@ package backends
 
 import (
 	"context"
-	"fmt"
 	"grog/internal/config"
 	"io"
 )
@@ -49,7 +48,18 @@ func GetCacheBackend(
 		}
 		return NewRemoteWrapper(fs, gcsCache), nil
 	case config.S3CacheBackend:
-		return nil, fmt.Errorf("s3 cache backend is not implemented yet")
+		s3Cache, err := NewS3Cache(ctx, cacheConfig.S3)
+		if err != nil {
+			return nil, err
+		}
+		return NewRemoteWrapper(fs, s3Cache), nil
+
+	case config.AzureBlobCacheBackend:
+		azureCache, err := NewAzureBlobCache(ctx, cacheConfig.AzureBlob)
+		if err != nil {
+			return nil, err
+		}
+		return NewRemoteWrapper(fs, azureCache), nil
 
 	default:
 		return fs, nil

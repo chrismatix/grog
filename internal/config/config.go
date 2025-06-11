@@ -121,14 +121,16 @@ func (w WorkspaceConfig) GetLoadOutputsMode() LoadOutputsMode {
 type CacheBackend string
 
 const (
-	GCSCacheBackend CacheBackend = "gcs"
-	S3CacheBackend  CacheBackend = "s3"
+	GCSCacheBackend       CacheBackend = "gcs"
+	S3CacheBackend        CacheBackend = "s3"
+	AzureBlobCacheBackend CacheBackend = "azure"
 )
 
 type CacheConfig struct {
-	Backend CacheBackend   `mapstructure:"backend"`
-	GCS     GCSCacheConfig `mapstructure:"gcs"`
-	S3      S3CacheConfig  `mapstructure:"s3"`
+	Backend   CacheBackend         `mapstructure:"backend"`
+	GCS       GCSCacheConfig       `mapstructure:"gcs"`
+	S3        S3CacheConfig        `mapstructure:"s3"`
+	AzureBlob AzureBlobCacheConfig `mapstructure:"azure"`
 }
 
 type GCSCacheConfig struct {
@@ -142,6 +144,13 @@ type S3CacheConfig struct {
 	Bucket          string `mapstructure:"bucket"`
 	Prefix          string `mapstructure:"prefix"`
 	CredentialsFile string `mapstructure:"credentials_file"`
+}
+
+type AzureBlobCacheConfig struct {
+	AccountName     string `mapstructure:"account_name"`
+	ContainerName   string `mapstructure:"container_name"`
+	Prefix          string `mapstructure:"prefix"`
+	ConnectionString string `mapstructure:"connection_string"`
 }
 
 const (
