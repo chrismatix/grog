@@ -15,6 +15,10 @@ import (
 	"path/filepath"
 )
 
+var runOptions struct {
+	inPackage bool
+}
+
 var RunCmd = &cobra.Command{
 	Use:   "run",
 	Short: "Builds and runs a single target's binary output.",
@@ -88,15 +92,27 @@ var RunCmd = &cobra.Command{
 		binOutputPath := config.GetPathAbsoluteToWorkspaceRoot(
 			filepath.Join(runTarget.Label.Package, runTarget.BinOutput.Identifier),
 		)
-		logger.Infof("Running %s -> %s with args %s", runTarget.Label, runTarget.BinOutput.Identifier, userCommandArgs)
 
 		runCommand := exec.Command(binOutputPath, userCommandArgs...)
 		runCommand.Env = execution.GetExtendedTargetEnv(ctx, runTarget)
 		runCommand.Stdout = os.Stdout
 		runCommand.Stderr = os.Stderr
 
+		if runOptions.inPackage {
+			packagePath := config.GetPathAbsoluteToWorkspaceRoot(runTarget.Label.Package)
+			runCommand.Dir = packagePath
+			logger.Infof("Running %s -> %s with args %s in package directory", runTarget.Label, runTarget.BinOutput.Identifier, userCommandArgs)
+		} else {
+			logger.Infof("Running %s -> %s with args %s", runTarget.Label, runTarget.BinOutput.Identifier, userCommandArgs)
+		}
+
 		if err := runCommand.Run(); err != nil {
 			logger.Fatalf("failed to run binary: %v", err)
 		}
 	},
+}
+
+func AddRunCmd(cmd *cobra.Command) {
+	RunCmd.Flags().BoolVarP(&runOptions.inPackage, "in-package", "i", false, "Run the target in the package directory where it is defined.")
+	cmd.AddCommand(RunCmd)
 }

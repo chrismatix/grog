@@ -2,4 +2,4 @@ INFO: 2 packages loaded, 4 targets configured.
 WARN: target //pkg:foo has no inputs, dependencies or output checks causing it to run only once
 INFO: Selected 1 target.
 INFO: Build completed successfully. 1 target completed (1 cache hits).
-INFO: Running //:creates_bin_tool -> dist/bin with args [foo]
+INFO: Running //pkg:foo -> bin.sh with args [] in package directory

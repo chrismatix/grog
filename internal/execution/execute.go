@@ -193,6 +193,7 @@ func (e *Executor) getTaskFunc(
 				return dag.CacheHit, nil
 			}
 
+			// TODO in the case of skip cache this log statement is a bit misleading
 			update(fmt.Sprintf("%s: cache hit. loading outputs.", target.Label))
 			loadingErr := e.loadCachedOutputs(ctx, target)
 			if loadingErr != nil {

@@ -1,0 +1,13 @@
+targets:
+  # A bin target that only works when invoked from the current
+  # package directory
+  # TODO this script should fail when not run from this directory
+  - name: foo
+    command: |
+      mkdir -p dist
+
+      cat > bin.sh << 'EOF'
+      #!/bin/bash
+      exit 0
+      EOF
+    bin_output: bin.sh

@@ -106,12 +106,12 @@ func init() {
 	viper.SetDefault("profile", "")
 
 	// Register subcommands
-	RootCmd.AddCommand(cmds.RunCmd)
 	RootCmd.AddCommand(cmds.VersionCmd)
 	RootCmd.AddCommand(cmds.ListCmd)
 	RootCmd.AddCommand(cmds.InfoCmd)
 	RootCmd.AddCommand(cmds.CheckCmd)
 	RootCmd.AddCommand(cmds.TaintCmd)
+	cmds.AddRunCmd(RootCmd)
 	cmds.AddGraphCmd(RootCmd)
 	cmds.AddCleanCmd(RootCmd)
 	cmds.AddTestCmd(RootCmd)

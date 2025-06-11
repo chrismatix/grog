@@ -21,6 +21,12 @@ cases:
       - //:creates_bin_tool
       - foo
 
+  - name: run_command_in_package_works
+    grog_args:
+      - run
+      - --in-package
+      - //pkg:foo
+
   - name: run_command_works_rel_path
     grog_args:
       - run
