@@ -3,6 +3,10 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"github.com/docker/docker/api/types/image"
+	"io"
+
+	"github.com/docker/docker/client"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"grog/internal/caching"
 	"grog/internal/config"
@@ -60,35 +64,31 @@ func (d *DockerRegistryOutputHandler) Write(ctx context.Context, target model.Ta
 
 	logger.Debugf("pushing Docker image %s to cache registry as %s", localImageName, remoteCacheImageName)
 
-	// Get the image from the local Docker daemon.
-	localRef, err := name.ParseReference(localImageName)
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		return fmt.Errorf("failed to parse local image reference %q: %w", localImageName, err)
+		return fmt.Errorf("failed to create docker client: %w", err)
+	}
+	defer cli.Close()
+
+	if err := cli.ImageTag(ctx, localImageName, remoteCacheImageName); err != nil {
+		return fmt.Errorf("failed to tag image %q as %q: %w", localImageName, remoteCacheImageName, err)
 	}
 
-	img, err := daemon.Image(localRef, daemon.WithContext(ctx))
+	rc, err := cli.ImagePush(ctx, remoteCacheImageName, image.PushOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to get image %q from local Docker daemon: %w", localImageName, err)
+		return fmt.Errorf("failed to push image %q: %w", remoteCacheImageName, err)
+	}
+	defer rc.Close()
+	if _, err := io.Copy(io.Discard, rc); err != nil {
+		return fmt.Errorf("error reading push response: %w", err)
 	}
 
-	// Create the remote tag reference.
-	remoteTag, err := name.NewTag(remoteCacheImageName)
+	inspect, _, err := cli.ImageInspectWithRaw(ctx, remoteCacheImageName)
 	if err != nil {
-		return fmt.Errorf("failed to create remote tag %q: %w", remoteCacheImageName, err)
+		return fmt.Errorf("failed to inspect pushed image %q: %w", remoteCacheImageName, err)
 	}
 
-	// Push the image to the remote cache registry.
-	if err := remote.Write(remoteTag,
-		img, remote.WithAuthFromKeychain(authn.DefaultKeychain), remote.WithContext(ctx)); err != nil {
-		return fmt.Errorf("failed to push image %q to registry: %w", remoteCacheImageName, err)
-	}
-
-	digest, err := img.ConfigName()
-	if err != nil {
-		return fmt.Errorf("failed to get image digest: %w", err)
-	}
-
-	err = d.targetCache.WriteOutputMetaFile(ctx, target, output, "digest", digest.String())
+	err = d.targetCache.WriteOutputMetaFile(ctx, target, output, "digest", inspect.ID)
 	if err != nil {
 		return fmt.Errorf("failed to write digest to cache: %w", err)
 	}

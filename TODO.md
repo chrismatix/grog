@@ -2,6 +2,7 @@
 
 
 - [ ] Add graph example to the docs
+- [ ] Investigate possible OOM when writing larget image caches
 - [ ] Add a note that script binary outputs need to have a shebang line!
 - [ ] get coverage above 90%
 - [ ] Add shell completions for commands that run targets
