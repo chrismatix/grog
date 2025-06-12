@@ -2,9 +2,13 @@ package handlers
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	dockerconfig "github.com/docker/cli/cli/config"
 	"github.com/docker/docker/api/types/image"
 	"io"
+	"strings"
 
 	"github.com/docker/docker/client"
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -74,12 +78,18 @@ func (d *DockerRegistryOutputHandler) Write(ctx context.Context, target model.Ta
 		return fmt.Errorf("failed to tag image %q as %q: %w", localImageName, remoteCacheImageName, err)
 	}
 
-	rc, err := cli.ImagePush(ctx, remoteCacheImageName, image.PushOptions{})
+	// Build the RegistryAuth header from ~/.docker/config.json / helpers
+	auth, err := makeRegistryAuth(remoteCacheImageName)
 	if err != nil {
-		return fmt.Errorf("failed to push image %q: %w", remoteCacheImageName, err)
+		return err
 	}
-	defer rc.Close()
-	if _, err := io.Copy(io.Discard, rc); err != nil {
+
+	// Push via Docker daemon using that auth
+	reader, err := cli.ImagePush(ctx, remoteCacheImageName, image.PushOptions{
+		RegistryAuth: auth,
+	})
+	defer reader.Close()
+	if _, err := io.Copy(io.Discard, reader); err != nil {
 		return fmt.Errorf("error reading push response: %w", err)
 	}
 
@@ -95,6 +105,31 @@ func (d *DockerRegistryOutputHandler) Write(ctx context.Context, target model.Ta
 
 	logger.Debugf("successfully pushed Docker image %s to registry", remoteCacheImageName)
 	return nil
+}
+
+func makeRegistryAuth(ref string) (string, error) {
+	// Extract registry hostname (e.g. "gcr.io" or "myregistry.example.com")
+	parts := strings.SplitN(ref, "/", 2)
+	registry := parts[0]
+
+	// Load CLI config (respects DOCKER_CONFIG / XDG_CONFIG_HOME / ~/.docker)
+	cfg, err := dockerconfig.Load("")
+	if err != nil {
+		return "", fmt.Errorf("loading docker config: %w", err)
+	}
+
+	// Get the AuthConfig for this registry
+	authConfig, err := cfg.GetAuthConfig(registry)
+	if err != nil {
+		return "", fmt.Errorf("getting auth config for registry %q: %w", registry, err)
+	}
+
+	// JSON-encode and base64-encode it for the daemon API
+	raw, err := json.Marshal(authConfig)
+	if err != nil {
+		return "", fmt.Errorf("marshaling auth config: %w", err)
+	}
+	return base64.URLEncoding.EncodeToString(raw), nil
 }
 
 // Load pulls the Docker image from the remote registry and writes it into the local Docker daemon.
