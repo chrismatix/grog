@@ -2,7 +2,15 @@ package handlers
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	dockerconfig "github.com/docker/cli/cli/config"
+	"github.com/docker/docker/api/types/image"
+	"io"
+	"strings"
+
+	"github.com/docker/docker/client"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"grog/internal/caching"
 	"grog/internal/config"
@@ -60,41 +68,68 @@ func (d *DockerRegistryOutputHandler) Write(ctx context.Context, target model.Ta
 
 	logger.Debugf("pushing Docker image %s to cache registry as %s", localImageName, remoteCacheImageName)
 
-	// Get the image from the local Docker daemon.
-	localRef, err := name.ParseReference(localImageName)
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		return fmt.Errorf("failed to parse local image reference %q: %w", localImageName, err)
+		return fmt.Errorf("failed to create docker client: %w", err)
+	}
+	defer cli.Close()
+
+	if err := cli.ImageTag(ctx, localImageName, remoteCacheImageName); err != nil {
+		return fmt.Errorf("failed to tag image %q as %q: %w", localImageName, remoteCacheImageName, err)
 	}
 
-	img, err := daemon.Image(localRef, daemon.WithContext(ctx))
+	// Build the RegistryAuth header from ~/.docker/config.json / helpers
+	auth, err := makeRegistryAuth(remoteCacheImageName)
 	if err != nil {
-		return fmt.Errorf("failed to get image %q from local Docker daemon: %w", localImageName, err)
+		return err
 	}
 
-	// Create the remote tag reference.
-	remoteTag, err := name.NewTag(remoteCacheImageName)
+	// Push via Docker daemon using that auth
+	reader, err := cli.ImagePush(ctx, remoteCacheImageName, image.PushOptions{
+		RegistryAuth: auth,
+	})
+	defer reader.Close()
+	if _, err := io.Copy(io.Discard, reader); err != nil {
+		return fmt.Errorf("error reading push response: %w", err)
+	}
+
+	inspect, _, err := cli.ImageInspectWithRaw(ctx, remoteCacheImageName)
 	if err != nil {
-		return fmt.Errorf("failed to create remote tag %q: %w", remoteCacheImageName, err)
+		return fmt.Errorf("failed to inspect pushed image %q: %w", remoteCacheImageName, err)
 	}
 
-	// Push the image to the remote cache registry.
-	if err := remote.Write(remoteTag,
-		img, remote.WithAuthFromKeychain(authn.DefaultKeychain), remote.WithContext(ctx)); err != nil {
-		return fmt.Errorf("failed to push image %q to registry: %w", remoteCacheImageName, err)
-	}
-
-	digest, err := img.ConfigName()
-	if err != nil {
-		return fmt.Errorf("failed to get image digest: %w", err)
-	}
-
-	err = d.targetCache.WriteOutputMetaFile(ctx, target, output, "digest", digest.String())
+	err = d.targetCache.WriteOutputMetaFile(ctx, target, output, "digest", inspect.ID)
 	if err != nil {
 		return fmt.Errorf("failed to write digest to cache: %w", err)
 	}
 
 	logger.Debugf("successfully pushed Docker image %s to registry", remoteCacheImageName)
 	return nil
+}
+
+func makeRegistryAuth(ref string) (string, error) {
+	// Extract registry hostname (e.g. "gcr.io" or "myregistry.example.com")
+	parts := strings.SplitN(ref, "/", 2)
+	registry := parts[0]
+
+	// Load CLI config (respects DOCKER_CONFIG / XDG_CONFIG_HOME / ~/.docker)
+	cfg, err := dockerconfig.Load("")
+	if err != nil {
+		return "", fmt.Errorf("loading docker config: %w", err)
+	}
+
+	// Get the AuthConfig for this registry
+	authConfig, err := cfg.GetAuthConfig(registry)
+	if err != nil {
+		return "", fmt.Errorf("getting auth config for registry %q: %w", registry, err)
+	}
+
+	// JSON-encode and base64-encode it for the daemon API
+	raw, err := json.Marshal(authConfig)
+	if err != nil {
+		return "", fmt.Errorf("marshaling auth config: %w", err)
+	}
+	return base64.URLEncoding.EncodeToString(raw), nil
 }
 
 // Load pulls the Docker image from the remote registry and writes it into the local Docker daemon.

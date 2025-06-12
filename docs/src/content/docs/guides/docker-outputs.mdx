@@ -11,7 +11,7 @@ Many real-world CI/CD pipelines don't just produce files or directories but pack
 
 Grog can cache Docker images, allowing you to:
 
-- Skip rebuilding images when their inputs haven't changed
+- Skip building images when their inputs haven't changed
 - Share images between team members using a remote cache
 - Integrate Docker builds into your dependency graph
 - Push images to registries only when needed
@@ -46,6 +46,10 @@ backend = "tarball"  # This is the default, so it's optional
 
 #### Registry Backend
 
+<Aside>
+  To use the registry backend you need to have docker installed on your machine.
+</Aside>
+
 The registry backend stores Docker images in a Docker registry:
 
 ```toml
@@ -63,6 +67,7 @@ registry_url = "https://your-registry-url"
 **Disadvantages:**
 
 - Requires a registry to be running and accessible
+- Requires docker to be installed on your machine
 - Needs authentication setup
 
 ### 3. Registry Authentication
