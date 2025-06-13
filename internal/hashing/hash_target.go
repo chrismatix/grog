@@ -17,8 +17,11 @@ func GetTargetChangeHash(target model.Target, dependencyHashes []string) (string
 		return "", err
 	}
 	absolutePackagePath := config.GetPathAbsoluteToWorkspaceRoot(target.Label.Package)
-	inputContentHash, err := HashFiles(absolutePackagePath, target.Inputs)
+	if len(target.Inputs) == 0 {
+		return targetDefinitionHash, nil
+	}
 
+	inputContentHash, err := HashFiles(absolutePackagePath, target.Inputs)
 	return fmt.Sprintf("%s_%s", targetDefinitionHash, inputContentHash), nil
 }
 

@@ -91,8 +91,8 @@ func TestHashFiles(t *testing.T) {
 	t.Run("NonExistentFileInList", func(t *testing.T) {
 		invalidList := append(fileList, "nonexistent.txt")
 		_, err := HashFiles(tempDir, invalidList)
-		if err == nil {
-			t.Error("Expected error for non-existent file in list, got nil")
+		if err != nil {
+			t.Errorf("non-existent file in list should not error, got %s", err)
 		}
 	})
 

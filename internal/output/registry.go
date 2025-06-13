@@ -6,6 +6,7 @@ import (
 	"github.com/alitto/pond/v2"
 	"grog/internal/caching"
 	"grog/internal/config"
+	"grog/internal/console"
 	"grog/internal/maps"
 	"grog/internal/model"
 	"grog/internal/output/handlers"
@@ -141,6 +142,8 @@ func (r *Registry) WriteOutputs(ctx context.Context, target *model.Target) error
 	if target.SkipsCache() {
 		return nil
 	}
+	logger := console.GetLogger(ctx)
+	logger.Debugf("%s: writing outputs", target.Label)
 
 	outputs := target.AllOutputs()
 
@@ -170,11 +173,12 @@ func (r *Registry) LoadOutputs(ctx context.Context, target *model.Target) error 
 	}
 	r.targetMutexMap.Lock(target.Label.String())
 	defer r.targetMutexMap.Unlock(target.Label.String())
-
 	if target.OutputsLoaded {
 		// Outputs are already loaded, nothing to do
 		return nil
 	}
+	logger := console.GetLogger(ctx)
+	logger.Debugf("%s: loading outputs", target.Label)
 
 	outputs := target.AllOutputs()
 

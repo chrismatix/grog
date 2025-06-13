@@ -16,12 +16,13 @@ cases:
 
   - name: load_minimal_outputs_rebuild_all
     grog_args:
-    # load_outputs=minimal is set in the grog.toml
+      # load_outputs=minimal is set in the grog.toml
       - build
 
   - name: assert_outputs_were_not_loaded
     setup_command: |
       # Fails if there are any .txt files in the current directory
+      ls *.txt || echo "none found"
       ls *.txt >/dev/null 2>&1 && exit 1 || exit 0
 
   - name: taint_top_level_output

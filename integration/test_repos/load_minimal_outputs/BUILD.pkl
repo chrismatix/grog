@@ -28,7 +28,6 @@ targets {
     }
     inputs {
       "ignored_input.txt"
-      "output_2.txt"
     }
     outputs {
       "output_3.txt"

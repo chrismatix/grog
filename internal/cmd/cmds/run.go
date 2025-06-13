@@ -67,7 +67,7 @@ var RunCmd = &cobra.Command{
 			[]label.TargetPattern{targetPattern},
 			graph,
 			selection.NonTestOnly,
-			false,
+			config.Global.StreamLogs,
 			config.Global.GetLoadOutputsMode(),
 		)
 

@@ -233,13 +233,13 @@ func (e *Executor) getTaskFunc(
 			update(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis()))
 			logger.Debugf("running target %s: %s", target.Label, target.CommandEllipsis())
 			err = executeTarget(ctx, target, binToolPaths, e.streamLogs)
-			logger.Debugf("target execution returned error %s: %s", target.Label, err)
 		} else {
 			logger.Debugf("skipped target %s due to no command", target.Label)
 		}
 		executionTime := time.Since(startTime).Seconds()
 
 		if err != nil {
+			logger.Debugf("target execution returned error %s: %s", target.Label, err)
 			if target.IsTest() && !errors.Is(err, context.Canceled) {
 				if testLogger := console.GetTestLogger(ctx); testLogger != nil {
 					testLogger.LogTestFailed(logger, target.Label.String(), executionTime)

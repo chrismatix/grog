@@ -62,27 +62,35 @@ Grog provides a wide array of build file formats:
 <Tabs>
   <TabItem label="YAML">
     ```yaml
+    # BUILD.yaml
     targets:
-      - name: build_app
-        command: npm run build
-        dependencies:
-          # Dependencies are labels that point to
-          # other targets that need to be built first.
-          - :generate_proto
-          - //path/to/other/package:target_name
+      - name: build_ui
+        command: npm run build:ui
         inputs:
-          - src/**/*.js
+          - frontend/src/**/*.{js,ts,jsx,tsx}
+          - frontend/package.json
         outputs:
-          - dist/bundle.js
+          - dir::frontend/dist
 
-      - name: generate_proto
-        command: |
-          # Yaml supports multiline commands
-          protoc --js_out=src/generated proto/*.proto
-        inputs:
-          - proto/*.proto
-        outputs:
-          - dir::src/generated
+        - name: compile_backend
+          command: go build -o backend/bin/app ./backend
+          inputs:
+            - backend/**/*.go
+          outputs:
+            - backend/bin/app
+
+        - name: build_image
+          command: >
+            docker build \
+            --file Dockerfile \
+            --tag myorg/myapp:latest .
+          dependencies:
+            - :build_ui
+            - :compile_backend
+          inputs:
+            - Dockerfile
+          outputs:
+            - docker::myorg/myapp:latest
     ```
     Save this as `BUILD.yaml` in your project directory.
 
@@ -92,47 +100,76 @@ Grog provides a wide array of build file formats:
   {
     "targets": [
       {
-        "name": "build_app",
-        "command": "npm run build",
-        "dependencies": [
-          ":generate_proto",
-          "//path/to/other/package:target_name"
+        "name": "build_ui",
+        "command": "npm run build:ui",
+        "inputs": [
+          "frontend/src/**/*.{js,ts,jsx,tsx}",
+          "frontend/package.json"
         ],
-        "inputs": ["src/**/*.js", "package.json"],
-        "outputs": ["dist/bundle.js"]
+        "outputs": [
+          "dir::frontend/dist"
+        ]
       },
       {
-        "name": "generate_proto",
-        "command": "protoc --js_out=src/generated proto/*.proto",
-        "inputs": ["proto/*.proto"],
-        "outputs": ["dir::src/generated"]
+        "name": "compile_backend",
+        "command": "go build -o backend/bin/app ./backend",
+        "inputs": [
+          "backend/**/*.go"
+        ],
+        "outputs": [
+          "backend/bin/app"
+        ]
+      },
+      {
+        "name": "build_image",
+        "command": "docker build --file Dockerfile --tag myapp .",
+        "dependencies": [
+          ":build_ui",
+          ":compile_backend"
+        ],
+        "inputs": [
+          "Dockerfile"
+        ],
+        "outputs": [
+          "docker::myapp"
+        ]
       }
     ]
   }
-  ```
+    ```
   Save this as `BUILD.json` in your project directory.
   </TabItem>
   <TabItem label="Makefile">
 ```make
-# @grog
-# inputs:
-#   - src/**/*.js
-#   - package.json
-# outputs:
-#   - dist/bundle.js
-# dependencies:
-#   - :generate_proto
-#   - //path/to/other/package:target_name
-build_app:
-  npm run build
+    # Makefile
 
-# @grog
-# inputs:
-#   - proto/*.proto
-# outputs:
-#   - dir::src/generated
-generate_proto:
-  protoc --js_out=src/generated proto/*.proto
+    # @grog
+    # inputs:
+    #   - frontend/src/**/*.{js,ts,jsx,tsx}
+    #   - frontend/package.json
+    # outputs:
+    #   - dir::frontend/dist
+    build_ui:
+      npm run build:ui
+
+    # @grog
+    # inputs:
+    #   - backend/**/*.go
+    # outputs:
+    #   - backend/bin/app
+    compile_backend:
+      go build -o backend/bin/app ./backend
+
+    # @grog
+    # dependencies:
+    #   - :build_ui
+    #   - :compile_backend
+    # inputs:
+    #   - Dockerfile
+    # outputs:
+    #   - docker::myorg/myapp:latest
+    build_image:
+      docker build --file Dockerfile --tag myorg/myapp:latest .
 
 ````
 
@@ -140,31 +177,44 @@ Add the grog metadata comments to your `Makefile` goals to allow running them wi
 </TabItem>
 <TabItem label="Pkl">
 ```Pkl
-amends "package://grog.build/releases/v0.5.1/grog@0.5.1#/package.pkl"
+amends "package://grog.build/releases/v0.9.3/grog@0.9.3#/package.pkl"
 
 targets {
   new {
-    name = "build_app"
-    command = "npm run build"
-    dependencies {
-      // Dependencies are targets that need to be
-      // built first. They are defined using labels.
-      ":generate_proto"
-      "//path/to/other/package:target_name"
+    name = "build_ui"
+    command = "npm run build:ui"
+    inputs {
+      "frontend/src/**/*.{js,ts,jsx,tsx}"
+      "frontend/package.json"
     }
     outputs {
-      "dir::dist/"
+      "dir::frontend/dist"
     }
   }
 
   new {
-    name = "generate_proto"
-    command = "protoc --js_out=src/generated proto/*.proto"
+    name = "compile_backend"
+    command = "go build -o backend/bin/app ./backend"
     inputs {
-      "proto/*.proto"
+      "backend/**/*.go"
     }
     outputs {
-      "dir::src/generated"
+      "backend/bin/app"
+    }
+  }
+
+  new {
+    name = "build_image"
+    command = "docker build --file Dockerfile --tag myorg/myapp:latest ."
+    dependencies {
+      ":build_ui"
+      ":compile_backend"
+    }
+    inputs {
+      "Dockerfile"
+    }
+    outputs {
+      "docker::myorg/myapp:latest"
     }
   }
 }
