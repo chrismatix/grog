@@ -1,0 +1,41 @@
+amends "package://grog.build/releases/v0.9.3/grog@0.9.3#/package.pkl"
+
+targets {
+  new {
+    name = "build_ui"
+    command = "npm run build:ui"
+    inputs {
+      "frontend/src/*"
+      "frontend/package.json"
+    }
+    outputs {
+      "dir::frontend/dist"
+    }
+  }
+
+  new {
+    name = "compile_backend"
+    command = "CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o backend/bin/app ./backend"
+    inputs {
+      "backend/**/*.go"
+    }
+    outputs {
+      "backend/bin/app"
+    }
+  }
+
+  new {
+    name = "build_image"
+    command = "docker build --platform=linux/amd64 --file Dockerfile --tag myorg/myapp:latest ."
+    dependencies {
+      ":build_ui"
+      ":compile_backend"
+    }
+    inputs {
+      "Dockerfile"
+    }
+    outputs {
+      "docker::myorg/myapp:latest"
+    }
+  }
+}

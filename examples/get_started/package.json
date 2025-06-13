@@ -1,0 +1,8 @@
+{
+  "name": "grog-get-started",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build:ui": "npm --prefix frontend run build:ui"
+  }
+}

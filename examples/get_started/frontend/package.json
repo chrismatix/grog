@@ -1,0 +1,7 @@
+{
+  "name": "grog-get-started-frontend",
+  "version": "1.0.0",
+  "scripts": {
+    "build:ui": "mkdir -p dist && cp -r src/* dist/"
+  }
+}

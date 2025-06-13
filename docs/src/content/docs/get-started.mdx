@@ -141,35 +141,34 @@ Grog provides a wide array of build file formats:
   </TabItem>
   <TabItem label="Makefile">
 ```make
-    # Makefile
 
-    # @grog
-    # inputs:
-    #   - frontend/src/**/*.{js,ts,jsx,tsx}
-    #   - frontend/package.json
-    # outputs:
-    #   - dir::frontend/dist
-    build_ui:
-      npm run build:ui
+# @grog
+# inputs:
+#   - frontend/src/**/*.{js,ts,jsx,tsx}
+#   - frontend/package.json
+# outputs:
+#   - dir::frontend/dist
+build_ui:
+  npm run build:ui
 
-    # @grog
-    # inputs:
-    #   - backend/**/*.go
-    # outputs:
-    #   - backend/bin/app
-    compile_backend:
-      go build -o backend/bin/app ./backend
+# @grog
+# inputs:
+#   - backend/**/*.go
+# outputs:
+#   - backend/bin/app
+compile_backend:
+  go build -o backend/bin/app ./backend
 
-    # @grog
-    # dependencies:
-    #   - :build_ui
-    #   - :compile_backend
-    # inputs:
-    #   - Dockerfile
-    # outputs:
-    #   - docker::myorg/myapp:latest
-    build_image:
-      docker build --file Dockerfile --tag myorg/myapp:latest .
+# @grog
+# dependencies:
+#   - :build_ui
+#   - :compile_backend
+# inputs:
+#   - Dockerfile
+# outputs:
+#   - docker::myapp:latest
+build_image:
+  docker build --file Dockerfile --tag myapp:latest .
 
 ````
 
@@ -205,7 +204,7 @@ targets {
 
   new {
     name = "build_image"
-    command = "docker build --file Dockerfile --tag myorg/myapp:latest ."
+    command = "docker build --file Dockerfile --tag myapp:latest ."
     dependencies {
       ":build_ui"
       ":compile_backend"
@@ -214,7 +213,7 @@ targets {
       "Dockerfile"
     }
     outputs {
-      "docker::myorg/myapp:latest"
+      "docker::myapp:latest"
     }
   }
 }
@@ -231,7 +230,49 @@ Things to note from the above examples:
 - Directory outputs are prefixed with `dir::` to indicate they are directories.
 - Command definition `command` are executed as sh scripts in the target's directory.
 
-## 5. Running Builds
+## 4. Inspect the Build Graph
+
+The build targets defined in the example above form a directed acyclic (build) graph (DAG).
+You can visualize this graph using the [`grog graph`](/guides/querying) command:
+
+```mermaid
+---
+title: get_started dependency graph
+config:
+    theme: default
+    maxTextSize: 50000
+    maxEdges: 500
+    fontSize: 16
+---
+flowchart BT
+    0@{ shape: rect, label: "//:build_image"}
+    style 0 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+    1@{ shape: rect, label: "Dockerfile"}
+    style 1 fill:#FFF8E1,stroke:#FB8C00,stroke-width:2,stroke-dasharray:6 3
+    2@{ shape: rect, label: "//:build_ui"}
+    style 2 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+    3@{ shape: rect, label: "frontend/package.json"}
+    style 3 fill:#FFF8E1,stroke:#FB8C00,stroke-width:2,stroke-dasharray:6 3
+    4@{ shape: rect, label: "frontend/src/*"}
+    style 4 fill:#FFF8E1,stroke:#FB8C00,stroke-width:2,stroke-dasharray:6 3
+    5@{ shape: rect, label: "//:compile_backend"}
+    style 5 fill:#E3F2FD,stroke:#1E88E5,stroke-width:2
+    6@{ shape: rect, label: "backend/**/*.go"}
+    style 6 fill:#FFF8E1,stroke:#FB8C00,stroke-width:2,stroke-dasharray:6 3
+    1 -.-> 0
+    3 -.-> 2
+    4 -.-> 2
+    6 -.-> 5
+    2 --> 0
+    5 --> 0
+```
+
+This representation reveals a few things:
+
+- Grog can and will build `compile_backend` and `build_ui` in parallel before building `build_image`.
+- A change to any file in `backend/**/*.go` will trigger a rebuild of `compile_backend`. This will in turn trigger a rebuild of `build_image`.
+
+## 5. Run Builds
 
 To run a build, use the `grog build` command followed by the target label:
 
@@ -252,7 +293,7 @@ Grog will re-run a build if any of the following conditions are met:
 - A target's inputs have changed.
 - A target's dependencies have changed.
 
-## 6. Running Tests
+## 6. Run Tests
 
 Grog will automatically treat targets that end with `test` as test targets.
 They will only be executed if you run `grog test` and will be ignored for `grog build`

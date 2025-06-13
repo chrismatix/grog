@@ -73,10 +73,11 @@ func (d *DockerRegistryOutputHandler) Write(ctx context.Context, target model.Ta
 		return fmt.Errorf("failed to create docker client: %w", err)
 	}
 	defer cli.Close()
-
 	if err := cli.ImageTag(ctx, localImageName, remoteCacheImageName); err != nil {
 		return fmt.Errorf("failed to tag image %q as %q: %w", localImageName, remoteCacheImageName, err)
 	}
+	// Clean up the image tag so that it does not pollute the user's docker machine
+	defer cli.ImageRemove(ctx, remoteCacheImageName, image.RemoveOptions{})
 
 	// Build the RegistryAuth header from ~/.docker/config.json / helpers
 	auth, err := makeRegistryAuth(remoteCacheImageName)
