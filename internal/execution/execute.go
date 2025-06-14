@@ -65,7 +65,7 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	numWorkers := config.Global.NumWorkers
 	stdLogger := console.GetLogger(ctx)
 
-	program, msgCh := console.StartTaskUI(ctx)
+	ctx, program, sendMsg := console.StartTaskUI(ctx)
 	defer func(p *tea.Program) {
 		err := p.ReleaseTerminal()
 		if err != nil {
@@ -73,9 +73,6 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 		}
 	}(program)
 	defer program.Quit()
-
-	// Attach the tea logger to the context
-	ctx = console.WithTeaLogger(ctx, program)
 
 	// Get selected vertices and create a TestLogger for them
 	selectedVertices := e.graph.GetSelectedVertices()
@@ -93,7 +90,7 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	// Add the TestLogger to the context
 	ctx = context.WithValue(ctx, console.TestLoggerKey{}, testLogger)
 
-	workerPool := worker.NewTaskWorkerPool[dag.CacheResult](stdLogger, numWorkers, msgCh, selectedTargetCount)
+	workerPool := worker.NewTaskWorkerPool[dag.CacheResult](stdLogger, numWorkers, sendMsg, selectedTargetCount)
 	workerPool.StartWorkers(ctx)
 	defer workerPool.Shutdown()
 

@@ -1,17 +1,21 @@
+// workerpool.go
 package worker
 
 import (
 	"context"
 	"fmt"
+	"runtime"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fatih/color"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
 	"grog/internal/config"
 	"grog/internal/console"
-	"runtime"
-	"sync"
-	"time"
 )
 
 type StatusFunc func(status string)
@@ -21,7 +25,6 @@ type TaskResult[T any] struct {
 	Error  error
 }
 
-// TaskFunc is a task submitted to the pool. It gets an update callback.
 type TaskFunc[T any] func(update StatusFunc) (T, error)
 
 type job[T any] struct {
@@ -30,54 +33,58 @@ type job[T any] struct {
 	result chan TaskResult[T]
 }
 
-// TaskWorkerPool runs tasks that return T with a fixed number of workers,
-// reporting progress to the tea UI
 type TaskWorkerPool[T any] struct {
 	logger     *zap.SugaredLogger
 	maxWorkers int
-	// totalTasks total number of tasks to run (0 for unlimited)
 	totalTasks int
-	jobCh      chan job[T]
 
-	// msgCh is used to send status updates to the UI.
-	msgCh chan tea.Msg
+	jobCh chan job[T]
 
-	// taskState keeps track of the current task state for logging
-	taskState console.TaskStateMap
+	sendMsg func(msg tea.Msg)
 
+	taskState      console.TaskStateMap
 	nextTaskId     int
 	completedTasks int
-	mu             sync.Mutex
 
-	// closed is set to true when the pool is shut down.
-	// Used to prevent sending messages on the closed msgCh
-	closed bool
+	closed       atomic.Bool
+	shutdownOnce sync.Once
+	watcherOnce  sync.Once
+	mu           sync.Mutex
 }
 
 func NewTaskWorkerPool[T any](
 	logger *zap.SugaredLogger,
 	maxWorkers int,
-	msgCh chan tea.Msg,
+	sendMsg func(msg tea.Msg),
 	totalTasks int,
 ) *TaskWorkerPool[T] {
 	if maxWorkers < 1 {
 		maxWorkers = runtime.NumCPU()
 	}
+
 	return &TaskWorkerPool[T]{
 		logger:     logger,
 		maxWorkers: maxWorkers,
 		totalTasks: totalTasks,
-		jobCh:      make(chan job[T]),
-		msgCh:      msgCh,
+		jobCh:      make(chan job[T], maxWorkers),
+		sendMsg:    sendMsg,
 		taskState:  make(console.TaskStateMap),
 	}
 }
 
 func (twp *TaskWorkerPool[T]) StartWorkers(ctx context.Context) {
+	// start workers
 	for i := 0; i < twp.maxWorkers; i++ {
 		workerId := i + 1
 		go twp.worker(ctx, workerId)
 	}
+	// schedule shutdown once
+	twp.watcherOnce.Do(func() {
+		go func() {
+			<-ctx.Done()
+			twp.Shutdown()
+		}()
+	})
 }
 
 func (twp *TaskWorkerPool[T]) worker(ctx context.Context, workerId int) {
@@ -86,17 +93,15 @@ func (twp *TaskWorkerPool[T]) worker(ctx context.Context, workerId int) {
 	for {
 		select {
 		case <-ctx.Done():
-			twp.closed = true
 			console.GetLogger(ctx).Debugf("Worker %d context cancelled, exiting", workerId)
 			return
 		case j, ok := <-twp.jobCh:
 			if !ok {
-				// Channel closed, exit worker
 				return
 			}
+
 			twp.setTaskState(workerId, fmt.Sprintf("Starting task %d on worker %d", j.id+1, workerId), zapcore.DebugLevel)
-			// Run the task, passing a callback to update progress.
-			result, err := j.task(func(status string) {
+			res, err := j.task(func(status string) {
 				taskStatus := status
 				if isDebug {
 					taskStatus = fmt.Sprintf("%s (worker %d)", status, workerId)
@@ -105,75 +110,72 @@ func (twp *TaskWorkerPool[T]) worker(ctx context.Context, workerId int) {
 			})
 
 			if j.result != nil {
-				j.result <- TaskResult[T]{
-					Return: result,
-					Error:  err,
-				}
-				close(j.result) // Close the channel after sending the result
+				j.result <- TaskResult[T]{Return: res, Error: err}
+				close(j.result)
 			}
+
 			twp.completeTask(workerId)
 		}
 	}
 }
 
-// setTaskState updates the task state from a worker
-// when we are not using tea (i.e. in ci) the task state is logged directly
-func (twp *TaskWorkerPool[T]) setTaskState(workerId int, status string, logLevel zapcore.Level) {
+func (twp *TaskWorkerPool[T]) setTaskState(workerId int, status string, lvl zapcore.Level) {
 	twp.mu.Lock()
 	defer twp.mu.Unlock()
-	state, ok := twp.taskState[workerId]
+
 	if logToStdout() {
-		// If we are not using bubble tea, just print the status to stdout
-		twp.logger.Logf(logLevel, status)
-		return
-	}
-	if !ok {
-		twp.taskState[workerId] = console.TaskState{Status: status, StartedAtSec: time.Now().Unix()}
-		twp.flushState()
+		twp.logger.Logf(lvl, status)
 		return
 	}
 
-	state.Status = status
-	twp.taskState[workerId] = state
-	twp.flushState()
+	state, exists := twp.taskState[workerId]
+	if !exists {
+		twp.taskState[workerId] = console.TaskState{Status: status, StartedAtSec: time.Now().Unix()}
+	} else {
+		state.Status = status
+		twp.taskState[workerId] = state
+	}
+
+	twp.flushStateLocked()
+}
+
+func (twp *TaskWorkerPool[T]) completeTask(workerId int) {
+	twp.mu.Lock()
+	defer twp.mu.Unlock()
+
+	delete(twp.taskState, workerId)
+	twp.completedTasks++
+	twp.flushStateLocked()
+}
+
+func (twp *TaskWorkerPool[T]) flushStateLocked() {
+	if twp.closed.Load() {
+		return
+	}
+
+	// copy
+	mapCopy := make(console.TaskStateMap, len(twp.taskState))
+	for k, v := range twp.taskState {
+		mapCopy[k] = v
+	}
+
+	twp.sendMsg(console.TaskStateMsg{State: mapCopy})
+
+	total := twp.nextTaskId
+	if twp.totalTasks > 0 {
+		total = twp.totalTasks
+	}
+	running := len(twp.taskState)
+
+	green := color.New(color.FgGreen).SprintFunc()
+	twp.sendMsg(console.HeaderMsg(
+		green(fmt.Sprintf("[%d/%d]", twp.completedTasks, total)) +
+			fmt.Sprintf(" %s running", console.FCount(running, "action")),
+	))
 }
 
 func logToStdout() bool {
 	return !console.UseTea() && !config.Global.DisableNonDeterministicLogging
-}
-
-// setTaskState updates the task state from a worker
-func (twp *TaskWorkerPool[T]) completeTask(workerId int) {
-	twp.mu.Lock()
-	defer twp.mu.Unlock()
-	delete(twp.taskState, workerId)
-	twp.completedTasks++
-	twp.flushState()
-}
-
-// flushState sends the current task state to the UI.
-func (twp *TaskWorkerPool[T]) flushState() {
-	if twp.closed {
-		return
-	}
-
-	// create a copy of the map so we don't modify the original'
-	stateCopy := make(console.TaskStateMap, len(twp.taskState))
-	for key, value := range twp.taskState {
-		stateCopy[key] = value
-	}
-	// Write the current task state
-	twp.msgCh <- console.TaskStateMsg{State: stateCopy}
-	totalTasks := twp.nextTaskId
-	if twp.totalTasks > 0 {
-		totalTasks = twp.totalTasks
-	}
-
-	actionsRunning := len(twp.taskState)
-	green := color.New(color.FgGreen).SprintFunc()
-	twp.msgCh <- console.HeaderMsg(green(
-		fmt.Sprintf("[%d/%d]", twp.completedTasks, totalTasks)) +
-		fmt.Sprintf(" %s running", console.FCount(actionsRunning, "action")))
 }
 
 func (twp *TaskWorkerPool[T]) NumWorkers() int {
@@ -181,29 +183,36 @@ func (twp *TaskWorkerPool[T]) NumWorkers() int {
 }
 
 func (twp *TaskWorkerPool[T]) Run(task TaskFunc[T]) (T, error) {
-	if twp.closed {
-		var zero T
+	var zero T
+	if twp.closed.Load() {
 		return zero, fmt.Errorf("worker pool is closed")
 	}
+
 	twp.mu.Lock()
-	taskId := twp.nextTaskId
+	id := twp.nextTaskId
 	twp.nextTaskId++
 	twp.mu.Unlock()
 
-	// Create a channel to receive the result from the worker.
 	resultCh := make(chan TaskResult[T], 1)
+	job := job[T]{id: id, task: task, result: resultCh}
 
-	// Enqueue the task with the result channel.
-	twp.jobCh <- job[T]{id: taskId, task: task, result: resultCh}
+	// enqueue or bail on context cancel
+	select {
+	case twp.jobCh <- job:
+	case <-time.After(time.Second): // backstop so we don't hang if closed
+		if twp.closed.Load() {
+			return zero, fmt.Errorf("worker pool is closed")
+		}
+		twp.jobCh <- job
+	}
 
-	// Wait for the result.
-	result := <-resultCh
-	return result.Return, result.Error
+	res := <-resultCh
+	return res.Return, res.Error
 }
 
 func (twp *TaskWorkerPool[T]) Shutdown() {
-	twp.mu.Lock()
-	defer twp.mu.Unlock()
-	twp.closed = true
-	close(twp.jobCh)
+	twp.shutdownOnce.Do(func() {
+		twp.closed.Store(true)
+		close(twp.jobCh)
+	})
 }

@@ -38,9 +38,12 @@ func HashFiles(absolutePackagePath string, fileList []string) (string, error) {
 		fullPath := filepath.Join(absolutePackagePath, file)
 		f, err := os.Open(fullPath)
 		if err != nil {
-			// NOTE: If a file does not exist in the package, we skip it.
-			// TODO make this a warning
-			continue
+			if os.IsNotExist(err) {
+				// NOTE: If a file does not exist in the package, we skip it.
+				// TODO make this a warning
+				continue
+			}
+			return "", fmt.Errorf("failed opening input file for hashing: %w", err)
 		}
 
 		// Copy file content into the combined hasher.

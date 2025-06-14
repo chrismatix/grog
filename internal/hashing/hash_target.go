@@ -22,7 +22,10 @@ func GetTargetChangeHash(target model.Target, dependencyHashes []string) (string
 	}
 
 	inputContentHash, err := HashFiles(absolutePackagePath, target.Inputs)
-	return fmt.Sprintf("%s_%s", targetDefinitionHash, inputContentHash), nil
+	if err != nil {
+		return "", fmt.Errorf("failed hashing input files %s for target %s: %w", strings.Join(target.Inputs, ","), target.Label, err)
+	}
+	return fmt.Sprintf("%s_%s", targetDefinitionHash, inputContentHash), err
 }
 
 // hashTargetDefinition computes the xxhash hash of a single file.

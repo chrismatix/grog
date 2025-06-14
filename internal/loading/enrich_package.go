@@ -114,11 +114,10 @@ func resolveInputs(
 			continue
 		}
 
-		matches, err := doublestar.Glob(fsys, input)
+		matches, err := doublestar.Glob(fsys, input, doublestar.WithFilesOnly())
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve glob pattern %s: %w", input, err)
 		}
-		logger.Debugf("Resolved glob pattern %s in %s to %v", input, absolutePackagePath, matches)
 
 		resolvedInputs = append(resolvedInputs, matches...)
 	}
@@ -131,7 +130,7 @@ func resolveInputs(
 	// Resolve exclusion patterns
 	var excludedPaths []string
 	for _, excludePattern := range excludeInputs {
-		matches, err := doublestar.Glob(fsys, excludePattern)
+		matches, err := doublestar.Glob(fsys, excludePattern, doublestar.WithFilesOnly())
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve exclusion glob pattern %s: %w", excludePattern, err)
 		}

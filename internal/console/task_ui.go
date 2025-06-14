@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/fatih/color"
 	"github.com/mattn/go-isatty"
 	"os"
 	"sort"
@@ -26,17 +27,22 @@ type TaskStateMsg struct {
 	State TaskStateMap
 }
 
-func StartTaskUI(ctx context.Context) (*tea.Program, chan tea.Msg) {
+func StartTaskUI(ctx context.Context) (context.Context, *tea.Program, func(tea.Msg)) {
 	msgCh := make(chan tea.Msg, 100)
 
+	// Because bubble tea manages the interrupt we overwrite
+	// the default cancellation mechanism in cmd_setup.go
+	wrappedCtx, cancel := context.WithCancel(ctx)
+
 	var opts []tea.ProgramOption
+	opts = append(opts, tea.WithContext(ctx))
 	if !UseTea() {
 		// If we're in daemon mode don't render the TUI
 		opts = append(opts, tea.WithInput(nil), tea.WithoutRenderer())
 	}
 
 	// Start the Bubbletea Program.
-	p := tea.NewProgram(initialModel(msgCh), opts...)
+	p := tea.NewProgram(initialModel(msgCh, cancel), opts...)
 
 	go func() {
 		defer close(msgCh)
@@ -58,7 +64,16 @@ func StartTaskUI(ctx context.Context) (*tea.Program, chan tea.Msg) {
 		}
 	}()
 
-	return p, msgCh
+	// inspired by program.Send
+	sendFunc := func(msg tea.Msg) {
+		select {
+		case <-wrappedCtx.Done():
+		case msgCh <- msg:
+		}
+	}
+
+	// Finally, also add the tea logger
+	return WithTeaLogger(wrappedCtx, p), p, sendFunc
 }
 
 func UseTea() bool {
@@ -79,14 +94,17 @@ type model struct {
 
 	// Mutex for the tasks map
 	tasksMutex sync.RWMutex
+
+	cancel context.CancelFunc
 }
 
-func initialModel(msgCh chan tea.Msg) *model {
+func initialModel(msgCh chan tea.Msg, cancel context.CancelFunc) *model {
 	return &model{
 		header: "",
 		tasks:  make(map[int]TaskState),
 		msgCh:  msgCh,
 		tick:   time.Now().Second(),
+		cancel: cancel,
 	}
 }
 
@@ -115,7 +133,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch castMsg.String() {
 		// React to ctrl+c
 		case "ctrl+c":
-			return m, tea.Quit
+			m.cancel()
+			green := color.New(color.FgGreen).SprintFunc()
+			printMessage := fmt.Sprintf("%s: Received interrupt signal, exiting...", green("INFO"))
+			return m, tea.Sequence(tea.Println(printMessage), tea.Quit)
 		}
 	case HeaderMsg:
 		m.header = string(castMsg)

@@ -147,8 +147,7 @@ func (w *Walker) Walk(
 			"context cancelled, cancelling all workers",
 		)
 		w.cancelAll()
-		// We must still await all walker routines
-		w.wait.Wait()
+
 		if w.failFastTriggered {
 			return w.completions, nil
 		} else {

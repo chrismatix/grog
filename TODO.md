@@ -1,6 +1,10 @@
 # TODOs
 
 
+- [ ] Always stream output logs to files aswell
+  - Each individual target log needs to be streamed to a target specific file
+  - The overall log needs to be streamed to a grog.log file
+  - Both at the grog root
 - [ ] ctrl-c needs to be hit twice to quit at the moment
 - [ ] get coverage above 90%
 - [ ] Add shell completions for commands that run targets
