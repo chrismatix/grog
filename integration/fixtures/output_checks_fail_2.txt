@@ -2,5 +2,5 @@ INFO: 1 package loaded, 2 targets configured.
 INFO: Selected 1 target.
 ERROR: Build failed. 0 targets completed (0 cache hits), 1 failed:
 ---------------------------------
-ERROR: Target //:foo failed: output check failed for target //:foo: exit status 1
-command exit 1
+ERROR: Target //:bar failed: output check failed: expected 'foo', got 'bar'
+command echo 'bar'

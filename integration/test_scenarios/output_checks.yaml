@@ -4,4 +4,11 @@ cases:
   - name: output_checks_fail
     grog_args:
       - build
+      - :foo
+    expect_fail: true
+
+  - name: output_checks_fail_2
+    grog_args:
+      - build
+      - :bar
     expect_fail: true

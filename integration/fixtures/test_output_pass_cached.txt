@@ -1,0 +1,6 @@
+INFO: 1 package loaded, 2 targets configured.
+WARN: target //:failing_test has no inputs, dependencies or output checks causing it to run only once
+WARN: target //:passing_test has no inputs, dependencies or output checks causing it to run only once
+INFO: Selected 1 target.
+INFO: //:passing_test PASSED (cached) in 0.0s
+INFO: Test completed successfully. 1 target completed (1 cache hits).

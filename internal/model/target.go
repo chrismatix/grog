@@ -73,14 +73,6 @@ func (t *Target) IsMultiplatformCache() bool {
 	return false
 }
 
-func (t *Target) GetDepsString() []string {
-	stringDeps := make([]string, len(t.Dependencies))
-	for i, dep := range t.Dependencies {
-		stringDeps[i] = dep.String()
-	}
-	return stringDeps
-}
-
 func (t *Target) CommandEllipsis() string {
 	lines := strings.SplitN(t.Command, "\n", 2)
 	firstLine := strings.TrimLeft(lines[0], " ")

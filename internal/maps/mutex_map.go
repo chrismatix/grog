@@ -22,9 +22,6 @@ func NewMutexMap() *MutexMap {
 // Lock locks a mutex with the given name. If it doesn't exist, one is created
 func (l *MutexMap) Lock(name string) {
 	l.mutex.Lock()
-	if l.locks == nil {
-		l.locks = make(map[string]*wrappedMutex)
-	}
 
 	nameLock, exists := l.locks[name]
 	if !exists {

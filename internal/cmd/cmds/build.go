@@ -16,6 +16,7 @@ import (
 	"grog/internal/execution"
 	"grog/internal/label"
 	"grog/internal/loading"
+	"grog/internal/locking"
 	"grog/internal/output"
 	"grog/internal/selection"
 	"os"
@@ -69,6 +70,16 @@ func runBuild(
 	streamLogs bool,
 	loadOutputsMode config.LoadOutputsMode,
 ) {
+	locker := locking.NewWorkspaceLocker()
+	if err := locker.Lock(ctx); err != nil {
+		logger.Fatalf("could not acquire workspace lock: %v", err)
+	}
+	defer func() {
+		if err := locker.Unlock(); err != nil {
+			logger.Fatalf("failed to release workspace lock: %v", err)
+		}
+	}()
+
 	startTime := time.Now()
 	errs := analysis.CheckTargetConstraints(logger, graph.GetVertices())
 	if len(errs) > 0 {

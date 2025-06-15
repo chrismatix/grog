@@ -1,0 +1,10 @@
+INFO: 1 package loaded, 2 targets configured.
+WARN: target //:failing_test has no inputs, dependencies or output checks causing it to run only once
+WARN: target //:passing_test has no inputs, dependencies or output checks causing it to run only once
+INFO: Selected 1 target.
+INFO: //:failing_test FAILED in 0.0s
+ERROR: Test failed. 0 targets completed (0 cache hits), 1 failed:
+---------------------------------
+ERROR: Target //:failing_test failed with exit code 1:
+command: "exit 1"
+
