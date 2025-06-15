@@ -97,7 +97,7 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	// walkCallback will be called at max parallelism by the graph walker
 	walkCallback := func(ctx context.Context, target *model.Target, depsCached bool) (dag.CacheResult, error) {
 		// get any possible bin tools that the target may use
-		binTools, err := getBinToolPaths(e.graph, target)
+		binTools, err := e.getBinToolPaths(target)
 		if err != nil {
 			return dag.CacheMiss, err
 		}
@@ -118,8 +118,8 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 }
 
 // getBinToolPaths From all the direct dependencies of a target, get their bin_output if defined
-func getBinToolPaths(graph *dag.DirectedTargetGraph, target *model.Target) (BinToolMap, error) {
-	deps := graph.GetDependencies(target)
+func (e *Executor) getBinToolPaths(target *model.Target) (BinToolMap, error) {
+	deps := e.graph.GetDependencies(target)
 
 	binTools := make(map[string]string, 0)
 	for _, dep := range deps {
@@ -195,7 +195,7 @@ func (e *Executor) getTaskFunc(
 			loadingErr := e.loadCachedOutputs(ctx, target)
 			if loadingErr != nil {
 				// Don't return so that we instead break out and continue executing the target
-				logger.Errorf("failed to load outputs from cache for target %s: %v", target.Label, loadingErr)
+				logger.Errorf("%s re-running due to output loading failure: %v", target.Label, loadingErr)
 			} else {
 				if target.IsTest() {
 					executionTime := time.Since(startTime).Seconds()
@@ -221,70 +221,87 @@ func (e *Executor) getTaskFunc(
 
 		if e.loadOutputsMode == config.LoadOutputsMinimal {
 			update(fmt.Sprintf("%s: loading dependency outputs (load_outputs=minimal).", target.Label))
-			if loadDepsErr := e.LoadDependencyOutputs(ctx, target); loadDepsErr != nil {
-				return dag.CacheMiss, loadDepsErr
+			if loadDepsErr := e.LoadDependencyOutputs(ctx, target, update); loadDepsErr != nil {
+				return dag.CacheMiss, fmt.Errorf("failed to load dependency outputs for target %s: %w", target.Label, err)
 			}
 		}
 
-		if target.Command != "" {
-			update(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis()))
-			logger.Debugf("running target %s: %s", target.Label, target.CommandEllipsis())
-			err = executeTarget(ctx, target, binToolPaths, e.streamLogs)
-		} else {
-			logger.Debugf("skipped target %s due to no command", target.Label)
-		}
-		executionTime := time.Since(startTime).Seconds()
-
-		if err != nil {
-			logger.Debugf("target execution returned error %s: %s", target.Label, err)
-			if target.IsTest() && !errors.Is(err, context.Canceled) {
-				if testLogger := console.GetTestLogger(ctx); testLogger != nil {
-					testLogger.LogTestFailed(logger, target.Label.String(), executionTime)
-				} else {
-					logger.Infof("%s %s in %.1fs", target.Label, color.New(color.FgRed).Sprintf("FAILED"), executionTime)
-				}
-			}
-			return dag.CacheMiss, err
-		}
-
-		// Run output checks again to see if they match now
-		if outputCheckErr = runOutputChecks(ctx, target, binToolPaths); outputCheckErr != nil {
-			return dag.CacheMiss, outputCheckErr
-		}
-
-		if target.IsTest() {
-			if testLogger := console.GetTestLogger(ctx); testLogger != nil {
-				testLogger.LogTestPassed(logger, target.Label.String(), executionTime)
-			} else {
-				logger.Infof("%s %s in %.1fs", target.Label, color.New(color.FgGreen).Sprintf("PASSED"), executionTime)
-			}
-		}
-
-		// If the target produced a bin output automatically mark it as executable
-		err = markBinOutputExecutable(target)
-		if err != nil {
-			return dag.CacheMiss, err
-		}
-
-		// Write outputs to the cache:
-		update(fmt.Sprintf("%s complete. writing outputs...", target.Label))
-		err = e.registry.WriteOutputs(ctx, target)
-		if err != nil {
-			return dag.CacheMiss, fmt.Errorf("build completed but failed to write outputs to cache for target %s:\n%w", target.Label, err)
-		}
-
-		if isTainted {
-			err = e.targetCache.RemoveTaint(ctx, *target)
-			if err != nil {
-				logger.Errorf("Failed to remove taint from target %s: %v", target.Label, err)
-			}
-		}
-
-		return dag.CacheMiss, nil
+		return e.executeTarget(ctx, target, binToolPaths, update, isTainted)
 	}
 }
 
-func (e *Executor) loadCachedOutputs(ctx context.Context, target *model.Target) error {
+func (e *Executor) executeTarget(
+	ctx context.Context,
+	target *model.Target,
+	binToolPaths BinToolMap,
+	update worker.StatusFunc,
+	isTainted bool,
+) (dag.CacheResult, error) {
+	logger := console.GetLogger(ctx)
+
+	startTime := time.Now()
+	var err error
+	if target.Command != "" {
+		update(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis()))
+		logger.Debugf("running target %s: %s", target.Label, target.CommandEllipsis())
+		err = executeTarget(ctx, target, binToolPaths, e.streamLogs)
+	} else {
+		logger.Debugf("skipped target %s due to no command", target.Label)
+	}
+	executionTime := time.Since(startTime).Seconds()
+
+	if err != nil {
+		logger.Debugf("target execution returned error %s: %s", target.Label, err)
+		if target.IsTest() && !errors.Is(err, context.Canceled) {
+			if testLogger := console.GetTestLogger(ctx); testLogger != nil {
+				testLogger.LogTestFailed(logger, target.Label.String(), executionTime)
+			} else {
+				logger.Infof("%s %s in %.1fs", target.Label, color.New(color.FgRed).Sprintf("FAILED"), executionTime)
+			}
+		}
+		return dag.CacheMiss, err
+	}
+
+	// Run output checks again to see if they match now
+	if outputCheckErr := runOutputChecks(ctx, target, binToolPaths); outputCheckErr != nil {
+		return dag.CacheMiss, outputCheckErr
+	}
+
+	if target.IsTest() {
+		if testLogger := console.GetTestLogger(ctx); testLogger != nil {
+			testLogger.LogTestPassed(logger, target.Label.String(), executionTime)
+		} else {
+			logger.Infof("%s %s in %.1fs", target.Label, color.New(color.FgGreen).Sprintf("PASSED"), executionTime)
+		}
+	}
+
+	// If the target produced a bin output automatically mark it as executable
+	err = markBinOutputExecutable(target)
+	if err != nil {
+		return dag.CacheMiss, err
+	}
+
+	// Write outputs to the cache:
+	update(fmt.Sprintf("%s complete. writing outputs...", target.Label))
+	err = e.registry.WriteOutputs(ctx, target)
+	if err != nil {
+		return dag.CacheMiss, fmt.Errorf("build completed but failed to write outputs to cache for target %s:\n%w", target.Label, err)
+	}
+
+	if isTainted {
+		err = e.targetCache.RemoveTaint(ctx, *target)
+		if err != nil {
+			logger.Errorf("Failed to remove taint from target %s: %v", target.Label, err)
+		}
+	}
+
+	return dag.CacheMiss, nil
+}
+
+func (e *Executor) loadCachedOutputs(
+	ctx context.Context,
+	target *model.Target,
+) error {
 	if target.SkipsCache() {
 		return nil
 	}
@@ -296,15 +313,30 @@ func (e *Executor) loadCachedOutputs(ctx context.Context, target *model.Target) 
 	return nil
 }
 
-func (e *Executor) LoadDependencyOutputs(ctx context.Context, target *model.Target) error {
-	console.GetLogger(ctx).Debugf(
+func (e *Executor) LoadDependencyOutputs(
+	ctx context.Context,
+	target *model.Target,
+	update worker.StatusFunc,
+) error {
+	logger := console.GetLogger(ctx)
+	logger.Debugf(
 		"loading dependency outputs for target %s.",
 		target.Label,
 	)
 	for _, dep := range e.graph.GetDependencies(target) {
 		err := e.loadCachedOutputs(ctx, dep)
 		if err != nil {
-			return err
+			logger.Debugf("%s: failed to load output for dependency %s (re-rerunning): %v", target.Label, dep.Label, err)
+
+			binTools, err := e.getBinToolPaths(target)
+			if err != nil {
+				return err
+			}
+
+			_, err = e.executeTarget(ctx, dep, binTools, update, false)
+			if err != nil {
+				return err
+			}
 		}
 	}
 

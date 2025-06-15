@@ -23,9 +23,7 @@ func (fsc *FileSystemCache) TypeName() string {
 
 // NewFileSystemCache creates a new cache using the configured cache directory
 func NewFileSystemCache(ctx context.Context) (*FileSystemCache, error) {
-	workspaceDir := config.Global.WorkspaceRoot
-	workspacePrefix := config.GetWorkspaceCachePrefix(workspaceDir)
-	workspaceCacheDir := filepath.Join(config.Global.GetCacheDirectory(), workspacePrefix)
+	workspaceCacheDir := config.Global.GetWorkspaceCacheDirectory()
 
 	// Ensure the root directory exists
 	if err := os.MkdirAll(workspaceCacheDir, 0755); err != nil {
@@ -144,7 +142,7 @@ func (fsc *FileSystemCache) Clear(ctx context.Context, expunge bool) error {
 	defer fsc.mutex.Unlock()
 
 	if expunge {
-		cacheDir := config.Global.GetCacheDirectory()
+		cacheDir := config.Global.GetWorkspaceCacheDirectory()
 		// Remove the entire cache directory
 		err := os.RemoveAll(cacheDir)
 		if err != nil {

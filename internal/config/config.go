@@ -47,16 +47,15 @@ type WorkspaceConfig struct {
 
 var Global WorkspaceConfig
 
-func (w WorkspaceConfig) GetCacheDirectory() string {
-	if w.Root == "" {
-		// This can only ever happen if the user intentionally sets the Root to ""
-		// or if we have an initialization bug.
-		// In any case we should exit with an error because otherwise we might end up
-		// writing/removing files in the wrong place.
-		fmt.Println("GROG_ROOT is not set (or set to \"\").")
-		os.Exit(1)
-	}
-	return filepath.Join(w.Root, "cache")
+// GetWorkspaceRootDir is the directory under the $GROG_ROOT that hosts the cache
+// and all other behind-the-scenes files
+func (w WorkspaceConfig) GetWorkspaceRootDir() string {
+	workspaceDir := Global.WorkspaceRoot
+	return filepath.Join(w.Root, GetWorkspaceCachePrefix(workspaceDir))
+}
+
+func (w WorkspaceConfig) GetWorkspaceCacheDirectory() string {
+	return filepath.Join(w.GetWorkspaceRootDir(), "cache")
 }
 
 func (w WorkspaceConfig) IsDebug() bool {

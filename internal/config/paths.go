@@ -10,7 +10,7 @@ import (
 )
 
 // GetWorkspaceCachePrefix returns name of the cache directory for the current repo.
-// Like Bazel we hash the repo path and use that as directory within $GROG_ROOT/cache
+// Like Bazel we hash the repo path and use that as directory within $GROG_ROOT
 // Unlike Bazel we only use the first 16 characters of the hash and add a readable portion
 // to make it easier to identify.
 func GetWorkspaceCachePrefix(workspaceDir string) string {

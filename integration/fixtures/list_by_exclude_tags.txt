@@ -1,2 +1,3 @@
+//:bin
 //package_1:bar
 //package_1:foo_test

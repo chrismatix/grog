@@ -83,7 +83,7 @@ var RunCmd = &cobra.Command{
 
 			executor := execution.NewExecutor(targetCache, registry, graph, config.Global.FailFast, config.Global.StreamLogs, config.Global.GetLoadOutputsMode())
 			logger.Infof("Loading outputs of direct dependencies due to load_outputs=minimal")
-			err = executor.LoadDependencyOutputs(ctx, runTarget)
+			err = executor.LoadDependencyOutputs(ctx, runTarget, func(_ string) {})
 			if err != nil {
 				logger.Fatalf("could not load dependencies: %v", err)
 			}

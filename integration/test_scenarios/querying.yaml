@@ -13,11 +13,21 @@ cases:
     grog_args:
       - list
       - --exclude-tag=tag1
-  #
-  #  - name: list_by_target_type
-  #    grog_args:
-  #      - list
-  #      - --target-type=test
+
+  - name: list_tests
+    grog_args:
+      - list
+      - --target-type=test
+
+  - name: list_binary_targets
+    grog_args:
+      - list
+      - --target-type=bin_output
+
+  - name: list_no_tests
+    grog_args:
+      - list
+      - --target-type=no_test
 
   - name: build_by_tags
     grog_args:

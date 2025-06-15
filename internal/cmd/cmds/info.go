@@ -31,6 +31,7 @@ var InfoCmd = &cobra.Command{
 		fmt.Fprintf(writer, "Version:\t%s\n", version)
 		fmt.Fprintf(writer, "Platform:\t%s\n", platform)
 		fmt.Fprintf(writer, "Workspace:\t%s\n", config.Global.WorkspaceRoot)
+		fmt.Fprintf(writer, "Workspace Cache:\t%s\n", config.Global.WorkspaceRoot)
 		fmt.Fprintf(writer, "Config:\t%s\n", viper.ConfigFileUsed())
 		fmt.Fprintf(writer, "Grog root:\t%s\n", config.Global.Root)
 
