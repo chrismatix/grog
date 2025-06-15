@@ -15,9 +15,11 @@ func runOutputChecks(ctx context.Context, target *model.Target, binToolPaths Bin
 				target.Label, err, check.Command)
 		}
 
-		if check.ExpectedOutput != "" && strings.TrimSpace(check.ExpectedOutput) != strings.TrimSpace(string(output)) {
+		expected := strings.TrimSpace(check.ExpectedOutput)
+		actual := strings.TrimSpace(string(output))
+		if check.ExpectedOutput != "" && expected != actual {
 			return fmt.Errorf("output check failed: expected '%s', got '%s'\ncommand %s",
-				check.ExpectedOutput, output, check.Command)
+				expected, actual, check.Command)
 		}
 	}
 

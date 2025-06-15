@@ -27,6 +27,9 @@ test: build-with-coverage
 	@rm -fr coverdata
 	@mkdir -p coverdata/unit coverdata/integration
 	@gotestsum -- -timeout 360s -cover ./internal/... -test.gocoverdir="$$(pwd)/coverdata/unit"
+
+	@echo ""
+	@echo "Running integration tests. This make take a few minutes"
 	@gotestsum -- -timeout 360s ./integration/... $(UPDATE_FLAG) $(UPDATE_ALL_FLAG)
 	@go tool covdata percent -i=coverdata/integration,coverdata/unit
 	@go tool covdata textfmt -i=coverdata/integration,coverdata/unit -o coverdata/coverage.out

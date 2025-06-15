@@ -1,0 +1,18 @@
+name: Tests
+repo: tests
+cases:
+  - name: test_output_pass
+    grog_args:
+      - test
+      - //:passing_test
+
+  - name: test_output_pass_cached
+    grog_args:
+      - test
+      - //:passing_test
+
+  - name: test_output_fail
+    grog_args:
+      - test
+      - //:failing_test
+    expect_fail: true

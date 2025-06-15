@@ -1,0 +1,13 @@
+amends ".../pkl/package.pkl"
+
+targets {
+  new {
+    name = "passing_test"
+    command = "exit 0"
+  }
+
+  new {
+    name = "failing_test"
+    command = "exit 1"
+  }
+}

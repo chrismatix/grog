@@ -13,3 +13,12 @@ cases:
   - name: should_restore_from_gcs
     grog_args:
       - build
+
+  - name: should_taint_gcs
+    grog_args:
+      - taint
+      - :foo
+
+  - name: build_after_taint_gcs
+    grog_args:
+      - build

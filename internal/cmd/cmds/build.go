@@ -16,6 +16,7 @@ import (
 	"grog/internal/execution"
 	"grog/internal/label"
 	"grog/internal/loading"
+	"grog/internal/locking"
 	"grog/internal/output"
 	"grog/internal/selection"
 	"os"
@@ -114,6 +115,17 @@ func runBuild(
 	}
 	targetCache := caching.NewTargetCache(cache)
 	registry := output.NewRegistry(targetCache, config.Global.EnableCache)
+
+	// Only lock the workspace once necessary, i.e., before we start building
+	locker := locking.NewWorkspaceLocker()
+	if err := locker.Lock(ctx); err != nil {
+		logger.Fatalf("could not acquire workspace lock: %v", err)
+	}
+	defer func() {
+		if err := locker.Unlock(); err != nil {
+			logger.Fatalf("failed to release workspace lock: %v", err)
+		}
+	}()
 
 	executor := execution.NewExecutor(targetCache, registry, graph, failFast, streamLogs, loadOutputsMode)
 	completionMap, executionErr := executor.Execute(ctx)

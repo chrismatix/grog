@@ -3,3 +3,9 @@ targets:
     command: exit 0
     output_checks:
       - command: "exit 1"
+
+  - name: bar
+    command: exit 0
+    output_checks:
+      - command: "echo 'bar'"
+        expected_output: 'foo'
