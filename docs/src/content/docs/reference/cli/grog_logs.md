@@ -1,20 +1,19 @@
 ---
-title: "grog rdeps"
+title: "grog logs"
 ---
-## grog rdeps
+## grog logs
 
-Lists (transitive) dependants (reverse dependencies) of a target.
+Print the latest log file for the given target.
 
 ```
-grog rdeps [flags]
+grog logs [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help                 help for rdeps
-      --target-type string   Filter targets by type (all, test, no_test, bin_output) (default "all")
-  -t, --transitive           Include all transitive dependants of the target
+  -h, --help        help for logs
+  -p, --path-only   Only print out the path of the target logs
 ```
 
 ### Options inherited from parent commands

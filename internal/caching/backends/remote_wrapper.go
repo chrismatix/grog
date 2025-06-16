@@ -182,9 +182,3 @@ func (rw *RemoteWrapper) Exists(ctx context.Context, path string, key string) (b
 	// Check if the file exists in the remote cache
 	return rw.remote.Exists(ctx, path, key)
 }
-
-// Clear removes all files from both the local file system cache and the remote cache.
-func (rw *RemoteWrapper) Clear(ctx context.Context, expunge bool) error {
-	// Clear the local file system cache only
-	return rw.fs.Clear(ctx, expunge)
-}

@@ -2,35 +2,38 @@ package cmds
 
 import (
 	"github.com/spf13/cobra"
-	"grog/internal/caching/backends"
 	"grog/internal/config"
+	"os"
 )
 
 var expunge bool
 
 var CleanCmd = &cobra.Command{
 	Use:   "clean",
-	Short: "Removes build outputs and clears the cache.",
-	Long:  `Removes build outputs and clears the cache.`,
+	Short: "Removes all cached artifacts.",
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx, logger := setupCommand()
+		_, logger := setupCommand()
 
-		cache, err := backends.GetCacheBackend(ctx, config.Global.Cache)
-
-		if err != nil {
-			logger.Fatalf("could not get cache: %v", err)
+		var dirToClear string
+		if expunge {
+			dirToClear = config.Global.Root
+		} else {
+			dirToClear = config.Global.GetWorkspaceRootDir()
 		}
 
-		err = cache.Clear(ctx, expunge)
-		if err != nil {
-			logger.Fatalf("could not clear cache: %v", err)
+		if err := os.RemoveAll(dirToClear); err != nil {
+			logger.Fatalf("Clean failed: %v", err)
+		}
+
+		if err := os.MkdirAll(dirToClear, 0755); err != nil {
+			logger.Fatalf("Clean succeeded but failed to recreate the directory: %v", err)
 		}
 
 		if expunge {
-			logger.Infof("Cache (%s) expunged successfully.", cache.TypeName())
-			return
+			logger.Info("Cache expunged successfully.")
+		} else {
+			logger.Info("Workspace cache cleaned successfully.")
 		}
-		logger.Info("Workspace cache cleaned successfully.")
 	},
 }
 

@@ -1,0 +1,4 @@
+INFO: 1 package loaded, 1 target configured.
+WARN: target //:logs has no inputs, dependencies or output checks causing it to run only once
+INFO: Selected 1 target.
+INFO: Build completed successfully. 1 target completed (0 cache hits).

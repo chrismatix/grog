@@ -1,6 +1,6 @@
 name: GCS backend
 repo: gcs_backend
-requires_creds: true
+requires_credentials: true
 cases:
   - name: should_write_to_gcs
     grog_args:

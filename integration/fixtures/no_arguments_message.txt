@@ -5,13 +5,14 @@ Available Commands:
   build       Loads the user configuration and executes build targets.
   changes     Lists targets whose inputs have been modified since a given commit.
   check       Loads the build graph and runs basic consistency checks.
-  clean       Removes build outputs and clears the cache.
+  clean       Removes all cached artifacts.
   completion  Generate the autocompletion script for the specified shell
   deps        Lists (transitive) dependencies of a target.
   graph       Outputs the target dependency graph.
   help        Help about any command
   info        Prints information about the grog cli and workspace.
   list        Lists targets by pattern.
+  logs        Print the latest log file for the given target.
   owners      Lists targets that own the specified files as inputs.
   rdeps       Lists (transitive) dependants (reverse dependencies) of a target.
   run         Builds and runs a single target's binary output.

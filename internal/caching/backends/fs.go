@@ -134,28 +134,6 @@ func (fsc *FileSystemCache) Exists(ctx context.Context, path, key string) (bool,
 	return true, nil
 }
 
-// Clear removes all files from the cache
-func (fsc *FileSystemCache) Clear(ctx context.Context, expunge bool) error {
-	logger := console.GetLogger(ctx)
-	logger.Debugf("Clearing all files from cache expunge=%t", expunge)
-	fsc.mutex.Lock()
-	defer fsc.mutex.Unlock()
-
-	if expunge {
-		cacheDir := config.Global.GetWorkspaceCacheDirectory()
-		// Remove the entire cache directory
-		err := os.RemoveAll(cacheDir)
-		if err != nil {
-			return err
-		}
-
-		// Recreate the empty root directory
-		return os.MkdirAll(cacheDir, 0755)
-	}
-
-	return os.RemoveAll(fsc.workspaceCacheDir)
-}
-
 func (fsc *FileSystemCache) GetWorkspaceCacheSizeBytes() (int64, error) {
 	return getDirectorySizeBytes(fsc.workspaceCacheDir)
 }

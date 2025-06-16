@@ -18,7 +18,7 @@ unit-test:
 full-test:
 	@echo "Clearing test infrastructure:"
 	./.github/reset_test_infra.sh
-	REQUIRES_CREDS=true $(MAKE) test
+	REQUIRES_CREDENTIALS=true $(MAKE) test
 
 # TODO combine all this cover data and show on github using
 # https://github.com/tj-actions/coverage-badge-go
@@ -29,7 +29,7 @@ test: build-with-coverage
 	@gotestsum -- -timeout 360s -cover ./internal/... -test.gocoverdir="$$(pwd)/coverdata/unit"
 
 	@echo ""
-	@echo "Running integration tests. This make take a few minutes"
+	@echo "Running integration tests. This may take a few minutes..."
 	@gotestsum -- -timeout 360s ./integration/... $(UPDATE_FLAG) $(UPDATE_ALL_FLAG)
 	@go tool covdata percent -i=coverdata/integration,coverdata/unit
 	@go tool covdata textfmt -i=coverdata/integration,coverdata/unit -o coverdata/coverage.out

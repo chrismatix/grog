@@ -1,6 +1,6 @@
 name: Docker Registry Outputs
 repo: docker_registry_output
-requires_creds: true
+requires_credentials: true
 cases:
   - name: creates_docker_registry_output
     grog_args:

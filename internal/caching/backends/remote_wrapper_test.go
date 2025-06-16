@@ -55,13 +55,6 @@ func (m *mockCacheBackend) Exists(ctx context.Context, path string, key string) 
 	return false, errors.New("Exists not implemented in mock")
 }
 
-func (m *mockCacheBackend) Clear(ctx context.Context, expunge bool) error {
-	if m.clearFunc != nil {
-		return m.clearFunc(ctx, expunge)
-	}
-	return errors.New("Clear not implemented in mock")
-}
-
 func TestRemoteWrapper_Get(t *testing.T) {
 	ctx := context.Background()
 	path := "test/path"
@@ -445,28 +438,6 @@ func TestRemoteWrapper_Exists(t *testing.T) {
 		}
 		if err.Error() != "remote exists failed" {
 			t.Errorf("expected error %q, got %q", "remote exists failed", err.Error())
-		}
-	})
-}
-
-func TestRemoteWrapper_Clear(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("successful clear", func(t *testing.T) {
-		fs := &FileSystemCache{
-			workspaceCacheDir: t.TempDir(),
-		}
-		remote := &mockCacheBackend{
-			clearFunc: func(ctx context.Context, expunge bool) error {
-				return nil
-			},
-		}
-
-		rw := NewRemoteWrapper(fs, remote)
-
-		err := rw.Clear(ctx, false)
-		if err != nil {
-			t.Fatalf("Clear failed: %v", err)
 		}
 	})
 }

@@ -50,9 +50,9 @@ type TestTable struct {
 	Repo  string `yaml:"repo"`
 	Cases []TestStep
 
-	// Only run this test when REQUIRES_CREDS is set
+	// Only run this test when REQUIRES_CREDENTIALS is set
 	// (for tests that require cloud credentials)
-	RequiresCreds bool `yaml:"requires_creds"`
+	RequiresCredentials bool `yaml:"requires_credentials"`
 }
 
 // TestStep defines a single test step
@@ -98,8 +98,8 @@ func TestCliArgs(t *testing.T) {
 	}
 
 	for _, tt := range testTables {
-		if tt.RequiresCreds {
-			if os.Getenv("REQUIRES_CREDS") == "" {
+		if tt.RequiresCredentials {
+			if os.Getenv("REQUIRES_CREDENTIALS") == "" {
 				continue
 			}
 		}

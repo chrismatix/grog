@@ -149,8 +149,3 @@ func (gcs *GCSCache) Exists(ctx context.Context, path string, key string) (bool,
 
 	return true, nil
 }
-
-// Clear is not supported for remote caches
-func (gcs *GCSCache) Clear(ctx context.Context, expunge bool) error {
-	return nil
-}

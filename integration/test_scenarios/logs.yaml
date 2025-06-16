@@ -1,0 +1,26 @@
+name: logs command
+repo: logs
+cases:
+  # Should fail for non-existent log file
+  - name: fails_for_non_existent_log
+    grog_args:
+      - logs
+      - //:logs
+    expect_fail: true
+
+  - name: builds_logs_target
+    grog_args:
+      - build
+      - //:logs
+
+  - name: prints_target_logs
+    grog_args:
+      - logs
+      - //:logs
+
+  - name: prints_target_log_file_path
+    grog_args:
+      - logs
+      - --path-only
+      - //:logs
+    skip_fixture: true

@@ -1,0 +1,1 @@
+FATAL: no log file found for target //:logs

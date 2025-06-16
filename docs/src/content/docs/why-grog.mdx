@@ -44,6 +44,21 @@ Independent targets are dispatched in parallel according to the dependency graph
 As a result, you keep using your existing scripts, Makefile rules, NPM commands, or any CLI you love—while grog transparently handles change detection, (remote) caching, and concurrent execution.
 This focused approach delivers immediate ROI for small teams: there’s no new DSL to learn, minimal infrastructure to stand up, and visible speed-ups on every incremental build.
 
+## A visual metaphor
+
+The diagram below is meant to illustrate the niche that Grog is fills in contrast to more advanced build tools:
+
+![A diagram illustrating when Grog is meant to be used in terms of monorepo complexity and engineering resources](../..//assets/grog-stats.svg)
+
+Starting from the bottom; when your monorepo complexity is low, there is no need to adopt a monorepo build tool.
+Either you are using a single language or only have a few packages so that you can manage them with a few simple shell scripts.
+Once teams move up the y-axis of complexity, the build steps become more interconnected and CI quickly turns into a bottleneck for shipping features.
+If you have the engineering resources and the necessary skills, this is a perfect time to look into tools like Bazel, Pants, or Buck.
+If you do not, then you end up in an excruciating spot where adopting these tools will cause your productivity to hit a wall for multiple months, but the alternative also becomes harder and harder to maintain.
+
+This is where Grog comes in.
+You get to, essentially, wrap your existing build scripting with a bit of declarative configuration, and in return you get most of the performance benefits of the more advanced tools.
+
 ## When _not_ to choose Grog?
 
 Grog might not be the right fit for you, if:

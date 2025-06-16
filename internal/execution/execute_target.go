@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"grog/internal/config"
 	"grog/internal/console"
+	"grog/internal/logs"
 	"grog/internal/model"
 	"io"
 	"os"
@@ -76,16 +77,24 @@ func runTargetCommand(
 	cmd.Env = GetExtendedTargetEnv(ctx, target)
 	cmd.Dir = executionPath
 
+	targetLogs := logs.NewTargetLogFile(*target)
+	logWriter, err := targetLogs.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer logWriter.Close()
+
 	var buffer bytes.Buffer
 
 	if program := console.GetTeaProgram(ctx); program != nil && streamLogs {
 		teaWriter := console.NewTeaWriter(program)
-		multiOut := io.MultiWriter(&buffer, teaWriter)
+		multiOut := io.MultiWriter(logWriter, teaWriter, &buffer)
 		cmd.Stdout = multiOut
 		cmd.Stderr = multiOut
 	} else {
-		cmd.Stdout = &buffer
-		cmd.Stderr = &buffer
+		multiOut := io.MultiWriter(logWriter, &buffer)
+		cmd.Stdout = multiOut
+		cmd.Stderr = multiOut
 	}
 
 	if cmdErr := cmd.Run(); cmdErr != nil {
