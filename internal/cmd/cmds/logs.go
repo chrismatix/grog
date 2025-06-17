@@ -3,6 +3,7 @@ package cmds
 import (
 	"fmt"
 	"github.com/spf13/cobra"
+	"grog/internal/completions"
 	"grog/internal/config"
 	"grog/internal/label"
 	"grog/internal/loading"
@@ -21,7 +22,7 @@ Use the --path-only flag to only print the path to the log file instead of its c
 	Example: `  grog logs //path/to/package:target       # Show log contents
   grog logs -p //path/to/package:target      # Show only the log file path`,
 	Args:              cobra.ExactArgs(1), // Requires exactly one target argument
-	ValidArgsFunction: targetLabelCompletion,
+	ValidArgsFunction: completions.TargetLabelCompletion,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := setupCommand()
 

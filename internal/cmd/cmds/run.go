@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 	"grog/internal/caching"
 	"grog/internal/caching/backends"
+	"grog/internal/completions"
 	"grog/internal/config"
 	"grog/internal/execution"
 	"grog/internal/label"
@@ -28,7 +29,7 @@ Any arguments after the target are passed directly to the binary being executed.
   grog run //path/to/package:target arg1 arg2   # Run with arguments
   grog run -i //path/to/package:target          # Run in the package directory`,
 	Args:              cobra.ArbitraryArgs,
-	ValidArgsFunction: targetLabelCompletion,
+	ValidArgsFunction: completions.TargetLabelCompletion,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := setupCommand()
 

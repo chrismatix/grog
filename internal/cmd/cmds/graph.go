@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss/tree"
 	"github.com/spf13/cobra"
 	"grog/internal/analysis"
+	"grog/internal/completions"
 	"grog/internal/config"
 	"grog/internal/dag"
 	"grog/internal/label"
@@ -34,7 +35,7 @@ Supports tree, JSON, and Mermaid diagram output formats. By default, only direct
   grog graph -o mermaid //path/to/package:target  # Output as Mermaid diagram
   grog graph -t //path/to/package:target      # Include transitive dependencies`,
 	Args:              cobra.ArbitraryArgs,
-	ValidArgsFunction: targetPatternCompletion,
+	ValidArgsFunction: completions.TargetPatternCompletion,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := setupCommand()
 

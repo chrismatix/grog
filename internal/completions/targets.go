@@ -1,4 +1,4 @@
-package cmd
+package completions
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-func targetPatternCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func TargetPatternCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	ctx := context.Background()
 	currentPkg, err := config.Global.GetCurrentPackage()
 	if err != nil {
@@ -44,6 +44,6 @@ func targetPatternCompletion(cmd *cobra.Command, args []string, toComplete strin
 	return comps, cobra.ShellCompDirectiveNoFileComp
 }
 
-func targetLabelCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	return targetPatternCompletion(cmd, args, toComplete)
+func TargetLabelCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	return TargetPatternCompletion(cmd, args, toComplete)
 }

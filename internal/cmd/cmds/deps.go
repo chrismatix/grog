@@ -2,6 +2,7 @@ package cmds
 
 import (
 	"github.com/spf13/cobra"
+	"grog/internal/completions"
 	"grog/internal/config"
 	"grog/internal/label"
 	"grog/internal/loading"
@@ -24,7 +25,7 @@ Dependencies can be filtered by target type using the --target-type flag.`,
   grog deps -t //path/to/package:target          # Show transitive dependencies
   grog deps --target-type=test //path/to/package:target  # Show only test dependencies`,
 	Args:              cobra.MaximumNArgs(1),
-	ValidArgsFunction: targetLabelCompletion,
+	ValidArgsFunction: completions.TargetLabelCompletion,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := setupCommand()
 

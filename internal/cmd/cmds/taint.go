@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 	"grog/internal/caching"
 	"grog/internal/caching/backends"
+	"grog/internal/completions"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/hashing"
@@ -22,7 +23,7 @@ This is useful when you want to force a rebuild of specific targets.`,
   grog taint //path/to/package/...         # Taint all targets in a package and subpackages
   grog taint //path/to/package:*           # Taint all targets in a package`,
 	Args:              cobra.MinimumNArgs(1),
-	ValidArgsFunction: targetPatternCompletion,
+	ValidArgsFunction: completions.TargetPatternCompletion,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := setupCommand()
 
