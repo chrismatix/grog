@@ -10,7 +10,8 @@ import (
 var CheckCmd = &cobra.Command{
 	Use:   "check",
 	Short: "Loads the build graph and runs basic consistency checks.",
-	Long:  `Loads the the build graph and performs the same consistency checks as 'grog build' without actually building anything.`,
+	Long:  `Loads the build graph and performs the same consistency checks as 'grog build' without actually building anything.`,
+	Example: `  grog check  # Validate the build graph for consistency issues`,
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := setupCommand()

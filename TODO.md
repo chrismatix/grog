@@ -1,5 +1,7 @@
 # TODOs
 
+- [ ] Make it so that the displayed execution time for a test is cached
+- [ ] Allow grog list to use regular directories for querying
 - [ ] Design the virtualization via docker feature
 - [ ] Always stream output logs to files aswell
   - Each individual target log needs to be streamed to a target specific file

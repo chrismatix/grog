@@ -11,6 +11,11 @@ var expunge bool
 var CleanCmd = &cobra.Command{
 	Use:   "clean",
 	Short: "Removes all cached artifacts.",
+	Long:  `Removes cached artifacts from the workspace or the entire grog cache.
+By default, only the workspace-specific cache is cleaned. Use the --expunge flag to remove all cached artifacts.`,
+	Example: `  grog clean            # Clean the workspace cache
+  grog clean --expunge   # Clean the entire grog cache`,
+	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		_, logger := setupCommand()
 

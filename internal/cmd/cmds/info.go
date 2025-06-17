@@ -13,6 +13,9 @@ import (
 var InfoCmd = &cobra.Command{
 	Use:   "info",
 	Short: "Prints information about the grog cli and workspace.",
+	Long:  `Displays detailed information about the grog CLI configuration, workspace settings, and cache statistics.`,
+	Example: `  grog info                   # Show all grog information
+  grog info --version          # Show only the version information`,
 	Args:  cobra.ArbitraryArgs, // Optional argument for target pattern
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := setupCommand()
@@ -31,7 +34,7 @@ var InfoCmd = &cobra.Command{
 		fmt.Fprintf(writer, "Version:\t%s\n", version)
 		fmt.Fprintf(writer, "Platform:\t%s\n", platform)
 		fmt.Fprintf(writer, "Workspace:\t%s\n", config.Global.WorkspaceRoot)
-		fmt.Fprintf(writer, "Workspace Cache:\t%s\n", config.Global.WorkspaceRoot)
+		fmt.Fprintf(writer, "Workspace Cache:\t%s\n", config.Global.GetWorkspaceCacheDirectory())
 		fmt.Fprintf(writer, "Config:\t%s\n", viper.ConfigFileUsed())
 		fmt.Fprintf(writer, "Grog root:\t%s\n", config.Global.Root)
 

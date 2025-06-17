@@ -11,7 +11,10 @@ import (
 var TestCmd = &cobra.Command{
 	Use:   "test",
 	Short: "Loads the user configuration and executes test targets.",
-	Long:  `Loads the user configuration, checks which targets need to be rebuilt based on file hashes, builds the dependency graph, and executes targets.`,
+	Long:  `Loads the user configuration, checks which targets need to be rebuilt based on file hashes, builds the dependency graph, and executes test targets.`,
+	Example: `  grog test                      # Run all tests in the current package
+  grog test //path/to/package:test  # Run a specific test
+  grog test //path/to/package/...   # Run all tests in a package and subpackages`,
 	Args:  cobra.ArbitraryArgs, // Optional argument for target pattern
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := setupCommand()

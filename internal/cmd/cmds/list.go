@@ -16,6 +16,11 @@ var ListCmd = &cobra.Command{
 	Use:     "list",
 	Aliases: []string{"ls"},
 	Short:   "Lists targets by pattern.",
+	Long:    `Lists targets that match the specified pattern. Can filter targets by type using the --target-type flag.`,
+	Example: `  grog list                           # List all targets in the current package
+  grog list //path/to/package:target    # List a specific target
+  grog list //path/to/package/...       # List all targets in a package and subpackages
+  grog list --target-type=test          # List only test targets`,
 	Args:    cobra.ArbitraryArgs, // Optional argument for target pattern
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := setupCommand()

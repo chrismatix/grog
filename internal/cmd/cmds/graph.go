@@ -27,6 +27,13 @@ var graphOptions struct {
 var GraphCmd = &cobra.Command{
 	Use:   "graph",
 	Short: "Outputs the target dependency graph.",
+	Long:  `Visualizes the dependency graph of targets in various formats.
+Supports tree, JSON, and Mermaid diagram output formats. By default, only direct dependencies are shown.`,
+	Example: `  grog graph                                # Show dependency tree for all targets
+  grog graph //path/to/package:target         # Show dependencies for a specific target
+  grog graph -o mermaid //path/to/package:target  # Output as Mermaid diagram
+  grog graph -t //path/to/package:target      # Include transitive dependencies`,
+	Args:  cobra.ArbitraryArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := setupCommand()
 

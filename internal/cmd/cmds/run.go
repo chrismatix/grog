@@ -22,6 +22,11 @@ var runOptions struct {
 var RunCmd = &cobra.Command{
 	Use:   "run",
 	Short: "Builds and runs a single target's binary output.",
+	Long:  `Builds a single target that produces a binary output and then executes it with the provided arguments.
+Any arguments after the target are passed directly to the binary being executed.`,
+	Example: `  grog run //path/to/package:target           # Run the target
+  grog run //path/to/package:target arg1 arg2   # Run with arguments
+  grog run -i //path/to/package:target          # Run in the package directory`,
 	Args:  cobra.ArbitraryArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := setupCommand()

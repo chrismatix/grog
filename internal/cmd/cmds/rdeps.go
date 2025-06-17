@@ -17,6 +17,12 @@ var rDepsOptions struct {
 var RDepsCmd = &cobra.Command{
 	Use:   "rdeps",
 	Short: "Lists (transitive) dependants (reverse dependencies) of a target.",
+	Long:  `Lists the direct or transitive dependants (reverse dependencies) of a specified target.
+By default, only direct dependants are shown. Use the --transitive flag to show all transitive dependants.
+Dependants can be filtered by target type using the --target-type flag.`,
+	Example: `  grog rdeps //path/to/package:target           # Show direct dependants
+  grog rdeps -t //path/to/package:target          # Show transitive dependants
+  grog rdeps --target-type=test //path/to/package:target  # Show only test dependants`,
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := setupCommand()

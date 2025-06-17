@@ -61,10 +61,10 @@ You can combine the recursive wildcard with a specific target name to match targ
 
 **All Targets in a Package (`*` or `all`):**
 
-You can match all targets directly within a specific package (non-recursively) using `:*` or `:all`.
+You can match all targets directly within a specific package (non-recursively) using `:...` or `:all`.
 
-- `//package/path:*`: Matches all targets defined directly in the `package/path` package.
-- `//package/path:all`: Equivalent to `//package/path:*`.
+- `//package/path:...`: Matches all targets defined directly in the `package/path` package.
+- `//package/path:all`: Equivalent to `//package/path:...`.
 
 **Note:** A pattern like `//package/path` without a colon or wildcard is treated as shorthand for `//package/path:path`, similar to target labels.
-To match all targets within the `package/path` directory _only_, use `//package/path:*`.
+To match all targets within the `package/path` directory _only_, use `//package/path:...`.
