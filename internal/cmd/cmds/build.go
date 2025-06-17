@@ -31,7 +31,8 @@ var BuildCmd = &cobra.Command{
 	Example: `  grog build                      # Build all targets in the current package
   grog build //path/to/package:target  # Build a specific target
   grog build //path/to/package/...     # Build all targets in a package and subpackages`,
-	Args:  cobra.ArbitraryArgs, // Optional argument for target pattern
+	Args:              cobra.ArbitraryArgs, // Optional argument for target pattern
+	ValidArgsFunction: targetPatternCompletion,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := setupCommand()
 

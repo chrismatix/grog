@@ -15,7 +15,8 @@ var TestCmd = &cobra.Command{
 	Example: `  grog test                      # Run all tests in the current package
   grog test //path/to/package:test  # Run a specific test
   grog test //path/to/package/...   # Run all tests in a package and subpackages`,
-	Args:  cobra.ArbitraryArgs, // Optional argument for target pattern
+	Args:              cobra.ArbitraryArgs, // Optional argument for target pattern
+	ValidArgsFunction: targetPatternCompletion,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := setupCommand()
 

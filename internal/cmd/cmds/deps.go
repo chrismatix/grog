@@ -17,13 +17,14 @@ var depsOptions struct {
 var DepsCmd = &cobra.Command{
 	Use:   "deps",
 	Short: "Lists (transitive) dependencies of a target.",
-	Long:  `Lists the direct or transitive dependencies of a specified target.
+	Long: `Lists the direct or transitive dependencies of a specified target.
 By default, only direct dependencies are shown. Use the --transitive flag to show all transitive dependencies.
 Dependencies can be filtered by target type using the --target-type flag.`,
 	Example: `  grog deps //path/to/package:target           # Show direct dependencies
   grog deps -t //path/to/package:target          # Show transitive dependencies
   grog deps --target-type=test //path/to/package:target  # Show only test dependencies`,
-	Args:  cobra.MaximumNArgs(1),
+	Args:              cobra.MaximumNArgs(1),
+	ValidArgsFunction: targetLabelCompletion,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := setupCommand()
 

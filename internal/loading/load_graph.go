@@ -10,7 +10,7 @@ import (
 )
 
 func MustLoadGraphForBuild(ctx context.Context, logger *zap.SugaredLogger) *dag.DirectedTargetGraph {
-	packages, err := LoadPackages(ctx)
+	packages, err := LoadPackages(ctx, "")
 	if err != nil {
 		logger.Fatalf(
 			"could not load packages: %v",
@@ -32,7 +32,7 @@ func MustLoadGraphForBuild(ctx context.Context, logger *zap.SugaredLogger) *dag.
 }
 
 func MustLoadGraphForQuery(ctx context.Context, logger *zap.SugaredLogger) *dag.DirectedTargetGraph {
-	packages, err := LoadPackages(ctx)
+	packages, err := LoadPackages(ctx, "")
 	if err != nil {
 		logger.Fatalf("could not load packages: %v", err)
 	}

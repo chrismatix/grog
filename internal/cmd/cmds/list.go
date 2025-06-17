@@ -21,7 +21,8 @@ var ListCmd = &cobra.Command{
   grog list //path/to/package:target    # List a specific target
   grog list //path/to/package/...       # List all targets in a package and subpackages
   grog list --target-type=test          # List only test targets`,
-	Args:    cobra.ArbitraryArgs, // Optional argument for target pattern
+	Args:              cobra.ArbitraryArgs, // Optional argument for target pattern
+	ValidArgsFunction: targetPatternCompletion,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := setupCommand()
 

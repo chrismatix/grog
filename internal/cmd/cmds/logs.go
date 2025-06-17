@@ -16,11 +16,12 @@ var logsOptions struct {
 var LogsCmd = &cobra.Command{
 	Use:   "logs",
 	Short: "Print the latest log file for the given target.",
-	Long:  `Displays the contents of the most recent log file for a specified target.
+	Long: `Displays the contents of the most recent log file for a specified target.
 Use the --path-only flag to only print the path to the log file instead of its contents.`,
 	Example: `  grog logs //path/to/package:target       # Show log contents
   grog logs -p //path/to/package:target      # Show only the log file path`,
-	Args:  cobra.ExactArgs(1), // Requires exactly one target argument
+	Args:              cobra.ExactArgs(1), // Requires exactly one target argument
+	ValidArgsFunction: targetLabelCompletion,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := setupCommand()
 

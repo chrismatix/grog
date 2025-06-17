@@ -12,11 +12,11 @@ import (
 var OwnersCmd = &cobra.Command{
 	Use:   "owners",
 	Short: "Lists targets that own the specified files as inputs.",
-	Long:  `Identifies and lists all targets that include the specified files as inputs.
+	Long: `Identifies and lists all targets that include the specified files as inputs.
 This is useful for finding which targets will be affected by changes to specific files.`,
 	Example: `  grog owners path/to/file.txt                # Find targets that use a specific file
   grog owners path/to/file1.txt path/to/file2.txt  # Find targets that use any of the specified files`,
-	Args:  cobra.MinimumNArgs(1), // Require at least one file argument
+	Args: cobra.MinimumNArgs(1), // Require at least one file argument
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := setupCommand()
 

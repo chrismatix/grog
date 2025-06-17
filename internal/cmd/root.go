@@ -45,6 +45,9 @@ func Stamp(version string, commit string, buildDate string) {
 func init() {
 	cobra.OnInitialize()
 
+	RootCmd.InitDefaultCompletionCmd()
+	RootCmd.CompletionOptions.DisableDefaultCmd = false
+
 	// Find the current workspace root
 	workspaceRoot := config.MustFindWorkspaceRoot()
 	viper.Set("workspace_root", workspaceRoot)
