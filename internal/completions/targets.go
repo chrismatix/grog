@@ -17,11 +17,11 @@ func TargetPatternCompletion(cmd *cobra.Command, args []string, toComplete strin
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	pattern := label.ParsePartialTargetPattern(currentPkg, toComplete)
-	searchDir := pattern.Prefix
-	if searchDir == "" && !strings.HasPrefix(toComplete, "//") {
-		searchDir = currentPkg
-	}
+       pattern := label.ParsePartialTargetPattern(currentPkg, toComplete)
+       searchDir := pattern.Prefix()
+       if searchDir == "" && !strings.HasPrefix(toComplete, "//") {
+               searchDir = currentPkg
+       }
 
 	packages, err := loading.LoadPackages(ctx, searchDir)
 	if err != nil {
@@ -41,31 +41,44 @@ func TargetPatternCompletion(cmd *cobra.Command, args []string, toComplete strin
 		}
 
 		if pkgPath == searchDir {
-			for lbl := range pkg.Targets {
-				if pattern.TargetPattern != "" && !strings.HasPrefix(lbl.Name, pattern.TargetPattern) {
-					continue
-				}
-				targets = append(targets, lbl.String())
-			}
-			continue
-		}
+                       for lbl := range pkg.Targets {
+                               if pattern.Target() != "" && !strings.HasPrefix(lbl.Name, pattern.Target()) {
+                                       continue
+                               }
+                               targets = append(targets, lbl.String())
+                       }
+                       continue
+               }
+               if searchDir == "" {
+                       seg := strings.Split(pkgPath, "/")[0]
+                       if seg != pkgPath {
+                               dirs[seg] = struct{}{}
+                       }
+               } else if strings.HasPrefix(pkgPath, searchDir+"/") {
+                       rest := strings.TrimPrefix(pkgPath, searchDir+"/")
+                       seg := strings.Split(rest, "/")[0]
+                       dirs[seg] = struct{}{}
+               }
+       }
 
-		if strings.HasPrefix(pkgPath, searchDir+"/") {
-			rest := strings.TrimPrefix(pkgPath, searchDir+"/")
-			seg := strings.Split(rest, "/")[0]
-			dirs[seg] = struct{}{}
-		}
-	}
+       // If the user already typed a full target name, suggest only that target
+       if pattern.Target() != "" {
+               for _, t := range targets {
+                       if strings.HasSuffix(t, ":"+pattern.Target()) {
+                               return []string{t}, cobra.ShellCompDirectiveNoFileComp
+                       }
+               }
+       }
 
-	var comps []string
-	for d := range dirs {
-		p := d
-		if searchDir != "" {
-			p = searchDir + "/" + d
-		}
-		comps = append(comps, "//"+p+"/")
-	}
-	comps = append(comps, targets...)
+       var comps []string
+       for d := range dirs {
+               p := d
+               if searchDir != "" {
+                       p = searchDir + "/" + d
+               }
+               comps = append(comps, "//"+p+"/")
+       }
+       comps = append(comps, targets...)
 	sort.Strings(comps)
 
 	return comps, cobra.ShellCompDirectiveNoFileComp

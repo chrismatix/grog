@@ -8,9 +8,9 @@ import (
 // TargetPattern represents a Bazel target pattern, e.g. "//pkg/..." or "//pkg/...:target".
 // It supports recursive (hierarchical) matching using the "..." wildcard.
 type TargetPattern struct {
-	prefix        string // package prefix (without trailing slash)
-	targetPattern string // target name filter (if empty, matches any target)
-	recursive     bool   // true if "..." is used for recursive matching
+       prefix        string // package prefix (without trailing slash)
+       targetPattern string // target name filter (if empty, matches any target)
+       recursive     bool   // true if "..." is used for recursive matching
 }
 
 // ParseTargetPattern parses a Bazel target pattern.
@@ -200,3 +200,12 @@ func (p TargetPattern) String() string {
 	}
 	return base
 }
+
+// Prefix returns the package prefix of the pattern.
+func (p TargetPattern) Prefix() string { return p.prefix }
+
+// Target returns the target pattern portion.
+func (p TargetPattern) Target() string { return p.targetPattern }
+
+// Recursive reports whether the pattern matches recursively.
+func (p TargetPattern) Recursive() bool { return p.recursive }
