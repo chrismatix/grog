@@ -18,29 +18,56 @@ func TargetPatternCompletion(cmd *cobra.Command, args []string, toComplete strin
 	}
 
 	pattern := label.ParsePartialTargetPattern(currentPkg, toComplete)
-	dir := pattern.Prefix
-	if dir == "" && !strings.HasPrefix(toComplete, "//") {
-		dir = currentPkg
+	searchDir := pattern.Prefix
+	if searchDir == "" && !strings.HasPrefix(toComplete, "//") {
+		searchDir = currentPkg
 	}
 
-	packages, err := loading.LoadPackages(ctx, dir)
+	packages, err := loading.LoadPackages(ctx, searchDir)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	var comps []string
+	dirs := make(map[string]struct{})
+	var targets []string
+
 	for _, pkg := range packages {
-		for lbl := range pkg.Targets {
-			if pattern.Prefix != "" && !strings.HasPrefix(lbl.Package, pattern.Prefix) {
-				continue
+		pkgPath, err := config.GetPackagePath(pkg.SourceFilePath)
+		if err != nil {
+			continue
+		}
+		if pkgPath == "." {
+			pkgPath = ""
+		}
+
+		if pkgPath == searchDir {
+			for lbl := range pkg.Targets {
+				if pattern.TargetPattern != "" && !strings.HasPrefix(lbl.Name, pattern.TargetPattern) {
+					continue
+				}
+				targets = append(targets, lbl.String())
 			}
-			if pattern.TargetPattern != "" && !strings.HasPrefix(lbl.Name, pattern.TargetPattern) {
-				continue
-			}
-			comps = append(comps, lbl.String())
+			continue
+		}
+
+		if strings.HasPrefix(pkgPath, searchDir+"/") {
+			rest := strings.TrimPrefix(pkgPath, searchDir+"/")
+			seg := strings.Split(rest, "/")[0]
+			dirs[seg] = struct{}{}
 		}
 	}
+
+	var comps []string
+	for d := range dirs {
+		p := d
+		if searchDir != "" {
+			p = searchDir + "/" + d
+		}
+		comps = append(comps, "//"+p+"/")
+	}
+	comps = append(comps, targets...)
 	sort.Strings(comps)
+
 	return comps, cobra.ShellCompDirectiveNoFileComp
 }
 
