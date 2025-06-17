@@ -92,19 +92,9 @@ func TestTargetPatternMatching(t *testing.T) {
 func TestCurrentPackageTargetPattern(t *testing.T) {
 	currentPkg := "pkg/path"
 
-	// Relative pattern without colon is interpreted as shorthand for ":target"
-	patternRelative, err := ParseTargetPattern(currentPkg, "foo")
-	if err != nil {
-		t.Fatalf("Failed to parse relative pattern: %v", err)
-	}
-
-	// Should match a label in the current package with target "foo"
-	if !patternRelative.Matches(TargetLabel{Package: currentPkg, Name: "foo"}) {
-		t.Error("Relative pattern 'foo' should match target 'foo' in current package")
-	}
-	// Should not match labels in other packages even if the target name is "foo"
-	if patternRelative.Matches(TargetLabel{Package: "other/pkg", Name: "foo"}) {
-		t.Error("Relative pattern 'foo' should not match targets in a different package")
+	// Relative pattern without colon should result in an error
+	if _, err := ParseTargetPattern(currentPkg, "foo"); err == nil {
+		t.Fatal("Expected error for relative pattern without colon")
 	}
 
 	// Relative pattern with explicit colon, e.g. ":bar", should have target "bar"

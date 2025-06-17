@@ -5,4 +5,4 @@ cases:
   - name: pkl_build_only_foo
     grog_args:
       - build
-      - foo
+      - :foo
