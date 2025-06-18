@@ -1,0 +1,8 @@
+amends ".../pkl/package.pkl"
+
+targets {
+  new {
+    name = "nested"
+    command = "echo 'hello world'"
+  }
+}

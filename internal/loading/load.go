@@ -11,13 +11,17 @@ import (
 	"sync"
 )
 
-func LoadPackages(ctx context.Context) ([]*model.Package, error) {
-	workspaceRoot := config.Global.WorkspaceRoot
+func LoadAllPackages(ctx context.Context) ([]*model.Package, error) {
+	return LoadPackages(ctx, config.Global.WorkspaceRoot)
+}
+
+// LoadPackages loads all packages in the given directory and its subdirectories.
+func LoadPackages(ctx context.Context, startDir string) ([]*model.Package, error) {
 	logger := console.GetLogger(ctx)
 
 	fileListQueue := make(chan *gocodewalker.File, 100)
 
-	fileWalker := gocodewalker.NewParallelFileWalker([]string{workspaceRoot}, fileListQueue)
+	fileWalker := gocodewalker.NewParallelFileWalker([]string{startDir}, fileListQueue)
 	go fileWalker.Start()
 
 	packageLoader := NewPackageLoader(logger)

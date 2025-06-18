@@ -1,0 +1,23 @@
+amends ".../pkl/package.pkl"
+
+targets {
+  new {
+    name = "foo"
+    command = "echo 'hello foo'"
+  }
+
+  new {
+    name = "foo_foo"
+    command = "echo 'hello foo_test'"
+  }
+
+  new {
+    name = "foo_test"
+    command = "echo 'hello foo_test'"
+  }
+
+  new {
+    name = "bar"
+    command = "echo 'hello foo'"
+  }
+}

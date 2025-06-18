@@ -2,6 +2,7 @@ package cmds
 
 import (
 	"grog/internal/analysis"
+	"grog/internal/console"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -23,14 +24,14 @@ var changesOptions struct {
 var ChangesCmd = &cobra.Command{
 	Use:   "changes",
 	Short: "Lists targets whose inputs have been modified since a given commit.",
-	Long:  `Identifies targets that need to be rebuilt due to changes in their input files since a specified git commit.
+	Long: `Identifies targets that need to be rebuilt due to changes in their input files since a specified git commit.
 Can optionally include transitive dependents of changed targets to find all affected targets.`,
 	Example: `  grog changes --since=HEAD~1                      # Show targets changed in the last commit
   grog changes --since=main --dependents=transitive  # Show targets changed since main branch, including dependents
   grog changes --since=v1.0.0 --target-type=test     # Show only test targets changed since v1.0.0`,
-	Args:  cobra.MaximumNArgs(0),
+	Args: cobra.MaximumNArgs(0),
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx, logger := setupCommand()
+		ctx, logger := console.SetupCommand()
 
 		if changesOptions.since == "" {
 			logger.Fatalf("--since flag is required")
@@ -51,7 +52,7 @@ Can optionally include transitive dependents of changed targets to find all affe
 			return
 		}
 
-		packages, err := loading.LoadPackages(ctx)
+		packages, err := loading.LoadAllPackages(ctx)
 		if err != nil {
 			logger.Fatalf(
 				"could not load packages: %v",

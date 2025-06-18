@@ -3,12 +3,14 @@ package cmds
 import (
 	"fmt"
 	"github.com/charmbracelet/lipgloss"
+	"grog/internal/console"
 	"sort"
 
 	"github.com/TyphonHill/go-mermaid/diagrams/flowchart"
 	"github.com/charmbracelet/lipgloss/tree"
 	"github.com/spf13/cobra"
 	"grog/internal/analysis"
+	"grog/internal/completions"
 	"grog/internal/config"
 	"grog/internal/dag"
 	"grog/internal/label"
@@ -27,17 +29,18 @@ var graphOptions struct {
 var GraphCmd = &cobra.Command{
 	Use:   "graph",
 	Short: "Outputs the target dependency graph.",
-	Long:  `Visualizes the dependency graph of targets in various formats.
+	Long: `Visualizes the dependency graph of targets in various formats.
 Supports tree, JSON, and Mermaid diagram output formats. By default, only direct dependencies are shown.`,
 	Example: `  grog graph                                # Show dependency tree for all targets
   grog graph //path/to/package:target         # Show dependencies for a specific target
   grog graph -o mermaid //path/to/package:target  # Output as Mermaid diagram
   grog graph -t //path/to/package:target      # Include transitive dependencies`,
-	Args:  cobra.ArbitraryArgs,
+	Args:              cobra.ArbitraryArgs,
+	ValidArgsFunction: completions.AllTargetPatternCompletion,
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx, logger := setupCommand()
+		ctx, logger := console.SetupCommand()
 
-		packages, err := loading.LoadPackages(ctx)
+		packages, err := loading.LoadAllPackages(ctx)
 		if err != nil {
 			logger.Fatalf(
 				"could not load packages: %v",

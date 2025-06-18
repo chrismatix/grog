@@ -92,16 +92,5 @@ func (s *Selector) targetExcludeTagsMatch(target *model.Target) bool {
 }
 
 func (s *Selector) targetMatchesTypeSelection(target *model.Target) bool {
-	switch s.TargetType {
-	case TestOnly:
-		return target.IsTest()
-	case NonTestOnly:
-		return !target.IsTest()
-	case BinOutput:
-		return target.HasBinOutput()
-	case AllTargets:
-		return true
-	}
-
-	return false
+	return TargetMatchesTypeSelection(target, s.TargetType)
 }

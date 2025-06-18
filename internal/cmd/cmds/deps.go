@@ -2,7 +2,9 @@ package cmds
 
 import (
 	"github.com/spf13/cobra"
+	"grog/internal/completions"
 	"grog/internal/config"
+	"grog/internal/console"
 	"grog/internal/label"
 	"grog/internal/loading"
 	"grog/internal/model"
@@ -17,15 +19,16 @@ var depsOptions struct {
 var DepsCmd = &cobra.Command{
 	Use:   "deps",
 	Short: "Lists (transitive) dependencies of a target.",
-	Long:  `Lists the direct or transitive dependencies of a specified target.
+	Long: `Lists the direct or transitive dependencies of a specified target.
 By default, only direct dependencies are shown. Use the --transitive flag to show all transitive dependencies.
 Dependencies can be filtered by target type using the --target-type flag.`,
 	Example: `  grog deps //path/to/package:target           # Show direct dependencies
   grog deps -t //path/to/package:target          # Show transitive dependencies
   grog deps --target-type=test //path/to/package:target  # Show only test dependencies`,
-	Args:  cobra.MaximumNArgs(1),
+	Args:              cobra.MaximumNArgs(1),
+	ValidArgsFunction: completions.AllTargetPatternCompletion,
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx, logger := setupCommand()
+		ctx, logger := console.SetupCommand()
 
 		if len(args) == 0 {
 			logger.Fatalf("`%s` requires a target label", cmd.UseLine())

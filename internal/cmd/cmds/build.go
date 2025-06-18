@@ -10,6 +10,7 @@ import (
 	"grog/internal/analysis"
 	"grog/internal/caching"
 	"grog/internal/caching/backends"
+	"grog/internal/completions"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/dag"
@@ -31,9 +32,10 @@ var BuildCmd = &cobra.Command{
 	Example: `  grog build                      # Build all targets in the current package
   grog build //path/to/package:target  # Build a specific target
   grog build //path/to/package/...     # Build all targets in a package and subpackages`,
-	Args:  cobra.ArbitraryArgs, // Optional argument for target pattern
+	Args:              cobra.ArbitraryArgs, // Optional argument for target pattern
+	ValidArgsFunction: completions.BuildTargetPatternCompletion,
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx, logger := setupCommand()
+		ctx, logger := console.SetupCommand()
 
 		currentPackagePath, err := config.Global.GetCurrentPackage()
 		if err != nil {

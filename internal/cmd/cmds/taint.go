@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 	"grog/internal/caching"
 	"grog/internal/caching/backends"
+	"grog/internal/completions"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/hashing"
@@ -15,15 +16,16 @@ import (
 var TaintCmd = &cobra.Command{
 	Use:   "taint",
 	Short: "Taints targets by pattern to force execution regardless of cache status.",
-	Long:  `Marks specified targets as "tainted", which forces them to be rebuilt on the next build command,
+	Long: `Marks specified targets as "tainted", which forces them to be rebuilt on the next build command,
 regardless of whether they would normally be considered up-to-date according to the cache.
 This is useful when you want to force a rebuild of specific targets.`,
 	Example: `  grog taint //path/to/package:target      # Taint a specific target
   grog taint //path/to/package/...         # Taint all targets in a package and subpackages
   grog taint //path/to/package:*           # Taint all targets in a package`,
-	Args:  cobra.MinimumNArgs(1),
+	Args:              cobra.MinimumNArgs(1),
+	ValidArgsFunction: completions.AllTargetPatternCompletion,
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx, logger := setupCommand()
+		ctx, logger := console.SetupCommand()
 
 		currentPackagePath, err := config.Global.GetCurrentPackage()
 		if err != nil {

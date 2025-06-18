@@ -8,9 +8,9 @@ import (
 // TargetPattern represents a Bazel target pattern, e.g. "//pkg/..." or "//pkg/...:target".
 // It supports recursive (hierarchical) matching using the "..." wildcard.
 type TargetPattern struct {
-	prefix        string // package prefix (without trailing slash)
-	targetPattern string // target name filter (if empty, matches any target)
-	recursive     bool   // true if "..." is used for recursive matching
+       prefix        string // package prefix (without trailing slash)
+       targetPattern string // target name filter (if empty, matches any target)
+       recursive     bool   // true if "..." is used for recursive matching
 }
 
 // ParseTargetPattern parses a Bazel target pattern.
@@ -105,6 +105,53 @@ func GetMatchAllTargetPattern() TargetPattern {
 	return TargetPattern{prefix: "", recursive: true}
 }
 
+// ParsePartialTargetPattern parses a target pattern but is lenient towards
+// incomplete patterns. It is primarily used for shell completions where the
+// user might not have typed the full pattern yet. Any missing parts are simply
+// returned empty without an error.
+func ParsePartialTargetPattern(currentPackage, pattern string) TargetPattern {
+	if strings.HasPrefix(pattern, ":") {
+		if currentPackage == "." {
+			currentPackage = ""
+		}
+		return TargetPattern{prefix: currentPackage, targetPattern: pattern[1:]}
+	}
+
+	if !strings.HasPrefix(pattern, "//") {
+		// Relative pattern without explicit ":" or shorthand.
+		colonIdx := strings.Index(pattern, ":")
+		var targetName string
+		if colonIdx == -1 {
+			targetName = pattern
+		} else {
+			targetName = pattern[colonIdx+1:]
+		}
+		return TargetPattern{prefix: currentPackage, targetPattern: targetName}
+	}
+
+	body := pattern[2:]
+	prefix := body
+	targetPattern := ""
+	recursive := false
+
+	if idx := strings.Index(body, "..."); idx != -1 {
+		recursive = true
+		prefix = body[:idx]
+		if len(body) > idx+3 && body[idx+3] == ':' {
+			targetPattern = body[idx+4:]
+		}
+	} else if colonIdx := strings.Index(body, ":"); colonIdx != -1 {
+		prefix = body[:colonIdx]
+		targetPattern = body[colonIdx+1:]
+	}
+
+	if len(prefix) > 0 && prefix[len(prefix)-1] == '/' {
+		prefix = prefix[:len(prefix)-1]
+	}
+
+	return TargetPattern{prefix: prefix, targetPattern: targetPattern, recursive: recursive}
+}
+
 // Matches returns true if the given TargetLabel matches the pattern.
 func (p TargetPattern) Matches(t TargetLabel) bool {
 	// Package matching.
@@ -149,3 +196,12 @@ func (p TargetPattern) String() string {
 	}
 	return base
 }
+
+// Prefix returns the package prefix of the pattern.
+func (p TargetPattern) Prefix() string { return p.prefix }
+
+// Target returns the target pattern portion.
+func (p TargetPattern) Target() string { return p.targetPattern }
+
+// Recursive reports whether the pattern matches recursively.
+func (p TargetPattern) Recursive() bool { return p.recursive }

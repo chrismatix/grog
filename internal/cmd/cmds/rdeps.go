@@ -2,7 +2,9 @@ package cmds
 
 import (
 	"github.com/spf13/cobra"
+	"grog/internal/completions"
 	"grog/internal/config"
+	"grog/internal/console"
 	"grog/internal/label"
 	"grog/internal/loading"
 	"grog/internal/model"
@@ -17,15 +19,16 @@ var rDepsOptions struct {
 var RDepsCmd = &cobra.Command{
 	Use:   "rdeps",
 	Short: "Lists (transitive) dependants (reverse dependencies) of a target.",
-	Long:  `Lists the direct or transitive dependants (reverse dependencies) of a specified target.
+	Long: `Lists the direct or transitive dependants (reverse dependencies) of a specified target.
 By default, only direct dependants are shown. Use the --transitive flag to show all transitive dependants.
 Dependants can be filtered by target type using the --target-type flag.`,
 	Example: `  grog rdeps //path/to/package:target           # Show direct dependants
   grog rdeps -t //path/to/package:target          # Show transitive dependants
   grog rdeps --target-type=test //path/to/package:target  # Show only test dependants`,
-	Args:  cobra.MaximumNArgs(1),
+	Args:              cobra.MaximumNArgs(1),
+	ValidArgsFunction: completions.AllTargetPatternCompletion,
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx, logger := setupCommand()
+		ctx, logger := console.SetupCommand()
 
 		if len(args) == 0 {
 			logger.Fatalf("`%s` requires a target label", cmd.UseLine())
