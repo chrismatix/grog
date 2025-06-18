@@ -1,16 +1,15 @@
-package cmds
+package console
 
 import (
 	"context"
 	"go.uber.org/zap"
-	"grog/internal/console"
 	"os"
 	"os/signal"
 	"syscall"
 )
 
-// setupCommand universal helper for setting up the context and logger for each command
-func setupCommand() (context.Context, *zap.SugaredLogger) {
+// SetupCommand universal helper for setting up the context and logger for each command
+func SetupCommand() (context.Context, *zap.SugaredLogger) {
 	ctx, cancel := context.WithCancel(context.Background())
 	// Listen for SIGTERM or SIGINT to cancel the context
 	signalChan := make(chan os.Signal, 1)
@@ -18,12 +17,12 @@ func setupCommand() (context.Context, *zap.SugaredLogger) {
 	go func() {
 		select {
 		case sig := <-signalChan:
-			console.GetLogger(ctx).Infof("Received signal %v, exiting...", sig)
+			GetLogger(ctx).Infof("Received signal %v, exiting...", sig)
 			cancel()
 		case <-ctx.Done():
 		}
 	}()
 
-	logger := console.GetLogger(ctx)
-	return console.WithLogger(ctx, logger), logger
+	logger := GetLogger(ctx)
+	return WithLogger(ctx, logger), logger
 }

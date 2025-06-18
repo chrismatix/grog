@@ -3,6 +3,7 @@ package cmds
 import (
 	"fmt"
 	"github.com/charmbracelet/lipgloss"
+	"grog/internal/console"
 	"sort"
 
 	"github.com/TyphonHill/go-mermaid/diagrams/flowchart"
@@ -35,11 +36,11 @@ Supports tree, JSON, and Mermaid diagram output formats. By default, only direct
   grog graph -o mermaid //path/to/package:target  # Output as Mermaid diagram
   grog graph -t //path/to/package:target      # Include transitive dependencies`,
 	Args:              cobra.ArbitraryArgs,
-	ValidArgsFunction: completions.TargetPatternCompletion,
+	ValidArgsFunction: completions.AllTargetPatternCompletion,
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx, logger := setupCommand()
+		ctx, logger := console.SetupCommand()
 
-		packages, err := loading.LoadPackages(ctx, "")
+		packages, err := loading.LoadAllPackages(ctx)
 		if err != nil {
 			logger.Fatalf(
 				"could not load packages: %v",

@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/viper"
 	"grog/internal/caching/backends"
 	"grog/internal/config"
+	"grog/internal/console"
 	"os"
 	"text/tabwriter"
 )
@@ -16,9 +17,9 @@ var InfoCmd = &cobra.Command{
 	Long:  `Displays detailed information about the grog CLI configuration, workspace settings, and cache statistics.`,
 	Example: `  grog info                   # Show all grog information
   grog info --version          # Show only the version information`,
-	Args:  cobra.ArbitraryArgs, // Optional argument for target pattern
+	Args: cobra.ArbitraryArgs, // Optional argument for target pattern
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx, logger := setupCommand()
+		ctx, logger := console.SetupCommand()
 
 		version := cmd.VersionTemplate()
 		platform := config.Global.GetPlatform()

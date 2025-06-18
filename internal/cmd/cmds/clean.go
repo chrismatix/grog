@@ -3,6 +3,7 @@ package cmds
 import (
 	"github.com/spf13/cobra"
 	"grog/internal/config"
+	"grog/internal/console"
 	"os"
 )
 
@@ -11,13 +12,13 @@ var expunge bool
 var CleanCmd = &cobra.Command{
 	Use:   "clean",
 	Short: "Removes all cached artifacts.",
-	Long:  `Removes cached artifacts from the workspace or the entire grog cache.
+	Long: `Removes cached artifacts from the workspace or the entire grog cache.
 By default, only the workspace-specific cache is cleaned. Use the --expunge flag to remove all cached artifacts.`,
 	Example: `  grog clean            # Clean the workspace cache
   grog clean --expunge   # Clean the entire grog cache`,
-	Args:  cobra.NoArgs,
+	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		_, logger := setupCommand()
+		_, logger := console.SetupCommand()
 
 		var dirToClear string
 		if expunge {

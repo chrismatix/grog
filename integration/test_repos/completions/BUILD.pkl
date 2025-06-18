@@ -1,0 +1,11 @@
+amends ".../pkl/package.pkl"
+
+targets {
+  new {
+    name = "bin"
+    inputs {
+      "bin.sh"
+    }
+    bin_output = "bin.sh"
+  }
+}

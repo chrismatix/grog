@@ -6,6 +6,7 @@ import (
 	"grog/internal/caching/backends"
 	"grog/internal/completions"
 	"grog/internal/config"
+	"grog/internal/console"
 	"grog/internal/execution"
 	"grog/internal/label"
 	"grog/internal/loading"
@@ -29,9 +30,9 @@ Any arguments after the target are passed directly to the binary being executed.
   grog run //path/to/package:target arg1 arg2   # Run with arguments
   grog run -i //path/to/package:target          # Run in the package directory`,
 	Args:              cobra.ArbitraryArgs,
-	ValidArgsFunction: completions.TargetLabelCompletion,
+	ValidArgsFunction: completions.BinaryTargetPatternCompletion,
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx, logger := setupCommand()
+		ctx, logger := console.SetupCommand()
 
 		if len(args) == 0 {
 			logger.Fatalf("`%s` requires a target pattern", cmd.UseLine())

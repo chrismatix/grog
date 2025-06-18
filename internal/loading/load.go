@@ -11,14 +11,13 @@ import (
 	"sync"
 )
 
-func LoadPackages(ctx context.Context, dir string) ([]*model.Package, error) {
-	workspaceRoot := config.Global.WorkspaceRoot
-	logger := console.GetLogger(ctx)
+func LoadAllPackages(ctx context.Context) ([]*model.Package, error) {
+	return LoadPackages(ctx, config.Global.WorkspaceRoot)
+}
 
-	startDir := workspaceRoot
-	if dir != "" {
-		startDir = config.GetPathAbsoluteToWorkspaceRoot(dir)
-	}
+// LoadPackages loads all packages in the given directory and its subdirectories.
+func LoadPackages(ctx context.Context, startDir string) ([]*model.Package, error) {
+	logger := console.GetLogger(ctx)
 
 	fileListQueue := make(chan *gocodewalker.File, 100)
 

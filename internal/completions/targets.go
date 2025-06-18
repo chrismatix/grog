@@ -1,33 +1,36 @@
 package completions
 
 import (
-	"context"
 	"github.com/spf13/cobra"
 	"grog/internal/config"
+	"grog/internal/console"
 	"grog/internal/label"
 	"grog/internal/loading"
+	"grog/internal/selection"
 	"sort"
 	"strings"
 )
 
-func TargetPatternCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	ctx := context.Background()
+func TargetPatternCompletion(_ *cobra.Command, _ []string, toComplete string, targetType selection.TargetTypeSelection) ([]string, cobra.ShellCompDirective) {
+	ctx, _ := console.SetupCommand()
 	currentPkg, err := config.Global.GetCurrentPackage()
 	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
+		return nil, cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveError
 	}
 
-       pattern := label.ParsePartialTargetPattern(currentPkg, toComplete)
-       searchDir := pattern.Prefix()
-       if searchDir == "" && !strings.HasPrefix(toComplete, "//") {
-               searchDir = currentPkg
-       }
+	pattern := label.ParsePartialTargetPattern(currentPkg, toComplete)
+	searchDir := pattern.Prefix()
+	if searchDir == "" && !strings.HasPrefix(toComplete, "//") {
+		searchDir = currentPkg
+	}
 
-	packages, err := loading.LoadPackages(ctx, searchDir)
+	absoluteSearchDir := config.GetPathAbsoluteToWorkspaceRoot(searchDir)
+	packages, err := loading.LoadPackages(ctx, absoluteSearchDir)
 	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
+		return nil, cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveError
 	}
 
+	selector := selection.New(nil, config.Global.Tags, config.Global.ExcludeTags, targetType)
 	dirs := make(map[string]struct{})
 	var targets []string
 
@@ -41,49 +44,64 @@ func TargetPatternCompletion(cmd *cobra.Command, args []string, toComplete strin
 		}
 
 		if pkgPath == searchDir {
-                       for lbl := range pkg.Targets {
-                               if pattern.Target() != "" && !strings.HasPrefix(lbl.Name, pattern.Target()) {
-                                       continue
-                               }
-                               targets = append(targets, lbl.String())
-                       }
-                       continue
-               }
-               if searchDir == "" {
-                       seg := strings.Split(pkgPath, "/")[0]
-                       if seg != pkgPath {
-                               dirs[seg] = struct{}{}
-                       }
-               } else if strings.HasPrefix(pkgPath, searchDir+"/") {
-                       rest := strings.TrimPrefix(pkgPath, searchDir+"/")
-                       seg := strings.Split(rest, "/")[0]
-                       dirs[seg] = struct{}{}
-               }
-       }
+			for targetLabel, target := range pkg.Targets {
+				if pattern.Target() != "" && !strings.HasPrefix(targetLabel.Name, pattern.Target()) {
+					continue
+				}
+				if selector.Match(target) {
+					targets = append(targets, targetLabel.String())
+				}
+			}
+			continue
+		}
+		if searchDir == "" {
+			// We are at the root package so just add the directory
+			segment := strings.Split(pkgPath, "/")[0]
+			dirs[segment] = struct{}{}
+		} else if strings.HasPrefix(pkgPath, searchDir) {
+			// pkgPath searchDir/foo/bar/bar
+			rest := strings.TrimPrefix(pkgPath, searchDir+"/")
+			// rest is foo/bar/bar
+			segment := strings.Split(rest, "/")[0]
+			// segment is foo
+			if pattern.Target() == "" || strings.HasPrefix(segment, pattern.Target()) {
+				dirs[segment] = struct{}{}
+			}
+		}
+	}
 
-       // If the user already typed a full target name, suggest only that target
-       if pattern.Target() != "" {
-               for _, t := range targets {
-                       if strings.HasSuffix(t, ":"+pattern.Target()) {
-                               return []string{t}, cobra.ShellCompDirectiveNoFileComp
-                       }
-               }
-       }
+	var completions []string
+	for directory := range dirs {
+		path := directory
+		if searchDir != "" {
+			path = searchDir + "/" + directory
+		}
+		completions = append(completions, "//"+path)
+	}
 
-       var comps []string
-       for d := range dirs {
-               p := d
-               if searchDir != "" {
-                       p = searchDir + "/" + d
-               }
-               comps = append(comps, "//"+p+"/")
-       }
-       comps = append(comps, targets...)
-	sort.Strings(comps)
+	// If there is only a single target and no directory completions just offer that
+	if len(completions) == 0 && len(targets) == 1 {
+		return []string{targets[0]}, cobra.ShellCompDirectiveNoFileComp
+	}
 
-	return comps, cobra.ShellCompDirectiveNoFileComp
+	completions = append(completions, targets...)
+	sort.Strings(completions)
+
+	return completions, cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveNoSpace
 }
 
-func TargetLabelCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	return TargetPatternCompletion(cmd, args, toComplete)
+func TestTargetPatternCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	return TargetPatternCompletion(cmd, args, toComplete, selection.TestOnly)
+}
+
+func BuildTargetPatternCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	return TargetPatternCompletion(cmd, args, toComplete, selection.NonTestOnly)
+}
+
+func BinaryTargetPatternCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	return TargetPatternCompletion(cmd, args, toComplete, selection.BinOutput)
+}
+
+func AllTargetPatternCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	return TargetPatternCompletion(cmd, args, toComplete, selection.AllTargets)
 }

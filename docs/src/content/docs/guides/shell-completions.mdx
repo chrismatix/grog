@@ -4,7 +4,7 @@ description: Enable bash or zsh completions for the grog CLI.
 ---
 
 Grog ships with a built in `completion` command that can generate shell completion scripts for
-`bash` and `zsh`. Installing these scripts enables auto completion of target labels and patterns
+`bash`, `fish`, and `zsh`. Installing these scripts enables auto completion of target labels and patterns
 for the most common commands.
 
 ```bash
@@ -12,8 +12,10 @@ for the most common commands.
 source <(grog completion bash)
 
 # Zsh
-compdef _grog grog
 source <(grog completion zsh)
+
+# Fish
+source <(grog completion fish)
 ```
 
 Add the lines above to your shell startup files (e.g. `.bashrc` or `.zshrc`) to load the completions automatically.

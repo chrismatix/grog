@@ -19,9 +19,13 @@ func (s *Selector) SelectTargets(
 func (s *Selector) FilterTargets(targets []*model.Target) []*model.Target {
 	var filteredLabels []*model.Target
 	for _, target := range targets {
-		if s.targetMatchesFilters(target) && targetMatchesPlatform(target) {
+		if s.Match(target) {
 			filteredLabels = append(filteredLabels, target)
 		}
 	}
 	return filteredLabels
+}
+
+func (s *Selector) Match(target *model.Target) bool {
+	return s.targetMatchesFilters(target) && targetMatchesPlatform(target)
 }

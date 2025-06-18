@@ -23,9 +23,9 @@ This is useful when you want to force a rebuild of specific targets.`,
   grog taint //path/to/package/...         # Taint all targets in a package and subpackages
   grog taint //path/to/package:*           # Taint all targets in a package`,
 	Args:              cobra.MinimumNArgs(1),
-	ValidArgsFunction: completions.TargetPatternCompletion,
+	ValidArgsFunction: completions.AllTargetPatternCompletion,
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx, logger := setupCommand()
+		ctx, logger := console.SetupCommand()
 
 		currentPackagePath, err := config.Global.GetCurrentPackage()
 		if err != nil {

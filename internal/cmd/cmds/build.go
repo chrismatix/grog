@@ -33,9 +33,9 @@ var BuildCmd = &cobra.Command{
   grog build //path/to/package:target  # Build a specific target
   grog build //path/to/package/...     # Build all targets in a package and subpackages`,
 	Args:              cobra.ArbitraryArgs, // Optional argument for target pattern
-	ValidArgsFunction: completions.TargetPatternCompletion,
+	ValidArgsFunction: completions.BuildTargetPatternCompletion,
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx, logger := setupCommand()
+		ctx, logger := console.SetupCommand()
 
 		currentPackagePath, err := config.Global.GetCurrentPackage()
 		if err != nil {

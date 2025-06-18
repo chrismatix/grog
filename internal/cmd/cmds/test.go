@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 	"grog/internal/completions"
 	"grog/internal/config"
+	"grog/internal/console"
 	"grog/internal/label"
 	"grog/internal/loading"
 	"grog/internal/selection"
@@ -17,9 +18,9 @@ var TestCmd = &cobra.Command{
   grog test //path/to/package:test  # Run a specific test
   grog test //path/to/package/...   # Run all tests in a package and subpackages`,
 	Args:              cobra.ArbitraryArgs, // Optional argument for target pattern
-	ValidArgsFunction: completions.TargetPatternCompletion,
+	ValidArgsFunction: completions.TestTargetPatternCompletion,
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx, logger := setupCommand()
+		ctx, logger := console.SetupCommand()
 
 		currentPackagePath, err := config.Global.GetCurrentPackage()
 		if err != nil {

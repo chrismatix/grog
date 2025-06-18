@@ -18,15 +18,21 @@ var RootCmd = &cobra.Command{
 	Use: "grog",
 	// PersistentPreRunE runs before any subcommand's Run, after flags are parsed.
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		if cmd.Flags().Changed("help") || cmd.Flags().Changed("version") ||
+			cmd.Name() == "help" || cmd.Name() == "completion" {
+			return nil
+		}
+
+		workspaceRoot := config.MustFindWorkspaceRoot()
+		viper.Set("workspace_root", workspaceRoot)
+		viper.AddConfigPath(workspaceRoot)
+
 		// Initialize config (read file, env, flags)
 		if err := initConfig(); err != nil {
 			return err
 		}
 
-		if err := config.Global.Validate(); err != nil {
-			return err
-		}
-		return nil
+		return config.Global.Validate()
 	},
 }
 
@@ -48,14 +54,9 @@ func init() {
 	RootCmd.InitDefaultCompletionCmd()
 	RootCmd.CompletionOptions.DisableDefaultCmd = false
 
-	// Find the current workspace root
-	workspaceRoot := config.MustFindWorkspaceRoot()
-	viper.Set("workspace_root", workspaceRoot)
-
 	// Set up Viper
 	viper.SetConfigType("toml")
 	viper.SetEnvPrefix("GROG")
-	viper.AddConfigPath(workspaceRoot)                     // search in workspace root
 	viper.AddConfigPath("$HOME/.grog")                     // optionally look for config in the home directory
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_")) // allow FLAG-NAME to map to ENV VAR_NAME
 	viper.AutomaticEnv()                                   // read in environment variables that match

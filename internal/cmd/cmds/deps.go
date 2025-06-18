@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 	"grog/internal/completions"
 	"grog/internal/config"
+	"grog/internal/console"
 	"grog/internal/label"
 	"grog/internal/loading"
 	"grog/internal/model"
@@ -25,9 +26,9 @@ Dependencies can be filtered by target type using the --target-type flag.`,
   grog deps -t //path/to/package:target          # Show transitive dependencies
   grog deps --target-type=test //path/to/package:target  # Show only test dependencies`,
 	Args:              cobra.MaximumNArgs(1),
-	ValidArgsFunction: completions.TargetLabelCompletion,
+	ValidArgsFunction: completions.AllTargetPatternCompletion,
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx, logger := setupCommand()
+		ctx, logger := console.SetupCommand()
 
 		if len(args) == 0 {
 			logger.Fatalf("`%s` requires a target label", cmd.UseLine())

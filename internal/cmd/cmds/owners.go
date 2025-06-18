@@ -3,6 +3,7 @@ package cmds
 import (
 	"github.com/spf13/cobra"
 	"grog/internal/config"
+	"grog/internal/console"
 	"grog/internal/label"
 	"grog/internal/loading"
 	"grog/internal/model"
@@ -18,7 +19,7 @@ This is useful for finding which targets will be affected by changes to specific
   grog owners path/to/file1.txt path/to/file2.txt  # Find targets that use any of the specified files`,
 	Args: cobra.MinimumNArgs(1), // Require at least one file argument
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx, logger := setupCommand()
+		ctx, logger := console.SetupCommand()
 
 		graph := loading.MustLoadGraphForQuery(ctx, logger)
 
