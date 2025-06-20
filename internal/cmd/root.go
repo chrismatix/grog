@@ -206,7 +206,7 @@ func readInEnvironmentVariablesConfig() error {
 		return nil
 	}
 
-	raw, err := os.ReadFile("grog.toml")
+	raw, err := os.ReadFile(viper.ConfigFileUsed())
 	if err != nil {
 		return err
 	}
