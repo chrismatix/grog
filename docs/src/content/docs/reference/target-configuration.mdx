@@ -19,18 +19,18 @@ Grog uses this information to ensure incremental, cached, and parallel builds.
 
 ## Fields Reference
 
-| Field          | Type           | Description                                                            |
-| -------------- | -------------- | ---------------------------------------------------------------------- |
-| name           | string         | Unique identifier for the target within its package                    |
-| command        | string         | Shell command or script to execute in the target's package directory   |
-| inputs         | string[]       | File paths or glob patterns that, when changed, will trigger a rebuild |
-| exclude_inputs | string[]       | File paths or glob patterns to exclude from inputs                     |
-| outputs        | string[]       | Files or directories produced by the target                            |
-| dependencies   | label[]        | Labels of other targets that must be built before this one             |
-| platform       | PlatformConfig | OS and architecture constraints for where this target can run          |
-| tags           | string[]       | Metadata tags that affect target behavior (e.g., "no-cache")           |
-| bin_output     | Output         | Specifically identifies a binary output from the target                |
-| environment_variables | Record<string, string> | Additional environment variables set when running the target |
+| Field                   | Type                     | Description                                                            |
+|-------------------------|--------------------------|------------------------------------------------------------------------|
+| `name`                  | `string`                 | Unique identifier for the target within its package                    |
+| `command`               | `string`                 | Shell command or script to execute in the target's package directory   |
+| `inputs`                | `string[]`               | File paths or glob patterns that, when changed, will trigger a rebuild |
+| `exclude_inputs`        | `string[]`               | File paths or glob patterns to exclude from inputs                     |
+| `outputs`               | `string[]`               | Files or directories produced by the target                            |
+| `dependencies`          | `label[]`                | Labels of other targets that must be built before this one             |
+| `platform`              | `PlatformConfig`         | OS and architecture constraints for where this target can run          |
+| `tags`                  | `string[]`               | Metadata tags that affect target behavior (e.g., "no-cache")           |
+| `bin_output`            | `Output`                 | Specifically identifies a binary output from the target                |
+| `environment_variables` | `Record<string, string>` | Additional environment variables set when running the target           |
 
 <Aside type="note">
   Targets with names ending in `test` are automatically treated as test targets.
