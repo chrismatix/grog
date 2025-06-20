@@ -1,15 +1,11 @@
 # TODOs
 
 - [ ] Make it so that the displayed execution time for a test is cached
+- [ ] Allow for setting global and target level environment variables
+  - The global environment variables should also be passed to the pkl evaluator
 - [ ] Allow grog list to use regular directories for querying
 - [ ] Design the virtualization via docker feature
-- [ ] Always stream output logs to files aswell
-  - Each individual target log needs to be streamed to a target specific file
-  - The overall log needs to be streamed to a grog.log file
-  - Both at the grog root
-  - Do we need a lock on the workspace while building?
 - [ ] get coverage above 90%
-- [ ] Add shell completions for commands that run targets
 - [ ] Add golangci-lint
 - [ ] Add s3 caching Option
 - [ ] Add Azure blob storage option

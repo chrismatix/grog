@@ -23,6 +23,9 @@ all_platforms = false
 # Logging Settings
 log_level = "info"
 
+# Environment Variables
+environment_variables = { FOO = "bar" }
+
 # Cache Settings
 enable_cache = true # default
 
@@ -44,6 +47,7 @@ For instance, to set or override the `fail_fast` option set `GROG_FAIL_FAST=fals
 - **fail_fast**: When true, Grog will stop execution after encountering the first error, cancelling all running tasks. Defaults to `false`.
 - **num_workers**: Number of concurrent workers for parallel task execution. Defaults to the number of CPUs.
 - **log_level**: Determines verbosity of logging (e.g., "debug", "info"). Defaults to `info`.
+- **environment_variables**: Key-value pairs that will be set for all target executions and passed to the Pkl loader.
 - **enable_cache**: Controls whether caching is enabled. Defaults to `true`.
 - **load_outputs**: Determines what outputs are loaded from the cache. Available options are:
   - `all` (default): Load all outputs from the cache.

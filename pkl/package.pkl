@@ -15,6 +15,7 @@ class Target {
   // Target Filtering
   tags: Listing<String>(isDistinct)
   platform: platform?
+  environment_variables: Mapping<String, String>?
 }
 
 default_platform: platform?

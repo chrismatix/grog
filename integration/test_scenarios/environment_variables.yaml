@@ -1,0 +1,11 @@
+name: environment variables
+repo: environment_variables
+cases:
+  - name: global_env
+    grog_args:
+      - build
+      - :global_env
+  - name: target_env
+    grog_args:
+      - build
+      - :target_env

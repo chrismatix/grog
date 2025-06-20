@@ -15,8 +15,9 @@ type TargetDTO struct {
 
 	OutputChecks []model.OutputCheck `json:"output_checks,omitempty" yaml:"output_checks,omitempty" pkl:"output_checks"`
 
-	Tags     []string              `json:"tags,omitempty" yaml:"tags,omitempty" pkl:"tags"`
-	Platform *model.PlatformConfig `json:"platform,omitempty" yaml:"platform,omitempty" pkl:"platform"`
+	Tags                 []string              `json:"tags,omitempty" yaml:"tags,omitempty" pkl:"tags"`
+	Platform             *model.PlatformConfig `json:"platform,omitempty" yaml:"platform,omitempty" pkl:"platform"`
+	EnvironmentVariables map[string]string     `json:"environment_variables,omitempty" yaml:"environment_variables,omitempty" pkl:"environment_variables"`
 }
 
 type PlatformConfigDTO struct {
