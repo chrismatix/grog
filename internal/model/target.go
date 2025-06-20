@@ -11,14 +11,15 @@ import (
 type Target struct {
 	Label label.TargetLabel `json:"label"`
 
-	Command       string              `json:"cmd"`
-	Dependencies  []label.TargetLabel `json:"dependencies,omitempty"`
-	Inputs        []string            `json:"inputs,omitempty"`
-	ExcludeInputs []string            `json:"exclude_inputs,omitempty"`
-	Outputs       []Output            `json:"outputs,omitempty"`
-	Platform      *PlatformConfig     `json:"platform,omitempty"`
-	Tags          []string            `json:"tags,omitempty"`
-	OutputChecks  []OutputCheck       `json:"output_checks,omitempty"`
+	Command              string              `json:"cmd"`
+	Dependencies         []label.TargetLabel `json:"dependencies,omitempty"`
+	Inputs               []string            `json:"inputs,omitempty"`
+	ExcludeInputs        []string            `json:"exclude_inputs,omitempty"`
+	Outputs              []Output            `json:"outputs,omitempty"`
+	Platform             *PlatformConfig     `json:"platform,omitempty"`
+	Tags                 []string            `json:"tags,omitempty"`
+	EnvironmentVariables map[string]string   `json:"environment_variables,omitempty"`
+	OutputChecks         []OutputCheck       `json:"output_checks,omitempty"`
 
 	// UnresolvedInputs are the inputs as specified by the user (no glob resolving)
 	UnresolvedInputs []string `json:"-"`

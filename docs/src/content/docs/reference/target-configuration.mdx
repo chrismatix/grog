@@ -30,6 +30,7 @@ Grog uses this information to ensure incremental, cached, and parallel builds.
 | platform       | PlatformConfig | OS and architecture constraints for where this target can run          |
 | tags           | string[]       | Metadata tags that affect target behavior (e.g., "no-cache")           |
 | bin_output     | Output         | Specifically identifies a binary output from the target                |
+| environment_variables | Record<string, string> | Additional environment variables set when running the target |
 
 <Aside type="note">
   Targets with names ending in `test` are automatically treated as test targets.
@@ -132,3 +133,7 @@ There are a few reserved tags that alter the way grog treats a target:
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | no-cache            | Outputs will neither be stored in nor loaded from the cache backend.                                                                                  |
 | multiplatform-cache | By default grog separates target caches by the host platform. Adding this tag causes grog to store the outputs at the same cache key across platforms |
+
+### environment_variables
+
+Key-value pairs of environment variables that will be set for this target during execution.

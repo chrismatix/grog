@@ -30,6 +30,9 @@ type WorkspaceConfig struct {
 	// Docker
 	Docker DockerConfig `mapstructure:"docker"`
 
+	// Environment Variables
+	EnvironmentVariables map[string]string `mapstructure:"environment_variables"`
+
 	// Environment
 	// Not officially supported in grog.toml but exposed via env variables
 	OS   string `mapstructure:"os"`

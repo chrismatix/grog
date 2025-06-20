@@ -109,7 +109,15 @@ func GetExtendedTargetEnv(ctx context.Context, target *model.Target) []string {
 		console.GetLogger(ctx).Debugf("failed to get git hash: %v", err)
 	}
 
-	return append(os.Environ(),
+	env := append([]string{}, os.Environ()...)
+	for k, v := range config.Global.EnvironmentVariables {
+		env = append(env, fmt.Sprintf("%s=%s", k, v))
+	}
+	for k, v := range target.EnvironmentVariables {
+		env = append(env, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	env = append(env,
 		"GROG_TARGET="+target.Label.String(),
 		"GROG_OS="+config.Global.OS,
 		"GROG_ARCH="+config.Global.Arch,
@@ -117,6 +125,8 @@ func GetExtendedTargetEnv(ctx context.Context, target *model.Target) []string {
 		"GROG_PACKAGE="+target.Label.Package,
 		"GROG_GIT_HASH="+gitHash,
 	)
+
+	return env
 }
 
 func getCommand(toolMap BinToolMap, command string) (string, error) {

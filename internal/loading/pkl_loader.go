@@ -26,7 +26,9 @@ func (pl PklLoader) getEvaluator(ctx context.Context) (pkl.Evaluator, error) {
 				"GROG_OS":       config.Global.OS,
 				"GROG_ARCH":     config.Global.Arch,
 				"GROG_PLATFORM": config.Global.GetPlatform(),
-			}))
+			}),
+			withEnv(config.Global.EnvironmentVariables),
+		)
 		if err != nil {
 			return nil, err
 		}
