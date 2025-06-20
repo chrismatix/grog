@@ -1,0 +1,30 @@
+amends ".../pkl/package.pkl"
+
+targets {
+  when (read?("env:ENV_GETS_PASSED_TO_PKL") == "1") {
+    new {
+      name = "global_env"
+      command = "echo $FOO_VAR > global.txt"
+      outputs { "global.txt" }
+      output_checks {
+        new {
+          command = "cat global.txt"
+          expected_output = "bar"
+        }
+      }
+    }
+
+    new {
+      name = "target_env"
+      environment_variables = new Mapping { ["BAZ_VAR"] = "qux" }
+      command = "echo $BAZ_VAR > target.txt"
+      outputs { "target.txt" }
+      output_checks {
+        new {
+          command = "cat target.txt"
+          expected_output = "qux"
+        }
+      }
+    }
+  }
+}

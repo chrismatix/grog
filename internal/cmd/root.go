@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"grog/internal/cmd/cmds"
@@ -153,6 +154,7 @@ func initConfig() error {
 	viper.SetDefault("arch", runtime.GOARCH)
 	viper.SetDefault("load_outputs", "all")
 	viper.SetDefault("cache.gcs.shared_cache", true)
+	viper.SetDefault("environment_variables", make(map[string]string))
 
 	names := []string{"grog"}
 	if os.Getenv("CI") == "1" {
@@ -188,5 +190,37 @@ func initConfig() error {
 	logger.Debugf("Using config file: %s", viper.ConfigFileUsed())
 	logger.Debugf("Running on %s", config.Global.GetPlatform())
 
+	if err := readInEnvironmentVariablesConfig(); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// Viper always normalizes all configuration keys to be lower-case
+// but users should be able to specify upper case environment_variables
+// So as a workaround we load the section here a second time _if_ there are env vars
+func readInEnvironmentVariablesConfig() error {
+	if len(config.Global.EnvironmentVariables) == 0 {
+		// nothing to load
+		return nil
+	}
+
+	raw, err := os.ReadFile("grog.toml")
+	if err != nil {
+		return err
+	}
+
+	var helper EnvVarsHelper
+	err = toml.Unmarshal(raw, &helper)
+	if err != nil {
+		return err
+	}
+
+	config.Global.EnvironmentVariables = helper.EnvironmentVariables
+	return nil
+}
+
+type EnvVarsHelper struct {
+	EnvironmentVariables map[string]string `toml:"environment_variables"`
 }

@@ -70,7 +70,7 @@ type TestStep struct {
 	SkipFixture bool `yaml:"skip_fixture"`
 }
 
-func TestCliArgs(t *testing.T) {
+func TestCliScenarios(t *testing.T) {
 	// Read all .yaml files from the cases/ directory
 	files, err := filepath.Glob("integration/test_scenarios/*.yaml")
 	if err != nil {

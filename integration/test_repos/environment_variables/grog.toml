@@ -1,1 +1,4 @@
-environment_variables = { FOO_VAR = "bar" }
+
+[environment_variables]
+FOO_VAR = "bar"
+ENV_GETS_PASSED_TO_PKL = "1"

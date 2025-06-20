@@ -117,7 +117,7 @@ func GetExtendedTargetEnv(ctx context.Context, target *model.Target) []string {
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
 
-	env = append(env,
+	return append(env,
 		"GROG_TARGET="+target.Label.String(),
 		"GROG_OS="+config.Global.OS,
 		"GROG_ARCH="+config.Global.Arch,
@@ -125,8 +125,6 @@ func GetExtendedTargetEnv(ctx context.Context, target *model.Target) []string {
 		"GROG_PACKAGE="+target.Label.Package,
 		"GROG_GIT_HASH="+gitHash,
 	)
-
-	return env
 }
 
 func getCommand(toolMap BinToolMap, command string) (string, error) {
