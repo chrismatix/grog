@@ -8,6 +8,7 @@ class Target {
   command: String?
   dependencies: Listing<String>(isDistinct)
   inputs:  Listing<String>(isDistinct)
+  exclude_inputs:  Listing<String>(isDistinct)
   outputs: Listing<String>(isDistinct)
   bin_output: String?
   output_checks: Listing<output_check>?

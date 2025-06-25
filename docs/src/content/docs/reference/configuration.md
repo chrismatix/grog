@@ -7,10 +7,8 @@ Grog is configured using a `grog.toml` file that is placed in the root of your w
 Find below a complete example of a grog configuration file:
 
 ```toml
-# Grog Configuration Example
-
 # Workspace Settings
-root = "/path/to/grog/root"
+root = "/home/grace/grog_data"
 
 # Execution Settings
 fail_fast = true # Exit immediately when encountering an issue

@@ -2,10 +2,13 @@ package loading
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/apple/pkl-go/pkl"
 	"grog/internal/config"
 	"grog/internal/console"
+	"os"
+	"path/filepath"
 )
 
 // PklLoader implements the Loader interface for pkl files.
@@ -20,21 +23,42 @@ func (pl PklLoader) FileNames() []string {
 // getEvaluator lazily loads and caches the evaluator
 func (pl PklLoader) getEvaluator(ctx context.Context) (pkl.Evaluator, error) {
 	if pl.evaluator == nil {
-		evaluator, err := pkl.NewEvaluator(ctx,
-			pkl.PreconfiguredOptions,
-			withEnv(map[string]string{
-				"GROG_OS":       config.Global.OS,
-				"GROG_ARCH":     config.Global.Arch,
-				"GROG_PLATFORM": config.Global.GetPlatform(),
-			}),
-			withEnv(config.Global.EnvironmentVariables),
-		)
+		var evaluator pkl.Evaluator
+		var err error
+
+		if hasPklProjectFile() {
+			evaluator, err = pkl.NewProjectEvaluator(ctx,
+				config.Global.WorkspaceRoot,
+				pkl.PreconfiguredOptions,
+				withEnv(map[string]string{
+					"GROG_OS":       config.Global.OS,
+					"GROG_ARCH":     config.Global.Arch,
+					"GROG_PLATFORM": config.Global.GetPlatform(),
+				}),
+				withEnv(config.Global.EnvironmentVariables),
+			)
+		} else {
+			evaluator, err = pkl.NewEvaluator(ctx,
+				pkl.PreconfiguredOptions,
+				withEnv(map[string]string{
+					"GROG_OS":       config.Global.OS,
+					"GROG_ARCH":     config.Global.Arch,
+					"GROG_PLATFORM": config.Global.GetPlatform(),
+				}),
+				withEnv(config.Global.EnvironmentVariables),
+			)
+		}
 		if err != nil {
 			return nil, err
 		}
 		pl.evaluator = evaluator
 	}
 	return pl.evaluator, nil
+}
+
+func hasPklProjectFile() bool {
+	_, err := os.Stat(filepath.Join(config.Global.WorkspaceRoot, "PklProject"))
+	return !errors.Is(err, os.ErrNotExist)
 }
 
 // withEnv adds or overrides environment variables for the `env:` resource reader.

@@ -72,25 +72,25 @@ Grog provides a wide array of build file formats:
         outputs:
           - dir::frontend/dist
 
-        - name: compile_backend
-          command: go build -o backend/bin/app ./backend
-          inputs:
-            - backend/**/*.go
-          outputs:
-            - backend/bin/app
+      - name: compile_backend
+        command: go build -o backend/bin/app ./backend
+        inputs:
+          - backend/**/*.go
+        outputs:
+          - backend/bin/app
 
-        - name: build_image
-          command: >
-            docker build \
-            --file Dockerfile \
-            --tag myorg/myapp:latest .
-          dependencies:
-            - :build_ui
-            - :compile_backend
-          inputs:
-            - Dockerfile
-          outputs:
-            - docker::myorg/myapp:latest
+      - name: build_image
+        command: >
+          docker build \
+          --file Dockerfile \
+          --tag myorg/myapp:latest .
+        dependencies:
+          - :build_ui
+          - :compile_backend
+        inputs:
+          - Dockerfile
+        outputs:
+          - docker::myorg/myapp:latest
     ```
     Save this as `BUILD.yaml` in your project directory.
 
