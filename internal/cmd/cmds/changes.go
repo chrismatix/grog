@@ -51,6 +51,7 @@ Can optionally include transitive dependents of changed targets to find all affe
 			logger.Debug("No files changed")
 			return
 		}
+		logger.Debugf("Changed files: %v", changedFiles)
 
 		packages, err := loading.LoadAllPackages(ctx)
 		if err != nil {

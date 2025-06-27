@@ -45,7 +45,6 @@ func StartTaskUI(ctx context.Context) (context.Context, *tea.Program, func(tea.M
 	p := tea.NewProgram(initialModel(msgCh, cancel), opts...)
 
 	go func() {
-		defer close(msgCh)
 		errCh := make(chan error, 1)
 
 		go func() {

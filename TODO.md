@@ -1,5 +1,6 @@
 # TODOs
 
+- [ ] Saw the panic send on closed channel for the task ui in the wild
 - [ ] Make it so that the displayed execution time for a test is cached
 - [ ] Allow for setting global and target level environment variables
   - The global environment variables should also be passed to the pkl evaluator

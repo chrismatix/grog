@@ -1,4 +1,3 @@
-// workerpool.go
 package worker
 
 import (
