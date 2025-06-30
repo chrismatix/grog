@@ -1,1 +1,27 @@
-FATAL: --platform cannot be used with --all-platforms
+Error: --platform cannot be used with --all-platforms
+Usage:
+  grog build [flags]
+
+Examples:
+  grog build                      # Build all targets in the current package
+  grog build //path/to/package:target  # Build a specific target
+  grog build //path/to/package/...     # Build all targets in a package and subpackages
+
+Flags:
+  -h, --help   help for build
+
+Global Flags:
+  -a, --all-platforms         Select all platforms (bypasses platform selectors)
+      --color string          Set color output (yes, no, or auto) (default "auto")
+      --debug                 Enable debug logging
+      --enable-cache          Enable cache (default true)
+      --exclude-tag strings   Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
+      --fail-fast             Fail fast on first error
+      --load-outputs string   Level of output loading for cached targets. One of: all, minimal. (default "all")
+      --platform string       Force a specific platform in the form os/arch
+      --profile string        Select a configuration profile to use
+      --stream-logs           Forward all target build/test logs to stdout/-err
+      --tag strings           Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+  -v, --verbose count         Set verbosity level (-v, -vv)
+
+--platform cannot be used with --all-platforms
