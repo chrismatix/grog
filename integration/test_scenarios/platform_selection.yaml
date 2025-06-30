@@ -32,6 +32,18 @@ cases:
       - "GROG_OS=made-up-os"
       - "GROG_ARCH=made-up-arch"
 
+  - name: select_by_platform_flag
+    grog_args:
+      - build
+      - --platform=made-up-os/made-up-arch
+
+  - name: error_platform_flag_and_all_platforms
+    grog_args:
+      - build
+      - --platform=made-up-os/made-up-arch
+      - --all-platforms
+    expect_fail: true
+
   - name: dep_platform_mismatch_should_fail
     grog_args:
       - build

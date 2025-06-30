@@ -1,0 +1,1 @@
+FATAL: --platform cannot be used with --all-platforms
