@@ -85,6 +85,10 @@ func init() {
 	RootCmd.PersistentFlags().BoolP("all-platforms", "a", false, "Select all platforms (bypasses platform selectors)")
 	err = viper.BindPFlag("all_platforms", RootCmd.PersistentFlags().Lookup("all-platforms"))
 
+	// platform
+	RootCmd.PersistentFlags().String("platform", "", "Force a specific platform in the form os/arch")
+	err = viper.BindPFlag("platform", RootCmd.PersistentFlags().Lookup("platform"))
+
 	// stream_logs
 	RootCmd.PersistentFlags().Bool("stream-logs", false, "Forward all target build/test logs to stdout/-err")
 	err = viper.BindPFlag("stream_logs", RootCmd.PersistentFlags().Lookup("stream-logs"))
@@ -189,6 +193,19 @@ func initConfig() error {
 	logger := console.InitLogger()
 	logger.Debugf("Using config file: %s", viper.ConfigFileUsed())
 	logger.Debugf("Running on %s", config.Global.GetPlatform())
+
+	platform := viper.GetString("platform")
+	if config.Global.AllPlatforms && platform != "" {
+		return fmt.Errorf("--platform cannot be used with --all-platforms")
+	}
+	if platform != "" {
+		parts := strings.SplitN(platform, "/", 2)
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid platform %s, expected os/arch", platform)
+		}
+		config.Global.OS = parts[0]
+		config.Global.Arch = parts[1]
+	}
 
 	if err := readInEnvironmentVariablesConfig(); err != nil {
 		return err
