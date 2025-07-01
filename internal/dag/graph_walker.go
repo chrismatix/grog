@@ -106,9 +106,9 @@ func (w *Walker) Walk(
 	w.allCancel = cancelFunc
 
 	// populate info map
-	for _, vertex := range w.graph.vertices {
-		if !vertex.IsSelected {
-			// skip unselected targets
+	for _, node := range w.graph.vertices {
+		vertex, ok := node.(*model.Target)
+		if !ok || !vertex.IsSelected {
 			continue
 		}
 
@@ -212,12 +212,21 @@ func (w *Walker) onComplete(target *model.Target, completion Completion) {
 
 	// Iterate over all dependants and send a ready message
 	// if their deps are satisfied
-	for _, dependant := range w.graph.outEdges[target.Label] {
+	for _, depNode := range w.graph.outEdges[target.Label] {
+		dependant, ok := depNode.(*model.Target)
+		if !ok {
+			continue
+		}
 
 		// Check if dependant deps are satisfied
 		depsDone := true
 		depsCached := true
-		for _, dep := range w.graph.inEdges[dependant.Label] {
+		for _, inNode := range w.graph.inEdges[dependant.Label] {
+			dep, ok := inNode.(*model.Target)
+			if !ok {
+				depsDone = false
+				continue
+			}
 			depCompletion, ok := w.completions[dep]
 			if !ok || !depCompletion.IsSuccess {
 				depsDone = false
@@ -235,10 +244,12 @@ func (w *Walker) onComplete(target *model.Target, completion Completion) {
 }
 
 func (w *Walker) cancelAll() {
-	for _, vertex := range w.graph.vertices {
-		go func(v *model.Target) {
-			w.cancelTarget(v)
-		}(vertex)
+	for _, node := range w.graph.vertices {
+		if v, ok := node.(*model.Target); ok {
+			go func(t *model.Target) {
+				w.cancelTarget(t)
+			}(v)
+		}
 	}
 }
 

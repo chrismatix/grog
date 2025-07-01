@@ -143,3 +143,11 @@ func (t *Target) MarshalJSON() ([]byte, error) {
 
 	return json.Marshal(wrapper)
 }
+
+func (t *Target) GetLabel() label.TargetLabel {
+	return t.Label
+}
+
+func (t *Target) GetDependencies() []label.TargetLabel {
+	return t.Dependencies
+}

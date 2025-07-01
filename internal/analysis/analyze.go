@@ -8,7 +8,8 @@ import (
 
 // BuildGraph builds a directed graph of targets and analyzes it.
 func BuildGraph(targets model.TargetMap) (*dag.DirectedTargetGraph, error) {
-	graph := dag.NewDirectedGraphFromMap(targets)
+	nodeMap := model.BuildNodeMapFromTargets(targets.TargetsAlphabetically()...)
+	graph := dag.NewDirectedGraphFromMap(nodeMap)
 
 	// Add edges defined by dependencies
 	for _, target := range targets {

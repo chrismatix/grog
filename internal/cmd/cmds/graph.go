@@ -173,11 +173,11 @@ func printMermaidDiagram(graph *dag.DirectedTargetGraph) {
 		toList := out[from]
 		// Sort each destination slice.
 		sort.Slice(toList, func(i, j int) bool {
-			return toList[i].Label.String() < toList[j].Label.String()
+			return toList[i].GetLabel().String() < toList[j].GetLabel().String()
 		})
 
 		for _, to := range toList {
-			chart.AddLink(nodeMap[from.String()], nodeMap[to.Label.String()])
+			chart.AddLink(nodeMap[from.String()], nodeMap[to.GetLabel().String()])
 		}
 	}
 

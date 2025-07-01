@@ -12,9 +12,17 @@ type Package struct {
 	// for logging purposes
 	SourceFilePath string
 
-	Targets map[label.TargetLabel]*Target `json:"targets"`
+	Targets      map[label.TargetLabel]*Target      `json:"targets"`
+	Environments map[label.TargetLabel]*Environment `json:"environments,omitempty"`
 }
 
 func (p *Package) GetTargets() []*Target {
 	return slices.Collect(maps.Values(p.Targets))
+}
+
+func (p *Package) GetEnvironments() []*Environment {
+	if p.Environments == nil {
+		return nil
+	}
+	return slices.Collect(maps.Values(p.Environments))
 }

@@ -32,10 +32,25 @@ type PackageDTO struct {
 	// Used for logging
 	SourceFilePath string
 
-	Targets []*TargetDTO `json:"targets" yaml:"targets" pkl:"targets"`
+	Targets      []*TargetDTO      `json:"targets" yaml:"targets" pkl:"targets"`
+	Environments []*EnvironmentDTO `json:"environments,omitempty" yaml:"environments,omitempty" pkl:"environments"`
 
 	// DefaultPlatform specifies the platform selector at the package level.
 	// This serves as the default for target-level platform selectors.
 	// If a target specifies its own platform selector, it overrides this default.
 	DefaultPlatform *model.PlatformConfig `json:"default_platform,omitempty" yaml:"default_platform,omitempty" pkl:"default_platform"`
+}
+
+type EnvironmentDTO struct {
+	Name         string                  `json:"name" yaml:"name" pkl:"name"`
+	Dependencies []string                `json:"dependencies,omitempty" yaml:"dependencies,omitempty" pkl:"dependencies"`
+	Command      string                  `json:"command,omitempty" yaml:"command,omitempty" pkl:"command"`
+	OutputImage  string                  `json:"output_image,omitempty" yaml:"output_image,omitempty" pkl:"output_image"`
+	Inputs       []string                `json:"inputs,omitempty" yaml:"inputs,omitempty" pkl:"inputs"`
+	Defaults     *EnvironmentDefaultsDTO `json:"defaults,omitempty" yaml:"defaults,omitempty" pkl:"defaults"`
+}
+
+type EnvironmentDefaultsDTO struct {
+	MountDependencies     string `json:"mount_dependencies,omitempty" yaml:"mount_dependencies,omitempty" pkl:"mount_dependencies"`
+	MountDependencyInputs bool   `json:"mount_dependency_inputs,omitempty" yaml:"mount_dependency_inputs,omitempty" pkl:"mount_dependency_inputs"`
 }

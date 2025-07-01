@@ -149,7 +149,7 @@ func TestDirectedTargetGraph_HasCycle(t *testing.T) {
 	}
 
 	// Remove one edge to break the cycle: target1 -> target2 -> target3
-	graph.outEdges[target3.Label] = []*model.Target{}
+	graph.outEdges[target3.Label] = []model.BuildNode{}
 
 	// Check if there is a cycle
 	graph = NewDirectedGraph()

@@ -19,6 +19,7 @@ import (
 // - parses the deps into target labels
 func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg PackageDTO) (*model.Package, error) {
 	targets := make(map[label.TargetLabel]*model.Target)
+	environments := make(map[label.TargetLabel]*model.Environment)
 	absolutePackagePath := config.GetPathAbsoluteToWorkspaceRoot(packagePath)
 
 	for _, target := range pkg.Targets {
@@ -91,9 +92,51 @@ func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg Packa
 		}
 	}
 
+	for _, env := range pkg.Environments {
+		var deps []label.TargetLabel
+		for _, dep := range env.Dependencies {
+			depLabel, err := label.ParseTargetLabel(packagePath, dep)
+			if err != nil {
+				return nil, err
+			}
+			deps = append(deps, depLabel)
+		}
+
+		if packagePath == "." {
+			packagePath = ""
+		}
+		envLabel := label.TargetLabel{Package: packagePath, Name: env.Name}
+		if _, ok := environments[envLabel]; ok {
+			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", env.Name, pkg.SourceFilePath)
+		}
+
+		resolvedInputs, err := resolveInputs(logger, absolutePackagePath, env.Inputs, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve inputs for environment %s: %w", envLabel, err)
+		}
+
+		var defaults *model.EnvironmentDefaults
+		if env.Defaults != nil {
+			defaults = &model.EnvironmentDefaults{
+				MountDependencies:     env.Defaults.MountDependencies,
+				MountDependencyInputs: env.Defaults.MountDependencyInputs,
+			}
+		}
+
+		environments[envLabel] = &model.Environment{
+			Label:        envLabel,
+			Dependencies: deps,
+			Command:      env.Command,
+			OutputImage:  env.OutputImage,
+			Inputs:       resolvedInputs,
+			Defaults:     defaults,
+		}
+	}
+
 	return &model.Package{
 		SourceFilePath: pkg.SourceFilePath,
 		Targets:        targets,
+		Environments:   environments,
 	}, nil
 }
 
