@@ -33,11 +33,17 @@ func (t *TargetHasher) SetTargetChangeHash(target *model.Target) error {
 	dependencies := t.graph.GetDependencies(target)
 	dependencyHashes := make([]string, len(target.Dependencies))
 	for index, dependency := range dependencies {
-		err := t.SetTargetChangeHash(dependency)
+		targetDependency, ok := dependency.(*model.Target)
+		if !ok {
+			// Only consider dependencies that are targets
+			continue
+		}
+
+		err := t.SetTargetChangeHash(targetDependency)
 		if err != nil {
 			return err
 		}
-		dependencyHashes[index] = dependency.ChangeHash
+		dependencyHashes[index] = targetDependency.ChangeHash
 	}
 
 	changeHash, err := GetTargetChangeHash(*target, dependencyHashes)

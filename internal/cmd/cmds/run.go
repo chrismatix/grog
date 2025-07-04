@@ -10,6 +10,7 @@ import (
 	"grog/internal/execution"
 	"grog/internal/label"
 	"grog/internal/loading"
+	"grog/internal/model"
 	"grog/internal/output"
 	"grog/internal/selection"
 	"os"
@@ -57,9 +58,14 @@ Any arguments after the target are passed directly to the binary being executed.
 		}
 
 		graph := loading.MustLoadGraphForBuild(ctx, logger)
-		runTarget, hasTarget := graph.GetVertices()[targetLabel]
-		if !hasTarget {
+		node, hasNode := graph.GetNodes()[targetLabel]
+		if !hasNode {
 			logger.Fatalf("could not find target %s", targetLabel)
+		}
+
+		runTarget, ok := node.(*model.Target)
+		if !ok {
+			logger.Fatalf("%s is not a target", targetLabel)
 		}
 
 		if !runTarget.HasBinOutput() {

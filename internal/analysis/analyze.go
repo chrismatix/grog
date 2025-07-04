@@ -7,18 +7,18 @@ import (
 )
 
 // BuildGraph builds a directed graph of targets and analyzes it.
-func BuildGraph(targets model.TargetMap) (*dag.DirectedTargetGraph, error) {
-	graph := dag.NewDirectedGraphFromMap(targets)
+func BuildGraph(nodes model.BuildNodeMap) (*dag.DirectedTargetGraph, error) {
+	graph := dag.NewDirectedGraphFromMap(nodes)
 
 	// Add edges defined by dependencies
-	for _, target := range targets {
-		for _, depLabel := range target.Dependencies {
-			dep := targets[depLabel]
+	for _, node := range nodes {
+		for _, depLabel := range node.GetDependencies() {
+			dep := nodes[depLabel]
 			if dep == nil {
-				return &dag.DirectedTargetGraph{}, fmt.Errorf("dependency %s of target %s not found", depLabel, target.Label)
+				return &dag.DirectedTargetGraph{}, fmt.Errorf("dependency %s of node %s not found", depLabel, node.GetLabel())
 			}
 
-			err := graph.AddEdge(dep, target)
+			err := graph.AddEdge(dep, node)
 			if err != nil {
 				return &dag.DirectedTargetGraph{}, err
 			}

@@ -19,7 +19,7 @@ var CheckCmd = &cobra.Command{
 
 		graph := loading.MustLoadGraphForBuild(ctx, logger)
 
-		errs := analysis.CheckTargetConstraints(logger, graph.GetVertices())
+		errs := analysis.CheckTargetConstraints(logger, graph.GetNodes())
 		if len(errs) > 0 {
 			for _, err := range errs {
 				logger.Errorf(err.Error())

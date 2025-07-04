@@ -12,79 +12,79 @@ import (
 // It is used to represent the dependency graph of a project.
 // In order to assert that it does not contain cycles, you can call hasCycle()
 type DirectedTargetGraph struct {
-	vertices model.TargetMap
+	nodes model.BuildNodeMap
 
-	// outEdges maps a vertex to its list of outgoing vertices,
+	// outEdges maps a node to its list of outgoing nodes,
 	// representing the directed outEdges in the graph.
-	outEdges map[label.TargetLabel][]*model.Target
-	// inEdges map a vertex to its list of incoming vertices,
+	outEdges map[label.TargetLabel][]model.BuildNode
+	// inEdges map a node to its list of incoming nodes,
 	// representing the directed inEdges in the graph.
-	inEdges map[label.TargetLabel][]*model.Target
+	inEdges map[label.TargetLabel][]model.BuildNode
 }
 
 // NewDirectedGraph creates and initializes a new directed graph.
 func NewDirectedGraph() *DirectedTargetGraph {
 	return &DirectedTargetGraph{
-		vertices: make(model.TargetMap),
-		outEdges: make(map[label.TargetLabel][]*model.Target),
-		inEdges:  make(map[label.TargetLabel][]*model.Target),
+		nodes:    make(model.BuildNodeMap),
+		outEdges: make(map[label.TargetLabel][]model.BuildNode),
+		inEdges:  make(map[label.TargetLabel][]model.BuildNode),
 	}
 }
 
-func NewDirectedGraphFromMap(targetMap model.TargetMap) *DirectedTargetGraph {
+func NewDirectedGraphFromMap(targetMap model.BuildNodeMap) *DirectedTargetGraph {
 	return &DirectedTargetGraph{
-		vertices: targetMap,
-		outEdges: make(map[label.TargetLabel][]*model.Target),
-		inEdges:  make(map[label.TargetLabel][]*model.Target),
+		nodes:    targetMap,
+		outEdges: make(map[label.TargetLabel][]model.BuildNode),
+		inEdges:  make(map[label.TargetLabel][]model.BuildNode),
 	}
 }
 
 // NewDirectedGraphFromTargets Useful for testing
-func NewDirectedGraphFromTargets(targets ...*model.Target) *DirectedTargetGraph {
+func NewDirectedGraphFromTargets(nodes ...model.BuildNode) *DirectedTargetGraph {
 	return &DirectedTargetGraph{
-		vertices: model.TargetMapFromTargets(targets...),
-		outEdges: make(map[label.TargetLabel][]*model.Target),
-		inEdges:  make(map[label.TargetLabel][]*model.Target),
+		nodes:    model.BuildNodeMapFromNodes(nodes...),
+		outEdges: make(map[label.TargetLabel][]model.BuildNode),
+		inEdges:  make(map[label.TargetLabel][]model.BuildNode),
 	}
 }
 
-func (g *DirectedTargetGraph) GetVertices() model.TargetMap {
-	return g.vertices
+func (g *DirectedTargetGraph) GetNodes() model.BuildNodeMap {
+	return g.nodes
 }
 
-func (g *DirectedTargetGraph) GetOutEdges() map[label.TargetLabel][]*model.Target {
+func (g *DirectedTargetGraph) GetOutEdges() map[label.TargetLabel][]model.BuildNode {
 	return g.outEdges
 }
 
-func (g *DirectedTargetGraph) GetSelectedVertices() []*model.Target {
-	// Filter selected vertices and return them
-	var selectedVertices []*model.Target
-	for _, vertex := range g.vertices {
-		if vertex.IsSelected {
-			selectedVertices = append(selectedVertices, vertex)
+func (g *DirectedTargetGraph) GetSelectedNodes() []model.BuildNode {
+	// Filter selected nodes and return them
+	var selectedNodes []model.BuildNode
+	for _, node := range g.nodes {
+		if node.GetIsSelected() {
+			selectedNodes = append(selectedNodes, node)
 		}
 	}
-	return selectedVertices
+	return selectedNodes
 }
 
-// GetSelectedSubgraph returns a new graph containing only selected vertices and edges between them.
-// The returned graph preserves the edge relationships between selected vertices from the original graph.
+// GetSelectedSubgraph returns a new graph containing only selected nodes and edges between them.
+// The returned graph preserves the edge relationships between selected nodes from the original graph.
 func (g *DirectedTargetGraph) GetSelectedSubgraph() *DirectedTargetGraph {
 	subgraph := NewDirectedGraph()
 
-	// Add all selected vertices
-	for _, vertex := range g.vertices {
-		if vertex.IsSelected {
-			subgraph.AddVertex(vertex)
+	// Add all selected nodes
+	for _, node := range g.nodes {
+		if node.GetIsSelected() {
+			subgraph.AddNode(node)
 		}
 	}
 
-	// Add edges between selected vertices
+	// Add edges between selected nodes
 	for fromLabel, toList := range g.outEdges {
-		if g.vertices[fromLabel].IsSelected {
+		if g.nodes[fromLabel].GetIsSelected() {
 			for _, to := range toList {
-				if to.IsSelected {
-					subgraph.AddEdge(g.vertices[fromLabel], to)
+				if to.GetIsSelected() {
+					subgraph.AddEdge(g.nodes[fromLabel], to)
 				}
 			}
 		}
@@ -93,42 +93,52 @@ func (g *DirectedTargetGraph) GetSelectedSubgraph() *DirectedTargetGraph {
 	return subgraph
 }
 
-// AddVertex idempotently adds a new vertex to the graph.
-func (g *DirectedTargetGraph) AddVertex(target *model.Target) {
-	if !g.hasVertex(target) {
-		g.vertices[target.Label] = target
+// AddNode idempotently adds a new node to the graph.
+func (g *DirectedTargetGraph) AddNode(node model.BuildNode) {
+	if !g.hasNode(node) {
+		g.nodes[node.GetLabel()] = node
 	}
 }
 
-// AddEdge adds a directed edge between two vertices.
-func (g *DirectedTargetGraph) AddEdge(from, to *model.Target) error {
+// AddEdge adds a directed edge between two nodes.
+func (g *DirectedTargetGraph) AddEdge(from, to model.BuildNode) error {
 	if from == to {
-		return fmt.Errorf("cannot add self-loop for target %s", from.Label)
+		return fmt.Errorf("cannot add self-loop for target %s", from.GetLabel())
 	}
-	if !g.hasVertex(from) {
-		return fmt.Errorf("vertex %s does not exist in the graph", from.Label)
+	if !g.hasNode(from) {
+		return fmt.Errorf("node %s does not exist in the graph", from.GetLabel())
 	}
-	if !g.hasVertex(to) {
-		return fmt.Errorf("vertex %s does not exist in the graph", from.Label)
+	if !g.hasNode(to) {
+		return fmt.Errorf("node %s does not exist in the graph", from.GetLabel())
 	}
-	g.outEdges[from.Label] = append(g.outEdges[from.Label], to)
-	g.inEdges[to.Label] = append(g.inEdges[to.Label], from)
+	g.outEdges[from.GetLabel()] = append(g.outEdges[from.GetLabel()], to)
+	g.inEdges[to.GetLabel()] = append(g.inEdges[to.GetLabel()], from)
 	return nil
 }
 
-func (g *DirectedTargetGraph) GetDependencies(target *model.Target) []*model.Target {
-	return g.inEdges[target.Label]
+func (g *DirectedTargetGraph) GetDependencies(target model.BuildNode) []model.BuildNode {
+	return g.inEdges[target.GetLabel()]
 }
 
-func (g *DirectedTargetGraph) GetDependants(target *model.Target) []*model.Target {
-	return g.outEdges[target.Label]
+func (g *DirectedTargetGraph) GetTargetDependencies(node model.BuildNode) []*model.Target {
+	var targets []*model.Target
+	for _, dependency := range g.GetDependencies(node) {
+		if target, ok := dependency.(*model.Target); ok {
+			targets = append(targets, target)
+		}
+	}
+	return targets
 }
 
-// GetDescendants returns a list of vertices that are descendants (dependants) of the given vertex.
-// Recurses via the outEdges of each vertex.
-func (g *DirectedTargetGraph) GetDescendants(target *model.Target) []*model.Target {
-	var descendants []*model.Target
-	for _, descendant := range g.outEdges[target.Label] {
+func (g *DirectedTargetGraph) GetDependants(target model.BuildNode) []model.BuildNode {
+	return g.outEdges[target.GetLabel()]
+}
+
+// GetDescendants returns a list of nodes that are descendants (dependants) of the given node.
+// Recurses via the outEdges of each node.
+func (g *DirectedTargetGraph) GetDescendants(target model.BuildNode) []model.BuildNode {
+	var descendants []model.BuildNode
+	for _, descendant := range g.outEdges[target.GetLabel()] {
 		descendants = append(descendants, descendant)
 
 		// Recurse
@@ -138,11 +148,11 @@ func (g *DirectedTargetGraph) GetDescendants(target *model.Target) []*model.Targ
 	return descendants
 }
 
-// GetAncestors returns a list of vertices that are ancestors (transitive dependencies) of the given vertex.
-// Recurses via the inEdges of each vertex.
-func (g *DirectedTargetGraph) GetAncestors(target *model.Target) []*model.Target {
-	var ancestors []*model.Target
-	for _, ancestor := range g.inEdges[target.Label] {
+// GetAncestors returns a list of nodes that are ancestors (transitive dependencies) of the given node.
+// Recurses via the inEdges of each node.
+func (g *DirectedTargetGraph) GetAncestors(target model.BuildNode) []model.BuildNode {
+	var ancestors []model.BuildNode
+	for _, ancestor := range g.inEdges[target.GetLabel()] {
 		ancestors = append(ancestors, ancestor)
 
 		// Recurse
@@ -152,28 +162,28 @@ func (g *DirectedTargetGraph) GetAncestors(target *model.Target) []*model.Target
 	return ancestors
 }
 
-// hasVertex checks whether a vertex exists in the graph.
-func (g *DirectedTargetGraph) hasVertex(target *model.Target) bool {
-	if target == nil {
+// hasNode checks whether a node exists in the graph.
+func (g *DirectedTargetGraph) hasNode(node model.BuildNode) bool {
+	if node == nil {
 		return false
 	}
-	return g.vertices[target.Label] != nil
+	return g.nodes[node.GetLabel()] != nil
 }
 
 // HasCycle detects if the directed graph has a cycle using Depth-First Search (DFS).
-// It maintains three states for each vertex:
+// It maintains three states for each node:
 // - 0: unvisited
 // - 1: visiting (currently in the recursion stack)
 // - 2: visited (completely explored)
 func (g *DirectedTargetGraph) HasCycle() bool {
-	visited := make(map[*model.Target]int) // 0: unvisited, 1: visiting, 2: visited
+	visited := make(map[model.BuildNode]int) // 0: unvisited, 1: visiting, 2: visited
 
-	var depthFirstSearch func(target *model.Target) bool
+	var depthFirstSearch func(target model.BuildNode) bool
 
-	depthFirstSearch = func(target *model.Target) bool {
+	depthFirstSearch = func(target model.BuildNode) bool {
 		visited[target] = 1 // Mark as visiting
 
-		for _, neighbor := range g.outEdges[target.Label] {
+		for _, neighbor := range g.outEdges[target.GetLabel()] {
 			if visited[neighbor] == 1 {
 				return true // Cycle detected
 			}
@@ -188,10 +198,10 @@ func (g *DirectedTargetGraph) HasCycle() bool {
 		return false        // No cycle detected in this branch
 	}
 
-	for _, vertex := range g.vertices {
-		if visited[vertex] == 0 {
-			if depthFirstSearch(vertex) {
-				return true // Cycle detected starting from this vertex
+	for _, node := range g.nodes {
+		if visited[node] == 0 {
+			if depthFirstSearch(node) {
+				return true // Cycle detected starting from this node
 			}
 		}
 	}
@@ -201,28 +211,28 @@ func (g *DirectedTargetGraph) HasCycle() bool {
 
 // GraphJSON is a helper struct for JSON serialization
 type GraphJSON struct {
-	Vertices []*model.Target     `json:"vertices"`
-	Edges    map[string][]string `json:"edges"` // from label to label
+	Nodes []model.BuildNode   `json:"nodes"`
+	Edges map[string][]string `json:"edges"` // from label to label
 }
 
-func (g *DirectedTargetGraph) LogSelectedVertices() {
-	for _, vertex := range g.vertices.SelectedTargetsAlphabetically() {
-		fmt.Println(vertex.Label)
+func (g *DirectedTargetGraph) LogSelectedNodes() {
+	for _, node := range g.nodes.SelectedNodesAlphabetically() {
+		fmt.Println(node.GetLabel())
 	}
 }
 
 // MarshalJSON serializes the graph to JSON
 func (g *DirectedTargetGraph) MarshalJSON() ([]byte, error) {
 	graphJSON := GraphJSON{
-		Vertices: g.vertices.TargetsAlphabetically(),
-		Edges:    map[string][]string{},
+		Nodes: g.nodes.NodesAlphabetically(),
+		Edges: map[string][]string{},
 	}
 
 	for from, toList := range g.outEdges {
 		fromLabel := from
 		var toLabels []string
 		for _, to := range toList {
-			toLabels = append(toLabels, to.Label.String())
+			toLabels = append(toLabels, to.GetLabel().String())
 		}
 		sort.Strings(toLabels)
 		graphJSON.Edges[fromLabel.String()] = toLabels

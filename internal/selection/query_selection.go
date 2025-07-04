@@ -9,23 +9,23 @@ import (
 func (s *Selector) SelectTargets(
 	graph *dag.DirectedTargetGraph,
 ) {
-	for _, target := range graph.GetVertices() {
-		if s.targetMatchesFilters(target) && targetMatchesPlatform(target) {
-			target.IsSelected = true
+	for _, node := range graph.GetNodes() {
+		if s.nodeMatchesFilters(node) && nodeMatchesPlatform(node) {
+			node.Select()
 		}
 	}
 }
 
-func (s *Selector) FilterTargets(targets []*model.Target) []*model.Target {
-	var filteredLabels []*model.Target
-	for _, target := range targets {
-		if s.Match(target) {
-			filteredLabels = append(filteredLabels, target)
+func (s *Selector) FilterNodes(nodes []model.BuildNode) []model.BuildNode {
+	var filteredLabels []model.BuildNode
+	for _, node := range nodes {
+		if s.Match(node) {
+			filteredLabels = append(filteredLabels, node)
 		}
 	}
 	return filteredLabels
 }
 
-func (s *Selector) Match(target *model.Target) bool {
-	return s.targetMatchesFilters(target) && targetMatchesPlatform(target)
+func (s *Selector) Match(node model.BuildNode) bool {
+	return s.nodeMatchesFilters(node) && nodeMatchesPlatform(node)
 }

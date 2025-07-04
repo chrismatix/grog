@@ -17,17 +17,17 @@ func MustLoadGraphForBuild(ctx context.Context, logger *zap.SugaredLogger) *dag.
 			err)
 	}
 
-	targets, err := model.TargetMapFromPackages(packages)
+	nodes, err := model.BuildNodeMapFromPackages(packages)
 	if err != nil {
 		logger.Fatalf("could not create target map: %v", err)
 	}
 
-	graph, err := analysis.BuildGraph(targets)
+	graph, err := analysis.BuildGraph(nodes)
 	if err != nil {
 		logger.Fatalf("could not build graph: %v", err)
 	}
 
-	logger.Infof("%s loaded, %s configured.", console.FCountPkg(len(packages)), console.FCountTargets(len(targets)))
+	logger.Infof("%s loaded, %s configured.", console.FCountPkg(len(packages)), console.FCountTargets(len(nodes)))
 	return graph
 }
 
@@ -37,12 +37,12 @@ func MustLoadGraphForQuery(ctx context.Context, logger *zap.SugaredLogger) *dag.
 		logger.Fatalf("could not load packages: %v", err)
 	}
 
-	targets, err := model.TargetMapFromPackages(packages)
+	nodes, err := model.BuildNodeMapFromPackages(packages)
 	if err != nil {
 		logger.Fatalf("could not create target map: %v", err)
 	}
 
-	graph, err := analysis.BuildGraph(targets)
+	graph, err := analysis.BuildGraph(nodes)
 	if err != nil {
 		logger.Fatalf("could not build graph: %v", err)
 	}

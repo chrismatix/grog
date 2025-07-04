@@ -21,17 +21,17 @@ func TestWalkerBasic(t *testing.T) {
 
 	graph := NewDirectedGraphFromTargets(target1, target2)
 
-	graph.AddVertex(target1)
-	graph.AddVertex(target2)
+	graph.AddNode(target1)
+	graph.AddNode(target2)
 
 	// Track execution order
 	var executionOrder []label.TargetLabel
 	var mu sync.Mutex
 
-	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (CacheResult, error) {
+	walkFunc := func(ctx context.Context, node model.BuildNode, depsCached bool) (CacheResult, error) {
 		mu.Lock()
 		defer mu.Unlock()
-		executionOrder = append(executionOrder, target.Label)
+		executionOrder = append(executionOrder, node.GetLabel())
 		return CacheMiss, nil
 	}
 
@@ -55,7 +55,7 @@ func TestWalkerBasic(t *testing.T) {
 	}
 
 	for _, target := range []*model.Target{target1, target2} {
-		completion, ok := completionMap[target]
+		completion, ok := completionMap[target.Label]
 		if !ok {
 			t.Errorf("Expected target %s to be in completion map", target.Label)
 		}
@@ -87,10 +87,10 @@ func TestWalkerLinearDependency(t *testing.T) {
 	var executionOrder []label.TargetLabel
 	var mu sync.Mutex
 
-	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (CacheResult, error) {
+	walkFunc := func(ctx context.Context, node model.BuildNode, depsCached bool) (CacheResult, error) {
 		mu.Lock()
 		defer mu.Unlock()
-		executionOrder = append(executionOrder, target.Label)
+		executionOrder = append(executionOrder, node.GetLabel())
 		return CacheMiss, nil
 	}
 
@@ -126,7 +126,7 @@ func TestWalkerLinearDependency(t *testing.T) {
 	}
 
 	for _, target := range []*model.Target{target1, target2, target3} {
-		completion, ok := completionMap[target]
+		completion, ok := completionMap[target.Label]
 		if !ok {
 			t.Errorf("Expected target %s to be in completion map", target.Label)
 		}
@@ -166,10 +166,10 @@ func TestWalkerDiamondDependency(t *testing.T) {
 	var executedTargets []label.TargetLabel
 	var mu sync.Mutex
 
-	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (CacheResult, error) {
+	walkFunc := func(ctx context.Context, node model.BuildNode, depsCached bool) (CacheResult, error) {
 		mu.Lock()
 		defer mu.Unlock()
-		executedTargets = append(executedTargets, target.Label)
+		executedTargets = append(executedTargets, node.GetLabel())
 		return CacheMiss, nil
 	}
 
@@ -209,7 +209,7 @@ func TestWalkerDiamondDependency(t *testing.T) {
 	}
 
 	for _, target := range []*model.Target{target1, target2, target3, target4} {
-		completion, ok := completionMap[target]
+		completion, ok := completionMap[target.Label]
 		if !ok {
 			t.Errorf("Expected target %s to be in completion map", target.Label)
 		}
@@ -235,11 +235,11 @@ func TestWalkerFailFast(t *testing.T) {
 	_ = graph.AddEdge(target2, target1)
 
 	// walkFunc that fails for target2
-	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (CacheResult, error) {
-		if target.Label.Name == "target2" {
+	walkFunc := func(ctx context.Context, node model.BuildNode, depsCached bool) (CacheResult, error) {
+		if node.GetLabel().Name == "target2" {
 			return CacheMiss, errors.New("failed to execute target2")
 		}
-		if target.Label.Name == "target3" {
+		if node.GetLabel().Name == "target3" {
 			select {
 			case <-ctx.Done():
 				// target2 should fail and trigger the context cancellation
@@ -263,7 +263,7 @@ func TestWalkerFailFast(t *testing.T) {
 	}
 
 	// target2 should have failed
-	completion2, ok := completionMap[target2]
+	completion2, ok := completionMap[target2.Label]
 	if !ok {
 		t.Errorf("Expected target2 to be in completion map")
 	}
@@ -275,13 +275,13 @@ func TestWalkerFailFast(t *testing.T) {
 	}
 
 	// target1 might or might not have started but should not be successful
-	_, ok = completionMap[target1]
+	_, ok = completionMap[target1.Label]
 	if ok {
 		t.Errorf("target1 should not have been processed")
 	}
 
 	// target3 should not have completed
-	completion, ok := completionMap[target3]
+	completion, ok := completionMap[target3.Label]
 	if ok && completion.IsSuccess {
 		t.Errorf("target3 should not have completed successfully")
 	}
@@ -296,18 +296,18 @@ func TestWalkerNonFailFast(t *testing.T) {
 
 	graph := NewDirectedGraphFromTargets(target1, target2, target3, target4)
 
-	graph.AddVertex(target1)
-	graph.AddVertex(target2)
-	graph.AddVertex(target3)
-	graph.AddVertex(target4)
+	graph.AddNode(target1)
+	graph.AddNode(target2)
+	graph.AddNode(target3)
+	graph.AddNode(target4)
 
 	_ = graph.AddEdge(target1, target2)
 	// target3 and target4 are on a different branch
 	_ = graph.AddEdge(target3, target4)
 
 	// walkFunc that fails for target2
-	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (CacheResult, error) {
-		if target.Label.Name == "target1" {
+	walkFunc := func(ctx context.Context, node model.BuildNode, depsCached bool) (CacheResult, error) {
+		if node.GetLabel().Name == "target1" {
 			return CacheMiss, errors.New("failed to execute target1")
 		}
 		return CacheMiss, nil
@@ -323,7 +323,7 @@ func TestWalkerNonFailFast(t *testing.T) {
 	}
 
 	// target1 should have failed
-	completion1, ok := completionMap[target1]
+	completion1, ok := completionMap[target1.Label]
 	if !ok {
 		t.Errorf("Expected target1 to be in completion map")
 	}
@@ -335,7 +335,7 @@ func TestWalkerNonFailFast(t *testing.T) {
 	}
 
 	// target2 should not be in completion map
-	_, ok = completionMap[target2]
+	_, ok = completionMap[target2.Label]
 	if ok {
 		t.Errorf("Did not expect target2 to be in completion map")
 	}
@@ -360,10 +360,10 @@ func TestWalkerEdgeCases(t *testing.T) {
 	})
 }
 
-// Test that when two failing parents share a single child, cancelTarget
-// is only invoked once per vertex (no double-close panic).
+// Test that when two failing parents share a single child, cancelNode
+// is only invoked once per node (no double-close panic).
 func TestNoDoubleCancel(t *testing.T) {
-	// Create three targets: two parents (t1, t2) and one shared child (t3).
+	// Create three targets: two parent (t1, t2) and one shared child (t3).
 	target1 := GetTarget("target1")
 	target2 := GetTarget("target2")
 	target3 := GetTarget("target3")
@@ -373,44 +373,44 @@ func TestNoDoubleCancel(t *testing.T) {
 	_ = graph.AddEdge(target1, target3)
 	_ = graph.AddEdge(target2, target3)
 
-	// walkFunc fails for both parents, succeeds (but never starts) for the child.
-	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (CacheResult, error) {
-		if target.Label.Name == "target1" || target.Label.Name == "target2" {
-			return CacheMiss, errors.New("intentional failure: " + target.Label.Name)
+	// walkFunc fails for both parent, succeeds (but never starts) for the child.
+	walkFunc := func(ctx context.Context, node model.BuildNode, depsCached bool) (CacheResult, error) {
+		if node.GetLabel().Name == "target1" || node.GetLabel().Name == "target2" {
+			return CacheMiss, errors.New("intentional failure: " + node.GetLabel().Name)
 		}
 		return CacheMiss, nil
 	}
 
-	// Non-failFast mode will invoke cancelTarget on the shared child twice
+	// Non-failFast mode will invoke cancelNode on the shared child twice
 	// if there is no protection against double-close. This test ensures no panic.
 	walker := NewWalker(graph, walkFunc, false)
 
 	// Should not panic, and should return a normal completion map.
-	cm, err := walker.Walk(context.Background())
+	completionMap, err := walker.Walk(context.Background())
 	if err != nil {
 		t.Fatalf("expected Walk to complete without error, got %v", err)
 	}
 
-	// Only the two failing parents should appear in the completion map.
-	if len(cm) != 2 {
-		t.Errorf("expected 2 entries in completion map, got %d", len(cm))
+	// Only the two failing parent should appear in the completion map.
+	if len(completionMap) != 2 {
+		t.Errorf("expected 2 entries in completion map, got %d", len(completionMap))
 	}
-	if _, ok := cm[target3]; ok {
+	if _, ok := completionMap[target3.Label]; ok {
 		t.Errorf("expected target3 not to be in completions map")
 	}
 
-	// Verify both parents are present and marked as failed.
-	for _, p := range []*model.Target{target1, target2} {
-		c, found := cm[p]
+	// Verify both parent are present and marked as failed.
+	for _, parent := range []*model.Target{target1, target2} {
+		c, found := completionMap[parent.Label]
 		if !found {
-			t.Errorf("expected %s in completion map", p.Label)
+			t.Errorf("expected %s in completion map", parent.Label)
 			continue
 		}
 		if c.IsSuccess {
-			t.Errorf("expected %s to have failed", p.Label)
+			t.Errorf("expected %s to have failed", parent.Label)
 		}
 		if c.Err == nil {
-			t.Errorf("expected %s to carry an error", p.Label)
+			t.Errorf("expected %s to carry an error", parent.Label)
 		}
 	}
 }

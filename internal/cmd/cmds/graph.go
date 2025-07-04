@@ -57,12 +57,12 @@ Supports tree, JSON, and Mermaid diagram output formats. By default, only direct
 			logger.Fatalf("could not parse target pattern: %v", err)
 		}
 
-		targets, err := model.TargetMapFromPackages(packages)
+		nodes, err := model.BuildNodeMapFromPackages(packages)
 		if err != nil {
 			logger.Fatalf("could not create target map: %v", err)
 		}
 
-		graph, err := analysis.BuildGraph(targets)
+		graph, err := analysis.BuildGraph(nodes)
 		if err != nil {
 			logger.Fatalf("could not build graph: %v", err)
 		}
@@ -75,10 +75,10 @@ Supports tree, JSON, and Mermaid diagram output formats. By default, only direct
 		selector.SelectTargets(graph)
 
 		if graphOptions.transitive {
-			// Select transitive dependencies of the selected targets
-			for _, target := range graph.GetSelectedVertices() {
+			// Select transitive dependencies of the selected nodes
+			for _, target := range graph.GetSelectedNodes() {
 				for _, ancestor := range graph.GetAncestors(target) {
-					ancestor.IsSelected = true
+					ancestor.Select()
 				}
 			}
 		}
@@ -124,23 +124,24 @@ func printMermaidDiagram(graph *dag.DirectedTargetGraph) {
 	chart.Title = fmt.Sprintf("%s dependency graph", filepath.Base(workspaceDir))
 
 	// Add Nodes:
-	// Deterministic ordering of vertices.
-	vertices := graph.GetVertices().SelectedTargetsAlphabetically()
+	// Deterministic ordering of nodes.
+	nodes := graph.GetNodes().SelectedNodesAlphabetically()
 	nodeMap := make(map[string]*flowchart.Node)
-	for _, vertex := range vertices {
-		node := chart.AddNode(vertex.Label.String())
-		node.Style = &flowchart.NodeStyle{
+	for _, node := range nodes {
+		chartNode := chart.AddNode(node.GetLabel().String())
+		chartNode.Style = &flowchart.NodeStyle{
 			Fill:        "#E3F2FD", // light-blue-50
 			Stroke:      "#1E88E5", // blue-600
 			StrokeWidth: 2,
 		}
-		nodeMap[vertex.Label.String()] = node
+		nodeMap[node.GetLabel().String()] = chartNode
 
+		targetNode, isTarget := node.(*model.Target)
 		// Add inputs as separate nodes if requested.
-		if graphOptions.mermaidInputsAsNodes {
+		if graphOptions.mermaidInputsAsNodes && isTarget {
 			// Keep input nodes in stable order as well.
-			inputs := make([]string, len(vertex.UnresolvedInputs))
-			copy(inputs, vertex.UnresolvedInputs)
+			inputs := make([]string, len(targetNode.UnresolvedInputs))
+			copy(inputs, targetNode.UnresolvedInputs)
 			sort.Strings(inputs)
 
 			for _, input := range inputs {
@@ -151,7 +152,7 @@ func printMermaidDiagram(graph *dag.DirectedTargetGraph) {
 					StrokeWidth: 2,
 					StrokeDash:  "6 3", // dashed border emphasises "just an input"
 				}
-				link := chart.AddLink(inputNode, node)
+				link := chart.AddLink(inputNode, chartNode)
 				link.Shape = flowchart.LinkShapeDotted
 			}
 		}
@@ -162,8 +163,8 @@ func printMermaidDiagram(graph *dag.DirectedTargetGraph) {
 
 	// Sort the map keys.
 	var fromKeys []label.TargetLabel
-	for k := range out {
-		fromKeys = append(fromKeys, k)
+	for key := range out {
+		fromKeys = append(fromKeys, key)
 	}
 	sort.Slice(fromKeys, func(i, j int) bool {
 		return fromKeys[i].String() < fromKeys[j].String()
@@ -173,11 +174,11 @@ func printMermaidDiagram(graph *dag.DirectedTargetGraph) {
 		toList := out[from]
 		// Sort each destination slice.
 		sort.Slice(toList, func(i, j int) bool {
-			return toList[i].Label.String() < toList[j].Label.String()
+			return toList[i].GetLabel().String() < toList[j].GetLabel().String()
 		})
 
 		for _, to := range toList {
-			chart.AddLink(nodeMap[from.String()], nodeMap[to.Label.String()])
+			chart.AddLink(nodeMap[from.String()], nodeMap[to.GetLabel().String()])
 		}
 	}
 
@@ -185,9 +186,9 @@ func printMermaidDiagram(graph *dag.DirectedTargetGraph) {
 }
 
 func printTree(graph *dag.DirectedTargetGraph) {
-	// Gather all vertices that have no dependants – they are the roots.
-	var roots []*model.Target
-	for _, v := range graph.GetVertices() {
+	// Gather all nodes that have no dependants – they are the roots.
+	var roots []model.BuildNode
+	for _, v := range graph.GetNodes() {
 		if len(graph.GetDependants(v)) == 0 {
 			roots = append(roots, v)
 		}
@@ -195,7 +196,7 @@ func printTree(graph *dag.DirectedTargetGraph) {
 
 	// Deterministic order of roots.
 	sort.Slice(roots, func(i, j int) bool {
-		return roots[i].Label.String() < roots[j].Label.String()
+		return roots[i].GetLabel().String() < roots[j].GetLabel().String()
 	})
 
 	for _, root := range roots {
@@ -204,14 +205,14 @@ func printTree(graph *dag.DirectedTargetGraph) {
 	}
 }
 
-// buildTree converts a vertex and all of its (transitive) dependencies into a
+// buildTree converts a node and all of its (transitive) dependencies into a
 // Lipgloss tree.
 func buildTree(
-	target *model.Target,
+	node model.BuildNode,
 	graph *dag.DirectedTargetGraph,
 	level int,
 ) *tree.Tree {
-	targetLabel := target.Label.String()
+	targetLabel := node.GetLabel().String()
 	t := tree.New().Root(targetLabel)
 
 	if level == 0 {
@@ -222,13 +223,13 @@ func buildTree(
 	}
 
 	// Deterministic output – sort the direct dependencies alphabetically.
-	deps := graph.GetDependencies(target)
+	deps := graph.GetDependencies(node)
 	sort.Slice(deps, func(i, j int) bool {
-		return deps[i].Label.String() < deps[j].Label.String()
+		return deps[i].GetLabel().String() < deps[j].GetLabel().String()
 	})
 
 	for _, dep := range deps {
-		depLabel := dep.Label.String()
+		depLabel := dep.GetLabel().String()
 
 		if len(graph.GetDependencies(dep)) > 0 {
 			t.Child(buildTree(dep, graph, level+1))

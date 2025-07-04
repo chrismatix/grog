@@ -116,10 +116,10 @@ func (t *Target) HasOutputChecksOnly() bool {
 	return len(t.OutputChecks) > 0 && len(t.AllOutputs()) == 0 && len(t.Inputs) == 0
 }
 
-func PrintSortedLabels(targets []*Target) {
-	labels := make([]label.TargetLabel, len(targets))
-	for i, target := range targets {
-		labels[i] = target.Label
+func PrintSortedLabels(nodes []BuildNode) {
+	labels := make([]label.TargetLabel, len(nodes))
+	for i, target := range nodes {
+		labels[i] = target.GetLabel()
 	}
 	label.PrintSorted(labels)
 }
@@ -142,4 +142,23 @@ func (t *Target) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(wrapper)
+}
+
+// -------------------------------
+// BuildNode interface implementation
+
+func (t *Target) GetLabel() label.TargetLabel {
+	return t.Label
+}
+
+func (t *Target) GetDependencies() []label.TargetLabel {
+	return t.Dependencies
+}
+
+func (t *Target) Select() {
+	t.IsSelected = true
+}
+
+func (t *Target) GetIsSelected() bool {
+	return t.IsSelected
 }

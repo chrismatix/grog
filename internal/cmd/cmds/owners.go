@@ -23,7 +23,7 @@ This is useful for finding which targets will be affected by changes to specific
 
 		graph := loading.MustLoadGraphForQuery(ctx, logger)
 
-		targets := graph.GetVertices()
+		nodes := graph.GetNodes()
 
 		// Resolve the input files relative to current directory
 		for i, arg := range args {
@@ -43,9 +43,9 @@ This is useful for finding which targets will be affected by changes to specific
 			return false
 		}
 
-		// Find targets that have any of the specified files in their inputs
+		// Find nodes that have any of the specified files in their inputs
 		var matchingTargets []*model.Target
-		for _, target := range targets {
+		for _, target := range nodes.GetTargets() {
 			for _, inputFile := range target.Inputs {
 				// Get the absolute path of the input file
 				absInputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(

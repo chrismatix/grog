@@ -6,7 +6,12 @@ import (
 	"slices"
 )
 
-func targetMatchesPlatform(target *model.Target) bool {
+func nodeMatchesPlatform(node model.BuildNode) bool {
+	target, ok := node.(*model.Target)
+	if !ok {
+		return true
+	}
+
 	if config.Global.AllPlatforms {
 		return true
 	}
