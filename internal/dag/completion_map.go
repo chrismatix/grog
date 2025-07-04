@@ -2,6 +2,7 @@ package dag
 
 import (
 	"grog/internal/label"
+	"grog/internal/model"
 )
 
 type CompletionMap map[label.TargetLabel]Completion
@@ -16,12 +17,12 @@ func (c CompletionMap) GetErrors() []error {
 	return errorList
 }
 
-// SuccessCount returns the number of successful targets and the number of cache hits
-func (c CompletionMap) SuccessCount() (int, int) {
+// TargetSuccessCount returns the number of successful targets and the number of cache hits
+func (c CompletionMap) TargetSuccessCount() (int, int) {
 	successCount := 0
 	cacheHits := 0
 	for _, completion := range c {
-		if completion.IsSuccess {
+		if completion.IsSuccess && completion.NodeType == model.TargetNode {
 			successCount++
 			if completion.CacheResult == CacheHit {
 				cacheHits++

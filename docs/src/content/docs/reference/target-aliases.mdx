@@ -1,0 +1,25 @@
+---
+title: Target Aliases
+description: Use aliases to create alternative labels pointing to existing targets.
+---
+
+A **target alias** is a lightweight entry in a `BUILD` file that simply points to another target.
+It has its own label but no command or outputs. When you build an alias, Grog will
+transparently build the aliased target.
+
+## Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `string` | Unique identifier for the alias within its package |
+| `actual` | `label` | Label of the target that this alias points to |
+
+## Example
+
+```yaml
+aliases:
+  - name: default
+    actual: :build_app
+```
+
+Running `grog build :default` would build the `:build_app` target.

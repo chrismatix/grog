@@ -77,6 +77,16 @@ Save this as `BUILD.json` in your project directory.
   </TabItem>
 </Tabs>
 
+You can also define simple **aliases** that point to other targets:
+
+```yaml
+aliases:
+  - name: default
+    actual: :build_app
+```
+
+Running `grog build :default` would build `:build_app`.
+
 For a complete list of available options, see the [target configuration reference](/reference/target-configuration).
 
 ## Makefile Integration

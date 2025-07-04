@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+var _ BuildNode = &Target{}
+
 // Target defines a build step that depends on Dependencies (other targets)
 // and Inputs (files) and produces Outputs.
 type Target struct {
@@ -146,6 +148,8 @@ func (t *Target) MarshalJSON() ([]byte, error) {
 
 // -------------------------------
 // BuildNode interface implementation
+
+func (t *Target) GetType() NodeType { return TargetNode }
 
 func (t *Target) GetLabel() label.TargetLabel {
 	return t.Label

@@ -20,6 +20,11 @@ type TargetDTO struct {
 	EnvironmentVariables map[string]string     `json:"environment_variables,omitempty" yaml:"environment_variables,omitempty" pkl:"environment_variables"`
 }
 
+type AliasDTO struct {
+	Name   string `json:"name" yaml:"name" pkl:"name"`
+	Actual string `json:"actual" yaml:"actual" pkl:"actual"`
+}
+
 type PlatformConfigDTO struct {
 	Os   []string `json:"os,omitempty" yaml:"os,omitempty" pkl:"os"`
 	Arch []string `json:"arch,omitempty" yaml:"arch,omitempty" pkl:"arch"`
@@ -33,6 +38,7 @@ type PackageDTO struct {
 	SourceFilePath string
 
 	Targets []*TargetDTO `json:"targets" yaml:"targets" pkl:"targets"`
+	Aliases []*AliasDTO  `json:"aliases" yaml:"aliases" pkl:"aliases"`
 
 	// DefaultPlatform specifies the platform selector at the package level.
 	// This serves as the default for target-level platform selectors.

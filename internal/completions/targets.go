@@ -52,6 +52,12 @@ func TargetPatternCompletion(_ *cobra.Command, _ []string, toComplete string, ta
 					targets = append(targets, targetLabel.String())
 				}
 			}
+			for aliasLabel := range pkg.Aliases {
+				if pattern.Target() != "" && !strings.HasPrefix(aliasLabel.Name, pattern.Target()) {
+					continue
+				}
+				targets = append(targets, aliasLabel.String())
+			}
 			continue
 		}
 		if searchDir == "" {
