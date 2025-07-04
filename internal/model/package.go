@@ -13,8 +13,13 @@ type Package struct {
 	SourceFilePath string
 
 	Targets map[label.TargetLabel]*Target `json:"targets"`
+	Aliases map[label.TargetLabel]*Alias  `json:"aliases"`
 }
 
 func (p *Package) GetTargets() []*Target {
 	return slices.Collect(maps.Values(p.Targets))
+}
+
+func (p *Package) GetAliases() []*Alias {
+	return slices.Collect(maps.Values(p.Aliases))
 }

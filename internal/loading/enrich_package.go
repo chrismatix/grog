@@ -19,6 +19,7 @@ import (
 // - parses the deps into target labels
 func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg PackageDTO) (*model.Package, error) {
 	targets := make(map[label.TargetLabel]*model.Target)
+	aliases := make(map[label.TargetLabel]*model.Alias)
 	absolutePackagePath := config.GetPathAbsoluteToWorkspaceRoot(packagePath)
 
 	for _, target := range pkg.Targets {
@@ -91,9 +92,30 @@ func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg Packa
 		}
 	}
 
+	for _, alias := range pkg.Aliases {
+		actualLabel, err := label.ParseTargetLabel(packagePath, alias.Actual)
+		if err != nil {
+			return nil, err
+		}
+
+		if packagePath == "." {
+			packagePath = ""
+		}
+		aliasLabel := label.TargetLabel{Package: packagePath, Name: alias.Name}
+		if _, ok := targets[aliasLabel]; ok || aliases[aliasLabel] != nil {
+			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", alias.Name, pkg.SourceFilePath)
+		}
+
+		aliases[aliasLabel] = &model.Alias{
+			Label:  aliasLabel,
+			Actual: actualLabel,
+		}
+	}
+
 	return &model.Package{
 		SourceFilePath: pkg.SourceFilePath,
 		Targets:        targets,
+		Aliases:        aliases,
 	}, nil
 }
 
