@@ -27,7 +27,9 @@ func MustLoadGraphForBuild(ctx context.Context, logger *zap.SugaredLogger) *dag.
 		logger.Fatalf("could not build graph: %v", err)
 	}
 
-	logger.Infof("%s loaded, %s configured.", console.FCountPkg(len(packages)), console.FCountTargets(len(nodes)))
+	logger.Infof("%s loaded, %s configured.",
+		console.FCountPkg(len(packages)),
+		console.FCountTargets(len(nodes.GetTargets())))
 	return graph
 }
 

@@ -1,6 +1,7 @@
 module package
 
 import "platform.pkl"
+import "alias.pkl"
 import "output_check.pkl"
 
 class Target {
@@ -13,12 +14,14 @@ class Target {
   bin_output: String?
   output_checks: Listing<output_check>?
 
+  environment_variables: Mapping<String, String>?
   // Target Filtering
   tags: Listing<String>(isDistinct)
   platform: platform?
-  environment_variables: Mapping<String, String>?
 }
 
 default_platform: platform?
 
 targets: Listing<Target>(isDistinctBy((it) -> it.name))
+
+aliases: Listing<alias>(isDistinctBy((it) -> it.name))?

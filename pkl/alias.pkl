@@ -1,0 +1,4 @@
+module alias
+
+name: String
+actual: String

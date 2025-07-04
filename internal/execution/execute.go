@@ -79,10 +79,11 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	selectedNodeCount := len(selectedNodes)
 
 	// Create a list of node labels for the TestLogger
-	targetLabels := make([]string, selectedNodeCount)
-	for i, node := range selectedNodes {
-		// TODO for the test logger we actually only need test targets
-		targetLabels[i] = node.GetLabel().String()
+	var targetLabels []string
+	for _, node := range selectedNodes {
+		if target, ok := node.(*model.Target); ok && target.IsTest() {
+			targetLabels = append(targetLabels, node.GetLabel().String())
+		}
 	}
 
 	// Create a TestLogger with the node labels

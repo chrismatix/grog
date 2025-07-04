@@ -26,6 +26,7 @@ type WalkCallback func(ctx context.Context, node model.BuildNode, depsCached boo
 
 type Completion struct {
 	IsSuccess   bool
+	NodeType    model.NodeType
 	CacheResult CacheResult
 	Err         error
 }
@@ -189,6 +190,7 @@ func (w *Walker) onComplete(node model.BuildNode, completion Completion) {
 	defer w.doneMutex.Unlock()
 
 	// Mark node as done
+	completion.NodeType = node.GetType()
 	w.completions[node.GetLabel()] = completion
 
 	if w.failFastTriggered {
@@ -265,7 +267,7 @@ func (w *Walker) nodeRoutine(
 			// don't account for cache hits in errors
 			w.onComplete(node, Completion{IsSuccess: false, Err: err})
 		} else {
-			if cacheResult == CacheHit && depsCached == false {
+			if cacheResult == CacheHit && depsCached == false && node.GetType() == model.TargetNode {
 				// This should not happen and indicates an issue with the walkCallback
 				// Reason: When the deps were not cached the invalidation should
 				// propagate down the dependency chain

@@ -43,7 +43,7 @@ func (s *Selector) SelectTargetsForBuild(
 	// Doing it all in one loop would be faster, but this is easier to reason about
 	selectedCount := 0
 	for _, node := range graph.GetNodes() {
-		if node.GetIsSelected() {
+		if node.GetIsSelected() && node.GetType() == model.TargetNode {
 			selectedCount++
 		}
 	}
