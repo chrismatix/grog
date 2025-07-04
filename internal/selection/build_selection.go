@@ -25,16 +25,16 @@ func (s *Selector) SelectTargetsForBuild(
 ) (int, int, error) {
 
 	platformSkipped := 0
-	for _, target := range graph.GetVertices() {
+	for _, node := range graph.GetNodes() {
 		// Match pattern and test flag
-		if s.targetMatchesFilters(target) {
-			if !targetMatchesPlatform(target) {
+		if s.nodeMatchesFilters(node) {
+			if !nodeMatchesPlatform(node) {
 				platformSkipped += 1
 				continue // Skip targets that don't match the platform
 			}
 
-			target.IsSelected = true
-			if err := s.selectAllAncestorsForBuild(graph, []string{target.Label.String()}, target); err != nil {
+			node.Select()
+			if err := s.selectAllAncestorsForBuild(graph, []string{node.GetLabel().String()}, node); err != nil {
 				return 0, 0, err
 			}
 		}
@@ -42,8 +42,8 @@ func (s *Selector) SelectTargetsForBuild(
 
 	// Doing it all in one loop would be faster, but this is easier to reason about
 	selectedCount := 0
-	for _, target := range graph.GetVertices() {
-		if target.IsSelected {
+	for _, node := range graph.GetNodes() {
+		if node.GetIsSelected() {
 			selectedCount++
 		}
 	}
@@ -51,22 +51,22 @@ func (s *Selector) SelectTargetsForBuild(
 	return selectedCount, platformSkipped, nil
 }
 
-// selectAllAncestorsForBuild recursively selects all ancestors of the given target
+// selectAllAncestorsForBuild recursively selects all ancestors of the given node
 // and returns the number of selected targets.
 func (s *Selector) selectAllAncestorsForBuild(
 	graph *dag.DirectedTargetGraph,
 	depChain []string,
-	target *model.Target,
+	node model.BuildNode,
 ) error {
-	for _, ancestor := range graph.GetDependencies(target) {
-		depChain = append(depChain, ancestor.Label.String())
-		if !targetMatchesPlatform(ancestor) {
+	for _, ancestor := range graph.GetDependencies(node) {
+		depChain = append(depChain, ancestor.GetLabel().String())
+		if !nodeMatchesPlatform(ancestor) {
 			depChainStr := strings.Join(depChain[1:], " -> ")
-			return fmt.Errorf("could not select target %s because it depends on %s, which does not match the platform %s",
+			return fmt.Errorf("could not select node %s because it depends on %s, which does not match the platform %s",
 				depChain[0], depChainStr, config.Global.GetPlatform())
 		}
 
-		ancestor.IsSelected = true
+		ancestor.Select()
 		if err := s.selectAllAncestorsForBuild(graph, depChain, ancestor); err != nil {
 			return err
 		}

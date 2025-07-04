@@ -45,13 +45,13 @@ func mustParseOutputs(outputs []string) []model.Output {
 func TestCheckPathConstraints(t *testing.T) {
 	tests := []struct {
 		name               string
-		targetMap          model.TargetMap
+		targetMap          model.BuildNodeMap
 		expectWarningCount int
 		expectErrorCount   int
 	}{
 		{
 			name: "valid target without warnings or errors",
-			targetMap: model.TargetMap{
+			targetMap: model.BuildNodeMap{
 				label.TL("", "target1"): &model.Target{
 					Label:        label.TL("", "target1"),
 					Inputs:       []string{"src/file.go"},
@@ -64,7 +64,7 @@ func TestCheckPathConstraints(t *testing.T) {
 		},
 		{
 			name: "target without inputs or dependencies does NOT generate warnings",
-			targetMap: model.TargetMap{
+			targetMap: model.BuildNodeMap{
 				label.TL("", "target1"): &model.Target{
 					Label: label.TL("", "target1"),
 				},
@@ -74,7 +74,7 @@ func TestCheckPathConstraints(t *testing.T) {
 		},
 		{
 			name: "target inputs include an absolute path",
-			targetMap: model.TargetMap{
+			targetMap: model.BuildNodeMap{
 				label.TL("", "target1"): &model.Target{
 					Label:   label.TL("", "target1"),
 					Inputs:  []string{"/abs/path/file.go"},
@@ -86,7 +86,7 @@ func TestCheckPathConstraints(t *testing.T) {
 		},
 		{
 			name: "target inputs escape package path",
-			targetMap: model.TargetMap{
+			targetMap: model.BuildNodeMap{
 				label.TL("", "target1"): &model.Target{
 					Label:   label.TL("", "target1"),
 					Inputs:  []string{"../../outside/package/file.go"},
@@ -98,7 +98,7 @@ func TestCheckPathConstraints(t *testing.T) {
 		},
 		{
 			name: "target outputs outside repository",
-			targetMap: model.TargetMap{
+			targetMap: model.BuildNodeMap{
 				label.TL("", "target1"): &model.Target{
 					Label:   label.TL("", "target1"),
 					Inputs:  []string{"src/file.go"},
@@ -110,7 +110,7 @@ func TestCheckPathConstraints(t *testing.T) {
 		},
 		{
 			name: "target with both warnings and errors",
-			targetMap: model.TargetMap{
+			targetMap: model.BuildNodeMap{
 				label.TL("", "target1"): &model.Target{
 					Label:   label.TL("", "target1"),
 					Inputs:  []string{"/abs/path/file.go", "../../outside/package/file.go"},
@@ -122,7 +122,7 @@ func TestCheckPathConstraints(t *testing.T) {
 		},
 		{
 			name: "target with outputs that are relative and inside the workspace",
-			targetMap: model.TargetMap{
+			targetMap: model.BuildNodeMap{
 				label.TL("", "target1"): &model.Target{
 					Label:   label.TL("", "target1"),
 					Inputs:  []string{"src/file.go"},
@@ -134,7 +134,7 @@ func TestCheckPathConstraints(t *testing.T) {
 		},
 		{
 			name: "target with outputs that tries to escape workspace",
-			targetMap: model.TargetMap{
+			targetMap: model.BuildNodeMap{
 				label.TL("", "target1"): &model.Target{
 					Label:   label.TL("", "target1"),
 					Inputs:  []string{"src/file.go"},

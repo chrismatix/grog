@@ -49,9 +49,15 @@ func New(
 	return &Selector{Patterns: patterns, Tags: tags, ExcludeTags: excludeTags, TargetType: targetType}
 }
 
-func (s *Selector) targetMatchesFilters(
-	target *model.Target,
+func (s *Selector) nodeMatchesFilters(
+	node model.BuildNode,
 ) bool {
+	target, ok := node.(*model.Target)
+	if !ok {
+		// TODO implement environments here
+		return true
+	}
+
 	return s.targetMatchesTypeSelection(target) &&
 		s.targetMatchesPatterns(target) &&
 		s.targetTagsMatch(target) &&

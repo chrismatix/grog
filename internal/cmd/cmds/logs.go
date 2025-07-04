@@ -9,6 +9,7 @@ import (
 	"grog/internal/label"
 	"grog/internal/loading"
 	"grog/internal/logs"
+	"grog/internal/model"
 )
 
 var logsOptions struct {
@@ -38,9 +39,14 @@ Use the --path-only flag to only print the path to the log file instead of its c
 		}
 
 		graph := loading.MustLoadGraphForQuery(ctx, logger)
-		logTarget, hasTarget := graph.GetVertices()[targetLabel]
+		node, hasTarget := graph.GetNodes()[targetLabel]
 		if !hasTarget {
 			logger.Fatalf("could not find target %s", targetLabel)
+		}
+
+		logTarget, isTarget := node.(*model.Target)
+		if !isTarget {
+			logger.Fatalf("%s is not a target", targetLabel)
 		}
 
 		targetLogFile := logs.NewTargetLogFile(*logTarget)

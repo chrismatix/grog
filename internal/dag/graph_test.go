@@ -7,19 +7,19 @@ import (
 	"testing"
 )
 
-func TestDirectedTargetGraph_AddVertex(t *testing.T) {
+func TestDirectedTargetGraph_AddNode(t *testing.T) {
 	graph := NewDirectedGraph()
 	target1 := &model.Target{Label: label.TargetLabel{Name: "target1"}}
 	target2 := &model.Target{Label: label.TargetLabel{Name: "target2"}}
 
-	graph.AddVertex(target1)
+	graph.AddNode(target1)
 	// add idempotently
-	graph.AddVertex(target1)
+	graph.AddNode(target1)
 
-	graph.AddVertex(target2)
+	graph.AddNode(target2)
 
-	if len(graph.vertices) != 2 {
-		t.Errorf("Expected 2 vertices, got %d", len(graph.vertices))
+	if len(graph.nodes) != 2 {
+		t.Errorf("Expected 2 nodes, got %d", len(graph.nodes))
 	}
 }
 
@@ -29,8 +29,8 @@ func TestDirectedTargetGraph_AddEdge(t *testing.T) {
 	target2 := &model.Target{Label: label.TargetLabel{Name: "target2"}}
 	target3 := &model.Target{Label: label.TargetLabel{Name: "target3"}}
 
-	graph.AddVertex(target1)
-	graph.AddVertex(target2)
+	graph.AddNode(target1)
+	graph.AddNode(target2)
 
 	err := graph.AddEdge(target1, target2)
 	if err != nil {
@@ -49,12 +49,12 @@ func TestDirectedTargetGraph_AddEdge(t *testing.T) {
 
 	err = graph.AddEdge(target1, target3)
 	if err == nil {
-		t.Errorf("AddEdge should have returned an error for non-existent 'to' vertex")
+		t.Errorf("AddEdge should have returned an error for non-existent 'to' node")
 	}
 
 	err = graph.AddEdge(target3, target1)
 	if err == nil {
-		t.Errorf("AddEdge should have returned an error for non-existent 'from' vertex")
+		t.Errorf("AddEdge should have returned an error for non-existent 'from' node")
 	}
 
 	if len(graph.outEdges[target1.Label]) != 2 {
@@ -72,16 +72,16 @@ func TestDirectedTargetGraph_GetInEdges(t *testing.T) {
 	target2 := &model.Target{Label: label.TargetLabel{Name: "target2"}}
 	target3 := &model.Target{Label: label.TargetLabel{Name: "target3"}}
 
-	graph.AddVertex(target1)
-	graph.AddVertex(target2)
-	graph.AddVertex(target3)
+	graph.AddNode(target1)
+	graph.AddNode(target2)
+	graph.AddNode(target3)
 
 	graph.AddEdge(target1, target2)
 	graph.AddEdge(target3, target2)
 
 	inEdges := graph.GetDependencies(target2)
 
-	expectedInEdges := []*model.Target{target1, target3}
+	expectedInEdges := []model.BuildNode{target1, target3}
 	if !reflect.DeepEqual(inEdges, expectedInEdges) {
 		t.Errorf("GetDependencies returned incorrect inEdges. Expected %v, got %v", expectedInEdges, inEdges)
 	}
@@ -93,34 +93,34 @@ func TestDirectedTargetGraph_GetOutEdges(t *testing.T) {
 	target2 := &model.Target{Label: label.TargetLabel{Name: "target2"}}
 	target3 := &model.Target{Label: label.TargetLabel{Name: "target3"}}
 
-	graph.AddVertex(target1)
-	graph.AddVertex(target2)
-	graph.AddVertex(target3)
+	graph.AddNode(target1)
+	graph.AddNode(target2)
+	graph.AddNode(target3)
 
 	graph.AddEdge(target2, target1)
 	graph.AddEdge(target2, target3)
 
 	outEdges := graph.GetDependants(target2)
 
-	expectedOutEdges := []*model.Target{target1, target3} //Two edges added in AddEdge test
+	expectedOutEdges := []model.BuildNode{target1, target3} // Two edges added in AddEdge test
 	if !reflect.DeepEqual(outEdges, expectedOutEdges) {
 		t.Errorf("GetDependants returned incorrect outEdges. Expected %v, got %v", expectedOutEdges, outEdges)
 	}
 }
 
-func TestDirectedTargetGraph_hasVertex(t *testing.T) {
+func TestDirectedTargetGraph_hasNode(t *testing.T) {
 	graph := NewDirectedGraph()
 	target1 := &model.Target{Label: label.TargetLabel{Name: "target1"}}
 	target2 := &model.Target{Label: label.TargetLabel{Name: "target2"}}
 
-	graph.AddVertex(target1)
+	graph.AddNode(target1)
 
-	if !graph.hasVertex(target1) {
-		t.Errorf("hasVertex should have returned true for existing vertex")
+	if !graph.hasNode(target1) {
+		t.Errorf("hasNode should have returned true for existing node")
 	}
 
-	if graph.hasVertex(target2) {
-		t.Errorf("hasVertex should have returned false for non-existent vertex")
+	if graph.hasNode(target2) {
+		t.Errorf("hasNode should have returned false for non-existent node")
 	}
 }
 
@@ -130,9 +130,9 @@ func TestDirectedTargetGraph_HasCycle(t *testing.T) {
 	target2 := &model.Target{Label: label.TargetLabel{Name: "target2"}}
 	target3 := &model.Target{Label: label.TargetLabel{Name: "target3"}}
 
-	graph.AddVertex(target1)
-	graph.AddVertex(target2)
-	graph.AddVertex(target3)
+	graph.AddNode(target1)
+	graph.AddNode(target2)
+	graph.AddNode(target3)
 
 	// No cycle
 	if graph.HasCycle() {
@@ -149,7 +149,7 @@ func TestDirectedTargetGraph_HasCycle(t *testing.T) {
 	}
 
 	// Remove one edge to break the cycle: target1 -> target2 -> target3
-	graph.outEdges[target3.Label] = []*model.Target{}
+	graph.outEdges[target3.Label] = []model.BuildNode{}
 
 	// Check if there is a cycle
 	graph = NewDirectedGraph()
@@ -157,9 +157,9 @@ func TestDirectedTargetGraph_HasCycle(t *testing.T) {
 	target2 = &model.Target{Label: label.TargetLabel{Name: "target2"}}
 	target3 = &model.Target{Label: label.TargetLabel{Name: "target3"}}
 
-	graph.AddVertex(target1)
-	graph.AddVertex(target2)
-	graph.AddVertex(target3)
+	graph.AddNode(target1)
+	graph.AddNode(target2)
+	graph.AddNode(target3)
 
 	graph.AddEdge(target1, target2)
 	graph.AddEdge(target2, target3)
@@ -179,12 +179,12 @@ func TestDirectedTargetGraph_GetDescendants(t *testing.T) {
 	target4 := &model.Target{Label: label.TargetLabel{Name: "target4"}}
 	target5 := &model.Target{Label: label.TargetLabel{Name: "target5"}}
 
-	// Add vertices
-	graph.AddVertex(target1)
-	graph.AddVertex(target2)
-	graph.AddVertex(target3)
-	graph.AddVertex(target4)
-	graph.AddVertex(target5)
+	// Add nodes
+	graph.AddNode(target1)
+	graph.AddNode(target2)
+	graph.AddNode(target3)
+	graph.AddNode(target4)
+	graph.AddNode(target5)
 
 	// Create a graph structure:
 	// target1 -> target2 -> target4
@@ -201,13 +201,13 @@ func TestDirectedTargetGraph_GetDescendants(t *testing.T) {
 	// We need to check that all expected descendants are in the actual descendants list
 	// Order might vary, so we'll use a map to check for presence
 	if len(descendants1) != len(expectedDescendants1) {
-		t.Errorf("GetDescendants for target1 returned wrong number of descendants. Expected %d, got %d",
+		t.Errorf("GetDescendants for target1 returned wrong number of descendants. Expected %descendant, got %descendant",
 			len(expectedDescendants1), len(descendants1))
 	}
 
 	descendantMap := make(map[string]bool)
-	for _, d := range descendants1 {
-		descendantMap[d.Label.Name] = true
+	for _, descendant := range descendants1 {
+		descendantMap[descendant.GetLabel().Name] = true
 	}
 
 	for _, expected := range expectedDescendants1 {

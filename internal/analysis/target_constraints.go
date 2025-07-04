@@ -23,9 +23,14 @@ TODO: We don't yet check that a parent package does not include inputs from chil
 
 // CheckTargetConstraints checks that the paths defined by each target are valid
 // logs any warnings on the way
-func CheckTargetConstraints(logger *zap.SugaredLogger, targetMap model.TargetMap) (errs []error) {
+func CheckTargetConstraints(logger *zap.SugaredLogger, nodeMap model.BuildNodeMap) (errs []error) {
 	// iterate over targets in alphabetical order for consistent logging
-	for _, target := range targetMap.TargetsAlphabetically() {
+	for _, node := range nodeMap.NodesAlphabetically() {
+		target, ok := node.(*model.Target)
+		if !ok {
+			continue
+		}
+
 		inputRelativeError := checkInputPathsRelative(target)
 		errs = append(errs, inputRelativeError...)
 

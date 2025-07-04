@@ -44,8 +44,8 @@ func TestSelectTargetsForBuild(t *testing.T) {
 			},
 		}
 
-		graph.AddVertex(target1)
-		graph.AddVertex(target2)
+		graph.AddNode(target1)
+		graph.AddNode(target2)
 
 		// Create a selector with NonTestOnly filter
 		selector := New([]label.TargetPattern{pattern}, []string{testTag}, []string{}, NonTestOnly)
@@ -87,8 +87,8 @@ func TestSelectTargetsForBuild(t *testing.T) {
 			},
 		}
 
-		graph.AddVertex(target3)
-		graph.AddVertex(target4)
+		graph.AddNode(target3)
+		graph.AddNode(target4)
 
 		// Create a dependency: target3 depends on target4.
 		if err := graph.AddEdge(target4, target3); err != nil {
@@ -129,8 +129,8 @@ func TestSelectTargetsForBuild(t *testing.T) {
 			Tags: []string{testTag},
 		}
 
-		graph.AddVertex(target5)
-		graph.AddVertex(target6)
+		graph.AddNode(target5)
+		graph.AddNode(target6)
 
 		// Create a selector with TestOnly filter
 		testSelector := New([]label.TargetPattern{pattern}, []string{testTag}, []string{}, TestOnly)
@@ -189,8 +189,8 @@ func TestSelectTargetsForBuild(t *testing.T) {
 			Tags: []string{testTag, excludeTag},
 		}
 
-		graph.AddVertex(target7)
-		graph.AddVertex(target8)
+		graph.AddNode(target7)
+		graph.AddNode(target8)
 
 		// Create a selector with an exclude tag
 		selector := New([]label.TargetPattern{pattern}, []string{testTag}, []string{excludeTag}, AllTargets)

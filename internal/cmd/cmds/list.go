@@ -47,7 +47,7 @@ var ListCmd = &cobra.Command{
 		selector := selection.New(targetPatterns, config.Global.Tags, config.Global.ExcludeTags, targetTypeFilter)
 		selector.SelectTargets(graph)
 
-		graph.LogSelectedVertices()
+		graph.LogSelectedNodes()
 	},
 }
 

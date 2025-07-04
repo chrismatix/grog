@@ -10,6 +10,7 @@ import (
 	"grog/internal/hashing"
 	"grog/internal/label"
 	"grog/internal/loading"
+	"grog/internal/model"
 	"grog/internal/selection"
 )
 
@@ -42,7 +43,7 @@ This is useful when you want to force a rebuild of specific targets.`,
 		selector := selection.New(targetPatterns, config.Global.Tags, config.Global.ExcludeTags, selection.AllTargets)
 		selector.SelectTargets(graph)
 
-		selectedVertices := graph.GetSelectedVertices()
+		selectedNodes := graph.GetSelectedNodes()
 
 		// Initialize cache
 		cache, err := backends.GetCacheBackend(ctx, config.Global.Cache)
@@ -53,7 +54,12 @@ This is useful when you want to force a rebuild of specific targets.`,
 
 		taintedCount := 0
 		targetHasher := hashing.NewTargetHasher(graph)
-		for _, target := range selectedVertices {
+		for _, node := range selectedNodes {
+			target, ok := node.(*model.Target)
+			if !ok {
+				continue
+			}
+
 			// In order for the cache key to be correct the ChangeHash needs to be set
 			err := targetHasher.SetTargetChangeHash(target)
 			err = targetCache.Taint(ctx, *target)

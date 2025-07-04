@@ -1,8 +1,10 @@
 package dag
 
-import "grog/internal/model"
+import (
+	"grog/internal/label"
+)
 
-type CompletionMap map[*model.Target]Completion
+type CompletionMap map[label.TargetLabel]Completion
 
 func (c CompletionMap) GetErrors() []error {
 	var errorList []error

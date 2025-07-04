@@ -18,6 +18,7 @@ import (
 	"grog/internal/label"
 	"grog/internal/loading"
 	"grog/internal/locking"
+	"grog/internal/model"
 	"grog/internal/output"
 	"grog/internal/selection"
 	"os"
@@ -76,7 +77,7 @@ func runBuild(
 	loadOutputsMode config.LoadOutputsMode,
 ) {
 	startTime := time.Now()
-	errs := analysis.CheckTargetConstraints(logger, graph.GetVertices())
+	errs := analysis.CheckTargetConstraints(logger, graph.GetNodes())
 	if len(errs) > 0 {
 		for _, err := range errs {
 			logger.Errorf(err.Error())
@@ -166,7 +167,12 @@ func runBuild(
 			cacheHits,
 			len(executionErrors))
 
-		for target, completion := range completionMap {
+		for label, completion := range completionMap {
+			target, ok := graph.GetNodes()[label].(*model.Target)
+			if !ok {
+				continue
+			}
+
 			if completion.IsSuccess {
 				continue
 			}

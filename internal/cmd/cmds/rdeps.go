@@ -45,12 +45,12 @@ Dependants can be filtered by target type using the --target-type flag.`,
 		}
 		graph := loading.MustLoadGraphForQuery(ctx, logger)
 
-		target, hasTarget := graph.GetVertices()[targetLabel]
+		target, hasTarget := graph.GetNodes()[targetLabel]
 		if !hasTarget {
 			logger.Fatalf("could not find target %s", targetLabel)
 		}
 
-		var rDeps []*model.Target
+		var rDeps []model.BuildNode
 		if rDepsOptions.transitive {
 			rDeps = graph.GetDescendants(target)
 		} else {
@@ -62,7 +62,7 @@ Dependants can be filtered by target type using the --target-type flag.`,
 			logger.Fatalf(err.Error())
 		}
 		selector := selection.New(nil, config.Global.Tags, config.Global.ExcludeTags, targetTypeFilter)
-		filteredRDeps := selector.FilterTargets(rDeps)
+		filteredRDeps := selector.FilterNodes(rDeps)
 
 		model.PrintSortedLabels(filteredRDeps)
 	},

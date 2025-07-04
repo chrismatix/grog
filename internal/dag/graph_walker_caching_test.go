@@ -20,9 +20,9 @@ func TestWalkerAllDepsCached(t *testing.T) {
 
 	depsCachedMap := make(map[string]bool)
 
-	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (CacheResult, error) {
+	walkFunc := func(ctx context.Context, node model.BuildNode, depsCached bool) (CacheResult, error) {
 		// Record the depsCached value for this target
-		depsCachedMap[target.Label.Name] = depsCached
+		depsCachedMap[node.GetLabel().Name] = depsCached
 
 		// Always return true to simulate cache hit for all targets
 		return CacheHit, nil
@@ -66,10 +66,10 @@ func TestWalkerOneDepsNotCached(t *testing.T) {
 
 	depsCachedMap := make(map[string]bool)
 
-	walkFunc := func(ctx context.Context, target *model.Target, depsCached bool) (CacheResult, error) {
-		depsCachedMap[target.Label.Name] = depsCached
+	walkFunc := func(ctx context.Context, node model.BuildNode, depsCached bool) (CacheResult, error) {
+		depsCachedMap[node.GetLabel().Name] = depsCached
 
-		if target.Label.Name != "target3" {
+		if node.GetLabel().Name != "target3" {
 			return CacheHit, nil
 		}
 		// Return CacheMiss only for target3 simulating a cache miss

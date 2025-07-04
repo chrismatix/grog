@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"grog/internal/console"
+	"grog/internal/label"
 	"grog/internal/model"
 	"sync"
 )
@@ -21,7 +22,7 @@ const (
 
 // WalkCallback is called for each target and should return true if the target was cached
 // depsCached is true if all dependencies were cached or if there were no dependencies
-type WalkCallback func(ctx context.Context, target *model.Target, depsCached bool) (CacheResult, error)
+type WalkCallback func(ctx context.Context, node model.BuildNode, depsCached bool) (CacheResult, error)
 
 type Completion struct {
 	IsSuccess   bool
@@ -29,12 +30,12 @@ type Completion struct {
 	Err         error
 }
 
-type vertexInfo struct {
-	// vertex routine sends this when it's done
+type nodeInfo struct {
+	// node routine sends this when it's done
 	done chan Completion
-	// vertex routine receives this when it's ready
+	// node routine receives this when it's ready
 	ready chan bool // sends depsCached
-	// vertex routine receives this when it is supposed to stop
+	// node routine receives this when it is supposed to stop
 	cancel chan struct{}
 
 	cancelOnce sync.Once
@@ -43,9 +44,9 @@ type vertexInfo struct {
 // Walker walks the graph in topological order.
 // Not thread-safe.
 type Walker struct {
-	graph         *DirectedTargetGraph
-	walkCallback  WalkCallback
-	vertexInfoMap map[*model.Target]*vertexInfo
+	graph        *DirectedTargetGraph
+	walkCallback WalkCallback
+	nodeInfoMap  map[label.TargetLabel]*nodeInfo
 	// Keep track of which targets have been completed
 	completions CompletionMap
 
@@ -59,23 +60,23 @@ type Walker struct {
 	// Concurrency
 	// doneMutex protects completions
 	doneMutex sync.Mutex
-	// vertexMutex protects vertexInfoMap
-	vertexMutex sync.Mutex
-	wait        sync.WaitGroup
+	// nodeMutex protects nodeInfoMap
+	nodeMutex sync.Mutex
+	wait      sync.WaitGroup
 }
 
 func NewWalker(graph *DirectedTargetGraph, walkFunc WalkCallback, failFast bool) *Walker {
 	return &Walker{
-		graph:         graph,
-		walkCallback:  walkFunc,
-		vertexInfoMap: map[*model.Target]*vertexInfo{},
-		completions:   map[*model.Target]Completion{},
-		failFast:      failFast,
+		graph:        graph,
+		walkCallback: walkFunc,
+		nodeInfoMap:  map[label.TargetLabel]*nodeInfo{},
+		completions:  map[label.TargetLabel]Completion{},
+		failFast:     failFast,
 	}
 }
 
 /*
-Walk For each vertex generate an info payload containing
+Walk For each node generate an info payload containing
 - a done channel
 - a cancel channel
 - a start channel
@@ -89,7 +90,7 @@ Procedure:
 - In case of failure we cancel them and in case of failFast we cancel all outstanding targets
 
 Note: We do not start routines for targets that are not selected. Therefore,
-we need to check if descendants exist before starting/cancelling them
+we need to check if descendants exist before starting/cancelling them.
 
 Walk will then wait for all the goroutines to finish.
 */
@@ -106,8 +107,8 @@ func (w *Walker) Walk(
 	w.allCancel = cancelFunc
 
 	// populate info map
-	for _, vertex := range w.graph.vertices {
-		if !vertex.IsSelected {
+	for _, node := range w.graph.nodes {
+		if !node.GetIsSelected() {
 			// skip unselected targets
 			continue
 		}
@@ -116,7 +117,7 @@ func (w *Walker) Walk(
 		readyCh := make(chan bool, 1)
 		cancelCh := make(chan struct{}, 1)
 
-		w.vertexInfoMap[vertex] = &vertexInfo{
+		w.nodeInfoMap[node.GetLabel()] = &nodeInfo{
 			done:   doneCh,
 			ready:  readyCh,
 			cancel: cancelCh,
@@ -124,11 +125,11 @@ func (w *Walker) Walk(
 
 		w.wait.Add(1)
 		// start all routines
-		go w.vertexRoutine(ctx, vertex, w.vertexInfoMap[vertex])
+		go w.nodeRoutine(ctx, node, w.nodeInfoMap[node.GetLabel()])
 
 		// start all routines with no dependencies immediately
-		if len(w.graph.inEdges[vertex.Label]) == 0 {
-			w.startTarget(vertex, true)
+		if len(w.graph.inEdges[node.GetLabel()]) == 0 {
+			w.startNode(node, true)
 		}
 	}
 
@@ -156,39 +157,39 @@ func (w *Walker) Walk(
 	}
 }
 
-// cancelTarget cancels a target if it is present in the graph (not idempotent!)
-func (w *Walker) cancelTarget(target *model.Target) {
-	w.vertexMutex.Lock()
-	defer w.vertexMutex.Unlock()
+// cancelNode cancels a target if it is present in the graph (not idempotent!)
+func (w *Walker) cancelNode(node model.BuildNode) {
+	w.nodeMutex.Lock()
+	defer w.nodeMutex.Unlock()
 
-	// cancel the vertex routine
-	if info, ok := w.vertexInfoMap[target]; ok {
+	// cancel the node routine
+	if info, ok := w.nodeInfoMap[node.GetLabel()]; ok {
 		info.cancelOnce.Do(func() {
 			close(info.cancel)
 		})
 	}
 }
 
-// startTarget sends a ready message to a target if it is present in the graph (not idempotent!)
-func (w *Walker) startTarget(target *model.Target, depsCached bool) {
-	w.vertexMutex.Lock()
-	defer w.vertexMutex.Unlock()
-	if info, ok := w.vertexInfoMap[target]; ok {
+// startNode sends a ready message to a target if it is present in the graph (not idempotent!)
+func (w *Walker) startNode(node model.BuildNode, depsCached bool) {
+	w.nodeMutex.Lock()
+	defer w.nodeMutex.Unlock()
+	if info, ok := w.nodeInfoMap[node.GetLabel()]; ok {
 		go func() {
 			info.ready <- depsCached
 		}()
 	}
 }
 
-// onComplete called when a vertex is done
+// onComplete called when a node is done
 // - fans out ready messages to dependants (if their deps are satisfied)
 // - in case of failure, cancels all dependants (or the entire walk if failFast=true)
-func (w *Walker) onComplete(target *model.Target, completion Completion) {
+func (w *Walker) onComplete(node model.BuildNode, completion Completion) {
 	w.doneMutex.Lock()
 	defer w.doneMutex.Unlock()
 
-	// Mark target as done
-	w.completions[target] = completion
+	// Mark node as done
+	w.completions[node.GetLabel()] = completion
 
 	if w.failFastTriggered {
 		// If failFast was triggered, we assume everything is being cancelled already
@@ -202,9 +203,9 @@ func (w *Walker) onComplete(target *model.Target, completion Completion) {
 			w.allCancel()
 			w.cancelAll()
 		} else {
-			// Cancel *all* descendants if the target failed
-			for _, dep := range w.graph.GetDescendants(target) {
-				w.cancelTarget(dep)
+			// Cancel *all* descendants if the node failed
+			for _, dep := range w.graph.GetDescendants(node) {
+				w.cancelNode(dep)
 			}
 		}
 		return
@@ -212,13 +213,13 @@ func (w *Walker) onComplete(target *model.Target, completion Completion) {
 
 	// Iterate over all dependants and send a ready message
 	// if their deps are satisfied
-	for _, dependant := range w.graph.outEdges[target.Label] {
+	for _, dependant := range w.graph.outEdges[node.GetLabel()] {
 
 		// Check if dependant deps are satisfied
 		depsDone := true
 		depsCached := true
-		for _, dep := range w.graph.inEdges[dependant.Label] {
-			depCompletion, ok := w.completions[dep]
+		for _, dep := range w.graph.inEdges[dependant.GetLabel()] {
+			depCompletion, ok := w.completions[dep.GetLabel()]
 			if !ok || !depCompletion.IsSuccess {
 				depsDone = false
 			}
@@ -229,23 +230,23 @@ func (w *Walker) onComplete(target *model.Target, completion Completion) {
 
 		// If yes, send ready message to dependant
 		if depsDone {
-			w.startTarget(dependant, depsCached)
+			w.startNode(dependant, depsCached)
 		}
 	}
 }
 
 func (w *Walker) cancelAll() {
-	for _, vertex := range w.graph.vertices {
-		go func(v *model.Target) {
-			w.cancelTarget(v)
-		}(vertex)
+	for _, node := range w.graph.nodes {
+		go func(v model.BuildNode) {
+			w.cancelNode(v)
+		}(node)
 	}
 }
 
-func (w *Walker) vertexRoutine(
+func (w *Walker) nodeRoutine(
 	ctx context.Context,
-	target *model.Target,
-	info *vertexInfo,
+	node model.BuildNode,
+	info *nodeInfo,
 ) {
 	// always decrement wait group
 	defer w.wait.Done()
@@ -255,23 +256,23 @@ func (w *Walker) vertexRoutine(
 		return
 	case depsCached := <-info.ready:
 		// call the callback
-		cacheResult, err := w.walkCallback(ctx, target, depsCached)
+		cacheResult, err := w.walkCallback(ctx, node, depsCached)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				// Cancelling externally or via failFast leaves target uncompleted
 				return
 			}
 			// don't account for cache hits in errors
-			w.onComplete(target, Completion{IsSuccess: false, Err: err})
+			w.onComplete(node, Completion{IsSuccess: false, Err: err})
 		} else {
 			if cacheResult == CacheHit && depsCached == false {
 				// This should not happen and indicates an issue with the walkCallback
 				// Reason: When the deps were not cached the invalidation should
 				// propagate down the dependency chain
-				console.GetLogger(ctx).Warnf("unexpected cache hit for target %v when deps were not cached, forcing cache miss", target.Label)
+				console.GetLogger(ctx).Warnf("unexpected cache hit for target %v when deps were not cached, forcing cache miss", node.GetLabel())
 				cacheResult = CacheMiss
 			}
-			w.onComplete(target, Completion{IsSuccess: true, Err: nil, CacheResult: cacheResult})
+			w.onComplete(node, Completion{IsSuccess: true, Err: nil, CacheResult: cacheResult})
 		}
 		return
 	}

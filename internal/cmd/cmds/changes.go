@@ -60,19 +60,19 @@ Can optionally include transitive dependents of changed targets to find all affe
 				err)
 		}
 
-		targets, err := model.TargetMapFromPackages(packages)
+		nodes, err := model.BuildNodeMapFromPackages(packages)
 		if err != nil {
 			logger.Fatalf("could not create target map: %v", err)
 		}
 
-		graph, err := analysis.BuildGraph(targets)
+		graph, err := analysis.BuildGraph(nodes)
 		if err != nil {
 			logger.Fatalf("could not build graph: %v", err)
 		}
 
-		// Find targets that own the changed files
+		// Find nodes that own the changed files
 		var matchingTargets []*model.Target
-		for _, target := range targets {
+		for _, target := range nodes.GetTargets() {
 			for _, inputFile := range target.Inputs {
 				// Get the absolute path of the input file
 				absInputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(
@@ -92,7 +92,7 @@ Can optionally include transitive dependents of changed targets to find all affe
 			// Get the absolute path of the package definition
 			absPkgPath := pkg.SourceFilePath
 			if containsFile(changedFiles, absPkgPath) {
-				// add all targets within that package:
+				// add all nodes within that package:
 				for _, target := range pkg.Targets {
 					matchingTargets = append(matchingTargets, target)
 				}
@@ -102,20 +102,22 @@ Can optionally include transitive dependents of changed targets to find all affe
 		// Get dependents if requested
 		var resultTargets []*model.Target
 		if changesOptions.dependents == "transitive" {
-			// Get all transitive dependents of the matching targets
+			// Get all transitive dependents of the matching nodes
 			for _, target := range matchingTargets {
 				resultTargets = append(resultTargets, target)
 				for _, descendant := range graph.GetDescendants(target) {
-					resultTargets = append(resultTargets, descendant)
+					if targetDescendant, ok := descendant.(*model.Target); ok {
+						resultTargets = append(resultTargets, targetDescendant)
+					}
 				}
 			}
 		} else {
 			resultTargets = matchingTargets
 		}
 
-		// Deduplicate targets
+		// Deduplicate nodes
 		uniqueLabels := make(map[label.TargetLabel]bool)
-		var deduplicatedTargets []*model.Target
+		var deduplicatedTargets []model.BuildNode
 		for _, target := range resultTargets {
 			if !uniqueLabels[target.Label] {
 				uniqueLabels[target.Label] = true
@@ -129,7 +131,7 @@ Can optionally include transitive dependents of changed targets to find all affe
 		}
 		selector := selection.New(nil, config.Global.Tags, config.Global.ExcludeTags, targetTypeFilter)
 
-		model.PrintSortedLabels(selector.FilterTargets(deduplicatedTargets))
+		model.PrintSortedLabels(selector.FilterNodes(deduplicatedTargets))
 	},
 }
 

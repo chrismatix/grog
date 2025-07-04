@@ -74,29 +74,36 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	}(program)
 	defer program.Quit()
 
-	// Get selected vertices and create a TestLogger for them
-	selectedVertices := e.graph.GetSelectedVertices()
-	selectedTargetCount := len(selectedVertices)
+	// Get selected nodes and create a TestLogger for them
+	selectedNodes := e.graph.GetSelectedNodes()
+	selectedNodeCount := len(selectedNodes)
 
-	// Create a list of target labels for the TestLogger
-	targetLabels := make([]string, selectedTargetCount)
-	for i, target := range selectedVertices {
-		targetLabels[i] = target.Label.String()
+	// Create a list of node labels for the TestLogger
+	targetLabels := make([]string, selectedNodeCount)
+	for i, node := range selectedNodes {
+		// TODO for the test logger we actually only need test targets
+		targetLabels[i] = node.GetLabel().String()
 	}
 
-	// Create a TestLogger with the target labels
+	// Create a TestLogger with the node labels
 	testLogger := console.NewTestLogger(targetLabels, 0) // 0 means use default terminal width
 
 	// Add the TestLogger to the context
 	ctx = context.WithValue(ctx, console.TestLoggerKey{}, testLogger)
 
-	workerPool := worker.NewTaskWorkerPool[dag.CacheResult](stdLogger, numWorkers, sendMsg, selectedTargetCount)
+	workerPool := worker.NewTaskWorkerPool[dag.CacheResult](stdLogger, numWorkers, sendMsg, selectedNodeCount)
 	workerPool.StartWorkers(ctx)
 	defer workerPool.Shutdown()
 
 	// walkCallback will be called at max parallelism by the graph walker
-	walkCallback := func(ctx context.Context, target *model.Target, depsCached bool) (dag.CacheResult, error) {
-		// get any possible bin tools that the target may use
+	walkCallback := func(ctx context.Context, node model.BuildNode, depsCached bool) (dag.CacheResult, error) {
+		target, ok := node.(*model.Target)
+		if !ok {
+			// this is where we would add the execution of other node types
+			return dag.CacheHit, nil
+		}
+
+		// get any possible bin tools that the node may use
 		binTools, err := e.getBinToolPaths(target)
 		if err != nil {
 			return dag.CacheMiss, err
@@ -119,7 +126,7 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 
 // getBinToolPaths From all the direct dependencies of a target, get their bin_output if defined
 func (e *Executor) getBinToolPaths(target *model.Target) (BinToolMap, error) {
-	deps := e.graph.GetDependencies(target)
+	deps := e.graph.GetTargetDependencies(target)
 
 	binTools := make(map[string]string, 0)
 	for _, dep := range deps {
@@ -323,7 +330,7 @@ func (e *Executor) LoadDependencyOutputs(
 		"loading dependency outputs for target %s.",
 		target.Label,
 	)
-	for _, dep := range e.graph.GetDependencies(target) {
+	for _, dep := range e.graph.GetTargetDependencies(target) {
 		err := e.loadCachedOutputs(ctx, dep)
 		if err != nil {
 			logger.Debugf("%s: failed to load output for dependency %s (re-rerunning): %v", target.Label, dep.Label, err)
