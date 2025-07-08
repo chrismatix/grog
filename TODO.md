@@ -1,12 +1,9 @@
 # TODOs
 
-- [ ] Saw the panic send on closed channel for the task ui in the wild
+- [ ] Improve shell completions to accept partial packages
 - [ ] Make it so that the displayed execution time for a test is cached
-- [ ] Allow for setting global and target level environment variables
-  - The global environment variables should also be passed to the pkl evaluator
 - [ ] Allow grog list to use regular directories for querying
 - [ ] Design the virtualization via docker feature
-- [ ] get coverage above 90%
 - [ ] Add golangci-lint
 - [ ] Add s3 caching Option
 - [ ] Add Azure blob storage option

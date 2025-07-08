@@ -1,5 +1,8 @@
 # Dev Log
 
+> NOTE:
+> No longer actively maintained.
+
 Observations, ramblings, and learnings along the way.
 
 ## 07-05-2025
@@ -19,7 +22,7 @@ Observation: Even on private solo code bases every abstraction only lives as lon
 
 ## 02-05-2025
 
-First quick and simple version of the docker registry cache backend is working now.
+First, quick and simple version of the docker registry cache backend is working now.
 But to have any sort of confidence in these features, I will add dedicated tests for things that need to use cloud services.
 Using this I will be able to also get more effective test coverage and then push a badge for that using gcs.
 

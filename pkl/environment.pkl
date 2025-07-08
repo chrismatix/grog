@@ -1,0 +1,6 @@
+module environment
+
+name: String
+type: String
+dependencies: Listing<String>(isDistinct)
+docker_image: String

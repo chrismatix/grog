@@ -2,6 +2,8 @@ module package
 
 import "platform.pkl"
 import "alias.pkl"
+//import "environment.pkl"
+
 import "output_check.pkl"
 
 class Target {
@@ -25,3 +27,5 @@ default_platform: platform?
 targets: Listing<Target>(isDistinctBy((it) -> it.name))
 
 aliases: Listing<alias>(isDistinctBy((it) -> it.name))?
+
+environments: Listing<alias>(isDistinctBy((it) -> it.name))?

@@ -1,0 +1,52 @@
+---
+title: Sandboxing
+description: Run targets inside Docker containers for consistency and cross-platform.
+---
+
+import { Aside, TabItem, Tabs } from "@astrojs/starlight/components";
+
+Grog plans to support running build commands in isolated Docker environments.
+This will allow you
+
+<Aside type="caution">
+  This feature is not ready yet. The docs instead reflect the planned
+  implementation in the spirit of Documentation-driven Development. So let us
+  know what you think!
+</Aside>
+
+## Environment Config
+
+An environment configuration exists on the build graph, but is distinct from targets.
+You can define a docker environment like so:
+
+<Tabs>
+  <TabItem label="YAML">
+    ```yaml
+    targets:
+      - name: foo
+        # ...
+
+    environments:
+      - name: arm64
+        type: docker
+        dependencies:
+          - arm64-image
+        docker_image: arm64-builder
+        defaults:
+          mount_dependencies: transitive # or: none, direct
+          mount_dependency_inputs: true # whether to also mount the input files of dependencies
+    ```
+  </TabItem>
+</Tabs>
+
+Let's go over the fields of an environment configuration:
+
+- `name`: This defines the environments label which works the same way as for [targets](/reference/labels).
+- `dependencies`: Environments do not define any build steps. Instead, you can use `dependencies` to define which targets need to build for this environment to function.
+- `docker_image`: This is the tag of the image that will be used in docker environments. Typically one of the environments dependencies would build this image tag, but you can provide any image you want here.
+- `defaults`: Defines execution defaults for an environment. Details tbd.
+
+
+## Using an environment
+
+TBD
