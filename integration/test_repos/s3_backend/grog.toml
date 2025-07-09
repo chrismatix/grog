@@ -1,0 +1,6 @@
+[cache]
+backend = "s3"
+
+[cache.s3]
+bucket = "grog-test-bucket"
+prefix = "/codegen"

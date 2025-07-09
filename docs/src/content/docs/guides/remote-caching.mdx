@@ -42,12 +42,6 @@ When it is not provided grog will attempt to use whatever authentication is asso
 
 ## AWS S3
 
-<Aside type="caution">
-  This feature is not ready yet. The docs instead reflect the planned
-  implementation in the spirit of Documentation-driven Development. So let us
-  know what you think!
-</Aside>
-
 To enable remote caching via S3 add the following to your config:
 
 ```toml
@@ -57,7 +51,4 @@ backend = "s3"
 [cache.s3]
 bucket = "<bucket-name>"
 prefix = "<prefix-for-cache-files>" # optional default: '/'
-credentials_file = "<path-to-aws-credentials-json>" # optional
 ```
-
-`credentials_file` should be a path to an iam account json key file.
