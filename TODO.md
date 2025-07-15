@@ -1,5 +1,6 @@
 # TODOs
 
+- [ ] Add s3 multipart uploads
 - [ ] Improve shell completions to accept partial packages
 - [ ] Make it so that the displayed execution time for a test is cached
 - [ ] Allow grog list to use regular directories for querying

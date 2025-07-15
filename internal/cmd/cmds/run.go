@@ -63,9 +63,24 @@ Any arguments after the target are passed directly to the binary being executed.
 			logger.Fatalf("could not find target %s", targetLabel)
 		}
 
-		runTarget, ok := node.(*model.Target)
-		if !ok {
-			logger.Fatalf("%s is not a target", targetLabel)
+		var runTarget *model.Target
+		castNode, isTarget := node.(*model.Target)
+		if !isTarget {
+			// For an alias use the actual target
+			castAlias, isAlias := node.(*model.Alias)
+			if !isAlias {
+				logger.Fatalf("%s is not a target", targetLabel)
+			}
+
+			resolvedNode := graph.GetNodes()[castAlias.Actual]
+			resolvedTarget, isTarget := resolvedNode.(*model.Target)
+			if !isTarget {
+				logger.Fatalf("%s resolved from %s is not a target", targetLabel, castAlias.Actual)
+			} else {
+				runTarget = resolvedTarget
+			}
+		} else {
+			runTarget = castNode
 		}
 
 		if !runTarget.HasBinOutput() {
