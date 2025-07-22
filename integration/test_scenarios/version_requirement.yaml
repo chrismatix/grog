@@ -6,3 +6,4 @@ cases:
     grog_args:
       - info
     expect_fail: true
+    skip_fixture: true
