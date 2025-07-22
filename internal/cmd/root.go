@@ -33,7 +33,11 @@ var RootCmd = &cobra.Command{
 			return err
 		}
 
-		return config.Global.Validate()
+		if err := config.Global.Validate(); err != nil {
+			return err
+		}
+
+		return config.Global.ValidateGrogVersion(cmd.Version)
 	},
 }
 

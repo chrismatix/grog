@@ -16,8 +16,9 @@ require (
 	github.com/docker/docker v27.5.0+incompatible
 	github.com/fatih/color v1.18.0
 	github.com/google/go-containerregistry v0.20.3
-	github.com/mattn/go-isatty v0.0.20
-	github.com/sergi/go-diff v1.4.0
+       github.com/mattn/go-isatty v0.0.20
+       github.com/blang/semver/v4 v4.0.0
+       github.com/sergi/go-diff v1.4.0
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.20.1
 	github.com/stretchr/testify v1.10.0

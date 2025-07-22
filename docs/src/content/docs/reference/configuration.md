@@ -9,6 +9,7 @@ Find below a complete example of a grog configuration file:
 ```toml
 # Workspace Settings
 root = "/home/grace/grog_data"
+required_grog_version = "^0.13"
 
 # Execution Settings
 fail_fast = true # Exit immediately when encountering an issue
@@ -42,6 +43,9 @@ For instance, to set or override the `fail_fast` option set `GROG_FAIL_FAST=fals
 ## Configuration Variables Explained
 
 - **root**: The base directory where Grog stores its internal files. Defaults to `~/.grog`.
+- **required_grog_version**: A [semver](https://semver.org/) range that the running
+  Grog binary must satisfy. If the version is outside of this range Grog exits with
+  an error.
 - **fail_fast**: When true, Grog will stop execution after encountering the first error, cancelling all running tasks. Defaults to `false`.
 - **num_workers**: Number of concurrent workers for parallel task execution. Defaults to the number of CPUs.
 - **log_level**: Determines verbosity of logging (e.g., "debug", "info"). Defaults to `info`.

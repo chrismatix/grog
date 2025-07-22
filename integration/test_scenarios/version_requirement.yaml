@@ -1,0 +1,7 @@
+name: require grog version
+repo: version_requirement
+cases:
+  - name: errors_if_version_does_not_match
+    grog_args:
+      - info
+    expect_fail: true
