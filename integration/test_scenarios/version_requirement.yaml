@@ -1,0 +1,9 @@
+name: require grog version
+repo: version_requirement
+skip_clean: true
+cases:
+  - name: errors_if_version_does_not_match
+    grog_args:
+      - info
+    expect_fail: true
+    skip_fixture: true

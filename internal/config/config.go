@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	semver "github.com/blang/semver/v4"
 )
 
 type WorkspaceConfig struct {
@@ -46,6 +48,9 @@ type WorkspaceConfig struct {
 	// Due to the concurrent nature of grog's execution we don't want to include
 	// logs that don't have a guaranteed order
 	DisableNonDeterministicLogging bool `mapstructure:"disable_non_deterministic_logging"`
+
+	// Require that the running grog version matches this semver range
+	RequiredGrogVersion string `mapstructure:"requires_grog"`
 }
 
 var Global WorkspaceConfig
@@ -108,6 +113,31 @@ func (w WorkspaceConfig) Validate() error {
 	_, err := ParseLoadOutputsMode(w.LoadOutputs)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// ValidateGrogVersion checks if the provided current version satisfies the
+// RequiredGrogVersion constraint if it is set. The version string should
+// follow semver conventions.
+func (w WorkspaceConfig) ValidateGrogVersion(currentVersion string) error {
+	if w.RequiredGrogVersion == "" {
+		return nil
+	}
+
+	required, err := semver.ParseRange(w.RequiredGrogVersion)
+	if err != nil {
+		return fmt.Errorf("invalid requires_grog: %w", err)
+	}
+
+	actual, err := semver.ParseTolerant(currentVersion)
+	if err != nil {
+		return fmt.Errorf("invalid grog version %q: %w", currentVersion, err)
+	}
+
+	if !required(actual) {
+		return fmt.Errorf("grog version %s does not satisfy %s", currentVersion, w.RequiredGrogVersion)
 	}
 
 	return nil

@@ -53,6 +53,8 @@ type TestTable struct {
 	// Only run this test when REQUIRES_CREDENTIALS is set
 	// (for tests that require cloud credentials)
 	RequiresCredentials bool `yaml:"requires_credentials"`
+	// Whether to skip the clean step
+	SkipClean bool `yaml:"skip_clean"`
 }
 
 // TestStep defines a single test step
@@ -107,13 +109,15 @@ func TestCliScenarios(t *testing.T) {
 		t.Run(tt.Name, func(t *testing.T) {
 
 			// Clear repository cache
-			output, err := runBinary([]string{"clean"}, tt.Repo, []string{})
-			if err != nil {
-				t.Fatalf(
-					"could not run `grog clean` on repo %s: %v\nCommand output:\n%s",
-					tt.Repo,
-					err,
-					output)
+			if !tt.SkipClean {
+				output, err := runBinary([]string{"clean"}, tt.Repo, []string{})
+				if err != nil {
+					t.Fatalf(
+						"could not run `grog clean` on repo %s: %v\nCommand output:\n%s",
+						tt.Repo,
+						err,
+						output)
+				}
 			}
 
 			testCaseNames := make(map[string]bool)
@@ -144,7 +148,7 @@ func TestCliScenarios(t *testing.T) {
 
 				t.Run(tc.Name, func(t *testing.T) {
 
-					output, err = runBinary(tc.GrogArgs, tt.Repo, tc.EnvVars)
+					output, err := runBinary(tc.GrogArgs, tt.Repo, tc.EnvVars)
 
 					if err != nil && !tc.ExpectFail {
 						fmt.Printf("Command ouput: %s\n", output)
