@@ -126,17 +126,17 @@ func (w WorkspaceConfig) ValidateGrogVersion(currentVersion string) error {
 		return nil
 	}
 
-	r, err := semver.ParseRange(w.RequiredGrogVersion)
+	required, err := semver.ParseRange(w.RequiredGrogVersion)
 	if err != nil {
 		return fmt.Errorf("invalid required_grog_version: %w", err)
 	}
 
-	v, err := semver.ParseTolerant(currentVersion)
+	actual, err := semver.ParseTolerant(currentVersion)
 	if err != nil {
 		return fmt.Errorf("invalid grog version %q: %w", currentVersion, err)
 	}
 
-	if !r(v) {
+	if !required(actual) {
 		return fmt.Errorf("grog version %s does not satisfy %s", currentVersion, w.RequiredGrogVersion)
 	}
 

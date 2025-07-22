@@ -15,6 +15,8 @@ import (
 	"strings"
 )
 
+var Version string
+
 var RootCmd = &cobra.Command{
 	Use: "grog",
 	// PersistentPreRunE runs before any subcommand's Run, after flags are parsed.
@@ -37,13 +39,17 @@ var RootCmd = &cobra.Command{
 			return err
 		}
 
-		return config.Global.ValidateGrogVersion(cmd.Version)
+		if err := config.Global.ValidateGrogVersion(Version); err != nil {
+			console.InitLogger().Fatalf("Invalid grog version: %v", err)
+		}
+		return nil
 	},
 }
 
 // Stamp sets the data for the version command
 func Stamp(version string, commit string, buildDate string) {
 	RootCmd.Version = version
+	Version = version
 
 	RootCmd.SetVersionTemplate(fmt.Sprintf(
 		"%s (%s) built on %s",
