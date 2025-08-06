@@ -230,7 +230,7 @@ func (e *Executor) getTaskFunc(
 		if e.loadOutputsMode == config.LoadOutputsMinimal {
 			update(fmt.Sprintf("%s: loading dependency outputs (load_outputs=minimal).", target.Label))
 			if loadDepsErr := e.LoadDependencyOutputs(ctx, target, update); loadDepsErr != nil {
-				return dag.CacheMiss, fmt.Errorf("failed to load dependency outputs for target %s: %w", target.Label, err)
+				return dag.CacheMiss, fmt.Errorf("failed to load dependency outputs for target %s: %w", target.Label, loadDepsErr)
 			}
 		}
 
@@ -261,6 +261,8 @@ func (e *Executor) executeTarget(
 	if err != nil {
 		logger.Debugf("target execution returned error %s: %s", target.Label, err)
 		if target.IsTest() && !errors.Is(err, context.Canceled) {
+			// Test errors we want to log differently
+			// Cancellations should just exit the execution
 			if testLogger := console.GetTestLogger(ctx); testLogger != nil {
 				testLogger.LogTestFailed(logger, target.Label.String(), executionTime)
 			} else {
