@@ -30,6 +30,7 @@ Grog uses this information to ensure incremental, cached, and parallel builds.
 | `platform`              | `PlatformConfig`         | OS and architecture constraints for where this target can run          |
 | `tags`                  | `string[]`               | Metadata tags that affect target behavior (e.g., "no-cache")           |
 | `bin_output`            | `Output`                 | Specifically identifies a binary output from the target                |
+| `timeout`               | `string`                 | Maximum time allowed for the target command to run                    |
 | `environment_variables` | `Record<string, string>` | Additional environment variables set when running the target           |
 
 <Aside type="note">
@@ -137,3 +138,9 @@ There are a few reserved tags that alter the way grog treats a target:
 ### environment_variables
 
 Key-value pairs of environment variables that will be set for this target during execution.
+
+### timeout
+
+The maximum time the target's command is allowed to run. If the command exceeds this duration, the build or test fails with a timeout error.
+
+Durations are expressed using Go's duration syntax, e.g. `30s`, `5m`.

@@ -1,3 +1,4 @@
 targets:
   - name: sleep_target
     command: sleep 60
+    timeout: 1s

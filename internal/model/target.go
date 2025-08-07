@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"grog/internal/label"
 	"strings"
+	"time"
 )
 
 var _ BuildNode = &Target{}
@@ -22,6 +23,7 @@ type Target struct {
 	Tags                 []string            `json:"tags,omitempty"`
 	EnvironmentVariables map[string]string   `json:"environment_variables,omitempty"`
 	OutputChecks         []OutputCheck       `json:"output_checks,omitempty"`
+	Timeout              time.Duration       `json:"timeout,omitempty"`
 
 	// UnresolvedInputs are the inputs as specified by the user (no glob resolving)
 	UnresolvedInputs []string `json:"-"`

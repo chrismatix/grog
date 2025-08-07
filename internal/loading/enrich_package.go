@@ -10,6 +10,7 @@ import (
 	"grog/internal/output"
 	"os"
 	"strings"
+	"time"
 )
 
 // getEnrichedPackage enriches the parsing dto with the following information
@@ -68,6 +69,14 @@ func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg Packa
 			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", target.Name, pkg.SourceFilePath)
 		}
 
+		var timeout time.Duration
+		if target.Timeout != "" {
+			timeout, err = time.ParseDuration(target.Timeout)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse timeout for target %s: %w", targetLabel, err)
+			}
+		}
+
 		// Determine the platform to use
 		// If target has its own platform, use that
 		// Otherwise, use the package default platform if available
@@ -89,6 +98,7 @@ func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg Packa
 			OutputChecks:         target.OutputChecks,
 			Tags:                 target.Tags,
 			EnvironmentVariables: target.EnvironmentVariables,
+			Timeout:              timeout,
 		}
 	}
 
