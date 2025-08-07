@@ -338,7 +338,7 @@ func (e *Executor) LoadDependencyOutputs(
 		if err != nil {
 			logger.Debugf("%s: failed to load output for dependency %s (re-rerunning): %v", target.Label, dep.Label, err)
 
-			binTools, err := e.getBinToolPaths(target)
+			binTools, err := e.getBinToolPaths(dep)
 			if err != nil {
 				return err
 			}
