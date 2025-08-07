@@ -1,0 +1,8 @@
+name: timeout tests
+repo: sleep
+cases:
+  - name: target_timeout
+    grog_args:
+      - build
+      - //:sleep_target
+    expect_fail: true

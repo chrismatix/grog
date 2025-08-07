@@ -35,10 +35,19 @@ func executeTarget(
 	binToolPaths BinToolMap,
 	streamLogs bool,
 ) error {
+	if target.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, target.Timeout)
+		defer cancel()
+	}
+
 	cmdOut, err := runTargetCommand(ctx, target, binToolPaths, target.Command, streamLogs)
 
 	if err != nil {
 		if ctx.Err() != nil {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				return fmt.Errorf("timeout after %s", target.Timeout)
+			}
 			// bubble up cancellation error
 			return ctx.Err()
 		}

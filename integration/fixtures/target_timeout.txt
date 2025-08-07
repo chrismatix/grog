@@ -1,0 +1,6 @@
+INFO: 1 package loaded, 1 target configured.
+WARN: target //:sleep_target has no inputs, dependencies or output checks causing it to run only once
+INFO: Selected 1 target.
+ERROR: Build failed. 0 targets completed (0 cache hits), 1 failed:
+---------------------------------
+ERROR: Target //:sleep_target failed: timeout after 1s
