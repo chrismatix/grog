@@ -17,6 +17,11 @@ type WorkspaceConfig struct {
 	StreamLogs  bool   `mapstructure:"stream_logs"`
 	NumWorkers  int    `mapstructure:"num_workers"`
 	LoadOutputs string `mapstructure:"load_outputs"`
+	// SkipWorkspaceLock disables the workspace-level lock. This should only be
+	// used in situations where the user can guarantee that no concurrent grog
+	// processes operate on the same workspace, otherwise cache corruption may
+	// occur.
+	SkipWorkspaceLock bool `mapstructure:"skip_workspace_lock"`
 
 	// Logging
 	LogLevel      string `mapstructure:"log_level"`

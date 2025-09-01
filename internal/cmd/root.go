@@ -91,6 +91,10 @@ func init() {
 	RootCmd.PersistentFlags().Bool("fail-fast", false, "Fail fast on first error")
 	err = viper.BindPFlag("fail_fast", RootCmd.PersistentFlags().Lookup("fail-fast"))
 
+	// skip_workspace_lock
+	RootCmd.PersistentFlags().Bool("skip-workspace-lock", false, "Skip the workspace level lock (DANGEROUS: may corrupt the cache)")
+	err = viper.BindPFlag("skip_workspace_lock", RootCmd.PersistentFlags().Lookup("skip-workspace-lock"))
+
 	// all_platforms
 	RootCmd.PersistentFlags().BoolP("all-platforms", "a", false, "Select all platforms (bypasses platform selectors)")
 	err = viper.BindPFlag("all_platforms", RootCmd.PersistentFlags().Lookup("all-platforms"))
