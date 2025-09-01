@@ -55,3 +55,4 @@ For instance, to set or override the `fail_fast` option set `GROG_FAIL_FAST=fals
   - `all` (default): Load all outputs from the cache.
   - `minimal`: Only load outputs of a target if a **direct dependant** needs to be re-built. This setting is useful to save bandwidth and disk space in CI settings.
 - **all_platforms**: When set to `true` skips the platform selection step and builds all targets for all platforms ([read more](/guides/querying)).
+- **skip_workspace_lock**: When `true`, Grog does not acquire a workspace-level lock before executing. **Warning:** Running multiple grog instances without locking can corrupt the workspace or cache.
