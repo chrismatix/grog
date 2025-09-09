@@ -52,12 +52,13 @@ func (d *DirectoryOutputHandler) Write(
 	logger.Debugf("compressing %s (target %s → %s)", directoryPath, target.Label, output)
 
 	pipeReader, pipeWriter := io.Pipe()
+	errChan := make(chan error, 1)
 
 	go func() {
 		gzipWriter := gzip.NewWriter(pipeWriter)
 		tarWriter := tar.NewWriter(gzipWriter)
 
-		walkError := filepath.WalkDir(directoryPath, func(path string, directoryEntry fs.DirEntry, err error) error {
+		walkErr := filepath.WalkDir(directoryPath, func(path string, directoryEntry fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
@@ -126,24 +127,38 @@ func (d *DirectoryOutputHandler) Write(
 			return nil
 		})
 
-		closeError := func() error {
-			if err := tarWriter.Close(); err != nil {
-				return err
-			}
-			return gzipWriter.Close()
-		}()
+		// Ensure tar and gzip writers are closed and their errors captured
+		if err := tarWriter.Close(); err != nil {
+			pipeWriter.CloseWithError(err)
+			errChan <- err
+			return
+		}
+		if err := gzipWriter.Close(); err != nil {
+			pipeWriter.CloseWithError(err)
+			errChan <- err
+			return
+		}
 
-		if walkError != nil {
-			pipeWriter.CloseWithError(walkError)
-		} else if closeError != nil {
-			pipeWriter.CloseWithError(closeError)
+		// Propagate any walk error after writers are closed
+		if walkErr != nil {
+			pipeWriter.CloseWithError(walkErr)
+			errChan <- walkErr
 		} else {
 			pipeWriter.Close()
+			errChan <- nil
 		}
 	}()
 
 	logger.Debug("streaming tar.gz to cache")
-	return d.targetCache.WriteFileStream(ctx, target, output, pipeReader)
+	writeErr := d.targetCache.WriteFileStream(ctx, target, output, pipeReader)
+	// Close the reader in case WriteFileStream returns early to unblock writer goroutine
+	pipeReader.Close()
+	// Wait for the writing goroutine to finish and capture its error
+	goroutineErr := <-errChan
+	if writeErr != nil {
+		return writeErr
+	}
+	return goroutineErr
 }
 
 // Load extracts the compressed directory from the cache and writes it to the target directory.
