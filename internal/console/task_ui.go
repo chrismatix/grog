@@ -3,13 +3,15 @@ package console
 import (
 	"context"
 	"fmt"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/fatih/color"
-	"github.com/mattn/go-isatty"
 	"os"
 	"sort"
 	"sync"
 	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/fatih/color"
+	"github.com/mattn/go-isatty"
+	"github.com/spf13/viper"
 )
 
 // HeaderMsg What to display in the header
@@ -76,6 +78,9 @@ func StartTaskUI(ctx context.Context) (context.Context, *tea.Program, func(tea.M
 }
 
 func UseTea() bool {
+	if viper.GetBool("disable_tea") {
+		return false
+	}
 	return isatty.IsTerminal(os.Stdout.Fd())
 }
 

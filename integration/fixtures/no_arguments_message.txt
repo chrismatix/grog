@@ -24,11 +24,13 @@ Flags:
   -a, --all-platforms         Select all platforms (bypasses platform selectors)
       --color string          Set color output (yes, no, or auto) (default "auto")
       --debug                 Enable debug logging
+      --disable-tea           Disable interactive TUI (Bubble Tea)
       --enable-cache          Enable cache (default true)
       --exclude-tag strings   Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast             Fail fast on first error
   -h, --help                  help for grog
       --load-outputs string   Level of output loading for cached targets. One of: all, minimal. (default "all")
+      --log-level string      Set log level (trace, debug, info, warn, error)
       --platform string       Force a specific platform in the form os/arch
       --profile string        Select a configuration profile to use
       --skip-workspace-lock   Skip the workspace level lock (DANGEROUS: may corrupt the cache)
