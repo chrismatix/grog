@@ -3,9 +3,6 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"github.com/pelletier/go-toml/v2"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"grog/internal/cmd/cmds"
 	"grog/internal/config"
 	"grog/internal/console"
@@ -13,6 +10,10 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/pelletier/go-toml/v2"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var Version string
@@ -31,7 +32,7 @@ var RootCmd = &cobra.Command{
 		viper.AddConfigPath(workspaceRoot)
 
 		// Initialize config (read file, env, flags)
-		if err := initConfig(); err != nil {
+		if err := initConfig(cmd); err != nil {
 			return err
 		}
 
@@ -87,6 +88,10 @@ func init() {
 	RootCmd.PersistentFlags().CountP("verbose", "v", "Set verbosity level (-v, -vv)")
 	err = viper.BindPFlag("verbose", RootCmd.PersistentFlags().Lookup("verbose"))
 
+	// log_level
+	RootCmd.PersistentFlags().String("log-level", "", "Set log level (trace, debug, info, warn, error)")
+	err = viper.BindPFlag("log_level", RootCmd.PersistentFlags().Lookup("log-level"))
+
 	// fail_fast
 	RootCmd.PersistentFlags().Bool("fail-fast", false, "Fail fast on first error")
 	err = viper.BindPFlag("fail_fast", RootCmd.PersistentFlags().Lookup("fail-fast"))
@@ -128,6 +133,11 @@ func init() {
 	err = viper.BindPFlag("profile", RootCmd.PersistentFlags().Lookup("profile"))
 	viper.SetDefault("profile", "")
 
+	// disable_tea
+	RootCmd.PersistentFlags().Bool("disable-tea", false, "Disable interactive TUI (Bubble Tea)")
+	err = viper.BindPFlag("disable_tea", RootCmd.PersistentFlags().Lookup("disable-tea"))
+	viper.SetDefault("disable_tea", false)
+
 	// Register subcommands
 	RootCmd.AddCommand(cmds.VersionCmd)
 	RootCmd.AddCommand(cmds.ListCmd)
@@ -150,27 +160,13 @@ func init() {
 	}
 }
 
-func initConfig() error {
-	// Set log_level based on verbosity flag
-	switch viper.GetInt("verbose") {
-	case 1:
-		viper.Set("log_level", "debug")
-	case 2:
-		viper.Set("log_level", "trace")
-	}
-
-	if viper.GetBool("debug") {
-		// Set log_level based on debug flag
-		viper.Set("log_level", "debug")
-	}
-
+func initConfig(cmd *cobra.Command) error {
 	// Set defaults here
 	viper.SetDefault("log_level", "info")
 	viper.SetDefault("load_outputs", "all")
 	viper.SetDefault("disable_non_deterministic_logging", false)
 	viper.SetDefault("os", runtime.GOOS)
 	viper.SetDefault("arch", runtime.GOARCH)
-	viper.SetDefault("load_outputs", "all")
 	viper.SetDefault("cache.gcs.shared_cache", true)
 	viper.SetDefault("environment_variables", make(map[string]string))
 
@@ -197,6 +193,28 @@ func initConfig() error {
 	}
 	if !found {
 		return fmt.Errorf("no grog config file found (tried: %v)", names)
+	}
+
+	// Determine effective log level precedence before unmarshalling into Global:
+	// 1) --log-level flag (if set)
+	// 2) --verbose/-v or --debug flags
+	// 3) workspace config (already read) or env or defaults
+	logLevelFlagSet := false
+	if cmd != nil {
+		if f := cmd.Flags().Lookup("log-level"); f != nil {
+			logLevelFlagSet = f.Changed
+		}
+	}
+	if !logLevelFlagSet {
+		switch viper.GetInt("verbose") {
+		case 1:
+			viper.Set("log_level", "debug")
+		case 2:
+			viper.Set("log_level", "trace")
+		}
+		if viper.GetBool("debug") {
+			viper.Set("log_level", "debug")
+		}
 	}
 
 	// Merge all config sources into the global
