@@ -59,7 +59,7 @@ You can combine the recursive wildcard with a specific target name to match targ
 - `//package/path/...:target_name`: Matches any target named `target_name` in `package/path` or any of its sub-packages.
   - Example: `//test/...:all_tests` matches the `all_tests` target in the `test` package and any sub-package under `test`.
 
-**All Targets in a Package (`*` or `all`):**
+**All Targets in a Package with `all`:**
 
 You can match all targets directly within a specific package (non-recursively) using `:...` or `:all`.
 

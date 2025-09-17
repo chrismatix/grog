@@ -1,7 +1,6 @@
 package cmds
 
 import (
-	"github.com/spf13/cobra"
 	"grog/internal/caching"
 	"grog/internal/caching/backends"
 	"grog/internal/completions"
@@ -16,6 +15,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/spf13/cobra"
 )
 
 var runOptions struct {
@@ -126,6 +127,7 @@ Any arguments after the target are passed directly to the binary being executed.
 		runCommand.Env = execution.GetExtendedTargetEnv(ctx, runTarget)
 		runCommand.Stdout = os.Stdout
 		runCommand.Stderr = os.Stderr
+		runCommand.Stdin = os.Stdin
 
 		if runOptions.inPackage {
 			packagePath := config.GetPathAbsoluteToWorkspaceRoot(runTarget.Label.Package)
