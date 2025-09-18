@@ -44,7 +44,7 @@ func StartTaskUI(ctx context.Context) (context.Context, *tea.Program, func(tea.M
 	}
 
 	// Start the Bubbletea Program.
-	p := tea.NewProgram(initialModel(msgCh, cancel), opts...)
+	p := tea.NewProgram(initialModel(ctx, msgCh, cancel), opts...)
 
 	go func() {
 		errCh := make(chan error, 1)
@@ -100,15 +100,18 @@ type model struct {
 	tasksMutex sync.RWMutex
 
 	cancel context.CancelFunc
+
+	streamLogsToggle *StreamLogsToggle
 }
 
-func initialModel(msgCh chan tea.Msg, cancel context.CancelFunc) *model {
+func initialModel(ctx context.Context, msgCh chan tea.Msg, cancel context.CancelFunc) *model {
 	return &model{
-		header: "",
-		tasks:  make(map[int]TaskState),
-		msgCh:  msgCh,
-		tick:   time.Now().Second(),
-		cancel: cancel,
+		header:           "",
+		tasks:            make(map[int]TaskState),
+		msgCh:            msgCh,
+		tick:             time.Now().Second(),
+		cancel:           cancel,
+		streamLogsToggle: GetStreamLogsToggle(ctx),
 	}
 }
 
@@ -141,6 +144,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			green := color.New(color.FgGreen).SprintFunc()
 			printMessage := fmt.Sprintf("%s: Received interrupt signal, exiting...", green("INFO"))
 			return m, tea.Sequence(tea.Println(printMessage), tea.Quit)
+		case "s":
+			if m.streamLogsToggle != nil {
+				m.streamLogsToggle.Toggle()
+				return m, nil
+			}
 		}
 	case HeaderMsg:
 		m.header = string(castMsg)
@@ -164,8 +172,14 @@ func (m *model) View() string {
 	defer m.tasksMutex.RUnlock()
 	s := ""
 
+	label := m.streamLogsCommandLabel()
+
 	// Render header
-	s += m.header + "\n"
+	if label == "" {
+		s += m.header + "\n"
+	} else {
+		s += m.header + ": " + label + "\n"
+	}
 
 	// Render tasks in order:
 	// Tasks may be sparse so we need to sort the task ids and then loop
@@ -181,5 +195,16 @@ func (m *model) View() string {
 			s += fmt.Sprintf("    %s %ds\n", status.Status, timePassed)
 		}
 	}
+
 	return s
+}
+
+func (m *model) streamLogsCommandLabel() string {
+	if m.streamLogsToggle == nil {
+		return ""
+	}
+	if m.streamLogsToggle.Enabled() {
+		return color.New(color.Bold).Sprint("(s)") + "top streaming logs"
+	}
+	return color.New(color.Bold).Sprint("(s)") + "tream logs"
 }

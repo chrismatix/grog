@@ -2,8 +2,10 @@ package console
 
 import (
 	"fmt"
-	tea "github.com/charmbracelet/bubbletea"
+	"io"
 	"strings"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // TeaWriter small helper so that we can use a tea.Program as a sync for zap
@@ -38,3 +40,21 @@ func (w TeaWriter) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 func (w TeaWriter) Sync() error { return nil }
+
+// StreamToggleWriter writes to the underlying writer only when the toggle is enabled.
+type StreamToggleWriter struct {
+	writer io.Writer
+	toggle *StreamLogsToggle
+}
+
+// NewStreamToggleWriter wraps the provided writer with a toggle check.
+func NewStreamToggleWriter(writer io.Writer, toggle *StreamLogsToggle) *StreamToggleWriter {
+	return &StreamToggleWriter{writer: writer, toggle: toggle}
+}
+
+func (w *StreamToggleWriter) Write(p []byte) (int, error) {
+	if w.toggle == nil || w.toggle.Enabled() {
+		return w.writer.Write(p)
+	}
+	return len(p), nil
+}
