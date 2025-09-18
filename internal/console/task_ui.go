@@ -172,8 +172,14 @@ func (m *model) View() string {
 	defer m.tasksMutex.RUnlock()
 	s := ""
 
+	label := m.streamLogsCommandLabel()
+
 	// Render header
-	s += m.header + "\n"
+	if label == "" {
+		s += m.header + "\n"
+	} else {
+		s += m.header + ": " + label + "\n"
+	}
 
 	// Render tasks in order:
 	// Tasks may be sparse so we need to sort the task ids and then loop
@@ -190,10 +196,6 @@ func (m *model) View() string {
 		}
 	}
 
-	if label := m.streamLogsCommandLabel(); label != "" {
-		s += "\n" + label + "\n"
-	}
-
 	return s
 }
 
@@ -202,7 +204,7 @@ func (m *model) streamLogsCommandLabel() string {
 		return ""
 	}
 	if m.streamLogsToggle.Enabled() {
-		return "(s)top streaming logs"
+		return color.New(color.Bold).Sprint("(s)") + "top streaming logs"
 	}
-	return "(s)tream logs"
+	return color.New(color.Bold).Sprint("(s)") + "tream logs"
 }
