@@ -31,14 +31,14 @@ func (e *CommandError) Error() string {
 }
 
 type Executor struct {
-	targetCache     *caching.TargetCache
-	registry        *output.Registry
-	graph           *dag.DirectedTargetGraph
-	failFast        bool
-	streamLogs      bool
-	enableCache     bool
-	loadOutputsMode config.LoadOutputsMode
-	targetHasher    *hashing.TargetHasher
+	targetCache      *caching.TargetCache
+	registry         *output.Registry
+	graph            *dag.DirectedTargetGraph
+	failFast         bool
+	enableCache      bool
+	loadOutputsMode  config.LoadOutputsMode
+	targetHasher     *hashing.TargetHasher
+	streamLogsToggle *console.StreamLogsToggle
 }
 
 func NewExecutor(
@@ -50,13 +50,13 @@ func NewExecutor(
 	loadOutputsMode config.LoadOutputsMode,
 ) *Executor {
 	return &Executor{
-		targetCache:     targetCache,
-		registry:        registry,
-		graph:           graph,
-		failFast:        failFast,
-		streamLogs:      streamLogs,
-		loadOutputsMode: loadOutputsMode,
-		targetHasher:    hashing.NewTargetHasher(graph),
+		targetCache:      targetCache,
+		registry:         registry,
+		graph:            graph,
+		failFast:         failFast,
+		loadOutputsMode:  loadOutputsMode,
+		targetHasher:     hashing.NewTargetHasher(graph),
+		streamLogsToggle: console.NewStreamLogsToggle(streamLogs),
 	}
 }
 
@@ -65,6 +65,7 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	numWorkers := config.Global.NumWorkers
 	stdLogger := console.GetLogger(ctx)
 
+	ctx = console.WithStreamLogsToggle(ctx, e.streamLogsToggle)
 	ctx, program, sendMsg := console.StartTaskUI(ctx)
 	defer func(p *tea.Program) {
 		err := p.ReleaseTerminal()
@@ -252,7 +253,7 @@ func (e *Executor) executeTarget(
 	if target.Command != "" {
 		update(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis()))
 		logger.Debugf("running target %s: %s", target.Label, target.CommandEllipsis())
-		err = executeTarget(ctx, target, binToolPaths, e.streamLogs)
+		err = executeTarget(ctx, target, binToolPaths, e.streamLogsToggle.Enabled())
 	} else {
 		logger.Debugf("skipped target %s due to no command", target.Label)
 	}

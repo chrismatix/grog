@@ -44,7 +44,7 @@ func StartTaskUI(ctx context.Context) (context.Context, *tea.Program, func(tea.M
 	}
 
 	// Start the Bubbletea Program.
-	p := tea.NewProgram(initialModel(msgCh, cancel), opts...)
+	p := tea.NewProgram(initialModel(ctx, msgCh, cancel), opts...)
 
 	go func() {
 		errCh := make(chan error, 1)
@@ -100,15 +100,18 @@ type model struct {
 	tasksMutex sync.RWMutex
 
 	cancel context.CancelFunc
+
+	streamLogsToggle *StreamLogsToggle
 }
 
-func initialModel(msgCh chan tea.Msg, cancel context.CancelFunc) *model {
+func initialModel(ctx context.Context, msgCh chan tea.Msg, cancel context.CancelFunc) *model {
 	return &model{
-		header: "",
-		tasks:  make(map[int]TaskState),
-		msgCh:  msgCh,
-		tick:   time.Now().Second(),
-		cancel: cancel,
+		header:           "",
+		tasks:            make(map[int]TaskState),
+		msgCh:            msgCh,
+		tick:             time.Now().Second(),
+		cancel:           cancel,
+		streamLogsToggle: GetStreamLogsToggle(ctx),
 	}
 }
 
@@ -141,6 +144,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			green := color.New(color.FgGreen).SprintFunc()
 			printMessage := fmt.Sprintf("%s: Received interrupt signal, exiting...", green("INFO"))
 			return m, tea.Sequence(tea.Println(printMessage), tea.Quit)
+		case "s":
+			if m.streamLogsToggle != nil {
+				m.streamLogsToggle.Toggle()
+				return m, nil
+			}
 		}
 	case HeaderMsg:
 		m.header = string(castMsg)
@@ -181,5 +189,20 @@ func (m *model) View() string {
 			s += fmt.Sprintf("    %s %ds\n", status.Status, timePassed)
 		}
 	}
+
+	if label := m.streamLogsCommandLabel(); label != "" {
+		s += "\n" + label + "\n"
+	}
+
 	return s
+}
+
+func (m *model) streamLogsCommandLabel() string {
+	if m.streamLogsToggle == nil {
+		return ""
+	}
+	if m.streamLogsToggle.Enabled() {
+		return "(s)top streaming logs"
+	}
+	return "(s)tream logs"
 }

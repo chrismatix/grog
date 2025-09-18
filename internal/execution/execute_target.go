@@ -95,11 +95,24 @@ func runTargetCommand(
 
 	var buffer bytes.Buffer
 
-	if program := console.GetTeaProgram(ctx); program != nil && streamLogs {
-		teaWriter := console.NewTeaWriter(program)
-		multiOut := io.MultiWriter(logWriter, teaWriter, &buffer)
-		cmd.Stdout = multiOut
-		cmd.Stderr = multiOut
+	if program := console.GetTeaProgram(ctx); program != nil {
+		toggle := console.GetStreamLogsToggle(ctx)
+		if toggle != nil {
+			teaWriter := console.NewTeaWriter(program)
+			toggleWriter := console.NewStreamToggleWriter(teaWriter, toggle)
+			multiOut := io.MultiWriter(logWriter, toggleWriter, &buffer)
+			cmd.Stdout = multiOut
+			cmd.Stderr = multiOut
+		} else if streamLogs {
+			teaWriter := console.NewTeaWriter(program)
+			multiOut := io.MultiWriter(logWriter, teaWriter, &buffer)
+			cmd.Stdout = multiOut
+			cmd.Stderr = multiOut
+		} else {
+			multiOut := io.MultiWriter(logWriter, &buffer)
+			cmd.Stdout = multiOut
+			cmd.Stderr = multiOut
+		}
 	} else {
 		multiOut := io.MultiWriter(logWriter, &buffer)
 		cmd.Stdout = multiOut
