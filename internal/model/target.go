@@ -21,6 +21,7 @@ type Target struct {
 	Outputs              []Output            `json:"outputs,omitempty"`
 	Platform             *PlatformConfig     `json:"platform,omitempty"`
 	Tags                 []string            `json:"tags,omitempty"`
+	Fingerprint          map[string]string   `json:"fingerprint,omitempty"`
 	EnvironmentVariables map[string]string   `json:"environment_variables,omitempty"`
 	OutputChecks         []OutputCheck       `json:"output_checks,omitempty"`
 	Timeout              time.Duration       `json:"timeout,omitempty"`

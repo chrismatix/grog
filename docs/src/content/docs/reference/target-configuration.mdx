@@ -29,6 +29,7 @@ Grog uses this information to ensure incremental, cached, and parallel builds.
 | `dependencies`          | `label[]`                | Labels of other targets that must be built before this one             |
 | `platform`              | `PlatformConfig`         | OS and architecture constraints for where this target can run          |
 | `tags`                  | `string[]`               | Metadata tags that affect target behavior (e.g., "no-cache")           |
+| `fingerprint`           | `Record<string, string>` | Extra identity inputs used to invalidate the target's cache entry      |
 | `bin_output`            | `Output`                 | Specifically identifies a binary output from the target                |
 | `timeout`               | `string`                 | Maximum time allowed for the target command to run                    |
 | `environment_variables` | `Record<string, string>` | Additional environment variables set when running the target           |
@@ -134,6 +135,29 @@ There are a few reserved tags that alter the way grog treats a target:
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | no-cache            | Outputs will neither be stored in nor loaded from the cache backend.                                                                                  |
 | multiplatform-cache | By default grog separates target caches by the host platform. Adding this tag causes grog to store the outputs at the same cache key across platforms |
+
+### fingerprint
+
+`fingerprint` lets you inject additional pieces of identity that should bust the cache even when none of the declared inputs change. Each key/value pair is fed into the target definition hash, so modifying any entry forces a rebuild on the next run.
+
+```yaml
+targets:
+  - name: publish
+    command: npm publish --tag $RELEASE_CHANNEL
+    fingerprint:
+      release_channel: "stable"
+      node_version: "22.1.0"
+```
+
+In the example above, bumping `node_version` will change the computed change hash despite the command and inputs staying the same. This is useful for build metadata like compiler versions or environment-provided secrets.
+
+You can verify the fingerprint values that landed in the build graph using `grog graph -o json`:
+
+```bash
+grog graph -o json //:publish | jq '.nodes[] | select(.label.name=="publish") | .fingerprint'
+```
+
+Because fingerprint data participates in hashing, use it sparingly—only values that should truly invalidate cached results belong here.
 
 ### environment_variables
 

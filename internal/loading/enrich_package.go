@@ -97,6 +97,7 @@ func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg Packa
 			Platform:             targetPlatform,
 			OutputChecks:         target.OutputChecks,
 			Tags:                 target.Tags,
+			Fingerprint:          target.Fingerprint,
 			EnvironmentVariables: target.EnvironmentVariables,
 			Timeout:              timeout,
 		}

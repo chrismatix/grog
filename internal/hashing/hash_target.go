@@ -37,6 +37,7 @@ func hashTargetDefinition(target model.Target, dependencyHashes []string) (strin
 	_, err = hasher.WriteString(sorted(target.Inputs))
 	_, err = hasher.WriteString(sorted(target.OutputDefinitions()))
 	_, err = hasher.WriteString(sorted(dependencyHashes))
+	_, err = hasher.WriteString(sortedKeyValue(target.Fingerprint))
 	if !target.IsMultiplatformCache() {
 		_, err = hasher.WriteString(config.Global.GetPlatform())
 	}
@@ -51,4 +52,17 @@ func hashTargetDefinition(target model.Target, dependencyHashes []string) (strin
 func sorted(s []string) string {
 	slices.Sort(s)
 	return strings.Join(s, ",")
+}
+
+func sortedKeyValue(m map[string]string) string {
+	if len(m) == 0 {
+		return ""
+	}
+
+	entries := make([]string, 0, len(m))
+	for k, v := range m {
+		entries = append(entries, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	return sorted(entries)
 }
