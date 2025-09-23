@@ -18,6 +18,7 @@ class Target {
   timeout: String?
 
   environment_variables: Mapping<String, String>?
+  fingerprint: Mapping<String, String>?
   // Target Filtering
   tags: Listing<String>(isDistinct)
   platform: platform?

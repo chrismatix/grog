@@ -16,6 +16,7 @@ type TargetDTO struct {
 	OutputChecks []model.OutputCheck `json:"output_checks,omitempty" yaml:"output_checks,omitempty" pkl:"output_checks"`
 
 	Tags                 []string              `json:"tags,omitempty" yaml:"tags,omitempty" pkl:"tags"`
+	Fingerprint          map[string]string     `json:"fingerprint,omitempty" yaml:"fingerprint,omitempty" pkl:"fingerprint"`
 	Platform             *model.PlatformConfig `json:"platform,omitempty" yaml:"platform,omitempty" pkl:"platform"`
 	EnvironmentVariables map[string]string     `json:"environment_variables,omitempty" yaml:"environment_variables,omitempty" pkl:"environment_variables"`
 	Timeout              string                `json:"timeout,omitempty" yaml:"timeout,omitempty" pkl:"timeout"`

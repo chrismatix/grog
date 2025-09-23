@@ -73,3 +73,41 @@ func TestGetEnrichedPackage_DefaultPlatform(t *testing.T) {
 		t.Errorf("Target %s has incorrect Arch platform: got %v, want [arm64]", target2Label, target2.Platform.Arch)
 	}
 }
+
+func TestGetEnrichedPackage_FingerprintCopied(t *testing.T) {
+	logger := zaptest.NewLogger(t).Sugar()
+	packagePath := "pkg"
+
+	fingerprint := map[string]string{"commit": "abc123", "arch": "arm64"}
+
+	pkgDTO := PackageDTO{
+		SourceFilePath: "pkg/BUILD.yaml",
+		Targets: []*TargetDTO{
+			{
+				Name:        "example",
+				Command:     "echo hi",
+				Fingerprint: fingerprint,
+			},
+		},
+	}
+
+	enrichedPkg, err := getEnrichedPackage(logger, packagePath, pkgDTO)
+	if err != nil {
+		t.Fatalf("failed to enrich package: %v", err)
+	}
+
+	target := enrichedPkg.Targets[label.TL(packagePath, "example")]
+	if target == nil {
+		t.Fatalf("expected target to be enriched")
+	}
+
+	if len(target.Fingerprint) != len(fingerprint) {
+		t.Fatalf("expected fingerprint to be copied, got %v", target.Fingerprint)
+	}
+
+	for k, v := range fingerprint {
+		if target.Fingerprint[k] != v {
+			t.Fatalf("expected fingerprint[%s] to be %s, got %s", k, v, target.Fingerprint[k])
+		}
+	}
+}
