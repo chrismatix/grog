@@ -195,14 +195,8 @@ func (twp *TaskWorkerPool[T]) Run(task TaskFunc[T]) (T, error) {
 	resultCh := make(chan TaskResult[T], 1)
 	job := job[T]{id: id, task: task, result: resultCh}
 
-	// enqueue or bail on context cancel
-	select {
-	case twp.jobCh <- job:
-	case <-time.After(time.Second): // backstop so we don't hang if closed
-		if twp.closed.Load() {
-			return zero, fmt.Errorf("worker pool is closed")
-		}
-		twp.jobCh <- job
+	if err := twp.enqueue(job); err != nil {
+		return zero, err
 	}
 
 	res := <-resultCh
@@ -214,4 +208,28 @@ func (twp *TaskWorkerPool[T]) Shutdown() {
 		twp.closed.Store(true)
 		close(twp.jobCh)
 	})
+}
+
+func (twp *TaskWorkerPool[T]) enqueue(job job[T]) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if twp.closed.Load() {
+				err = fmt.Errorf("worker pool is closed")
+				return
+			}
+			panic(r)
+		}
+	}()
+
+	// enqueue or bail on context cancel
+	select {
+	case twp.jobCh <- job:
+	case <-time.After(time.Second): // backstop so we don't hang if closed
+		if twp.closed.Load() {
+			return fmt.Errorf("worker pool is closed")
+		}
+		twp.jobCh <- job
+	}
+
+	return nil
 }

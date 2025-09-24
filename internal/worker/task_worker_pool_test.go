@@ -100,6 +100,34 @@ func TestPanicOnJobChannel(t *testing.T) {
 	}
 }
 
+func TestRunWithConcurrentShutdown(t *testing.T) {
+	for i := 0; i < 200; i++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		testLogger := zaptest.NewLogger(t).Sugar()
+		p := NewTaskWorkerPool[int](testLogger, 1, func(_ tea.Msg) {}, 0)
+		p.StartWorkers(ctx)
+
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			_, _ = p.Run(func(update StatusFunc) (int, error) {
+				return 42, nil
+			})
+		}()
+
+		// Allow Run to start and then race Shutdown/Cancel against the send.
+		time.Sleep(time.Millisecond)
+		p.Shutdown()
+		cancel()
+
+		select {
+		case <-done:
+		case <-time.After(200 * time.Millisecond):
+			t.Fatal("Run did not return in time")
+		}
+	}
+}
+
 func TestTaskError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
