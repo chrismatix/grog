@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/fatih/color"
 	"grog/internal/caching"
 	"grog/internal/config"
 	"grog/internal/console"
@@ -18,6 +16,9 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/fatih/color"
 )
 
 type CommandError struct {
@@ -194,8 +195,8 @@ func (e *Executor) getTaskFunc(
 		// depsCached is also true when there are no deps
 		if depsCached && hasCacheHit && !isTainted {
 			if e.loadOutputsMode == config.LoadOutputsMinimal {
-				update(fmt.Sprintf("%s: skipped loading outputs because load_outputs=minimal.", target.Label))
-				logger.Debugf("%s: skipped loading outputs because load_outputs=minimal", target.Label)
+				update(fmt.Sprintf("%s: cache hit. skipped loading outputs because load_outputs=minimal.", target.Label))
+				logger.Debugf("%s: cache hit. skipped loading outputs because load_outputs=minimal", target.Label)
 				return dag.CacheHit, nil
 			}
 
@@ -336,17 +337,22 @@ func (e *Executor) LoadDependencyOutputs(
 	)
 	for _, dep := range e.graph.GetTargetDependencies(target) {
 		err := e.loadCachedOutputs(ctx, dep)
+
 		if err != nil {
 			logger.Debugf("%s: failed to load output for dependency %s (re-rerunning): %v", target.Label, dep.Label, err)
-
-			binTools, err := e.getBinToolPaths(dep)
-			if err != nil {
-				return err
+			// In this case we need to also recursively re-load the dependencies of the dependency
+			if recursiveLoadErr := e.LoadDependencyOutputs(ctx, dep, update); recursiveLoadErr != nil {
+				return recursiveLoadErr
 			}
 
-			_, err = e.executeTarget(ctx, dep, binTools, update, false)
-			if err != nil {
-				return err
+			binTools, binToolErr := e.getBinToolPaths(dep)
+			if binToolErr != nil {
+				return binToolErr
+			}
+
+			_, executionErr := e.executeTarget(ctx, dep, binTools, update, false)
+			if executionErr != nil {
+				return executionErr
 			}
 		}
 	}
