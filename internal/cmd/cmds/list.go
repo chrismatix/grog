@@ -1,13 +1,14 @@
 package cmds
 
 import (
-	"github.com/spf13/cobra"
 	"grog/internal/completions"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/label"
 	"grog/internal/loading"
 	"grog/internal/selection"
+
+	"github.com/spf13/cobra"
 )
 
 var listOptions struct {
@@ -18,7 +19,7 @@ var ListCmd = &cobra.Command{
 	Use:     "list",
 	Aliases: []string{"ls"},
 	Short:   "Lists targets by pattern.",
-	Long:    `Lists targets that match the specified pattern. Can filter targets by type using the --target-type flag.`,
+	Long:    `Lists targets that match the specified pattern. If no pattern is specified only lists the targets in the current workspace. Can filter targets by type using the --target-type flag.`,
 	Example: `  grog list                           # List all targets in the current package
   grog list //path/to/package:target    # List a specific target
   grog list //path/to/package/...       # List all targets in a package and subpackages
@@ -33,9 +34,20 @@ var ListCmd = &cobra.Command{
 			logger.Fatalf("could not get current package: %v", err)
 		}
 
-		targetPatterns, err := label.ParsePatternsOrMatchAll(currentPackagePath, args)
-		if err != nil {
-			logger.Fatalf("could not parse target pattern: %v", err)
+		var targetPatterns []label.TargetPattern
+		if len(args) == 0 {
+			// Default to only showing the targets in the current package
+			currentPackagePattern, err := label.ParseTargetPattern(currentPackagePath, ":all")
+			if err != nil {
+				logger.Fatalf("could not parse target pattern: %v", err)
+			}
+			targetPatterns = []label.TargetPattern{currentPackagePattern}
+		} else {
+			var err error
+			targetPatterns, err = label.ParsePatternsOrMatchAll(currentPackagePath, args)
+			if err != nil {
+				logger.Fatalf("could not parse target pattern: %v", err)
+			}
 		}
 
 		graph := loading.MustLoadGraphForQuery(ctx, logger)

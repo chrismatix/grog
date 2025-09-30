@@ -6,27 +6,32 @@ cases:
   - name: list_by_tags
     grog_args:
       - list
+      - //...
       - --tag=tag1
       - --tag=non-existent
 
   - name: list_by_exclude_tags
     grog_args:
       - list
+      - //...
       - --exclude-tag=tag1
 
   - name: list_tests
     grog_args:
       - list
+      - //...
       - --target-type=test
 
   - name: list_binary_targets
     grog_args:
       - list
+      - //...
       - --target-type=bin_output
 
   - name: list_no_tests
     grog_args:
       - list
+      - //...
       - --target-type=no_test
 
   - name: build_by_tags
@@ -40,6 +45,10 @@ cases:
     grog_args:
       - list
       - //package_1/...
+
+  - name: list_current
+    grog_args:
+      - list
 
   # Deps
   ###
