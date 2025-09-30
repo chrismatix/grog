@@ -1,19 +1,23 @@
 ---
 title: Grog Scripts
 description: Learn how to turn annotated shell and Python scripts into first-class Grog targets that are easy to share and run.
-sidebar:
-label: Grog Scripts
 ---
 
 import { Aside } from "@astrojs/starlight/components";
 
+<Aside type="caution">
+  This feature is not ready yet. The docs instead reflect the planned
+  implementation in the spirit of Documentation-driven Development.
+  So let us know what you think!
+</Aside>
+
 ## What are Grog Scripts?
 
-Grog Scripts let you promote existing automation scripts to first-class build targets without having to add them as targets with `bin_output` to your BUILD files (more below)..
+Grog Scripts let you promote existing automation scripts to first-class build targets without having to add them as targets with `bin_output` to your BUILD files (more [below](#comparison-to-binary-output-targets)).
 They combine lightweight metadata with the standard `grog run` workflow so you can cache results, share helpers across teams, and keep using your preferred languages.
 
 - Store scripts directly in your repository with names ending in `.grog.sh` or `.grog.py`.
-- Add a `# @grog` metadata block at the top of the file to describe dependencies, inputs, and outputs just like annotated Makefile targets.
+- Add a `# @grog` metadata block at the top of the file to describe dependencies, inputs, and outputs just like annotated [Makefile targets](../build-configuration).
 - Run them anywhere in the workspace with `grog run path/to/script.grog.sh` (or the Python equivalent) while passing through arguments with `--`.
 
 This approach avoids scattering wrapper targets across BUILD files and keeps the execution logic beside the script that implements it.
@@ -23,9 +27,15 @@ This approach avoids scattering wrapper targets across BUILD files and keeps the
 Grog scans your workspace for executable files that match the naming convention `*.grog.sh` or `*.grog.py` and treats each match as a runnable tool.
 Because the loader already understands annotated Makefile targets, the same `# @grog` block is used to declare script metadata, keeping configuration consistent across formats.【F:docs/src/content/docs/get-started.mdx†L145-L175】【F:internal/loading/makefile_loader.go†L69-L151】
 
+<Aside>
+  You can still run any other `.sh` or `.py` file with `grog run`, but they will not be discovered as targets when Grog scans the workspace.
+</Aside>
+
 You can run a script from any directory with either a relative or absolute path.
-Grog automatically builds any declared dependencies, restores cached outputs, and then launches the interpreter that matches the file extension.
-Use `--` to forward additional parameters to the script, just like when running annotated binary outputs.【F:docs/src/content/docs/guides/binary-outputs.mdx†L60-L69】
+Grog automatically builds any declared dependencies, restores cached outputs, and then executes the file using `sh`.
+`.py` files therefore need a shebang to tell Python which interpreter to use.
+
+Use `--` to forward additional parameters to the script.
 
 ```shell
 # Run a shell script directly
@@ -37,7 +47,7 @@ grog run ./tools/release.grog.py -- --version 1.2.0
 
 <Aside>
   When you invoke a script, Grog executes it in the workspace root by default.
-  Use `grog run -i` if you want the script to run inside the directory that contains its metadata and inputs, mirroring the existing `grog run` flag for binary targets.【F:docs/src/content/docs/reference/cli/grog_run.md†L19-L30】
+  Use `grog run --in-package/-i` if you want the script to run inside the directory that contains its metadata and inputs, mirroring the existing `grog run` flag for binary targets.【F:docs/src/content/docs/reference/cli/grog_run.md†L19-L30】
 </Aside>
 
 ## Annotating scripts with `# @grog`
@@ -46,25 +56,13 @@ A script becomes runnable once you add a comment header that starts with `# @gro
 All subsequent comment lines (prefixed with `#`) are parsed as YAML until the first non-comment line, mirroring the Makefile loader.【F:internal/loading/makefile_loader.go†L69-L151】
 The metadata keys are:
 
-| Key            | Required | Description                                                                                                                                                                                      |
-|----------------|----------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `name`         | Optional | Overrides the default target name that Grog derives from the script file. Useful when you want a shorter or stable CLI label.【F:internal/loading/makefile_loader.go†L103-L148】                   |
-| `dependencies` | Optional | A list of labels for other targets that must finish before the script executes. These behave the same way they do for annotated Makefile goals.【F:internal/loading/makefile_loader.go†L103-L151】 |
-| `inputs`       | Optional | Glob patterns or file paths that Grog hashes to detect changes before running the script.【F:internal/loading/makefile_loader.go†L103-L151】                                                       |
-| `outputs`      | Optional | Files or directories produced by the script that should be cached or checked for existence.【F:internal/loading/makefile_loader.go†L103-L151】                                                     |
+| Key            | Required | Description                                                                     |
+|----------------|----------|---------------------------------------------------------------------------------|
+| `name`         | Optional | Overrides the default target name that Grog derives from the file name.         |
+| `dependencies` | Optional | A list of labels for other targets that must finish before the script executes. |
 
-Scripts without a `name` inherit their filename, so `tools/sbom.grog.sh` can still be addressed as `//tools:sbom.grog.sh` if you prefer to run it via a label.
+Scripts without a `name` inherit their filename, so `tools/script.grog.sh` can still be addressed as `//tools:script.grog.sh` if you prefer to run it via a label.
 Keep metadata close to the script so reviewers can understand its behavior at a glance.
-
-## Validation and error handling
-
-The metadata parser is strict and surfaces actionable error messages:
-
-- Invalid YAML causes `failed to parse annotation block …` errors that include the line range of the offending block.【F:internal/loading/makefile_loader.go†L121-L125】【F:internal/loading/makefile_loader_test.go†L96-L107】
-- If the parser reaches the end of the comment block without seeing executable content, the script is skipped—useful when you are drafting metadata incrementally.【F:internal/loading/makefile_loader_test.go†L109-L117】
-- Structural mistakes, such as omitting the colon in a Makefile-style target declaration, trigger `expected a make target definition…` errors so you can fix them before running the command.【F:internal/loading/makefile_loader.go†L128-L132】【F:internal/loading/makefile_loader_test.go†L83-L94】
-
-Because scripts reuse the same parser, you get identical validation guarantees regardless of whether the metadata lives in a `Makefile` or a standalone script file.
 
 ## Example: Shell script
 
@@ -73,21 +71,19 @@ Because scripts reuse the same parser, you get identical validation guarantees r
 # @grog
 # name: format
 # dependencies:
-#   - //tools:install_shfmt
-# inputs:
-#   - scripts/format.grog.sh
-#   - "src/**/*.go"
-# outputs:
-#   - dir::tmp/shfmt-report
+#   - //tools:install_prettier
 set -euo pipefail
 
-mkdir -p tmp/shfmt-report
-shfmt -d src > tmp/shfmt-report/diff.txt
+# Format JavaScript and TypeScript files
+prettier --write "src/**/*.{js,ts}" "$@"
 ```
 
 ```shell
 chmod +x scripts/format.grog.sh
+# Run the script using the file name
 grog run scripts/format.grog.sh -- --check
+# Run the script using the target label
+grog run //scripts:format -- --check
 ```
 
 This script ensures the `install_shfmt` tool is built first, tracks the files it reads, and records generated reports so they can be cached across builds.
@@ -97,35 +93,30 @@ This script ensures the `install_shfmt` tool is built first, tracks the files it
 ```python
 #!/usr/bin/env python3
 # @grog
-# name: smoke_tests
+# name: test
 # dependencies:
-#   - //services/api:build_image
-# inputs:
-#   - scripts/smoke_tests.grog.py
-#   - tests/smoke/**/*.py
-# outputs:
-#   - reports/smoke/junit.xml
+#   - //tools:pytest
 
-import pathlib
 import subprocess
 
-REPORT = pathlib.Path("reports/smoke")
-REPORT.mkdir(parents=True, exist_ok=True)
-
+# Run unit tests with coverage report
 subprocess.run([
     "pytest",
-    "tests/smoke",
-    "--junitxml",
-    REPORT / "junit.xml",
+    "--cov=src",
+    "--cov-report=html",
+    "tests/",
 ], check=True)
 ```
 
 ```shell
 chmod +x scripts/smoke_tests.grog.py
+# Run the script using the file name
 grog run scripts/smoke_tests.grog.py -- --maxfail=1
+# Run the script using the target label
+grog run //scripts:custom_name -- --maxfail=1
 ```
 
-Python scripts follow the same rules: metadata stays in comments, the interpreter derives from the shebang, and `--` cleanly forwards additional pytest flags.
+Python scripts follow the same rules: metadata stays in comments, the interpreter derives from the shebang, and `--` cleanly forwards additional arguments to the script.
 
 ## Dependency and caching semantics
 
@@ -137,7 +128,7 @@ This uniform treatment means scripts participate fully in commands like `grog bu
 
 Before this feature you would have to define a wrapper target that defines the existing script file as an executable target with a `bin_output` like so:
 
-```pkl
+```Pkl
 amends "package://grog.build/releases/v0.16.1/grog@0.16.1#/package.pkl"
 
 targets {

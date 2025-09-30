@@ -23,9 +23,9 @@ export default defineConfig({
           items: ["get-started", "why-grog", "build-configuration"],
         },
         {
-          label: "Guides",
+          label: "Topics",
           collapsed: false,
-          autogenerate: { directory: "guides" },
+          autogenerate: { directory: "topics" },
         },
         {
           label: "Reference",
