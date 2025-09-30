@@ -49,7 +49,7 @@ A unique identifier for the target within its package. This forms part of the ta
 ### command
 
 The shell command or script to execute. This can be a single line or a multi-line script using YAML's `|` syntax or equivalent in other formats.
-The command is optional which can be useful, for instance, when defining executable scripts ([read more](/guides/binary-outputs)).
+The command is optional which can be useful, for instance, when defining executable scripts ([read more](/topics/binary-outputs)).
 
 Grog also injects the following environment variables into the target's environment:
 
@@ -114,7 +114,7 @@ Other targets that must be built before this one, specified as labels. Labels ca
 ### platform
 
 A platform configuration that restricts where this target can be executed.
-This is particularly useful for multi-platform builds (see [docs](/guides/multi-platform-builds)).
+This is particularly useful for multi-platform builds (see [docs](/topics/multi-platform-builds)).
 
 The `platform` field has two sub-fields:
 
