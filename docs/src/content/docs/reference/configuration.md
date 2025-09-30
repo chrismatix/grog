@@ -9,7 +9,7 @@ Find below a complete example of a grog configuration file:
 ```toml
 # Workspace Settings
 root = "/home/grace/grog_data"
-requires_grog = "^0.13"
+requires_grog = ">=0.15.0"
 
 # Execution Settings
 fail_fast = true # Exit immediately when encountering an issue
@@ -29,12 +29,11 @@ environment_variables = { FOO = "bar" }
 enable_cache = true # default
 
 [cache]
-backend = "s3"  # Options: "" (local), "gcs", "s3"
+backend = "gcs"  # Options: "" (local), "gcs", "s3"
 
 [cache.gcs]
 bucket = "my-gcs-bucket"
 prefix = "grog-cache/"
-credentials_file = "/path/to/gcs-credentials.json"
 ```
 
 All value in this file can be overridden at runtime by passing an environment variable of the same name prefixed with `GROG_`.
@@ -54,5 +53,5 @@ For instance, to set or override the `fail_fast` option set `GROG_FAIL_FAST=fals
 - **load_outputs**: Determines what outputs are loaded from the cache. Available options are:
   - `all` (default): Load all outputs from the cache.
   - `minimal`: Only load outputs of a target if a **direct dependant** needs to be re-built. This setting is useful to save bandwidth and disk space in CI settings.
-- **all_platforms**: When set to `true` skips the platform selection step and builds all targets for all platforms ([read more](/guides/querying)).
+- **all_platforms**: When set to `true` skips the platform selection step and builds all targets for all platforms ([read more](/topics/querying)).
 - **skip_workspace_lock**: When `true`, Grog does not acquire a workspace-level lock before executing. **Warning:** Running multiple grog instances without locking can corrupt the workspace or cache.
