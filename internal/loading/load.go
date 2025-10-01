@@ -7,6 +7,7 @@ import (
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/model"
+	"maps"
 	"slices"
 	"sync"
 )
@@ -32,7 +33,8 @@ func LoadPackages(ctx context.Context, startDir string) ([]*model.Package, error
 	loadedPackagePaths := make(map[string]string)
 	loadedMu := &sync.Mutex{}
 
-	var packages []*model.Package
+	packagesByPath := make(map[string]*model.Package)
+	scriptLoader := ScriptLoader{}
 
 	for f := range fileListQueue {
 		// TODO this should be processed in a worker as well
@@ -54,29 +56,70 @@ func LoadPackages(ctx context.Context, startDir string) ([]*model.Package, error
 				return nil, err
 			}
 
-			// Check for duplicate package definitions
 			loadedMu.Lock()
-			if loadedPackageFile, ok := loadedPackagePaths[packagePath]; ok {
-				loadedMu.Unlock()
+			if existing, ok := packagesByPath[packagePath]; ok {
+				if source, exists := loadedPackagePaths[packagePath]; exists {
+					loadedMu.Unlock()
 
-				// Sort the paths to make the error message deterministic and testable via integration test
-				paths := []string{
-					config.MustGetPathRelativeToWorkspaceRoot(loadedPackageFile),
-					config.MustGetPathRelativeToWorkspaceRoot(pkg.SourceFilePath),
+					paths := []string{
+						config.MustGetPathRelativeToWorkspaceRoot(source),
+						config.MustGetPathRelativeToWorkspaceRoot(pkg.SourceFilePath),
+					}
+					slices.Sort(paths)
+					return nil, fmt.Errorf("found conflicting package definitions at package path: %s\n- %s\n- %s",
+						packagePath,
+						paths[0],
+						paths[1],
+					)
 				}
-				slices.Sort(paths)
-				return nil, fmt.Errorf("found conflicting package definitions at package path: %s\n- %s\n- %s",
-					packagePath,
-					paths[0],
-					paths[1],
-				)
+
+				if err := mergePackages(pkg, existing); err != nil {
+					loadedMu.Unlock()
+					return nil, err
+				}
 			}
+			packagesByPath[packagePath] = pkg
 			loadedPackagePaths[packagePath] = pkgDto.SourceFilePath
 			loadedMu.Unlock()
-
-			packages = append(packages, pkg)
+			continue
 		}
+
+		if !scriptLoader.Matches(f.Filename) {
+			continue
+		}
+
+		packagePath, err := config.GetPackagePath(f.Location)
+		if err != nil {
+			return nil, err
+		}
+
+		scriptPkgDto, matched, err := scriptLoader.Load(ctx, f.Location)
+		if err != nil {
+			return nil, err
+		}
+		if !matched {
+			relativePath := config.MustGetPathRelativeToWorkspaceRoot(f.Location)
+			return nil, fmt.Errorf("%s does not contain a # @grog annotation", relativePath)
+		}
+
+		scriptPkg, err := getEnrichedPackage(logger, packagePath, scriptPkgDto)
+		if err != nil {
+			return nil, err
+		}
+
+		loadedMu.Lock()
+		if existing, ok := packagesByPath[packagePath]; ok {
+			if err := mergePackages(existing, scriptPkg); err != nil {
+				loadedMu.Unlock()
+				return nil, err
+			}
+		} else {
+			packagesByPath[packagePath] = scriptPkg
+		}
+		loadedMu.Unlock()
 	}
+
+	packages := slices.Collect(maps.Values(packagesByPath))
 
 	return packages, nil
 }
