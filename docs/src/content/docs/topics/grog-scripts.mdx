@@ -5,12 +5,6 @@ description: Learn how to turn annotated shell and Python scripts into first-cla
 
 import { Aside } from "@astrojs/starlight/components";
 
-<Aside type="caution">
-  This feature is not ready yet. The docs instead reflect the planned
-  implementation in the spirit of Documentation-driven Development.
-  So let us know what you think!
-</Aside>
-
 ## What are Grog Scripts?
 
 Grog Scripts let you promote existing automation scripts to first-class build targets without having to add them as targets with `bin_output` to your BUILD files (more [below](#comparison-to-binary-output-targets)).
@@ -28,7 +22,7 @@ Grog scans your workspace for executable files that match the naming convention 
 Because the loader already understands annotated Makefile targets, the same `# @grog` block is used to declare script metadata, keeping configuration consistent across formats.【F:docs/src/content/docs/get-started.mdx†L145-L175】【F:internal/loading/makefile_loader.go†L69-L151】
 
 <Aside>
-  You can still run any other `.sh` or `.py` file with `grog run`, but they will not be discovered as targets when Grog scans the workspace.
+  You can still run any other `.sh` or `.py` file with `grog run` as long as it includes a `# @grog` metadata block. Files that do not follow the `.grog.sh`/`.grog.py` naming convention will not be discovered automatically, but `grog run path/to/script` loads their metadata at execution time.
 </Aside>
 
 You can run a script from any directory with either a relative or absolute path.
