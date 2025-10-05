@@ -88,14 +88,17 @@ func mergePackages(from *model.Package, into *model.Package) error {
 
 	for fromTargetLabel, fromTarget := range from.Targets {
 		if intoTarget, exists := into.Targets[fromTargetLabel]; exists {
-			return fmt.Errorf("duplicate fromTarget label: %s (defined in %s and %s)", fromTargetLabel, intoTarget.SourceFilePath, fromTarget.SourceFilePath)
+			return fmt.Errorf("duplicate target label: %s (defined in %s and %s)", fromTargetLabel, intoTarget.SourceFilePath, fromTarget.SourceFilePath)
 		}
 		into.Targets[fromTargetLabel] = fromTarget
 	}
 
 	for fromAliasLabel, fromAlias := range from.Aliases {
 		if intoAlias, exists := into.Targets[fromAliasLabel]; exists {
-			return fmt.Errorf("duplicate fromTarget label: %s (defined in %s and %s)", fromAliasLabel, intoAlias.SourceFilePath, fromAlias.SourceFilePath)
+			return fmt.Errorf("duplicate target label: %s (defined in %s and %s)", fromAliasLabel, intoAlias.SourceFilePath, fromAlias.SourceFilePath)
+		}
+		if intoTarget, exists := into.Targets[fromAliasLabel]; exists {
+			return fmt.Errorf("duplicate alias label: %s (defined in %s and as target in %s)", fromAliasLabel, fromAlias.SourceFilePath, intoTarget.SourceFilePath)
 		}
 		into.Aliases[fromAliasLabel] = fromAlias
 	}
