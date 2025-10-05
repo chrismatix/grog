@@ -60,7 +60,7 @@ func LoadPackages(ctx context.Context, startDir string) ([]*model.Package, error
 		loadedMu.Lock()
 		if existingPackage, ok := loadedPackages[packagePath]; ok {
 			// This mutates the existingPackage
-			mergingErr := mergePackages(existingPackage, pkg)
+			mergingErr := mergePackages(pkg, existingPackage)
 			if mergingErr != nil {
 				return nil, mergingErr
 			}

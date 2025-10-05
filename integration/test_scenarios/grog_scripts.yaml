@@ -8,4 +8,4 @@ cases:
   - name: run_grog_sh_target
     grog_args:
       - run
-      - :
+      - :run.grog.sh
