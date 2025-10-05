@@ -9,3 +9,10 @@ cases:
     grog_args:
       - run
       - :run.grog.sh
+
+  - name: run_any_script
+    grog_args:
+      - run
+      - dir/minimal.sh
+      - --
+      - bar
