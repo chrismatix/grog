@@ -7,58 +7,19 @@ import { Aside } from "@astrojs/starlight/components";
 
 ## What are Grog Scripts?
 
-Grog Scripts let you promote existing automation scripts to first-class build targets without having to add them as targets with `bin_output` to your BUILD files (more [below](#comparison-to-binary-output-targets)).
-They combine lightweight metadata with the standard `grog run` workflow so you can cache results, share helpers across teams, and keep using your preferred languages.
+Grog Scripts are a nicer way of defining [binary](/topics/binary-outputs) script targets, that is, targets whose output you can run with `grog run`.
+In short; you add a comment header to your script that defines its dependencies and inputs, and Grog automatically builds them before running the script.
 
-- Store scripts directly in your repository with names ending in `.grog.sh` or `.grog.py`.
-- Add a `# @grog` metadata block at the top of the file to describe dependencies, inputs, and outputs just like annotated [Makefile targets](../build-configuration).
-- Run them anywhere in the workspace with `grog run path/to/script.grog.sh` (or the Python equivalent) while passing through arguments with `--`.
+## How to use Grog Scripts
 
-This approach avoids scattering wrapper targets across BUILD files and keeps the execution logic beside the script that implements it.
+In short:
 
-## Script discovery and invocation
+1. Store scripts directly in your repository with names ending in `.grog.sh` or `.grog.py`.
+2. Add a `# @grog` metadata block at the top of the file to describe dependencies, inputs, and outputs just like with annotated [Makefile targets](/docs/build-configuration).
+3. Run them anywhere in the workspace with `grog run path/to/script.grog.sh` (or the Python equivalent) while passing through arguments with `--`.
 
-Grog scans your workspace for executable files that match the naming convention `*.grog.sh` or `*.grog.py` and treats each match as a runnable tool.
-
-<Aside>
-  You can still run any other `.sh` or `.py` file with `grog run` as long as it includes a `# @grog` metadata block.
-  Files that do not follow the `.grog.sh`/`.grog.py` naming convention will not be discovered automatically, but `grog run path/to/script` loads their metadata at execution time.
-</Aside>
-
-You can run a script from any directory with either a relative or absolute path.
-Grog automatically builds any declared dependencies, restores cached outputs, and then executes the file using `sh`.
-`.py` files therefore need a shebang to tell Python which interpreter to use.
-
-Use `--` to forward additional parameters to the script.
-
-```shell
-# Run a shell script directly
-grog run scripts/format.grog.sh -- --check
-
-# Explicitly run from the repo root
-grog run ./tools/release.grog.py -- --version 1.2.0
-```
-
-<Aside>
-  When you invoke a script, Grog executes it in the workspace root by default.
-  Use `grog run --in-package/-i` if you want the script to run inside the directory that contains its metadata and inputs, mirroring the existing `grog run` flag for binary targets.【F:docs/src/content/docs/reference/cli/grog_run.md†L19-L30】
-</Aside>
-
-## Annotating scripts with `# @grog`
-
-A script becomes runnable once you add a comment header that starts with `# @grog`.
-All subsequent comment lines (prefixed with `#`) are parsed as YAML until the first non-comment line, mirroring the Makefile loader.【F:internal/loading/makefile_loader.go†L69-L151】
-The metadata keys are:
-
-| Key            | Required | Description                                                                     |
-|----------------|----------|---------------------------------------------------------------------------------|
-| `name`         | Optional | Overrides the default target name that Grog derives from the file name.         |
-| `dependencies` | Optional | A list of labels for other targets that must finish before the script executes. |
-
-Scripts without a `name` inherit their filename, so `tools/script.grog.sh` can still be addressed as `//tools:script.grog.sh` if you prefer to run it via a label.
-Keep metadata close to the script so reviewers can understand its behavior at a glance.
-
-## Example: Shell script
+Let's go through a brief example.
+Suppose you have a script `scripts/format.sh` that depends on some build target like `//tools:install_prettier`:
 
 ```bash
 #!/usr/bin/env bash
@@ -72,45 +33,30 @@ set -euo pipefail
 prettier --write "src/**/*.{js,ts}" "$@"
 ```
 
+By adding this metadata block, Grog will treat this script as a Grog target and the actual script file as its [binary output](/docs/binary-outputs).
+Then, you can simply run the script anywhere in the workspace:
+
 ```shell
-chmod +x scripts/format.grog.sh
 # Run the script using the file name
 grog run scripts/format.grog.sh -- --check
 # Run the script using the target label
 grog run //scripts:format -- --check
 ```
 
-This script ensures the `install_shfmt` tool is built first, tracks the files it reads, and records generated reports so they can be cached across builds.
+## Configuration
 
-## Example: Python script
+Grog scans your workspace for executable files that match the naming convention `*.grog.sh` or `*.grog.py` and treats each match as a runnable target.
 
-```python
-#!/usr/bin/env python3
-# @grog
-# name: test
-# dependencies:
-#   - //tools:pytest
+<Aside>
+  Files that do not follow the `.grog.sh`/`.grog.py` naming convention will not be discovered automatically, but can
+  still be run with `grog run path/to/script` as long as they include a `# @grog` metadata block.
+</Aside>
 
-import subprocess
+You can run a script from any directory with either a relative or absolute path using `grog run`. Grog will:
+1. Build the script target including its dependencies.
+2. Execute the file using `sh` (`.py` files need a shebang to specify the interpreter).
 
-# Run unit tests with coverage report
-subprocess.run([
-    "pytest",
-    "--cov=src",
-    "--cov-report=html",
-    "tests/",
-], check=True)
-```
-
-```shell
-chmod +x scripts/smoke_tests.grog.py
-# Run the script using the file name
-grog run scripts/smoke_tests.grog.py -- --maxfail=1
-# Run the script using the target label
-grog run //scripts:custom_name -- --maxfail=1
-```
-
-Python scripts follow the same rules: metadata stays in comments, the interpreter derives from the shebang, and `--` cleanly forwards additional arguments to the script.
+Use `--` to forward additional parameters to the script.
 
 ## Comparison to binary output targets
 
