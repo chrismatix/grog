@@ -92,7 +92,7 @@ Can optionally include transitive dependents of changed targets to find all affe
 		for _, pkg := range packages {
 			for _, target := range pkg.Targets {
 				if containsFile(changedFiles, target.SourceFilePath) {
-					// Add the source file that defined this target
+					// Add this target if the package source file changed
 					matchingTargets = append(matchingTargets, target)
 				}
 			}

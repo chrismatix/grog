@@ -42,10 +42,7 @@ func (p *PackageLoader) LoadIfMatched(ctx context.Context, filePath string, file
 		if loader.Matches(fileName) {
 			p.logger.Debugf("Loading package from %s using loader %s", filePath, loader)
 			pkgDto, matched, err := loader.Load(ctx, filePath)
-			if err != nil && matched {
-				pkgDto.SourceFilePath = filePath
-				return PackageDTO{}, false, err
-			}
+			pkgDto.SourceFilePath = filePath
 			return pkgDto, matched, err
 		}
 	}
