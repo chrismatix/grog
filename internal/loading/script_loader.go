@@ -8,11 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"go.uber.org/zap"
 	"grog/internal/config"
-	"grog/internal/label"
 	"grog/internal/model"
 
+	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
 
@@ -59,94 +58,75 @@ type scriptAnnotation struct {
 }
 
 func (p *scriptParser) parse() (PackageDTO, bool, error) {
-	lineNumber := 0
-	foundAnnotation := false
-	var annotationLines []string
-	var annotationLineNumbers []int
+	lineCount := 0
+	var annotation grogAnnotation
 
 	for p.scanner.Scan() {
-		lineNumber++
+		lineCount++
 		line := p.scanner.Text()
 		trimmed := strings.TrimSpace(line)
 
-		if !foundAnnotation {
-			if trimmed == "" {
-				continue
-			}
-			if strings.HasPrefix(trimmed, "#!") {
-				// allow shebangs before the annotation block
-				continue
-			}
-			if strings.HasPrefix(trimmed, "# @grog") {
-				foundAnnotation = true
-				continue
-			}
-			// The first non-empty, non-shebang line was not an annotation.
-			break
-		}
+		if strings.HasPrefix(trimmed, "# @grog") {
 
-		if trimmed == "" {
-			break
-		}
+			// Collect the subsequent comment lines.
+			var annotationLines []string
+			var annotationLineNumbers []int
 
-		if strings.HasPrefix(trimmed, "#") {
-			content := strings.TrimSpace(trimmed[1:])
-			annotationLines = append(annotationLines, content)
-			annotationLineNumbers = append(annotationLineNumbers, lineNumber)
-			continue
-		}
+			for p.scanner.Scan() {
+				lineCount++
+				nextLine := p.scanner.Text()
+				trimmedNext := strings.TrimSpace(nextLine)
+				if trimmedNext == "" {
+					continue
+				}
+				if strings.HasPrefix(trimmedNext, "#") {
+					// Remove '#' and any whitespace.
+					content := strings.TrimSpace(trimmedNext[1:])
+					annotationLines = append(annotationLines, content)
+					annotationLineNumbers = append(annotationLineNumbers, lineCount)
+				} else {
+					if len(annotationLines) == 0 {
+						// This means that there is just an empty # @grog start block with no content
+						// This is fine
+						break
+					}
 
-		break
+					// End of annotation: this should be the target definition.
+					foundAnnotation, err := p.handleTarget(annotationLines, annotationLineNumbers)
+					if err != nil {
+						return PackageDTO{}, true, err
+					}
+					annotation = foundAnnotation
+					// Break out of the loop.
+					break
+				}
+			}
+		}
 	}
 
 	if err := p.scanner.Err(); err != nil {
 		return PackageDTO{}, false, fmt.Errorf("failed to scan %s: %w", p.file, err)
 	}
 
-	if !foundAnnotation {
-		return PackageDTO{}, false, nil
-	}
-
-	var annotation scriptAnnotation
-	if len(annotationLines) > 0 {
-		content := strings.Join(annotationLines, "\n")
-		if err := yaml.Unmarshal([]byte(content), &annotation); err != nil {
-			firstLine := 0
-			lastLine := 0
-			if len(annotationLineNumbers) > 0 {
-				firstLine = annotationLineNumbers[0]
-				lastLine = annotationLineNumbers[len(annotationLineNumbers)-1]
-			}
-			if firstLine == 0 {
-				return PackageDTO{}, false, fmt.Errorf("failed to parse annotation in %s: %w", p.file, err)
-			}
-			return PackageDTO{}, false, fmt.Errorf("failed to parse annotation in %s L%d-%d: %w", p.file, firstLine, lastLine, err)
-		}
-	}
-
-	defaultName := filepath.Base(p.file)
+	scriptFileName := filepath.Base(p.file)
 	targetName := annotation.Name
 	if targetName == "" {
-		targetName = defaultName
+		// Default to the script file name as the target name
+		targetName = scriptFileName
 	}
 
 	target := &TargetDTO{
-		Name:                 targetName,
-		Dependencies:         annotation.Dependencies,
-		Inputs:               prependUnique(annotation.Inputs, defaultName),
-		ExcludeInputs:        annotation.ExcludeInputs,
-		Outputs:              annotation.Outputs,
-		BinOutput:            annotation.BinOutput,
-		Tags:                 annotation.Tags,
-		Fingerprint:          annotation.Fingerprint,
-		EnvironmentVariables: annotation.EnvironmentVariables,
-		Timeout:              annotation.Timeout,
-		Platform:             annotation.Platform,
-		OutputChecks:         annotation.OutputChecks,
+		Name:         targetName,
+		Dependencies: annotation.Dependencies,
+		// Prepend the script file name to the inputs to ensure
+		// that changing it always invalidates it as a target
+		Inputs:  prependUnique(annotation.Inputs, scriptFileName),
+		Outputs: annotation.Outputs,
+		Tags:    annotation.Tags,
 	}
 
 	if target.BinOutput == "" {
-		target.BinOutput = defaultName
+		target.BinOutput = scriptFileName
 	}
 
 	pkg := PackageDTO{
@@ -155,6 +135,25 @@ func (p *scriptParser) parse() (PackageDTO, bool, error) {
 	}
 
 	return pkg, true, nil
+}
+
+// handleTarget parses the collected annotation lines and the subsequent target definition.
+func (p *scriptParser) handleTarget(
+	annotationLines []string,
+	annotationLineNumbers []int,
+) (grogAnnotation, error) {
+	// Combine annotation lines into a YAML snippet.
+	annotationContent := strings.Join(annotationLines, "\n")
+	lastLineNum := annotationLineNumbers[len(annotationLineNumbers)-1]
+
+	var annotation grogAnnotation
+	if len(annotationContent) > 0 {
+		if err := yaml.Unmarshal([]byte(annotationContent), &annotation); err != nil {
+			return grogAnnotation{}, fmt.Errorf("failed to parse annotation block L%d-%d: %w", annotationLineNumbers[0], lastLineNum, err)
+		}
+	}
+
+	return annotation, nil
 }
 
 func prependUnique(values []string, element string) []string {
@@ -195,32 +194,4 @@ func LoadScriptTarget(ctx context.Context, logger *zap.SugaredLogger, filePath s
 	}
 
 	return nil, fmt.Errorf("no target could be derived from %s", filePath)
-}
-
-func mergePackages(into *model.Package, from *model.Package) error {
-	if into.Targets == nil {
-		into.Targets = make(map[label.TargetLabel]*model.Target)
-	}
-	if into.Aliases == nil {
-		into.Aliases = make(map[label.TargetLabel]*model.Alias)
-	}
-
-	for lbl, target := range from.Targets {
-		if _, exists := into.Targets[lbl]; exists {
-			return fmt.Errorf("duplicate target label: %s (defined in %s and %s)", lbl, into.SourceFilePath, from.SourceFilePath)
-		}
-		into.Targets[lbl] = target
-	}
-
-	for lbl, alias := range from.Aliases {
-		if _, exists := into.Targets[lbl]; exists {
-			return fmt.Errorf("duplicate target label: %s (defined in %s and %s)", lbl, into.SourceFilePath, from.SourceFilePath)
-		}
-		if _, exists := into.Aliases[lbl]; exists {
-			return fmt.Errorf("duplicate alias label: %s (defined in %s and %s)", lbl, into.SourceFilePath, from.SourceFilePath)
-		}
-		into.Aliases[lbl] = alias
-	}
-
-	return nil
 }

@@ -6,8 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"go.uber.org/zap/zaptest"
 	"grog/internal/config"
+
+	"go.uber.org/zap/zaptest"
 )
 
 func writeTempScript(t *testing.T, dir, name, contents string) string {
@@ -67,19 +68,28 @@ set -e
 	}
 }
 
-func TestScriptLoaderLoadWithoutAnnotation(t *testing.T) {
+func TestScriptLoaderDifferentFormsAnnotation(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
-	script := writeTempScript(t, dir, "no_meta.grog.sh", "#!/usr/bin/env bash\necho hi\n")
-
-	loader := ScriptLoader{}
-	_, matched, err := loader.Load(context.Background(), script)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
+	scripts := []string{
+		// Annotation is optional
+		"#!/usr/bin/env bash\necho hi\n",
+		// shebang line is optional
+		"# @grog\necho \"hi\"",
 	}
-	if matched {
-		t.Fatalf("expected no metadata to be detected")
+
+	for _, scriptText := range scripts {
+		dir := t.TempDir()
+		script := writeTempScript(t, dir, "no_meta.grog.sh", scriptText)
+
+		loader := ScriptLoader{}
+		_, matched, err := loader.Load(t.Context(), script)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if !matched {
+			t.Fatalf("expected the script loader to be able to load the file")
+		}
 	}
 }
 

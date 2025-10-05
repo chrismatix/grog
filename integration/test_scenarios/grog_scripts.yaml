@@ -1,0 +1,11 @@
+name: grog scripts
+repo: grog_scripts
+cases:
+  - name: list_grog_script_targets
+    grog_args:
+      - list
+
+  - name: run_grog_sh_target
+    grog_args:
+      - run
+      - :

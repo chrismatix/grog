@@ -3,13 +3,13 @@ package loading
 import (
 	"context"
 	"fmt"
-	"github.com/boyter/gocodewalker"
 	"grog/internal/config"
 	"grog/internal/console"
+	"grog/internal/label"
 	"grog/internal/model"
-	"maps"
-	"slices"
 	"sync"
+
+	"github.com/boyter/gocodewalker"
 )
 
 func LoadAllPackages(ctx context.Context) ([]*model.Package, error) {
@@ -30,11 +30,8 @@ func LoadPackages(ctx context.Context, startDir string) ([]*model.Package, error
 	// Keep track of loaded package paths to error out when there is a collision
 	// e.g. when a user defines both BUILD.json and BUILD.py in the same directory
 	// packagePath -> sourceFilePath
-	loadedPackagePaths := make(map[string]string)
+	loadedPackages := make(map[string]*model.Package)
 	loadedMu := &sync.Mutex{}
-
-	packagesByPath := make(map[string]*model.Package)
-	scriptLoader := ScriptLoader{}
 
 	for f := range fileListQueue {
 		// TODO this should be processed in a worker as well
@@ -44,47 +41,7 @@ func LoadPackages(ctx context.Context, startDir string) ([]*model.Package, error
 			return nil, err
 		}
 
-		if matched {
-			packagePath, err := config.GetPackagePath(f.Location)
-			if err != nil {
-				return nil, err
-			}
-
-			pkg, err := getEnrichedPackage(logger, packagePath, pkgDto)
-			if err != nil {
-				fmt.Println(err)
-				return nil, err
-			}
-
-			loadedMu.Lock()
-			if existing, ok := packagesByPath[packagePath]; ok {
-				if source, exists := loadedPackagePaths[packagePath]; exists {
-					loadedMu.Unlock()
-
-					paths := []string{
-						config.MustGetPathRelativeToWorkspaceRoot(source),
-						config.MustGetPathRelativeToWorkspaceRoot(pkg.SourceFilePath),
-					}
-					slices.Sort(paths)
-					return nil, fmt.Errorf("found conflicting package definitions at package path: %s\n- %s\n- %s",
-						packagePath,
-						paths[0],
-						paths[1],
-					)
-				}
-
-				if err := mergePackages(pkg, existing); err != nil {
-					loadedMu.Unlock()
-					return nil, err
-				}
-			}
-			packagesByPath[packagePath] = pkg
-			loadedPackagePaths[packagePath] = pkgDto.SourceFilePath
-			loadedMu.Unlock()
-			continue
-		}
-
-		if !scriptLoader.Matches(f.Filename) {
+		if !matched {
 			continue
 		}
 
@@ -93,33 +50,55 @@ func LoadPackages(ctx context.Context, startDir string) ([]*model.Package, error
 			return nil, err
 		}
 
-		scriptPkgDto, matched, err := scriptLoader.Load(ctx, f.Location)
+		pkg, err := getEnrichedPackage(logger, packagePath, pkgDto)
 		if err != nil {
-			return nil, err
-		}
-		if !matched {
-			relativePath := config.MustGetPathRelativeToWorkspaceRoot(f.Location)
-			return nil, fmt.Errorf("%s does not contain a # @grog annotation", relativePath)
-		}
-
-		scriptPkg, err := getEnrichedPackage(logger, packagePath, scriptPkgDto)
-		if err != nil {
+			fmt.Println(err)
 			return nil, err
 		}
 
+		// Merge into existing package if it exists or set
 		loadedMu.Lock()
-		if existing, ok := packagesByPath[packagePath]; ok {
-			if err := mergePackages(existing, scriptPkg); err != nil {
-				loadedMu.Unlock()
-				return nil, err
+		if existingPackage, ok := loadedPackages[packagePath]; ok {
+			// This mutates the existingPackage
+			mergingErr := mergePackages(existingPackage, pkg)
+			if mergingErr != nil {
+				return nil, mergingErr
 			}
 		} else {
-			packagesByPath[packagePath] = scriptPkg
+			loadedPackages[packagePath] = pkg
 		}
 		loadedMu.Unlock()
 	}
 
-	packages := slices.Collect(maps.Values(packagesByPath))
+	packages := make([]*model.Package, 0, len(loadedPackages))
+	for _, pkg := range loadedPackages {
+		packages = append(packages, pkg)
+	}
 
 	return packages, nil
+}
+
+func mergePackages(from *model.Package, into *model.Package) error {
+	if into.Targets == nil {
+		into.Targets = make(map[label.TargetLabel]*model.Target)
+	}
+	if into.Aliases == nil {
+		into.Aliases = make(map[label.TargetLabel]*model.Alias)
+	}
+
+	for fromTargetLabel, fromTarget := range from.Targets {
+		if intoTarget, exists := into.Targets[fromTargetLabel]; exists {
+			return fmt.Errorf("duplicate fromTarget label: %s (defined in %s and %s)", fromTargetLabel, intoTarget.SourceFilePath, fromTarget.SourceFilePath)
+		}
+		into.Targets[fromTargetLabel] = fromTarget
+	}
+
+	for fromAliasLabel, fromAlias := range from.Aliases {
+		if intoAlias, exists := into.Targets[fromAliasLabel]; exists {
+			return fmt.Errorf("duplicate fromTarget label: %s (defined in %s and %s)", fromAliasLabel, intoAlias.SourceFilePath, fromAlias.SourceFilePath)
+		}
+		into.Aliases[fromAliasLabel] = fromAlias
+	}
+
+	return nil
 }

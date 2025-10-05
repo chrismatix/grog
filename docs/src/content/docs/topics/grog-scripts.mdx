@@ -19,10 +19,10 @@ This approach avoids scattering wrapper targets across BUILD files and keeps the
 ## Script discovery and invocation
 
 Grog scans your workspace for executable files that match the naming convention `*.grog.sh` or `*.grog.py` and treats each match as a runnable tool.
-Because the loader already understands annotated Makefile targets, the same `# @grog` block is used to declare script metadata, keeping configuration consistent across formats.【F:docs/src/content/docs/get-started.mdx†L145-L175】【F:internal/loading/makefile_loader.go†L69-L151】
 
 <Aside>
-  You can still run any other `.sh` or `.py` file with `grog run` as long as it includes a `# @grog` metadata block. Files that do not follow the `.grog.sh`/`.grog.py` naming convention will not be discovered automatically, but `grog run path/to/script` loads their metadata at execution time.
+  You can still run any other `.sh` or `.py` file with `grog run` as long as it includes a `# @grog` metadata block.
+  Files that do not follow the `.grog.sh`/`.grog.py` naming convention will not be discovered automatically, but `grog run path/to/script` loads their metadata at execution time.
 </Aside>
 
 You can run a script from any directory with either a relative or absolute path.
@@ -111,12 +111,6 @@ grog run //scripts:custom_name -- --maxfail=1
 ```
 
 Python scripts follow the same rules: metadata stays in comments, the interpreter derives from the shebang, and `--` cleanly forwards additional arguments to the script.
-
-## Dependency and caching semantics
-
-The metadata-driven fields determine how Grog orchestrates script execution.
-Dependencies make sure upstream targets are complete before the script runs, while inputs and outputs inform cache keys and restore behavior—just as they do for annotated Makefile targets.【F:internal/loading/makefile_loader.go†L103-L151】
-This uniform treatment means scripts participate fully in commands like `grog build`, `grog changes`, and query subcommands without extra configuration.【F:docs/src/content/docs/guides/querying.mdx†L74-L183】
 
 ## Comparison to binary output targets
 
