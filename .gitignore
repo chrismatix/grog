@@ -1,5 +1,8 @@
 ## Custom ignores
 
+# Nix output
+result
+
 # The grog binary
 dist/
 coverdata/
