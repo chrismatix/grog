@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/apple/pkl-go/pkl"
 	"grog/internal/config"
 	"grog/internal/console"
 	"os"
 	"path/filepath"
+
+	"github.com/apple/pkl-go/pkl"
 )
 
 // PklLoader implements the Loader interface for pkl files.
@@ -16,8 +17,8 @@ type PklLoader struct {
 	evaluator pkl.Evaluator
 }
 
-func (pl PklLoader) FileNames() []string {
-	return []string{"BUILD.pkl"}
+func (pl PklLoader) Matches(fileName string) bool {
+	return "BUILD.pkl" == fileName
 }
 
 // getEvaluator lazily loads and caches the evaluator

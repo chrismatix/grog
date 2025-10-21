@@ -1,0 +1,6 @@
+INFO: 1 package loaded, 4 targets configured.
+WARN: target //:a_build_target has no inputs, dependencies or output checks causing it to run only once
+INFO: Selected 2 targets.
+INFO: Build completed successfully. 2 targets completed (0 cache hits).
+INFO: Running //:run.grog.sh -> run.grog.sh with args []
+running run.grog.sh

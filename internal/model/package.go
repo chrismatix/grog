@@ -8,9 +8,8 @@ import (
 
 // Package defines all the information that a package needs to build.
 type Package struct {
-	// Record the path to the source file that defines this package.
-	// for logging purposes
-	SourceFilePath string
+	// Record the path to this package relative to the workspace root
+	Path string
 
 	Targets map[label.TargetLabel]*Target `json:"targets"`
 	Aliases map[label.TargetLabel]*Alias  `json:"aliases"`

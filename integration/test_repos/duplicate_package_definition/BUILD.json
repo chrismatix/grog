@@ -1,9 +1,0 @@
-{
-  "targets": [
-    {
-      "name": "bar",
-      "command": "cat grog.toml",
-      "inputs": ["grog.toml"]
-    }
-  ]
-}

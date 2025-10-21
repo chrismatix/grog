@@ -2,8 +2,6 @@ package loading
 
 import (
 	"fmt"
-	"github.com/bmatcuk/doublestar/v4"
-	"go.uber.org/zap"
 	"grog/internal/config"
 	"grog/internal/label"
 	"grog/internal/model"
@@ -11,6 +9,9 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/bmatcuk/doublestar/v4"
+	"go.uber.org/zap"
 )
 
 // getEnrichedPackage enriches the parsing dto with the following information
@@ -86,6 +87,7 @@ func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg Packa
 		}
 
 		targets[targetLabel] = &model.Target{
+			SourceFilePath:       pkg.SourceFilePath,
 			Label:                targetLabel,
 			Command:              target.Command,
 			Dependencies:         deps,
@@ -118,15 +120,16 @@ func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg Packa
 		}
 
 		aliases[aliasLabel] = &model.Alias{
-			Label:  aliasLabel,
-			Actual: actualLabel,
+			SourceFilePath: pkg.SourceFilePath,
+			Label:          aliasLabel,
+			Actual:         actualLabel,
 		}
 	}
 
 	return &model.Package{
-		SourceFilePath: pkg.SourceFilePath,
-		Targets:        targets,
-		Aliases:        aliases,
+		Path:    packagePath,
+		Targets: targets,
+		Aliases: aliases,
 	}, nil
 }
 

@@ -43,7 +43,7 @@ type EnvironmentDTO struct {
 // The package that we use internally is in model.Package.
 type PackageDTO struct {
 	// Record the path to the source file that defines this package.
-	// Used for logging
+	// Note that in the final model package this is stored on the target level not the package
 	SourceFilePath string
 
 	Targets      []*TargetDTO      `json:"targets" yaml:"targets" pkl:"targets"`

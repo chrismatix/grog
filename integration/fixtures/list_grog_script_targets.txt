@@ -1,0 +1,4 @@
+//:a_build_target
+//:minimal_name
+//:run.grog.sh
+//:some_target

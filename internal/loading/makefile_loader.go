@@ -13,9 +13,8 @@ import (
 // MakefileLoader implements the Loader interface for Makefiles.
 type MakefileLoader struct{}
 
-// FileNames returns the supported file names.
-func (m MakefileLoader) FileNames() []string {
-	return []string{"Makefile"}
+func (m MakefileLoader) Matches(fileName string) bool {
+	return fileName == "Makefile"
 }
 
 // Load reads the Makefile at filePath parses it to PackageDTO
@@ -100,14 +99,6 @@ func (p *makefileParser) parse() (PackageDTO, bool, error) {
 	return p.pkg, targetsFound, p.scanner.Err()
 }
 
-// grogAnnotation represents the annotation block in a Makefile.
-type grogAnnotation struct {
-	Name         string   `yaml:"name"`
-	Dependencies []string `yaml:"dependencies"`
-	Inputs       []string `yaml:"inputs"`
-	Outputs      []string `yaml:"outputs"`
-}
-
 // handleTarget parses the collected annotation lines and the subsequent target definition.
 func (p *makefileParser) handleTarget(
 	annotationLines []string,
@@ -140,6 +131,7 @@ func (p *makefileParser) handleTarget(
 		Dependencies: annotation.Dependencies,
 		Inputs:       annotation.Inputs,
 		Outputs:      annotation.Outputs,
+		Tags:         annotation.Tags,
 	}
 
 	// Use the annotation's name as key if provided, otherwise use the target name.

@@ -7,12 +7,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"grog/internal/config"
 	"grog/internal/label"
 	"grog/internal/loading"
 	"grog/internal/model"
 	"grog/internal/selection"
+
+	"github.com/spf13/cobra"
 )
 
 var changesOptions struct {
@@ -89,11 +90,9 @@ Can optionally include transitive dependents of changed targets to find all affe
 
 		// Check package definitions
 		for _, pkg := range packages {
-			// Get the absolute path of the package definition
-			absPkgPath := pkg.SourceFilePath
-			if containsFile(changedFiles, absPkgPath) {
-				// add all nodes within that package:
-				for _, target := range pkg.Targets {
+			for _, target := range pkg.Targets {
+				if containsFile(changedFiles, target.SourceFilePath) {
+					// Add this target if the package source file changed
 					matchingTargets = append(matchingTargets, target)
 				}
 			}

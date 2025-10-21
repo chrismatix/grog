@@ -2,11 +2,12 @@ package loading
 
 import (
 	"context"
-	"go.uber.org/zap"
 	"grog/internal/analysis"
 	"grog/internal/console"
 	"grog/internal/dag"
 	"grog/internal/model"
+
+	"go.uber.org/zap"
 )
 
 func MustLoadGraphForBuild(ctx context.Context, logger *zap.SugaredLogger) *dag.DirectedTargetGraph {
