@@ -13,6 +13,8 @@ var _ BuildNode = &Target{}
 // and Inputs (files) and produces Outputs.
 type Target struct {
 	Label label.TargetLabel `json:"label"`
+	// The file in which this target was defined
+	SourceFilePath string `json:"-"`
 
 	Command              string              `json:"cmd"`
 	Dependencies         []label.TargetLabel `json:"dependencies,omitempty"`

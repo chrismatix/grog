@@ -1,0 +1,5 @@
+INFO: 1 package loaded, 4 targets configured.
+WARN: target //:a_build_target has no inputs, dependencies or output checks causing it to run only once
+INFO: Selected 1 target.
+INFO: Build completed successfully. 1 target completed (0 cache hits).
+INFO: Running //dir:minimal.sh -> minimal.sh with args [bar]

@@ -1,7 +1,6 @@
 package completions
 
 import (
-	"github.com/spf13/cobra"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/label"
@@ -9,6 +8,8 @@ import (
 	"grog/internal/selection"
 	"sort"
 	"strings"
+
+	"github.com/spf13/cobra"
 )
 
 func TargetPatternCompletion(_ *cobra.Command, _ []string, toComplete string, targetType selection.TargetTypeSelection) ([]string, cobra.ShellCompDirective) {
@@ -35,10 +36,7 @@ func TargetPatternCompletion(_ *cobra.Command, _ []string, toComplete string, ta
 	var targets []string
 
 	for _, pkg := range packages {
-		pkgPath, err := config.GetPackagePath(pkg.SourceFilePath)
-		if err != nil {
-			continue
-		}
+		pkgPath := pkg.Path
 		if pkgPath == "." {
 			pkgPath = ""
 		}

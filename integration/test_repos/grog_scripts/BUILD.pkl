@@ -1,0 +1,19 @@
+amends ".../pkl/package.pkl"
+
+targets {
+  new {
+    name = "some_target"
+    inputs {
+      "run.grog.sh"
+    }
+    bin_output = "run.grog.sh"
+    tags {
+      "no-cache"
+    }
+  }
+
+  new {
+    name = "a_build_target"
+    command = "mkdir -p dist && echo \"foo\" > dist/output.txt"
+  }
+}

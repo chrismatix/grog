@@ -73,9 +73,9 @@ func validateName(name string) error {
 		case c >= 'a' && c <= 'z':
 		case c >= 'A' && c <= 'Z':
 		case c >= '0' && c <= '9':
-		case c == '_' || c == '-':
+		case c == '_' || c == '-' || c == '.':
 		default:
-			return fmt.Errorf("invalid character %q in target name %q: only alphanumeric characters, underscores, and dashes are allowed", c, name)
+			return fmt.Errorf("invalid character %q in target name %q: only alphanumeric characters, underscores, dots, and dashes are allowed", c, name)
 		}
 	}
 	return nil

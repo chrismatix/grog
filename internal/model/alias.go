@@ -6,6 +6,9 @@ var _ BuildNode = &Alias{}
 
 // Alias is a simple build node that points to another target.
 type Alias struct {
+	// The file in which this alias was defined
+	SourceFilePath string `json:"-"`
+
 	Label      label.TargetLabel `json:"label"`
 	Actual     label.TargetLabel `json:"actual"`
 	IsSelected bool              `json:"is_selected,omitempty"`

@@ -3,16 +3,16 @@ package loading
 import (
 	"context"
 	"fmt"
-	"gopkg.in/yaml.v3"
 	"os"
+
+	"gopkg.in/yaml.v3"
 )
 
 // YamlLoader implements the Loader interface for JSON files.
 type YamlLoader struct{}
 
-// FileNames returns the supported JSON file extensions.
-func (j YamlLoader) FileNames() []string {
-	return []string{"BUILD.yaml", "BUILD.yml"}
+func (j YamlLoader) Matches(fileName string) bool {
+	return "BUILD.yaml" == fileName || "BUILD.yml" == fileName
 }
 
 // Load reads the file at the specified filePath and unmarshals its content into a model.Package.

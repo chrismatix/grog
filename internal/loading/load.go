@@ -3,12 +3,13 @@ package loading
 import (
 	"context"
 	"fmt"
-	"github.com/boyter/gocodewalker"
 	"grog/internal/config"
 	"grog/internal/console"
+	"grog/internal/label"
 	"grog/internal/model"
-	"slices"
 	"sync"
+
+	"github.com/boyter/gocodewalker"
 )
 
 func LoadAllPackages(ctx context.Context) ([]*model.Package, error) {
@@ -29,10 +30,8 @@ func LoadPackages(ctx context.Context, startDir string) ([]*model.Package, error
 	// Keep track of loaded package paths to error out when there is a collision
 	// e.g. when a user defines both BUILD.json and BUILD.py in the same directory
 	// packagePath -> sourceFilePath
-	loadedPackagePaths := make(map[string]string)
+	loadedPackages := make(map[string]*model.Package)
 	loadedMu := &sync.Mutex{}
-
-	var packages []*model.Package
 
 	for f := range fileListQueue {
 		// TODO this should be processed in a worker as well
@@ -42,41 +41,67 @@ func LoadPackages(ctx context.Context, startDir string) ([]*model.Package, error
 			return nil, err
 		}
 
-		if matched {
-			packagePath, err := config.GetPackagePath(f.Location)
-			if err != nil {
-				return nil, err
-			}
-
-			pkg, err := getEnrichedPackage(logger, packagePath, pkgDto)
-			if err != nil {
-				fmt.Println(err)
-				return nil, err
-			}
-
-			// Check for duplicate package definitions
-			loadedMu.Lock()
-			if loadedPackageFile, ok := loadedPackagePaths[packagePath]; ok {
-				loadedMu.Unlock()
-
-				// Sort the paths to make the error message deterministic and testable via integration test
-				paths := []string{
-					config.MustGetPathRelativeToWorkspaceRoot(loadedPackageFile),
-					config.MustGetPathRelativeToWorkspaceRoot(pkg.SourceFilePath),
-				}
-				slices.Sort(paths)
-				return nil, fmt.Errorf("found conflicting package definitions at package path: %s\n- %s\n- %s",
-					packagePath,
-					paths[0],
-					paths[1],
-				)
-			}
-			loadedPackagePaths[packagePath] = pkgDto.SourceFilePath
-			loadedMu.Unlock()
-
-			packages = append(packages, pkg)
+		if !matched {
+			continue
 		}
+
+		packagePath, err := config.GetPackagePath(f.Location)
+		if err != nil {
+			return nil, err
+		}
+
+		pkg, err := getEnrichedPackage(logger, packagePath, pkgDto)
+		if err != nil {
+			fmt.Println(err)
+			return nil, err
+		}
+
+		// Merge into existing package if it exists or set
+		loadedMu.Lock()
+		if existingPackage, ok := loadedPackages[packagePath]; ok {
+			// This mutates the existingPackage
+			mergingErr := mergePackages(pkg, existingPackage)
+			if mergingErr != nil {
+				return nil, mergingErr
+			}
+		} else {
+			loadedPackages[packagePath] = pkg
+		}
+		loadedMu.Unlock()
+	}
+
+	packages := make([]*model.Package, 0, len(loadedPackages))
+	for _, pkg := range loadedPackages {
+		packages = append(packages, pkg)
 	}
 
 	return packages, nil
+}
+
+func mergePackages(from *model.Package, into *model.Package) error {
+	if into.Targets == nil {
+		into.Targets = make(map[label.TargetLabel]*model.Target)
+	}
+	if into.Aliases == nil {
+		into.Aliases = make(map[label.TargetLabel]*model.Alias)
+	}
+
+	for fromTargetLabel, fromTarget := range from.Targets {
+		if intoTarget, exists := into.Targets[fromTargetLabel]; exists {
+			return fmt.Errorf("duplicate target label: %s (defined in %s and %s)", fromTargetLabel, intoTarget.SourceFilePath, fromTarget.SourceFilePath)
+		}
+		into.Targets[fromTargetLabel] = fromTarget
+	}
+
+	for fromAliasLabel, fromAlias := range from.Aliases {
+		if intoAlias, exists := into.Aliases[fromAliasLabel]; exists {
+			return fmt.Errorf("duplicate target label: %s (defined in %s and %s)", fromAliasLabel, intoAlias.SourceFilePath, fromAlias.SourceFilePath)
+		}
+		if intoTarget, exists := into.Targets[fromAliasLabel]; exists {
+			return fmt.Errorf("duplicate alias label: %s (defined in %s and as target in %s)", fromAliasLabel, fromAlias.SourceFilePath, intoTarget.SourceFilePath)
+		}
+		into.Aliases[fromAliasLabel] = fromAlias
+	}
+
+	return nil
 }
