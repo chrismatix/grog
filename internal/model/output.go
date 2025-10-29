@@ -4,11 +4,11 @@ package model
 type Output struct {
 	// Type returns the type of the reference
 	// e.g. docker::image-name -> docker
-	Type string
+	Type string `json:"type" yaml:"type"`
 
 	// Identifier returns the identifying part of the reference (without type)
 	// e.g. docker::image-name -> image-name
-	Identifier string
+	Identifier string `json:"identifier" yaml:"identifier"`
 }
 
 func NewOutput(typeName, identifier string) Output {

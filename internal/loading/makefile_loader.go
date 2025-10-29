@@ -81,7 +81,7 @@ func (p *makefileParser) parse() (PackageDTO, bool, error) {
 				}
 				if strings.HasPrefix(trimmedNext, "#") {
 					// Remove '#' and any whitespace.
-					content := strings.TrimSpace(trimmedNext[1:])
+					content := trimmedNext[1:]
 					annotationLines = append(annotationLines, content)
 					annotationLineNumbers = append(annotationLineNumbers, lineCount)
 				} else {

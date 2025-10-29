@@ -42,24 +42,9 @@ func newScriptParser(scanner *bufio.Scanner, file string) *scriptParser {
 	return &scriptParser{scanner: scanner, file: file}
 }
 
-type scriptAnnotation struct {
-	Name                 string                `yaml:"name"`
-	Dependencies         []string              `yaml:"dependencies"`
-	Inputs               []string              `yaml:"inputs"`
-	ExcludeInputs        []string              `yaml:"exclude_inputs"`
-	Outputs              []string              `yaml:"outputs"`
-	BinOutput            string                `yaml:"bin_output"`
-	Tags                 []string              `yaml:"tags"`
-	Fingerprint          map[string]string     `yaml:"fingerprint"`
-	EnvironmentVariables map[string]string     `yaml:"environment_variables"`
-	Timeout              string                `yaml:"timeout"`
-	Platform             *model.PlatformConfig `yaml:"platform"`
-	OutputChecks         []model.OutputCheck   `yaml:"output_checks"`
-}
-
 func (p *scriptParser) parse() (PackageDTO, bool, error) {
 	lineCount := 0
-	var annotation grogAnnotation
+	var annotation scriptAnnotation
 
 	for p.scanner.Scan() {
 		lineCount++
@@ -80,8 +65,8 @@ func (p *scriptParser) parse() (PackageDTO, bool, error) {
 					continue
 				}
 				if strings.HasPrefix(trimmedNext, "#") {
-					// Remove '#' and any whitespace.
-					content := strings.TrimSpace(trimmedNext[1:])
+					// Remove '#'
+					content := trimmedNext[1:]
 					annotationLines = append(annotationLines, content)
 					annotationLineNumbers = append(annotationLineNumbers, lineCount)
 				} else {
@@ -120,14 +105,16 @@ func (p *scriptParser) parse() (PackageDTO, bool, error) {
 		Dependencies: annotation.Dependencies,
 		// Prepend the script file name to the inputs to ensure
 		// that changing it always invalidates it as a target
-		Inputs:  prependUnique(annotation.Inputs, scriptFileName),
-		Outputs: annotation.Outputs,
-		Tags:    annotation.Tags,
+		Inputs:               prependUnique(annotation.Inputs, scriptFileName),
+		Tags:                 annotation.Tags,
+		Fingerprint:          annotation.Fingerprint,
+		EnvironmentVariables: annotation.EnvironmentVariables,
+		Timeout:              annotation.Timeout,
+		Platform:             annotation.Platform,
 	}
 
-	if target.BinOutput == "" {
-		target.BinOutput = scriptFileName
-	}
+	// Script files are always their own bin output
+	target.BinOutput = scriptFileName
 
 	pkg := PackageDTO{
 		SourceFilePath: p.file,
@@ -141,15 +128,15 @@ func (p *scriptParser) parse() (PackageDTO, bool, error) {
 func (p *scriptParser) handleTarget(
 	annotationLines []string,
 	annotationLineNumbers []int,
-) (grogAnnotation, error) {
+) (scriptAnnotation, error) {
 	// Combine annotation lines into a YAML snippet.
 	annotationContent := strings.Join(annotationLines, "\n")
 	lastLineNum := annotationLineNumbers[len(annotationLineNumbers)-1]
 
-	var annotation grogAnnotation
+	var annotation scriptAnnotation
 	if len(annotationContent) > 0 {
 		if err := yaml.Unmarshal([]byte(annotationContent), &annotation); err != nil {
-			return grogAnnotation{}, fmt.Errorf("failed to parse annotation block L%d-%d: %w", annotationLineNumbers[0], lastLineNum, err)
+			return scriptAnnotation{}, fmt.Errorf("failed to parse annotation block L%d-%d: %w", annotationLineNumbers[0], lastLineNum, err)
 		}
 	}
 

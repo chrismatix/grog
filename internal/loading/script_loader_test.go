@@ -34,8 +34,8 @@ func TestScriptLoaderLoad(t *testing.T) {
 #   - //tools:prepare
 # inputs:
 #   - src/**/*.js
-# outputs:
-#   - dist/report.txt
+# platform:
+#   arch: [ arm64 ]
 set -e
 `)
 
@@ -63,8 +63,8 @@ set -e
 	if len(target.Inputs) == 0 || target.Inputs[0] != "format.grog.sh" {
 		t.Fatalf("expected script path to be the first input, got %#v", target.Inputs)
 	}
-	if len(target.Outputs) != 1 || target.Outputs[0] != "dist/report.txt" {
-		t.Fatalf("unexpected outputs: %#v", target.Outputs)
+	if target.Platform == nil || len(target.Platform.Arch) == 0 {
+		t.Fatalf("expected platform to be set")
 	}
 }
 
