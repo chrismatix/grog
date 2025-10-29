@@ -1,10 +1,22 @@
 package loading
 
+import "grog/internal/model"
+
+// scriptAnnotation represents a grog yaml annotation for the grog scripts feature
+type scriptAnnotation struct {
+	Name                 string                `yaml:"name"`
+	Dependencies         []string              `yaml:"dependencies"`
+	Inputs               []string              `yaml:"inputs"`
+	Tags                 []string              `yaml:"tags"`
+	Fingerprint          map[string]string     `yaml:"fingerprint"`
+	EnvironmentVariables map[string]string     `yaml:"environment_variables"`
+	Timeout              string                `yaml:"timeout"`
+	Platform             *model.PlatformConfig `yaml:"platform"`
+}
+
 // grogAnnotation represents the annotation block in a Makefile.
 type grogAnnotation struct {
-	Name         string   `yaml:"name"`
-	Dependencies []string `yaml:"dependencies"`
-	Inputs       []string `yaml:"inputs"`
-	Outputs      []string `yaml:"outputs"`
-	Tags         []string `yaml:"tags"`
+	scriptAnnotation `yaml:",inline"`
+	// script annotations cannot have outputs
+	Outputs []string `yaml:"outputs"`
 }
