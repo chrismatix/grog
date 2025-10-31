@@ -105,8 +105,9 @@ func (p *scriptParser) parse() (PackageDTO, bool, error) {
 		Dependencies: annotation.Dependencies,
 		// Prepend the script file name to the inputs to ensure
 		// that changing it always invalidates it as a target
-		Inputs:               prependUnique(annotation.Inputs, scriptFileName),
-		Tags:                 annotation.Tags,
+		Inputs: prependUnique(annotation.Inputs, scriptFileName),
+		// Script files should never be cached
+		Tags:                 prependUnique(annotation.Tags, "no-cache"),
 		Fingerprint:          annotation.Fingerprint,
 		EnvironmentVariables: annotation.EnvironmentVariables,
 		Timeout:              annotation.Timeout,
