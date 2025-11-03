@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"grog/internal/dag"
 	"grog/internal/model"
+	"strings"
 )
 
 // BuildGraph builds a directed graph of targets and analyzes it.
@@ -25,8 +26,12 @@ func BuildGraph(nodes model.BuildNodeMap) (*dag.DirectedTargetGraph, error) {
 		}
 	}
 
-	if graph.HasCycle() {
-		return &dag.DirectedTargetGraph{}, fmt.Errorf("cycle detected")
+	if cycle, hasCycle := graph.FindCycle(); hasCycle {
+		var chain []string
+		for _, node := range cycle {
+			chain = append(chain, node.GetLabel().String())
+		}
+		return &dag.DirectedTargetGraph{}, fmt.Errorf("cycle detected: %s", strings.Join(chain, " -> "))
 	}
 
 	return graph, nil

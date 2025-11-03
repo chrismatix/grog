@@ -176,37 +176,63 @@ func (g *DirectedTargetGraph) hasNode(node model.BuildNode) bool {
 // - 1: visiting (currently in the recursion stack)
 // - 2: visited (completely explored)
 func (g *DirectedTargetGraph) HasCycle() bool {
+	_, hasCycle := g.FindCycle()
+	return hasCycle
+}
+
+// FindCycle returns the nodes that form a cycle in the graph, including the repeated
+// starting node at the end of the slice to illustrate the full loop. The boolean return
+// value indicates whether a cycle was found.
+func (g *DirectedTargetGraph) FindCycle() ([]model.BuildNode, bool) {
 	visited := make(map[model.BuildNode]int) // 0: unvisited, 1: visiting, 2: visited
+	var stack []model.BuildNode
+	var cycle []model.BuildNode
 
 	var depthFirstSearch func(target model.BuildNode) bool
 
 	depthFirstSearch = func(target model.BuildNode) bool {
 		visited[target] = 1 // Mark as visiting
+		stack = append(stack, target)
 
 		for _, neighbor := range g.outEdges[target.GetLabel()] {
-			if visited[neighbor] == 1 {
-				return true // Cycle detected
-			}
 			if visited[neighbor] == 0 {
 				if depthFirstSearch(neighbor) {
 					return true // Cycle detected in descendant
 				}
+				continue
+			}
+			if visited[neighbor] == 1 {
+				idx := -1
+				for i := len(stack) - 1; i >= 0; i-- {
+					if stack[i] == neighbor {
+						idx = i
+						break
+					}
+				}
+				if idx == -1 {
+					cycle = []model.BuildNode{neighbor, neighbor}
+				} else {
+					cycle = append([]model.BuildNode{}, stack[idx:]...)
+					cycle = append(cycle, neighbor)
+				}
+				return true
 			}
 		}
 
+		stack = stack[:len(stack)-1]
 		visited[target] = 2 // Mark as visited
 		return false        // No cycle detected in this branch
 	}
 
-	for _, node := range g.nodes {
+	for _, node := range g.nodes.NodesAlphabetically() {
 		if visited[node] == 0 {
 			if depthFirstSearch(node) {
-				return true // Cycle detected starting from this node
+				return cycle, true // Cycle detected starting from this node
 			}
 		}
 	}
 
-	return false // No cycle detected in the entire graph
+	return nil, false // No cycle detected in the entire graph
 }
 
 // GraphJSON is a helper struct for JSON serialization

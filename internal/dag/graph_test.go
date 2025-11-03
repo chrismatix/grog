@@ -169,6 +169,37 @@ func TestDirectedTargetGraph_HasCycle(t *testing.T) {
 	}
 }
 
+func TestDirectedTargetGraph_FindCycle(t *testing.T) {
+	graph := NewDirectedGraph()
+	target1 := &model.Target{Label: label.TargetLabel{Name: "target1"}}
+	target2 := &model.Target{Label: label.TargetLabel{Name: "target2"}}
+	target3 := &model.Target{Label: label.TargetLabel{Name: "target3"}}
+
+	graph.AddNode(target1)
+	graph.AddNode(target2)
+	graph.AddNode(target3)
+
+	graph.AddEdge(target1, target2)
+	graph.AddEdge(target2, target3)
+	graph.AddEdge(target3, target1)
+
+	cycle, found := graph.FindCycle()
+	if !found {
+		t.Fatalf("expected to find a cycle")
+	}
+
+	expected := []model.BuildNode{target1, target2, target3, target1}
+	if len(cycle) != len(expected) {
+		t.Fatalf("unexpected cycle length: got %d, want %d", len(cycle), len(expected))
+	}
+
+	for i := range expected {
+		if cycle[i] != expected[i] {
+			t.Fatalf("unexpected cycle node at %d: got %s, want %s", i, cycle[i].GetLabel(), expected[i].GetLabel())
+		}
+	}
+}
+
 func TestDirectedTargetGraph_GetDescendants(t *testing.T) {
 	graph := NewDirectedGraph()
 
