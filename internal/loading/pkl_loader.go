@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"grog/internal/config"
 	"grog/internal/console"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -29,7 +30,7 @@ func (pl PklLoader) getEvaluator(ctx context.Context) (pkl.Evaluator, error) {
 
 		if hasPklProjectFile() {
 			evaluator, err = pkl.NewProjectEvaluator(ctx,
-				config.Global.WorkspaceRoot,
+				&url.URL{Scheme: "file", Path: config.Global.WorkspaceRoot},
 				pkl.PreconfiguredOptions,
 				withEnv(map[string]string{
 					"GROG_OS":       config.Global.OS,

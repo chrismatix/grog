@@ -3,22 +3,22 @@ module grog
 go 1.25.0
 
 require (
-	cloud.google.com/go/storage v1.57.0
+	cloud.google.com/go/storage v1.57.1
 	github.com/Netflix/go-expect v0.0.0-20220104043353-73e0943537d2
 	github.com/TyphonHill/go-mermaid v1.0.0
 	github.com/alitto/pond/v2 v2.5.0
-	github.com/apple/pkl-go v0.11.1
-	github.com/aws/aws-sdk-go-v2 v1.36.5
-	github.com/aws/aws-sdk-go-v2/config v1.29.17
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.83.0
+	github.com/apple/pkl-go v0.12.0
+	github.com/aws/aws-sdk-go-v2 v1.39.6
+	github.com/aws/aws-sdk-go-v2/config v1.31.17
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.90.0
 	github.com/blang/semver/v4 v4.0.0
 	github.com/bmatcuk/doublestar/v4 v4.9.1
 	github.com/boyter/gocodewalker v1.5.1
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/docker/cli v28.2.2+incompatible
-	github.com/docker/docker v28.5.1+incompatible
+	github.com/docker/cli v28.5.2+incompatible
+	github.com/docker/docker v28.5.2+incompatible
 	github.com/fatih/color v1.18.0
 	github.com/google/go-containerregistry v0.20.6
 	github.com/mattn/go-isatty v0.0.20
@@ -44,21 +44,21 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.54.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.54.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
-	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.11 // indirect
-	github.com/aws/aws-sdk-go-v2/credentials v1.17.70 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.32 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.36 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.36 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.3 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.36 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.12.4 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.7.4 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.12.17 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.18.17 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.25.5 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.30.3 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.34.0 // indirect
-	github.com/aws/smithy-go v1.22.4 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.3 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.18.21 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.13 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.13 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.13 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.4 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.13 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.3 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.13 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.13 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.30.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.5 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.39.1 // indirect
+	github.com/aws/smithy-go v1.23.2 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/charmbracelet/colorprofile v0.3.2 // indirect
