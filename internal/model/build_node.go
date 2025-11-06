@@ -19,3 +19,10 @@ type BuildNode interface {
 	GetIsSelected() bool
 	GetType() NodeType
 }
+
+func IsTestTargetNode(node BuildNode) bool {
+	if target, ok := node.(*Target); ok {
+		return target.IsTest()
+	}
+	return false
+}
