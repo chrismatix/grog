@@ -338,8 +338,8 @@ func (e *Executor) LoadDependencyOutputs(
 	for _, dep := range e.graph.GetTargetDependencies(target) {
 		err := e.loadCachedOutputs(ctx, dep)
 
-		if err != nil {
-			logger.Debugf("%s: failed to load output for dependency %s (re-rerunning): %v", target.Label, dep.Label, err)
+		if err != nil || dep.SkipsCache() {
+			logger.Debugf("%s: failed to load output for dependency %s (re-rerunning): err=%v no-cache=%t", target.Label, dep.Label, err, target.SkipsCache())
 			// In this case we need to also recursively re-load the dependencies of the dependency
 			if recursiveLoadErr := e.LoadDependencyOutputs(ctx, dep, update); recursiveLoadErr != nil {
 				return recursiveLoadErr
@@ -350,6 +350,7 @@ func (e *Executor) LoadDependencyOutputs(
 				return binToolErr
 			}
 
+			update(fmt.Sprintf("%s: re-running dependency %s (load_outputs_mode=minimal).", target.Label, dep.Label))
 			_, executionErr := e.executeTarget(ctx, dep, binTools, update, false)
 			if executionErr != nil {
 				return executionErr

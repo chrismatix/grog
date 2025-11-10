@@ -43,8 +43,5 @@ targets {
     dependencies {
       ":target_b"
     }
-    tags {
-      "no-cache"
-    }
   }
 }
