@@ -22,17 +22,14 @@ When a target doesn't match the current host's platform, Grog will **skip** it a
 
 ### Defining Platform Selectors
 
-You can specify platform requirements using the `platform` field:
+You can specify platform requirements using the `platforms` field:
 
 ```yaml
-default_platform:
-  os:
-    - linux
-  arch:
-    - amd64
+default_platforms:
+  - linux/amd64
 
 targets:
-  # default_platform is applied here
+  # default_platforms is applied here
   - name: build_linux_amd64
     command: go build -o dist/myapp-linux-amd64 ./cmd/myapp
     inputs:
@@ -43,12 +40,9 @@ targets:
 
   - name: build_darwin_arm64
     command: go build -o dist/myapp-darwin-arm64 ./cmd/myapp
-    # This overrides default_platform
-    platform:
-      os:
-        - darwin
-      arch:
-        - arm64
+    # This overrides default_platforms
+    platforms:
+      - darwin/arm64
     inputs:
       - cmd/**/*.go
       - go.mod
@@ -61,11 +55,14 @@ In this example:
 - `build_linux_amd64` will only run on Linux AMD64 hosts
 - `build_darwin_arm64` will only run on macOS ARM64 hosts (like Apple Silicon Macs)
 
+Each entry in `platforms` must be a full `os/arch` identifier. To support
+multiple variants for the same target, list each supported identifier.
+
 ### Platform Selector Behavior
 
 When you run `grog build`, Grog will:
 
-1. Check each target's platform selector against the os and arch the grog binary was built for
+1. Check each target's platform selectors against the os/arch platform the grog binary was built for
 2. Skip targets that don't match the current platform
 3. Build targets that do match the platform
 
@@ -84,9 +81,8 @@ When a target depends on a platform-specific target, Grog enforces platform comp
 targets:
   - name: linux_binary
     command: go build -o dist/myapp-linux ./cmd/myapp
-    platform:
-      os:
-        - linux
+    platforms:
+      - linux/amd64
     outputs:
       - dist/myapp-linux
 
@@ -94,9 +90,8 @@ targets:
     dependencies:
       - :linux_binary
     command: tar -czf dist/myapp-linux.tar.gz dist/myapp-linux
-    platform:
-      os:
-        - linux
+    platforms:
+      - linux/amd64
     outputs:
       - dist/myapp-linux.tar.gz
 ```

@@ -78,12 +78,15 @@ func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg Packa
 			}
 		}
 
-		// Determine the platform to use
-		// If target has its own platform, use that
-		// Otherwise, use the package default platform if available
-		targetPlatform := target.Platform
-		if targetPlatform == nil && pkg.DefaultPlatform != nil {
-			targetPlatform = pkg.DefaultPlatform
+		// Determine the platforms to use
+		// If target has its own platforms, use those
+		// Otherwise, use the package default platforms if available
+		var targetPlatforms []string
+		switch {
+		case target.Platforms != nil:
+			targetPlatforms = append([]string{}, target.Platforms...)
+		case pkg.DefaultPlatforms != nil:
+			targetPlatforms = append([]string{}, pkg.DefaultPlatforms...)
 		}
 
 		targets[targetLabel] = &model.Target{
@@ -96,7 +99,7 @@ func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg Packa
 			ExcludeInputs:        target.ExcludeInputs,
 			Outputs:              parsedOutputs,
 			BinOutput:            parsedBinOutput,
-			Platform:             targetPlatform,
+			Platforms:            targetPlatforms,
 			OutputChecks:         target.OutputChecks,
 			Tags:                 target.Tags,
 			Fingerprint:          target.Fingerprint,

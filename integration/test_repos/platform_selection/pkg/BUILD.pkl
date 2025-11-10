@@ -11,10 +11,8 @@ targets {
   new {
     name = "foo_platform"
     command = "echo 'hello world'"
-    platform {
-      os {
-        "made-up-os"
-      }
+    platforms {
+      "made-up-os/made-up-arch"
     }
   }
 }

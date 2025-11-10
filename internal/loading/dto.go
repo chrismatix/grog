@@ -15,21 +15,16 @@ type TargetDTO struct {
 
 	OutputChecks []model.OutputCheck `json:"output_checks,omitempty" yaml:"output_checks,omitempty" pkl:"output_checks"`
 
-	Tags                 []string              `json:"tags,omitempty" yaml:"tags,omitempty" pkl:"tags"`
-	Fingerprint          map[string]string     `json:"fingerprint,omitempty" yaml:"fingerprint,omitempty" pkl:"fingerprint"`
-	Platform             *model.PlatformConfig `json:"platform,omitempty" yaml:"platform,omitempty" pkl:"platform"`
-	EnvironmentVariables map[string]string     `json:"environment_variables,omitempty" yaml:"environment_variables,omitempty" pkl:"environment_variables"`
-	Timeout              string                `json:"timeout,omitempty" yaml:"timeout,omitempty" pkl:"timeout"`
+	Tags                 []string          `json:"tags,omitempty" yaml:"tags,omitempty" pkl:"tags"`
+	Fingerprint          map[string]string `json:"fingerprint,omitempty" yaml:"fingerprint,omitempty" pkl:"fingerprint"`
+	Platforms            []string          `json:"platforms,omitempty" yaml:"platforms,omitempty" pkl:"platforms"`
+	EnvironmentVariables map[string]string `json:"environment_variables,omitempty" yaml:"environment_variables,omitempty" pkl:"environment_variables"`
+	Timeout              string            `json:"timeout,omitempty" yaml:"timeout,omitempty" pkl:"timeout"`
 }
 
 type AliasDTO struct {
 	Name   string `json:"name" yaml:"name" pkl:"name"`
 	Actual string `json:"actual" yaml:"actual" pkl:"actual"`
-}
-
-type PlatformConfigDTO struct {
-	Os   []string `json:"os,omitempty" yaml:"os,omitempty" pkl:"os"`
-	Arch []string `json:"arch,omitempty" yaml:"arch,omitempty" pkl:"arch"`
 }
 
 type EnvironmentDTO struct {
@@ -50,8 +45,8 @@ type PackageDTO struct {
 	Aliases      []*AliasDTO       `json:"aliases" yaml:"aliases" pkl:"aliases"`
 	Environments []*EnvironmentDTO `json:"environments" yaml:"environments" pkl:"environments"`
 
-	// DefaultPlatform specifies the platform selector at the package level.
+	// DefaultPlatforms specifies the platform selectors at the package level.
 	// This serves as the default for target-level platform selectors.
-	// If a target specifies its own platform selector, it overrides this default.
-	DefaultPlatform *model.PlatformConfig `json:"default_platform,omitempty" yaml:"default_platform,omitempty" pkl:"default_platform"`
+	// If a target specifies its own platform selectors, they override this default.
+	DefaultPlatforms []string `json:"default_platforms,omitempty" yaml:"default_platforms,omitempty" pkl:"default_platforms"`
 }

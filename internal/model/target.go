@@ -21,7 +21,7 @@ type Target struct {
 	Inputs               []string            `json:"inputs,omitempty"`
 	ExcludeInputs        []string            `json:"exclude_inputs,omitempty"`
 	Outputs              []Output            `json:"outputs,omitempty"`
-	Platform             *PlatformConfig     `json:"platform,omitempty"`
+	Platforms            []string            `json:"platforms,omitempty" yaml:"platforms,omitempty" pkl:"platforms"`
 	Tags                 []string            `json:"tags,omitempty"`
 	Fingerprint          map[string]string   `json:"fingerprint,omitempty"`
 	EnvironmentVariables map[string]string   `json:"environment_variables,omitempty"`
@@ -40,11 +40,6 @@ type Target struct {
 	// ChangeHash is the combined hash of the target definition and its input files
 	ChangeHash  string `json:"change_hash,omitempty"`
 	HasCacheHit bool   `json:"has_cache_hit,omitempty"`
-}
-
-type PlatformConfig struct {
-	OS   []string `json:"os,omitempty" yaml:"os,omitempty" pkl:"os"`
-	Arch []string `json:"arch,omitempty" yaml:"arch,omitempty" pkl:"arch"`
 }
 
 type OutputCheck struct {
