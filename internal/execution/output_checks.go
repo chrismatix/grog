@@ -7,9 +7,9 @@ import (
 	"strings"
 )
 
-func runOutputChecks(ctx context.Context, target *model.Target, binToolPaths BinToolMap) error {
+func runOutputChecks(ctx context.Context, target *model.Target, binToolPaths BinToolMap, outputIdentifiers OutputIdentifierMap) error {
 	for _, check := range target.OutputChecks {
-		output, err := runTargetCommand(ctx, target, binToolPaths, check.Command, false)
+		output, err := runTargetCommand(ctx, target, binToolPaths, outputIdentifiers, check.Command, false)
 		if err != nil {
 			return fmt.Errorf("output check failed for target %s: %w\ncommand %s",
 				target.Label, err, check.Command)

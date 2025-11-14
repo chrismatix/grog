@@ -12,6 +12,7 @@ import (
 	"grog/internal/label"
 	"grog/internal/model"
 	"grog/internal/output"
+	"grog/internal/output/handlers"
 	"grog/internal/worker"
 	"os"
 	"path/filepath"
@@ -112,13 +113,15 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 			return dag.CacheMiss, err
 		}
 
+		outputIdentifiers := e.getDependencyOutputIdentifiers(target)
+
 		err = e.targetHasher.SetTargetChangeHash(target)
 		if err != nil {
 			return dag.CacheMiss, err
 		}
 
 		// taskFunc will be run in the worker pool
-		taskFunc := e.getTaskFunc(ctx, target, binTools, depsCached)
+		taskFunc := e.getTaskFunc(ctx, target, binTools, outputIdentifiers, depsCached)
 		return workerPool.Run(taskFunc)
 	}
 
@@ -153,10 +156,51 @@ func (e *Executor) getBinToolPaths(target *model.Target) (BinToolMap, error) {
 	return binTools, nil
 }
 
+// getDependencyOutputIdentifiers builds the output map available to the shell
+// helper functions for a target's direct dependencies.
+func (e *Executor) getDependencyOutputIdentifiers(target *model.Target) OutputIdentifierMap {
+	deps := e.graph.GetTargetDependencies(target)
+	outputIdentifiers := make(OutputIdentifierMap, 0)
+
+	for _, dep := range deps {
+		depOutputs := getTargetOutputIdentifiers(dep)
+		if len(depOutputs) == 0 {
+			continue
+		}
+
+		outputIdentifiers[dep.Label.String()] = depOutputs
+		if dep.Label.Package == target.Label.Package {
+			outputIdentifiers[":"+dep.Label.Name] = depOutputs
+		}
+		if dep.Label.CanBeShortened() {
+			outputIdentifiers["//"+dep.Label.Package] = depOutputs
+		}
+	}
+
+	return outputIdentifiers
+}
+
+func getTargetOutputIdentifiers(target *model.Target) []string {
+	var identifiers []string
+	for _, output := range target.AllOutputs() {
+		if !output.IsSet() {
+			continue
+		}
+		if output.Type == string(handlers.FileHandler) || output.Type == string(handlers.DirHandler) {
+			workspaceRelativePath := filepath.Join(target.Label.Package, output.Identifier)
+			identifiers = append(identifiers, config.GetPathAbsoluteToWorkspaceRoot(workspaceRelativePath))
+			continue
+		}
+		identifiers = append(identifiers, output.Identifier)
+	}
+	return identifiers
+}
+
 func (e *Executor) getTaskFunc(
 	ctx context.Context,
 	target *model.Target,
 	binToolPaths BinToolMap,
+	outputIdentifiers OutputIdentifierMap,
 	depsCached bool,
 ) worker.TaskFunc[dag.CacheResult] {
 	return func(update worker.StatusFunc) (dag.CacheResult, error) {
@@ -171,7 +215,7 @@ func (e *Executor) getTaskFunc(
 
 		logger := console.GetLogger(ctx)
 
-		outputCheckErr := runOutputChecks(ctx, target, binToolPaths)
+		outputCheckErr := runOutputChecks(ctx, target, binToolPaths, outputIdentifiers)
 		if outputCheckErr != nil {
 			logger.Debugf("running target due to output check error: %v", outputCheckErr)
 		} else if depsCached == true && target.HasOutputChecksOnly() {
@@ -236,7 +280,7 @@ func (e *Executor) getTaskFunc(
 			}
 		}
 
-		return e.executeTarget(ctx, target, binToolPaths, update, isTainted)
+		return e.executeTarget(ctx, target, binToolPaths, outputIdentifiers, update, isTainted)
 	}
 }
 
@@ -244,6 +288,7 @@ func (e *Executor) executeTarget(
 	ctx context.Context,
 	target *model.Target,
 	binToolPaths BinToolMap,
+	outputIdentifiers OutputIdentifierMap,
 	update worker.StatusFunc,
 	isTainted bool,
 ) (dag.CacheResult, error) {
@@ -254,7 +299,7 @@ func (e *Executor) executeTarget(
 	if target.Command != "" {
 		update(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis()))
 		logger.Debugf("running target %s: %s", target.Label, target.CommandEllipsis())
-		err = executeTarget(ctx, target, binToolPaths, e.streamLogsToggle.Enabled())
+		err = executeTarget(ctx, target, binToolPaths, outputIdentifiers, e.streamLogsToggle.Enabled())
 	} else {
 		logger.Debugf("skipped target %s due to no command", target.Label)
 	}
@@ -275,7 +320,7 @@ func (e *Executor) executeTarget(
 	}
 
 	// Run output checks again to see if they match now
-	if outputCheckErr := runOutputChecks(ctx, target, binToolPaths); outputCheckErr != nil {
+	if outputCheckErr := runOutputChecks(ctx, target, binToolPaths, outputIdentifiers); outputCheckErr != nil {
 		return dag.CacheMiss, outputCheckErr
 	}
 
@@ -350,8 +395,10 @@ func (e *Executor) LoadDependencyOutputs(
 				return binToolErr
 			}
 
+			outputIdentifiers := e.getDependencyOutputIdentifiers(dep)
+
 			update(fmt.Sprintf("%s: re-running dependency %s (load_outputs_mode=minimal).", target.Label, dep.Label))
-			_, executionErr := e.executeTarget(ctx, dep, binTools, update, false)
+			_, executionErr := e.executeTarget(ctx, dep, binTools, outputIdentifiers, update, false)
 			if executionErr != nil {
 				return executionErr
 			}

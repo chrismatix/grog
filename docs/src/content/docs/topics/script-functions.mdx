@@ -1,0 +1,127 @@
+---
+title: Script Functions
+description: Use helper functions like $(bin) and $(output) inside your target commands to reference dependency outputs reliably.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Grog injects a couple of helper shell functions into every target command and output check. These helpers let you reference dependency outputs without hard-coding file paths or worrying about where the target is executed from.
+
+## $(bin)
+
+`$(bin //pkg:target)` returns the absolute path to the dependency's `bin_output`. You can also use the shorthand `$(bin :target)` for dependencies that live in the same package, or `$(bin //pkg)` when the target label can be shortened.
+
+<Tabs>
+  <TabItem label="YAML">
+
+```yaml
+- name: generate_stubs
+  dependencies:
+    - //tools:protoc
+  command: |
+    # The protoc binary path resolves automatically regardless of cwd
+    $(bin //tools:protoc) --python_out=generated proto/*.proto
+  outputs:
+    - dir::generated
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```Pkl
+targets {
+  new {
+    name = "generate_stubs"
+    dependencies {
+      "//tools:protoc"
+    }
+    command = '''
+    # The protoc binary path resolves automatically regardless of cwd
+    $(bin //tools:protoc) --python_out=generated proto/*.proto
+    '''
+    outputs {
+      "dir::generated"
+    }
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
+
+## $(output)
+
+`$(output <label> <index>)` exposes every output produced by a dependency. Indexes are zero-based and follow the order defined in the dependency's `outputs` list (with its `bin_output` appended last when present). File and directory outputs resolve to absolute paths on disk, while other output types return their identifier strings—for example, Docker outputs return the image tag you defined.
+
+<Tabs>
+  <TabItem label="YAML">
+
+```yaml
+- name: package_site
+  dependencies:
+    - //frontend:build
+  command: |
+    # Copy the compiled assets from the build target's first output directory
+    cp -R $(output //frontend:build 0) dist/
+  outputs:
+    - dir::dist
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```Pkl
+targets {
+  new {
+    name = "package_site"
+    dependencies {
+      "//frontend:build"
+    }
+    command = '''
+    # Copy the compiled assets from the build target's first output directory
+    cp -R $(output //frontend:build 0) dist/
+    '''
+    outputs {
+      "dir::dist"
+    }
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
+
+Use the same shorthand label forms as `$(bin)` (`:target` for same-package deps and `//pkg` for shorten-able labels). If you reference an index that does not exist—or a dependency that produces no outputs—Grog exits with a helpful error so you can fix the command quickly.
+
+To reference Docker images (or any other non-filesystem outputs), use the identifier directly:
+
+<Tabs>
+  <TabItem label="YAML">
+
+```yaml
+- name: smoke_test_image
+  dependencies:
+    - //containers:backend_image
+  command: |
+    docker run --rm $(output //containers:backend_image 0) --health-check
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```Pkl
+targets {
+  new {
+    name = "smoke_test_image"
+    dependencies {
+      "//containers:backend_image"
+    }
+    command = '''
+    docker run --rm $(output //containers:backend_image 0) --health-check
+    '''
+  }
+}
+```
+
+  </TabItem>
+</Tabs>

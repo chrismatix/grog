@@ -22,17 +22,26 @@ var binTemplate string
 
 // templateData is the data expected by the run_sh.sh.tmpl
 type templateData struct {
-	BinToolMap  BinToolMap
-	UserCommand string
+	BinToolMap          BinToolMap
+	OutputIdentifierMap OutputIdentifierMap
+	UserCommand         string
 }
 
 // BinToolMap Maps target label to tool a binary path
 type BinToolMap map[string]string
 
+// OutputIdentifierMap maps a target label (and its shorthands) to the list of
+// output identifiers produced by that dependency. File and directory outputs
+// resolve to absolute paths while other output types retain their identifiers.
+// The order matches the dependency's output definition order and includes bin
+// outputs as the final element if present.
+type OutputIdentifierMap map[string][]string
+
 func executeTarget(
 	ctx context.Context,
 	target *model.Target,
 	binToolPaths BinToolMap,
+	outputIdentifiers OutputIdentifierMap,
 	streamLogs bool,
 ) error {
 	if target.Timeout > 0 {
@@ -41,7 +50,7 @@ func executeTarget(
 		defer cancel()
 	}
 
-	cmdOut, err := runTargetCommand(ctx, target, binToolPaths, target.Command, streamLogs)
+	cmdOut, err := runTargetCommand(ctx, target, binToolPaths, outputIdentifiers, target.Command, streamLogs)
 
 	if err != nil {
 		if ctx.Err() != nil {
@@ -70,11 +79,12 @@ func runTargetCommand(
 	ctx context.Context,
 	target *model.Target,
 	binToolPaths BinToolMap,
+	outputIdentifiers OutputIdentifierMap,
 	command string,
 	streamLogs bool,
 ) ([]byte, error) {
 	executionPath := config.GetPathAbsoluteToWorkspaceRoot(target.Label.Package)
-	templatedCommand, err := getCommand(binToolPaths, command)
+	templatedCommand, err := getCommand(binToolPaths, outputIdentifiers, command)
 	if err != nil {
 		return nil, err
 	}
@@ -150,15 +160,16 @@ func GetExtendedTargetEnv(ctx context.Context, target *model.Target) []string {
 	)
 }
 
-func getCommand(toolMap BinToolMap, command string) (string, error) {
+func getCommand(toolMap BinToolMap, outputMap OutputIdentifierMap, command string) (string, error) {
 	tmpl, err := template.New("binCommand").Parse(binTemplate)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse run template: %w", err)
 	}
 
 	data := templateData{
-		BinToolMap:  toolMap,
-		UserCommand: command,
+		BinToolMap:          toolMap,
+		OutputIdentifierMap: outputMap,
+		UserCommand:         command,
 	}
 
 	var buf bytes.Buffer
