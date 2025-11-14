@@ -15,6 +15,7 @@ import (
 	"grog/internal/worker"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -40,6 +41,20 @@ type Executor struct {
 	loadOutputsMode  config.LoadOutputsMode
 	targetHasher     *hashing.TargetHasher
 	streamLogsToggle *console.StreamLogsToggle
+	execDurationNs   atomic.Int64
+}
+
+// Stats capture aggregated executor metrics.
+type Stats struct {
+	ExecDuration  time.Duration
+	CacheDuration time.Duration
+}
+
+func (e *Executor) addExecDuration(duration time.Duration) {
+	if duration <= 0 {
+		return
+	}
+	e.execDurationNs.Add(duration.Nanoseconds())
 }
 
 func NewExecutor(
@@ -62,7 +77,7 @@ func NewExecutor(
 }
 
 // Execute executes the targets in the given graph and returns the completion map
-func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
+func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, Stats, error) {
 	numWorkers := config.Global.NumWorkers
 	stdLogger := console.GetLogger(ctx)
 
@@ -124,7 +139,11 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 
 	walker := dag.NewWalker(e.graph, walkCallback, e.failFast)
 	completionMap, err := walker.Walk(ctx)
-	return completionMap, err
+	stats := Stats{
+		ExecDuration:  time.Duration(e.execDurationNs.Load()),
+		CacheDuration: e.registry.CacheDuration(),
+	}
+	return completionMap, stats, err
 }
 
 // getBinToolPaths From all the direct dependencies of a target, get their bin_output if defined
@@ -254,7 +273,9 @@ func (e *Executor) executeTarget(
 	if target.Command != "" {
 		update(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis()))
 		logger.Debugf("running target %s: %s", target.Label, target.CommandEllipsis())
+		execStart := time.Now()
 		err = executeTarget(ctx, target, binToolPaths, e.streamLogsToggle.Enabled())
+		e.addExecDuration(time.Since(execStart))
 	} else {
 		logger.Debugf("skipped target %s due to no command", target.Label)
 	}
