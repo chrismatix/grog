@@ -41,7 +41,7 @@ type Executor struct {
 	loadOutputsMode  config.LoadOutputsMode
 	targetHasher     *hashing.TargetHasher
 	streamLogsToggle *console.StreamLogsToggle
-	execDuration     atomic.Int64
+	execDurationNs   atomic.Int64
 }
 
 // Stats capture aggregated executor metrics.
@@ -54,7 +54,7 @@ func (e *Executor) addExecDuration(duration time.Duration) {
 	if duration <= 0 {
 		return
 	}
-	e.execDuration.Add(duration.Nanoseconds())
+	e.execDurationNs.Add(duration.Nanoseconds())
 }
 
 func NewExecutor(
@@ -140,7 +140,7 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, Stats, error
 	walker := dag.NewWalker(e.graph, walkCallback, e.failFast)
 	completionMap, err := walker.Walk(ctx)
 	stats := Stats{
-		ExecDuration:  time.Duration(e.execDuration.Load()),
+		ExecDuration:  time.Duration(e.execDurationNs.Load()),
 		CacheDuration: e.registry.CacheDuration(),
 	}
 	return completionMap, stats, err

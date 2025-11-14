@@ -3,7 +3,6 @@ package output
 import (
 	"context"
 	"fmt"
-	"github.com/alitto/pond/v2"
 	"grog/internal/caching"
 	"grog/internal/config"
 	"grog/internal/console"
@@ -14,16 +13,19 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/alitto/pond/v2"
 )
 
 // Registry manages the available output handlers
 type Registry struct {
-	handlers      map[string]handlers.Handler
-	targetCache   *caching.TargetCache
-	pool          pond.Pool
-	handlerMutex  sync.RWMutex
-	enableCache   bool
-	cacheDuration atomic.Int64
+	handlers     map[string]handlers.Handler
+	targetCache  *caching.TargetCache
+	pool         pond.Pool
+	handlerMutex sync.RWMutex
+	enableCache  bool
+	// Total time spent on registry operations
+	cacheDurationNs atomic.Int64
 
 	// Features like load_outputs=minimal may load outputs concurrently
 	// In this case we want to make sure that that only happens once per target
@@ -218,10 +220,10 @@ func (r *Registry) addCacheDuration(duration time.Duration) {
 	if duration <= 0 {
 		return
 	}
-	r.cacheDuration.Add(duration.Nanoseconds())
+	r.cacheDurationNs.Add(duration.Nanoseconds())
 }
 
 // CacheDuration returns the total time spent on registry operations.
 func (r *Registry) CacheDuration() time.Duration {
-	return time.Duration(r.cacheDuration.Load())
+	return time.Duration(r.cacheDurationNs.Load())
 }
