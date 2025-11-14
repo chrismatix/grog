@@ -26,7 +26,7 @@ A binary output is an executable file produced by a build target that can be use
 Each target can specify a single `bin_output` field that points to a file output. When the build completes, Grog will:
 
 1. Mark this file as executable.
-2. Make it available to dependent target commands via the `$(bin :target_name)` syntax.
+2. Make it available to dependent target commands via the `$(bin :target_name)` syntax (see [script functions](/topics/script-functions) for details).
 
 ### Example: Creating and Using a Binary Tool
 

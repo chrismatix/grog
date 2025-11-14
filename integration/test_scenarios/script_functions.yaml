@@ -1,0 +1,7 @@
+name: script functions
+repo: script_functions
+cases:
+  - name: build_output_helper
+    grog_args:
+      - build
+      - :use_outputs

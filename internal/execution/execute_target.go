@@ -23,16 +23,23 @@ var binTemplate string
 // templateData is the data expected by the run_sh.sh.tmpl
 type templateData struct {
 	BinToolMap  BinToolMap
+	OutputMap   OutputMap
 	UserCommand string
 }
 
 // BinToolMap Maps target label to tool a binary path
 type BinToolMap map[string]string
 
+// OutputMap maps a target label (and its shorthands) to the list of output paths
+// produced by that dependency. The order matches the dependency's output
+// definition order and includes bin outputs as the final element if present.
+type OutputMap map[string][]string
+
 func executeTarget(
 	ctx context.Context,
 	target *model.Target,
 	binToolPaths BinToolMap,
+	outputPaths OutputMap,
 	streamLogs bool,
 ) error {
 	if target.Timeout > 0 {
@@ -41,7 +48,7 @@ func executeTarget(
 		defer cancel()
 	}
 
-	cmdOut, err := runTargetCommand(ctx, target, binToolPaths, target.Command, streamLogs)
+	cmdOut, err := runTargetCommand(ctx, target, binToolPaths, outputPaths, target.Command, streamLogs)
 
 	if err != nil {
 		if ctx.Err() != nil {
@@ -70,11 +77,12 @@ func runTargetCommand(
 	ctx context.Context,
 	target *model.Target,
 	binToolPaths BinToolMap,
+	outputPaths OutputMap,
 	command string,
 	streamLogs bool,
 ) ([]byte, error) {
 	executionPath := config.GetPathAbsoluteToWorkspaceRoot(target.Label.Package)
-	templatedCommand, err := getCommand(binToolPaths, command)
+	templatedCommand, err := getCommand(binToolPaths, outputPaths, command)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +158,7 @@ func GetExtendedTargetEnv(ctx context.Context, target *model.Target) []string {
 	)
 }
 
-func getCommand(toolMap BinToolMap, command string) (string, error) {
+func getCommand(toolMap BinToolMap, outputMap OutputMap, command string) (string, error) {
 	tmpl, err := template.New("binCommand").Parse(binTemplate)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse run template: %w", err)
@@ -158,6 +166,7 @@ func getCommand(toolMap BinToolMap, command string) (string, error) {
 
 	data := templateData{
 		BinToolMap:  toolMap,
+		OutputMap:   outputMap,
 		UserCommand: command,
 	}
 
