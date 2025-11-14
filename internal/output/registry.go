@@ -13,15 +13,17 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // Registry manages the available output handlers
 type Registry struct {
-	handlers     map[string]handlers.Handler
-	targetCache  *caching.TargetCache
-	pool         pond.Pool
-	handlerMutex sync.RWMutex
-	enableCache  bool
+	handlers      map[string]handlers.Handler
+	targetCache   *caching.TargetCache
+	pool          pond.Pool
+	handlerMutex  sync.RWMutex
+	enableCache   bool
+	cacheDuration atomic.Int64
 
 	// Features like load_outputs=minimal may load outputs concurrently
 	// In this case we want to make sure that that only happens once per target
@@ -84,6 +86,8 @@ func (r *Registry) HasCacheHit(ctx context.Context, target *model.Target) (bool,
 	if !r.enableCache {
 		return false, nil
 	}
+	start := time.Now()
+	defer r.addCacheDuration(time.Since(start))
 	r.targetMutexMap.Lock(target.Label.String())
 	defer r.targetMutexMap.Unlock(target.Label.String())
 	// check for the default file system key for checking if the inputs changed
@@ -132,6 +136,8 @@ func (r *Registry) WriteOutputs(ctx context.Context, target *model.Target) error
 	if !r.enableCache {
 		return nil
 	}
+	start := time.Now()
+	defer r.addCacheDuration(time.Since(start))
 
 	r.targetMutexMap.Lock(target.Label.String())
 	defer r.targetMutexMap.Unlock(target.Label.String())
@@ -171,6 +177,8 @@ func (r *Registry) LoadOutputs(ctx context.Context, target *model.Target) error 
 	if !r.enableCache {
 		return nil
 	}
+	start := time.Now()
+	defer r.addCacheDuration(time.Since(start))
 	r.targetMutexMap.Lock(target.Label.String())
 	defer r.targetMutexMap.Unlock(target.Label.String())
 	if target.OutputsLoaded {
@@ -204,4 +212,16 @@ func (r *Registry) LoadOutputs(ctx context.Context, target *model.Target) error 
 	// TODO here we should only write the local cache exists file but it feels like the wrong place to do this
 	// since the output registry should not have to know about the file cache
 	return r.targetCache.WriteLocalCacheExistsFile(ctx, *target)
+}
+
+func (r *Registry) addCacheDuration(duration time.Duration) {
+	if duration <= 0 {
+		return
+	}
+	r.cacheDuration.Add(duration.Nanoseconds())
+}
+
+// CacheDuration returns the total time spent on registry operations.
+func (r *Registry) CacheDuration() time.Duration {
+	return time.Duration(r.cacheDuration.Load())
 }

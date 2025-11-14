@@ -138,12 +138,17 @@ func runBuild(
 	}
 
 	executor := execution.NewExecutor(targetCache, registry, graph, failFast, streamLogs, loadOutputsMode)
-	completionMap, executionErr := executor.Execute(ctx)
+	completionMap, execStats, executionErr := executor.Execute(ctx)
 
 	elapsedTime := time.Since(startTime).Seconds()
 	// Mostly used to keep our test fixtures deterministic
 	if !config.Global.DisableNonDeterministicLogging {
-		logger.Infof("Elapsed time: %.3fs", elapsedTime)
+		logger.Infof(
+			"Elapsed time: %.3fs (exec %.3fs, cache %.3fs)",
+			elapsedTime,
+			execStats.ExecDuration.Seconds(),
+			execStats.CacheDuration.Seconds(),
+		)
 	}
 
 	if executionErr != nil {
