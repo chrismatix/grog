@@ -38,7 +38,11 @@ type Target struct {
 	OutputsLoaded bool `json:"outputs_loaded,omitempty"`
 
 	// ChangeHash is the combined hash of the target definition and its input files
-	ChangeHash  string `json:"change_hash,omitempty"`
+	ChangeHash string `json:"change_hash,omitempty"`
+	// OutputHash is the hash of all target outputs
+	// For targets that do not produce outputs (aggregators) this is the same as the ChangeHash
+	// The output hash is used by descendant targets to determine whether they need to be rebuilt
+	OutputHash  string `json:"output_hash,omitempty"`
 	HasCacheHit bool   `json:"has_cache_hit,omitempty"`
 }
 
