@@ -9,4 +9,19 @@ targets {
       "output.txt"
     }
   }
+
+  new {
+    name = "dir"
+    inputs { "src/*.txt" }
+    command = """
+      rm -r dist
+      mkdir -p dist/nested
+      echo "Hello World" > dist/file1.txt
+      echo "Lorem ipsum" > dist/file2.txt
+      echo "foo" > dist/nested/file3.txt
+    """
+    outputs {
+      "dir::dist"
+    }
+  }
 }
