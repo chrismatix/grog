@@ -37,7 +37,7 @@ cases:
   - name: select_by_platform_flag
     grog_args:
       - build
-      - --platform=made-up-os/made-up-arch
+      - --platform=made-up-os/default-arch
 
   - name: error_platform_flag_and_all_platforms
     grog_args:
