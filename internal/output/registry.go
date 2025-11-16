@@ -30,6 +30,9 @@ type Registry struct {
 	// Features like load_outputs=minimal may load outputs concurrently
 	// In this case we want to make sure that that only happens once per target
 	targetMutexMap *maps.MutexMap
+
+	hashMutex sync.RWMutex
+	hashCache map[string]string
 }
 
 // NewRegistry creates a new registry with default handlers
@@ -42,6 +45,7 @@ func NewRegistry(
 		targetCache:    targetCache,
 		targetMutexMap: maps.NewMutexMap(),
 		enableCache:    enableCache,
+		hashCache:      make(map[string]string),
 		pool: pond.NewPool(
 			runtime.NumCPU() * 2,
 		),
@@ -170,6 +174,9 @@ func (r *Registry) WriteOutputs(ctx context.Context, target *model.Target) error
 		}
 	}
 
+	if _, err := r.computeAndStoreTargetOutputHash(ctx, target); err != nil {
+		return err
+	}
 	target.OutputsLoaded = true
 	return nil
 }
@@ -207,6 +214,9 @@ func (r *Registry) LoadOutputs(ctx context.Context, target *model.Target) error 
 		}
 	}
 
+	if _, err := r.computeAndStoreTargetOutputHash(ctx, target); err != nil {
+		return err
+	}
 	target.OutputsLoaded = true
 	// Why this is needed:
 	// - When restoring from the remote cache we copy every file to the local cache

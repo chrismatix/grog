@@ -71,7 +71,7 @@ func NewExecutor(
 		graph:            graph,
 		failFast:         failFast,
 		loadOutputsMode:  loadOutputsMode,
-		targetHasher:     hashing.NewTargetHasher(graph),
+		targetHasher:     hashing.NewTargetHasher(graph, registry),
 		streamLogsToggle: console.NewStreamLogsToggle(streamLogs),
 	}
 }
@@ -127,7 +127,7 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, Stats, error
 			return dag.CacheMiss, err
 		}
 
-		err = e.targetHasher.SetTargetChangeHash(target)
+		err = e.targetHasher.SetTargetChangeHash(ctx, target)
 		if err != nil {
 			return dag.CacheMiss, err
 		}

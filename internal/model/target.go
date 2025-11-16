@@ -39,6 +39,7 @@ type Target struct {
 
 	// ChangeHash is the combined hash of the target definition and its input files
 	ChangeHash  string `json:"change_hash,omitempty"`
+	OutputHash  string `json:"output_hash,omitempty"`
 	HasCacheHit bool   `json:"has_cache_hit,omitempty"`
 }
 
