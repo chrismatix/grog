@@ -2,13 +2,14 @@ package analysis
 
 import (
 	"fmt"
-	"github.com/fatih/color"
-	"go.uber.org/zap"
 	"grog/internal/config"
 	"grog/internal/model"
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/fatih/color"
+	"go.uber.org/zap"
 )
 
 /*
