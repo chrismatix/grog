@@ -238,35 +238,59 @@ func (d *DirectoryOutputHandler) Load(ctx context.Context, target model.Target, 
 		// Get the target path
 		targetPath := filepath.Join(dirPath, header.Name)
 
-		// Create directories if needed
-		if header.Typeflag == tar.TypeDir {
+		switch header.Typeflag {
+		case tar.TypeDir:
+			// Remove any files that already exist
+			if err := os.RemoveAll(targetPath); err != nil {
+				return err
+			}
 			if err := os.MkdirAll(targetPath, 0755); err != nil {
 				return err
 			}
 			fileCount++
 			continue
-		}
 
-		// Create parent directories if needed
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-			return fmt.Errorf("failed to create parent directories for file %s: %w", targetPath, err)
-		}
+		case tar.TypeSymlink:
+			// Ensure the parent directory exists
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+				return fmt.Errorf("failed to create parent directories for symlink %s: %w", targetPath, err)
+			}
 
-		// Create the file
-		file, tarError := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY, os.FileMode(header.Mode))
-		if tarError != nil {
-			return fmt.Errorf("failed to create file %s: %w", targetPath, tarError)
-		}
+			// Remove any existing file/symlink so os.Symlink doesn't fail
+			if err := os.RemoveAll(targetPath); err != nil {
+				return fmt.Errorf("failed to remove existing path for symlink %s: %w", targetPath, err)
+			}
 
-		if _, err := io.Copy(file, tarReader); err != nil {
-			return fmt.Errorf("failed to copy file %s: %w", targetPath, err)
-		}
+			// header.Linkname holds the symlink target as written by FileInfoHeader
+			if err := os.Symlink(header.Linkname, targetPath); err != nil {
+				return fmt.Errorf("failed to create symlink %s -> %s: %w", targetPath, header.Linkname, err)
+			}
 
-		if err := file.Close(); err != nil {
-			return fmt.Errorf("failed to close file %s: %w", targetPath, err)
-		}
+			fileCount++
+			continue
 
-		fileCount++
+		default:
+			// Create parent directories if needed
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+				return fmt.Errorf("failed to create parent directories for file %s: %w", targetPath, err)
+			}
+
+			// Create the file
+			file, tarError := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY, os.FileMode(header.Mode))
+			if tarError != nil {
+				return fmt.Errorf("failed to create file %s: %w", targetPath, tarError)
+			}
+
+			if _, err := io.Copy(file, tarReader); err != nil {
+				return fmt.Errorf("failed to copy file %s: %w", targetPath, err)
+			}
+
+			if err := file.Close(); err != nil {
+				return fmt.Errorf("failed to close file %s: %w", targetPath, err)
+			}
+
+			fileCount++
+		}
 	}
 
 	logger.Debugf("Successfully extracted %d files to %s", fileCount, dirPath)
