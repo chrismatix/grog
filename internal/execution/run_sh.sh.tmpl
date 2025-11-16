@@ -8,4 +8,26 @@ bin() {
     esac
 }
 
+# $(output //pkg:target 0) returns the identifier for the requested output.
+# File and directory outputs resolve to absolute paths while other outputs (like Docker images)
+# return their identifier strings.
+output() {
+    label="$1"
+    index="$2"
+
+    case "$label" in
+    {{- range $label, $outputs := .OutputIdentifierMap }}
+        "{{$label}}")
+            case "$index" in
+            {{- range $idx, $path := $outputs }}
+                "{{$idx}}") echo "{{$path}}" ;;
+            {{- end }}
+            *) echo "Error: unknown output index '$index' for '$label'. Did you pass the right index?" >&2; exit 1 ;;
+            esac
+            ;;
+    {{- end }}
+    *) echo "Error: unknown output label '$label'. Did you add '$label' to the target's dependencies?" >&2; exit 1 ;;
+    esac
+}
+
 {{ .UserCommand }}
