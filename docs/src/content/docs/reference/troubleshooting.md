@@ -14,4 +14,4 @@ FATAL: target selection failed: could not select target //:bar because it depend
 
 This error occurs when try to build `foo`, but somewhere in foo's dependency chain there is a target that is not compatible with the host platform. (See docs).
 
-To resolve this, you can either ensure that `foo` shares the same `platform` selector as `bar` or modify the `bar` build so that it can run on your host platform.
+To resolve this, you can either ensure that `foo` shares the same `platforms` selector as `bar` or modify the `bar` build so that it can run on your host platform.

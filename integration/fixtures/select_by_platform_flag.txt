@@ -3,5 +3,5 @@ WARN: target //:arch_guard has no inputs, dependencies or output checks causing 
 WARN: target //:os_guard has no inputs, dependencies or output checks causing it to run only once
 WARN: target //pkg:foo has no inputs, dependencies or output checks causing it to run only once
 WARN: target //pkg:foo_platform has no inputs, dependencies or output checks causing it to run only once
-INFO: Selected 5 targets.
-INFO: Build completed successfully. 5 targets completed (5 cache hits).
+INFO: Selected 3 targets (2 targets not matching made-up-os/default-arch host).
+INFO: Build completed successfully. 3 targets completed (3 cache hits).

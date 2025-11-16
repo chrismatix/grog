@@ -17,12 +17,14 @@ cases:
       - //:os_guard
     env_vars:
       - "GROG_OS=made-up-os"
+      - "GROG_ARCH=default-arch"
 
   - name: select_by_arch
     grog_args:
       - build
       - //:arch_guard
     env_vars:
+      - "GROG_OS=default-os"
       - "GROG_ARCH=made-up-arch"
 
   - name: select_by_both_arch_and_os
@@ -30,12 +32,12 @@ cases:
       - build
     env_vars:
       - "GROG_OS=made-up-os"
-      - "GROG_ARCH=made-up-arch"
+      - "GROG_ARCH=default-arch"
 
   - name: select_by_platform_flag
     grog_args:
       - build
-      - --platform=made-up-os/made-up-arch
+      - --platform=made-up-os/default-arch
 
   - name: error_platform_flag_and_all_platforms
     grog_args:
