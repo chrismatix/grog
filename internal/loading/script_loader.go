@@ -111,7 +111,7 @@ func (p *scriptParser) parse() (PackageDTO, bool, error) {
 		Fingerprint:          annotation.Fingerprint,
 		EnvironmentVariables: annotation.EnvironmentVariables,
 		Timeout:              annotation.Timeout,
-		Platform:             annotation.Platform,
+		Platforms:            annotation.Platforms,
 	}
 
 	// Script files are always their own bin output

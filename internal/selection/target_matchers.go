@@ -16,14 +16,11 @@ func nodeMatchesPlatform(node model.BuildNode) bool {
 		return true
 	}
 
-	if target.Platform == nil {
+	if len(target.Platforms) == 0 {
 		return true
 	}
 
-	if len(target.Platform.OS) != 0 && !slices.Contains(target.Platform.OS, config.Global.OS) {
-		return false
-	}
-	if len(target.Platform.Arch) != 0 && !slices.Contains(target.Platform.Arch, config.Global.Arch) {
+	if !slices.Contains(target.Platforms, config.Global.GetPlatform()) {
 		return false
 	}
 

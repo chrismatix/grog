@@ -27,7 +27,7 @@ Grog uses this information to ensure incremental, cached, and parallel builds.
 | `exclude_inputs`        | `string[]`               | File paths or glob patterns to exclude from inputs                     |
 | `outputs`               | `string[]`               | Files or directories produced by the target                            |
 | `dependencies`          | `label[]`                | Labels of other targets that must be built before this one             |
-| `platform`              | `PlatformConfig`         | OS and architecture constraints for where this target can run          |
+| `platforms`             | `string[]`               | Specific platform identifiers where this target can run (e.g. `linux/amd64`) |
 | `tags`                  | `string[]`               | Metadata tags that affect target behavior (e.g., "no-cache")           |
 | `fingerprint`           | `Record<string, string>` | Extra identity inputs used to invalidate the target's cache entry      |
 | `bin_output`            | `Output`                 | Specifically identifies a binary output from the target                |
@@ -111,19 +111,14 @@ Other targets that must be built before this one, specified as labels. Labels ca
 - Targets in the same package: `:target_name`
 - Targets in other packages: `//path/to/package:target_name`
 
-### platform
+### platforms
 
-A platform configuration that restricts where this target can be executed.
+A list of platform identifiers (`os/arch`) that restrict where this target can be executed.
 This is particularly useful for multi-platform builds (see [docs](/topics/multi-platform-builds)).
-
-The `platform` field has two sub-fields:
-
-- `os`: List of operating systems where this target can run (e.g., "linux", "darwin")
-- `arch`: List of CPU architectures where this target can run (e.g., "amd64", "arm64")
 
 When a target has platform constraints defined:
 
-1. Grog checks the current host's OS and architecture
+1. Grog checks the current host's platform identifier (for example, `linux/amd64`)
 2. Targets that don't match the current platform are skipped
 
 ### tags

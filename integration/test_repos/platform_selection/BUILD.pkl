@@ -4,10 +4,8 @@ targets {
   new {
     name = "os_guard"
     command = "echo 'hello world'"
-    platform {
-      os {
-        "made-up-os"
-      }
+    platforms {
+      "made-up-os/default-arch"
     }
   }
 
@@ -18,17 +16,15 @@ targets {
     command = "echo 'hello world'"
     dependencies {
       ":os_guard"
-     }
+    }
   }
 
   new {
     name = "arch_guard"
     inputs { "src/*.txt" }
     command = "echo 'hello world'"
-    platform {
-      arch {
-        "made-up-arch"
-      }
+    platforms {
+      "default-os/made-up-arch"
     }
   }
 }
