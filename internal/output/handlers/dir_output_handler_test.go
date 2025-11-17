@@ -39,7 +39,7 @@ func TestDirectoryOutputHandler_WriteAndLoad(t *testing.T) {
 		t.Fatalf("failed to write file: %v", err)
 	}
 
-	if err := handler.Write(ctx, target, output); err != nil {
+	if _, err := handler.Write(ctx, target, output); err != nil {
 		t.Fatalf("Write failed: %v", err)
 	}
 
@@ -47,7 +47,7 @@ func TestDirectoryOutputHandler_WriteAndLoad(t *testing.T) {
 		t.Fatalf("failed to remove directory: %v", err)
 	}
 
-	if err := handler.Load(ctx, target, output); err != nil {
+	if _, err := handler.Load(ctx, target, output); err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
 

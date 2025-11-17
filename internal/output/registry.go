@@ -31,8 +31,10 @@ type Registry struct {
 	// In this case we want to make sure that that only happens once per target
 	targetMutexMap *maps.MutexMap
 
-	hashMutex sync.RWMutex
-	hashCache map[string]string
+	hashMutex       sync.RWMutex
+	hashCache       map[string]string
+	outputHashMutex sync.RWMutex
+	outputHashCache map[string]map[model.Output]string
 }
 
 // NewRegistry creates a new registry with default handlers
@@ -41,11 +43,12 @@ func NewRegistry(
 	enableCache bool,
 ) *Registry {
 	r := &Registry{
-		handlers:       make(map[string]handlers.Handler),
-		targetCache:    targetCache,
-		targetMutexMap: maps.NewMutexMap(),
-		enableCache:    enableCache,
-		hashCache:      make(map[string]string),
+		handlers:        make(map[string]handlers.Handler),
+		targetCache:     targetCache,
+		targetMutexMap:  maps.NewMutexMap(),
+		enableCache:     enableCache,
+		hashCache:       make(map[string]string),
+		outputHashCache: make(map[string]map[model.Output]string),
 		pool: pond.NewPool(
 			runtime.NumCPU() * 2,
 		),
@@ -163,7 +166,14 @@ func (r *Registry) WriteOutputs(ctx context.Context, target *model.Target) error
 	for _, outputRef := range outputs {
 		localOutputRef := outputRef
 		task := r.pool.SubmitErr(func() error {
-			return r.mustGetHandler(localOutputRef.Type).Write(ctx, *target, localOutputRef)
+			hash, err := r.mustGetHandler(localOutputRef.Type).Write(ctx, *target, localOutputRef)
+			if err != nil {
+				return err
+			}
+			if hash != "" {
+				r.cacheOutputHash(target, localOutputRef, hash)
+			}
+			return nil
 		})
 		tasks = append(tasks, task)
 	}
@@ -203,7 +213,14 @@ func (r *Registry) LoadOutputs(ctx context.Context, target *model.Target) error 
 	for _, outputRef := range outputs {
 		localOutputRef := outputRef
 		task := r.pool.SubmitErr(func() error {
-			return r.mustGetHandler(localOutputRef.Type).Load(ctx, *target, localOutputRef)
+			hash, err := r.mustGetHandler(localOutputRef.Type).Load(ctx, *target, localOutputRef)
+			if err != nil {
+				return err
+			}
+			if hash != "" {
+				r.cacheOutputHash(target, localOutputRef, hash)
+			}
+			return nil
 		})
 		tasks = append(tasks, task)
 	}

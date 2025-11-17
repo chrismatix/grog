@@ -2,8 +2,15 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"grog/internal/caching"
+	"grog/internal/config"
 	"grog/internal/model"
+	"io"
+	"os"
+	"path/filepath"
+
+	"github.com/cespare/xxhash/v2"
 )
 
 // FileOutputHandler is the default output handler that writes files to the file system.
@@ -26,10 +33,46 @@ func (f *FileOutputHandler) Has(ctx context.Context, target model.Target, output
 	return f.targetCache.FileExists(ctx, target, output)
 }
 
-func (f *FileOutputHandler) Write(ctx context.Context, target model.Target, output model.Output) error {
-	return f.targetCache.WriteFile(ctx, target, output)
+func (f *FileOutputHandler) Write(ctx context.Context, target model.Target, output model.Output) (string, error) {
+	absOutputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.Identifier))
+	file, err := os.Open(absOutputPath)
+	if err != nil {
+		return "", fmt.Errorf("open output %s: %w", output, err)
+	}
+	defer file.Close()
+
+	hasher := xxhash.New()
+	tee := io.TeeReader(file, hasher)
+
+	if err := f.targetCache.WriteFileStream(ctx, target, output, tee); err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%x", hasher.Sum64()), nil
 }
 
-func (f *FileOutputHandler) Load(ctx context.Context, target model.Target, output model.Output) error {
-	return f.targetCache.LoadFile(ctx, target, output)
+func (f *FileOutputHandler) Load(ctx context.Context, target model.Target, output model.Output) (string, error) {
+	absOutputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.Identifier))
+	contentReader, err := f.targetCache.LoadFileStream(ctx, target, output)
+	if err != nil {
+		return "", err
+	}
+	defer contentReader.Close()
+
+	outputFile, err := os.Create(absOutputPath)
+	if err != nil {
+		return "", err
+	}
+
+	hasher := xxhash.New()
+	if _, err := io.Copy(outputFile, io.TeeReader(contentReader, hasher)); err != nil {
+		outputFile.Close()
+		return "", err
+	}
+
+	if err := outputFile.Close(); err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%x", hasher.Sum64()), nil
 }

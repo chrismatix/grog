@@ -84,16 +84,12 @@ func (r *Registry) hashTargetOutputs(ctx context.Context, target *model.Target) 
 		return "", nil
 	}
 
-	hashed := make([]string, 0, len(outputs))
-	for _, out := range outputs {
-		outputHash, err := r.hashSingleOutput(ctx, target, out)
-		if err != nil {
-			return "", err
-		}
-		hashed = append(hashed, fmt.Sprintf("%s=%s", out.String(), outputHash))
+	hashes, err := r.ensureOutputHashes(ctx, target)
+	if err != nil {
+		return "", err
 	}
-	sort.Strings(hashed)
-	return hashing.HashString(strings.Join(hashed, "|")), nil
+
+	return aggregateOutputHashes(outputs, hashes)
 }
 
 func (r *Registry) hashSingleOutput(ctx context.Context, target *model.Target, output model.Output) (string, error) {
@@ -133,6 +129,72 @@ func (r *Registry) loadTargetHashFromMeta(ctx context.Context, target *model.Tar
 		return "", err
 	}
 	return strings.TrimSpace(content), nil
+}
+
+func (r *Registry) ensureOutputHashes(ctx context.Context, target *model.Target) (map[model.Output]string, error) {
+	cached := r.getCachedOutputHashes(target)
+	if cached == nil {
+		cached = make(map[model.Output]string)
+	}
+
+	for _, out := range target.AllOutputs() {
+		if cached[out] != "" {
+			continue
+		}
+
+		hash, err := r.hashSingleOutput(ctx, target, out)
+		if err != nil {
+			return nil, err
+		}
+
+		cached[out] = hash
+		r.cacheOutputHash(target, out, hash)
+	}
+
+	return cached, nil
+}
+
+func aggregateOutputHashes(outputs []model.Output, hashes map[model.Output]string) (string, error) {
+	if len(outputs) == 0 {
+		return "", nil
+	}
+
+	hashed := make([]string, 0, len(outputs))
+	for _, out := range outputs {
+		hashed = append(hashed, fmt.Sprintf("%s=%s", out.String(), hashes[out]))
+	}
+	sort.Strings(hashed)
+	return hashing.HashString(strings.Join(hashed, "|")), nil
+}
+
+func (r *Registry) getCachedOutputHashes(target *model.Target) map[model.Output]string {
+	r.outputHashMutex.RLock()
+	defer r.outputHashMutex.RUnlock()
+
+	cached := r.outputHashCache[target.Label.String()]
+	if cached == nil {
+		return nil
+	}
+
+	clone := make(map[model.Output]string, len(cached))
+	for output, hash := range cached {
+		clone[output] = hash
+	}
+
+	return clone
+}
+
+func (r *Registry) cacheOutputHash(target *model.Target, output model.Output, hash string) {
+	r.outputHashMutex.Lock()
+	defer r.outputHashMutex.Unlock()
+
+	cache := r.outputHashCache[target.Label.String()]
+	if cache == nil {
+		cache = make(map[model.Output]string)
+		r.outputHashCache[target.Label.String()] = cache
+	}
+
+	cache[output] = hash
 }
 
 func (r *Registry) getCachedTargetHash(label string) (string, bool) {

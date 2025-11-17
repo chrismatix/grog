@@ -12,9 +12,9 @@ type Handler interface {
 
 	Has(ctx context.Context, target model.Target, output model.Output) (bool, error)
 
-	Write(ctx context.Context, target model.Target, output model.Output) error
+	Write(ctx context.Context, target model.Target, output model.Output) (string, error)
 
-	Load(ctx context.Context, target model.Target, output model.Output) error
+	Load(ctx context.Context, target model.Target, output model.Output) (string, error)
 }
 
 type HandlerType string
