@@ -3,14 +3,9 @@ package output
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 
-	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1/daemon"
-
-	"grog/internal/config"
 	"grog/internal/hashing"
 	"grog/internal/model"
 	"grog/internal/output/handlers"
@@ -21,8 +16,8 @@ const outputHashMetaKey = "__grog_output_hash"
 var targetHashMetaOutput = model.NewOutput("__grog__", "__target_output__")
 
 // LoadTargetOutputHash returns the aggregated hash for all outputs of the target.
-// It first checks the in-memory cache, then the cache metadata, and finally
-// falls back to hashing the local outputs if necessary.
+// It first checks the in-memory cache, then the cache metadata, and finally loads
+// the outputs to populate hashes if necessary.
 func (r *Registry) LoadTargetOutputHash(ctx context.Context, target *model.Target) (string, error) {
 	if !r.enableCache || target.SkipsCache() {
 		return "", nil
@@ -46,10 +41,6 @@ func (r *Registry) LoadTargetOutputHash(ctx context.Context, target *model.Targe
 		if err := r.LoadOutputs(ctx, target); err != nil {
 			return "", fmt.Errorf("load outputs for %s: %w", target.Label, err)
 		}
-	}
-
-	if target.OutputHash != "" {
-		return target.OutputHash, nil
 	}
 
 	return r.computeAndStoreTargetOutputHash(ctx, target)
@@ -92,37 +83,6 @@ func (r *Registry) hashTargetOutputs(ctx context.Context, target *model.Target) 
 	return aggregateOutputHashes(outputs, hashes)
 }
 
-func (r *Registry) hashSingleOutput(ctx context.Context, target *model.Target, output model.Output) (string, error) {
-	switch handlers.HandlerType(output.Type) {
-	case handlers.FileHandler:
-		absPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.Identifier))
-		return hashing.HashFile(absPath)
-	case handlers.DirHandler:
-		absPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.Identifier))
-		return hashing.HashDirectory(absPath)
-	case handlers.DockerHandler:
-		return hashDockerImage(ctx, output.Identifier)
-	default:
-		return "", fmt.Errorf("unsupported output type %s", output.Type)
-	}
-}
-
-func hashDockerImage(ctx context.Context, imageRef string) (string, error) {
-	ref, err := name.ParseReference(imageRef)
-	if err != nil {
-		return "", fmt.Errorf("parse docker reference %s: %w", imageRef, err)
-	}
-	img, err := daemon.Image(ref, daemon.WithContext(ctx))
-	if err != nil {
-		return "", fmt.Errorf("inspect docker image %s: %w", imageRef, err)
-	}
-	digest, err := img.Digest()
-	if err != nil {
-		return "", fmt.Errorf("compute digest for docker image %s: %w", imageRef, err)
-	}
-	return digest.String(), nil
-}
-
 func (r *Registry) loadTargetHashFromMeta(ctx context.Context, target *model.Target) (string, error) {
 	content, err := r.targetCache.LoadOutputMetaFile(ctx, *target, targetHashMetaOutput, outputHashMetaKey)
 	if err != nil {
@@ -138,17 +98,9 @@ func (r *Registry) ensureOutputHashes(ctx context.Context, target *model.Target)
 	}
 
 	for _, out := range target.AllOutputs() {
-		if cached[out] != "" {
-			continue
+		if cached[out] == "" {
+			return nil, fmt.Errorf("missing cached hash for output %s of target %s", out, target.Label)
 		}
-
-		hash, err := r.hashSingleOutput(ctx, target, out)
-		if err != nil {
-			return nil, err
-		}
-
-		cached[out] = hash
-		r.cacheOutputHash(target, out, hash)
 	}
 
 	return cached, nil
