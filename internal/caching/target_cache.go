@@ -21,6 +21,8 @@ const existsFileKey = "__grog_exists__"
 // (forcing it to execute regardless of cache status)
 const taintedFileKey = "__grog_tainted"
 
+const outputDigest = "_digest"
+
 type TargetCache struct {
 	backend backends.CacheBackend
 }
@@ -72,6 +74,16 @@ func (tc *TargetCache) WriteOutputMetaFile(
 	return tc.backend.Set(ctx, tc.CachePath(target), tc.MetaCacheKey(output, metaKey), bytes.NewReader([]byte(metaValue)))
 }
 
+// WriteOutputDigest writes a digest for a given at a fixed key
+func (tc *TargetCache) WriteOutputDigest(
+	ctx context.Context,
+	target model.Target,
+	output model.Output,
+	metaValue string,
+) error {
+	return tc.WriteOutputMetaFile(ctx, target, output, outputDigest, metaValue)
+}
+
 func (tc *TargetCache) LoadOutputMetaFile(
 	ctx context.Context,
 	target model.Target,
@@ -91,6 +103,10 @@ func (tc *TargetCache) LoadOutputMetaFile(
 		return "", err
 	}
 	return buf.String(), nil
+}
+
+func (tc *TargetCache) LoadOutputDigest(ctx context.Context, target model.Target, output model.Output) (string, error) {
+	return tc.LoadOutputMetaFile(ctx, target, output, outputDigest)
 }
 
 func (tc *TargetCache) HasOutputMetaFile(

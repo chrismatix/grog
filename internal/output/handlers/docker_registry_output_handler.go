@@ -5,17 +5,19 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	dockerconfig "github.com/docker/cli/cli/config"
-	"github.com/docker/docker/api/types/image"
 	"io"
 	"strings"
 
-	"github.com/docker/docker/client"
-	"github.com/google/go-containerregistry/pkg/authn"
+	dockerconfig "github.com/docker/cli/cli/config"
+	"github.com/docker/docker/api/types/image"
+
 	"grog/internal/caching"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/model"
+
+	"github.com/docker/docker/client"
+	"github.com/google/go-containerregistry/pkg/authn"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/daemon"
@@ -89,7 +91,11 @@ func (d *DockerRegistryOutputHandler) Write(ctx context.Context, target model.Ta
 	reader, err := cli.ImagePush(ctx, remoteCacheImageName, image.PushOptions{
 		RegistryAuth: auth,
 	})
+	if err != nil {
+		return "", fmt.Errorf("failed to push image %q to registry: %w", remoteCacheImageName, err)
+	}
 	defer reader.Close()
+
 	if _, err := io.Copy(io.Discard, reader); err != nil {
 		return "", fmt.Errorf("error reading push response: %w", err)
 	}
@@ -99,7 +105,7 @@ func (d *DockerRegistryOutputHandler) Write(ctx context.Context, target model.Ta
 		return "", fmt.Errorf("failed to inspect pushed image %q: %w", remoteCacheImageName, err)
 	}
 
-	err = d.targetCache.WriteOutputMetaFile(ctx, target, output, "digest", inspect.ID)
+	err = d.targetCache.WriteOutputDigest(ctx, target, output, inspect.ID)
 	if err != nil {
 		return "", fmt.Errorf("failed to write digest to cache: %w", err)
 	}
@@ -137,7 +143,7 @@ func makeRegistryAuth(ref string) (string, error) {
 func (d *DockerRegistryOutputHandler) Load(ctx context.Context, target model.Target, output model.Output) (string, error) {
 	imageName := output.Identifier
 	// Get expected image digest
-	expectedDigest, err := d.targetCache.LoadOutputMetaFile(ctx, target, output, "digest")
+	expectedDigest, err := d.targetCache.LoadOutputDigest(ctx, target, output)
 	if err != nil {
 		return "", fmt.Errorf("failed to load digest file %q: %w", imageName, err)
 	}

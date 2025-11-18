@@ -46,7 +46,7 @@ func (d *DockerOutputHandler) Write(ctx context.Context, target model.Target, ou
 	// Parse the image reference
 	ref, err := name.ParseReference(imageName)
 	if err != nil {
-		return fmt.Errorf("failed to parse image reference %q: %w", imageName, err)
+		return "", fmt.Errorf("failed to parse image reference %q: %w", imageName, err)
 	}
 
 	// Get the image from the Docker daemon

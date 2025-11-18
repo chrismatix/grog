@@ -8,10 +8,7 @@ import (
 
 	"grog/internal/hashing"
 	"grog/internal/model"
-	"grog/internal/output/handlers"
 )
-
-const outputHashMetaKey = "__grog_output_hash"
 
 var targetHashMetaOutput = model.NewOutput("__grog__", "__target_output__")
 
@@ -63,7 +60,7 @@ func (r *Registry) computeAndStoreTargetOutputHash(ctx context.Context, target *
 	}
 
 	r.cacheTargetHash(target, hash)
-	if err := r.targetCache.WriteOutputMetaFile(ctx, *target, targetHashMetaOutput, outputHashMetaKey, hash); err != nil {
+	if err := r.targetCache.WriteOutputDigest(ctx, *target, targetHashMetaOutput, hash); err != nil {
 		return "", fmt.Errorf("write output hash meta for %s: %w", target.Label, err)
 	}
 	return hash, nil
@@ -84,7 +81,7 @@ func (r *Registry) hashTargetOutputs(ctx context.Context, target *model.Target) 
 }
 
 func (r *Registry) loadTargetHashFromMeta(ctx context.Context, target *model.Target) (string, error) {
-	content, err := r.targetCache.LoadOutputMetaFile(ctx, *target, targetHashMetaOutput, outputHashMetaKey)
+	content, err := r.targetCache.LoadOutputDigest(ctx, *target, targetHashMetaOutput)
 	if err != nil {
 		return "", err
 	}

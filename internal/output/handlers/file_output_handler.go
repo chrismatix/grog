@@ -37,7 +37,7 @@ func (f *FileOutputHandler) Write(ctx context.Context, target model.Target, outp
 	absOutputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.Identifier))
 	file, err := os.Open(absOutputPath)
 	if err != nil {
-		return "", fmt.Errorf("open output %s: %w", output, err)
+		return "", fmt.Errorf("declared output %s for target %s was not created", output, target.Label)
 	}
 	defer file.Close()
 
