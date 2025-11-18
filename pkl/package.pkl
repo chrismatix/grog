@@ -1,6 +1,5 @@
 module package
 
-import "platform.pkl"
 import "alias.pkl"
 //import "environment.pkl"
 
@@ -21,10 +20,10 @@ class Target {
   fingerprint: Mapping<String, String>?
   // Target Filtering
   tags: Listing<String>(isDistinct)
-  platform: platform?
+  platforms: Listing<String>(isDistinct)?
 }
 
-default_platform: platform?
+default_platforms: Listing<String>(isDistinct)?
 
 targets: Listing<Target>(isDistinctBy((it) -> it.name))
 

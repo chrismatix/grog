@@ -12,8 +12,10 @@ type Handler interface {
 
 	Has(ctx context.Context, target model.Target, output model.Output) (bool, error)
 
+	// Write writes the output to the output handler and returns its digest
 	Write(ctx context.Context, target model.Target, output model.Output) (string, error)
 
+	// Load loads the output from the output handler and returns its digest
 	Load(ctx context.Context, target model.Target, output model.Output) (string, error)
 }
 

@@ -1,11 +1,9 @@
 package backends
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"grog/internal/console"
 	"io"
 	"sync"
 )
@@ -48,25 +46,19 @@ func (rw *RemoteWrapper) Get(ctx context.Context, path, key string) (io.ReadClos
 	}
 
 	// File not found locally, try the remote cache
-	reader, err = rw.remote.Get(ctx, path, key)
+	remoteReader, err := rw.remote.Get(ctx, path, key)
 	if err != nil {
 		return nil, err
 	}
+	defer remoteReader.Close()
 
-	// File found in remote-cache, store it in the local file system cache for future access
-	// Create a buffer to read the content from the remote reader and store it in both the local cache and the return reader
-	var buf bytes.Buffer
-	teeReader := io.TeeReader(reader, &buf)
+	// Write the remote content into the local filesystem cache
+	if err := rw.fs.Set(ctx, path, key, remoteReader); err != nil {
+		return nil, err
+	}
 
-	// Store the file in the local cache asynchronously, so it doesn't block the Get request
-	go func() {
-		err := rw.fs.Set(ctx, path, key, &buf)
-		if err != nil {
-			logger := console.GetLogger(ctx)
-			logger.Errorf("Failed to store file in local cache after retrieving from remote: %v", err)
-		}
-	}()
-	return io.NopCloser(teeReader), nil
+	// Now return a fresh reader from the local cache
+	return rw.fs.Get(ctx, path, key)
 }
 
 // Set stores a file in both the local file system cache and the remote cache concurrently.

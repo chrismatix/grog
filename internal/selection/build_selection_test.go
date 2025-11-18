@@ -37,11 +37,8 @@ func TestSelectTargetsForBuild(t *testing.T) {
 				Name:    "target2",
 				Package: "pkg",
 			},
-			Tags: []string{testTag},
-			Platform: &model.PlatformConfig{
-				OS:   []string{"linux"}, // does not match "darwin"
-				Arch: []string{"arm64"},
-			},
+			Tags:      []string{testTag},
+			Platforms: []string{"linux/arm64"}, // does not match "darwin/amd64"
 		}
 
 		graph.AddNode(target1)
@@ -80,11 +77,8 @@ func TestSelectTargetsForBuild(t *testing.T) {
 				Name:    "target4",
 				Package: "pkg",
 			},
-			Tags: []string{testTag},
-			Platform: &model.PlatformConfig{
-				OS:   []string{"linux"}, // mismatch
-				Arch: []string{"arm64"},
-			},
+			Tags:      []string{testTag},
+			Platforms: []string{"linux/arm64"}, // mismatch
 		}
 
 		graph.AddNode(target3)

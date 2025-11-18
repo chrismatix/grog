@@ -3,10 +3,11 @@ package config
 import (
 	"crypto/sha256"
 	"fmt"
-	"github.com/fatih/color"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/fatih/color"
 )
 
 // GetWorkspaceCachePrefix returns name of the cache directory for the current repo.
@@ -59,14 +60,6 @@ func GetPathRelativeToWorkspaceRoot(path string) (string, error) {
 	}
 
 	return path[len(workspaceRoot)+1:], nil
-}
-
-func MustGetPathRelativeToWorkspaceRoot(path string) string {
-	relativePath, err := GetPathRelativeToWorkspaceRoot(path)
-	if err != nil {
-		panic(err)
-	}
-	return relativePath
 }
 
 func GetPathAbsoluteToWorkspaceRoot(path string) string {

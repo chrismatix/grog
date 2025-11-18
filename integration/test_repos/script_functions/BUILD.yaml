@@ -1,0 +1,23 @@
+targets:
+  - name: produce_outputs
+    command: |
+      set -eu
+      mkdir -p build/assets
+      echo "artifact" > build/message.txt
+      echo "from assets" > build/assets/info.txt
+    outputs:
+      - build/message.txt
+      - dir::build/assets
+
+  - name: use_outputs
+    dependencies:
+      - :produce_outputs
+    command: |
+      set -eu
+      cat $(output :produce_outputs 0) > copied.txt
+      cp $(output :produce_outputs 1)/info.txt assets_copy.txt
+      echo "copied=$(cat copied.txt)"
+      echo "asset=$(cat assets_copy.txt)"
+    outputs:
+      - copied.txt
+      - assets_copy.txt
