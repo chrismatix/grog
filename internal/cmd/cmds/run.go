@@ -258,10 +258,15 @@ func runTargetBinaries(ctx context.Context, logger *zap.SugaredLogger, runTarget
 		target *model.Target
 		cmd    *exec.Cmd
 	}
+	// For each target, create a new Cmd and run it in a goroutine.
 	runs := make([]binaryRun, 0, len(runTargets))
 	for _, runTarget := range runTargets {
 		cmd := newBinaryRunCommand(ctx, runTarget, userCommandArgs)
-		logRunInvocation(logger, runTarget, userCommandArgs)
+		if runOptions.inPackage {
+			logger.Infof("Running %s -> %s with args %s in package directory", runTarget.Label, runTarget.BinOutput.Identifier, userCommandArgs)
+		} else {
+			logger.Infof("Running %s -> %s with args %s", runTarget.Label, runTarget.BinOutput.Identifier, userCommandArgs)
+		}
 		runs = append(runs, binaryRun{target: runTarget, cmd: cmd})
 	}
 
@@ -288,7 +293,7 @@ func runTargetBinaries(ctx context.Context, logger *zap.SugaredLogger, runTarget
 		return nil
 	}
 	if len(runTargets) == 1 {
-		return fmt.Errorf("failed to run binary: %w", errs[0])
+		return errs[0]
 	}
 	return fmt.Errorf("multiple binaries failed: %w", errors.Join(errs...))
 }
@@ -307,12 +312,4 @@ func newBinaryRunCommand(ctx context.Context, runTarget *model.Target, userComma
 		runCommand.Dir = packagePath
 	}
 	return runCommand
-}
-
-func logRunInvocation(logger *zap.SugaredLogger, runTarget *model.Target, userCommandArgs []string) {
-	if runOptions.inPackage {
-		logger.Infof("Running %s -> %s with args %s in package directory", runTarget.Label, runTarget.BinOutput.Identifier, userCommandArgs)
-		return
-	}
-	logger.Infof("Running %s -> %s with args %s", runTarget.Label, runTarget.BinOutput.Identifier, userCommandArgs)
 }
