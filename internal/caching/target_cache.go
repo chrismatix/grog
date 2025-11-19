@@ -53,7 +53,7 @@ func (tc *TargetCache) CacheKey(output model.Output) string {
 	return hashing.HashString(output.String())
 }
 
-func (tc *TargetCache) MetaCacheKey(output model.Output, metaKey string) string {
+func (tc *TargetCache) OutputMetaCacheKey(output model.Output, metaKey string) string {
 	return fmt.Sprintf("%s_%s", tc.CacheKey(output), metaKey)
 }
 
@@ -71,7 +71,15 @@ func (tc *TargetCache) WriteOutputMetaFile(
 	metaKey string,
 	metaValue string,
 ) error {
-	return tc.backend.Set(ctx, tc.CachePath(target), tc.MetaCacheKey(output, metaKey), bytes.NewReader([]byte(metaValue)))
+	return tc.backend.Set(ctx, tc.CachePath(target), tc.OutputMetaCacheKey(output, metaKey), bytes.NewReader([]byte(metaValue)))
+}
+
+// WriteOutputHash writes the currently stored OutputHash for a target
+func (tc *TargetCache) WriteOutputHash(
+	ctx context.Context,
+	target model.Target,
+) error {
+	return tc.backend.Set(ctx, tc.CachePath(target), tc.CacheKey(output), outputReader)
 }
 
 // WriteOutputDigest writes a digest for a given at a fixed key
@@ -90,7 +98,7 @@ func (tc *TargetCache) LoadOutputMetaFile(
 	output model.Output,
 	metaKey string,
 ) (string, error) {
-	contentReader, err := tc.backend.Get(ctx, tc.CachePath(target), tc.MetaCacheKey(output, metaKey))
+	contentReader, err := tc.backend.Get(ctx, tc.CachePath(target), tc.OutputMetaCacheKey(output, metaKey))
 	if err != nil {
 		return "", fmt.Errorf("output %s for target %s does not exist in %s backend",
 			output.String(),
@@ -115,7 +123,7 @@ func (tc *TargetCache) HasOutputMetaFile(
 	output model.Output,
 	metaKey string,
 ) (bool, error) {
-	return tc.backend.Exists(ctx, tc.CachePath(target), tc.MetaCacheKey(output, metaKey))
+	return tc.backend.Exists(ctx, tc.CachePath(target), tc.OutputMetaCacheKey(output, metaKey))
 }
 
 // WriteFile writes a file path relative to the target path to the cache backend

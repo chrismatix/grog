@@ -204,6 +204,7 @@ func (r *Registry) LoadOutputs(ctx context.Context, target *model.Target) error 
 		// Outputs are already loaded, nothing to do
 		return nil
 	}
+
 	logger := console.GetLogger(ctx)
 	logger.Debugf("%s: loading outputs", target.Label)
 

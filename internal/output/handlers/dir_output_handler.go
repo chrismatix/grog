@@ -21,12 +21,14 @@ import (
 // and using the target cache to store them.
 type DirectoryOutputHandler struct {
 	targetCache *caching.TargetCache
+	cas         *caching.Cas
 }
 
 // NewDirectoryOutputHandler creates a new DirectoryOutputHandler
-func NewDirectoryOutputHandler(targetCache *caching.TargetCache) *DirectoryOutputHandler {
+func NewDirectoryOutputHandler(targetCache *caching.TargetCache, cas *caching.Cas) *DirectoryOutputHandler {
 	return &DirectoryOutputHandler{
 		targetCache: targetCache,
+		cas:         cas,
 	}
 }
 

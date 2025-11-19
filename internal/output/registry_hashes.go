@@ -60,7 +60,7 @@ func (r *Registry) computeAndStoreTargetOutputHash(ctx context.Context, target *
 	}
 
 	r.cacheTargetHash(target, hash)
-	if err := r.targetCache.WriteOutputDigest(ctx, *target, targetHashMetaOutput, hash); err != nil {
+	if err := r.targetCache.Writ(ctx, *target, targetHashMetaOutput, hash); err != nil {
 		return "", fmt.Errorf("write output hash meta for %s: %w", target.Label, err)
 	}
 	return hash, nil
