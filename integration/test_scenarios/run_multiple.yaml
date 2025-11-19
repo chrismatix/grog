@@ -1,0 +1,17 @@
+name: Run multiple binaries
+repo: run_multiple
+cases:
+  - name: run_multiple_commands
+    grog_args:
+      - run
+      - //:fast_runner
+      - //:slow_runner
+      - --
+
+  - name: run_multiple_commands_failure
+    grog_args:
+      - run
+      - //:slow_runner
+      - //:fails_runner
+      - --
+    expect_fail: true

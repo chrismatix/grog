@@ -68,6 +68,13 @@ grog build //package:protoc_compiler
 ./path/to/protoc/bin/protoc --help
 ```
 
+You can also run multiple binaries at the same time by listing each target
+before the `--` separator that introduces the arguments passed to the binaries:
+
+```shell
+grog run //tools:api_server //tools:web_dev --
+```
+
 <Aside>
   Binary outputs are cached just like any other output, which means Grog will
   avoid rebuilding the tool if nothing has changed, making your builds faster.
