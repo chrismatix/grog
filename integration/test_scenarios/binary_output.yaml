@@ -19,6 +19,7 @@ cases:
     grog_args:
       - run
       - //:creates_bin_tool
+      - --
       - foo
 
   - name: run_command_in_package_works
@@ -31,10 +32,12 @@ cases:
     grog_args:
       - run
       - :creates_bin_tool
+      - --
       - foo
 
   - name: run_command_works_declared_bin_tool
     grog_args:
       - run
       - //:declares_bin_tool
+      - --
       - bar

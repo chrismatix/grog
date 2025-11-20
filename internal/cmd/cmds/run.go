@@ -182,7 +182,8 @@ func splitRunArgs(args []string, argsLenAtDash int) ([]string, []string, error) 
 	if argsLenAtDash > 0 {
 		return args[:argsLenAtDash], args[argsLenAtDash:], nil
 	}
-	return args[:1], args[1:], nil
+	// (== -1) This means that no '--' was found and we interpret all remaining args as targets
+	return args, nil, nil
 }
 
 func parseMultipleTargetLabels(logger *zap.SugaredLogger, currentPackagePath string, targetArgs []string) []label.TargetLabel {
