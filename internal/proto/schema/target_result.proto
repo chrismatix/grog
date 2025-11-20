@@ -1,0 +1,47 @@
+syntax = "proto3";
+package grog.proto.v1;
+
+import "digest.proto";
+
+option go_package = "grog/proto/v1";
+
+message FileOutput {
+  string path = 1; // Path relative to the target's working directory.
+  Digest digest = 2;
+  bool   is_executable = 3;
+}
+
+message DirectoryOutput {
+  // Path relative to the action's working directory.
+  string path = 1;
+
+  // Digest of the serialized Tree proto in CAS.
+  Digest tree_digest = 2;
+}
+
+message DockerImageOutput {
+  string tag = 1;
+  string digest = 2;
+}
+
+message Output {
+  oneof kind {
+    FileOutput file = 1;
+    DirectoryOutput directory = 2;
+    DockerImageOutput docker_image = 3;
+  }
+}
+
+// A single target result cache entry.
+// The change hash here is the key for retrieving it from the
+message TargetResult {
+  // The change hash of the action
+  string change_hash = 1;
+  // The combined digest of all of its outputs
+  string output_hash = 2;
+
+  // Declared outputs (files, dirs, docker images).
+  repeated Output outputs = 3;
+
+  int64 execution_duration_millis = 4;
+}

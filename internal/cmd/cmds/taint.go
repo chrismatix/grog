@@ -11,6 +11,7 @@ import (
 	"grog/internal/label"
 	"grog/internal/loading"
 	"grog/internal/model"
+	"grog/internal/output"
 	"grog/internal/selection"
 )
 
@@ -51,9 +52,10 @@ This is useful when you want to force a rebuild of specific targets.`,
 			logger.Fatalf("could not instantiate cache: %v", err)
 		}
 		targetCache := caching.NewTargetCache(cache)
+		registry := output.NewRegistry(targetCache, config.Global.EnableCache)
 
 		taintedCount := 0
-		targetHasher := hashing.NewTargetHasher(graph)
+		targetHasher := hashing.NewTargetHasher(graph, registry)
 		for _, node := range selectedNodes {
 			target, ok := node.(*model.Target)
 			if !ok {
@@ -61,7 +63,7 @@ This is useful when you want to force a rebuild of specific targets.`,
 			}
 
 			// In order for the cache key to be correct the ChangeHash needs to be set
-			err := targetHasher.SetTargetChangeHash(target)
+			err := targetHasher.SetTargetChangeHash(ctx, target)
 			err = targetCache.Taint(ctx, *target)
 			if err != nil {
 				logger.Errorf("Failed to taint target %s: %v", target.Label, err)
