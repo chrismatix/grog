@@ -89,7 +89,9 @@ func (r *Registry) HasCacheHit(ctx context.Context, target *model.Target) (bool,
 		return false, nil
 	}
 	start := time.Now()
-	defer r.addCacheDuration(time.Since(start))
+	defer func() {
+		r.addCacheDuration(time.Since(start))
+	}()
 	r.targetMutexMap.Lock(target.Label.String())
 	defer r.targetMutexMap.Unlock(target.Label.String())
 	// check for the default file system key for checking if the inputs changed
@@ -139,7 +141,9 @@ func (r *Registry) WriteOutputs(ctx context.Context, target *model.Target) error
 		return nil
 	}
 	start := time.Now()
-	defer r.addCacheDuration(time.Since(start))
+	defer func() {
+		r.addCacheDuration(time.Since(start))
+	}()
 
 	r.targetMutexMap.Lock(target.Label.String())
 	defer r.targetMutexMap.Unlock(target.Label.String())
@@ -180,7 +184,9 @@ func (r *Registry) LoadOutputs(ctx context.Context, target *model.Target) error 
 		return nil
 	}
 	start := time.Now()
-	defer r.addCacheDuration(time.Since(start))
+	defer func() {
+		r.addCacheDuration(time.Since(start))
+	}()
 	r.targetMutexMap.Lock(target.Label.String())
 	defer r.targetMutexMap.Unlock(target.Label.String())
 	if target.OutputsLoaded {
