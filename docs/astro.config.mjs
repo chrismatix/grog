@@ -14,7 +14,10 @@ export default defineConfig({
     starlight({
       title: "Grog Docs",
       plugins: [starlightThemeRapide()],
-      social: [{ icon: "github", label: "GitHub", href: "https://github.com/chrismatix/grog" }],
+      social: [
+        { icon: "github", label: "GitHub", href: "https://github.com/chrismatix/grog" },
+        { icon: "slack", label: "Slack", href: "https://grog-build.slack.com" },
+      ],
       sidebar: [
         {
           label: "Start Here!",
