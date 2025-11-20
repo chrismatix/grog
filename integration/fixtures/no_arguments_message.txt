@@ -15,7 +15,7 @@ Available Commands:
   logs        Print the latest log file for the given target.
   owners      Lists targets that own the specified files as inputs.
   rdeps       Lists (transitive) dependants (reverse dependencies) of a target.
-  run         Builds and runs a single target's binary output.
+  run         Builds and runs one or more targets' binary outputs.
   taint       Taints targets by pattern to force execution regardless of cache status.
   test        Loads the user configuration and executes test targets.
   version     Print the version info.

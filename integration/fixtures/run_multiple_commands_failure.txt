@@ -1,0 +1,11 @@
+INFO: 1 package loaded, 3 targets configured.
+WARN: target //:fails_runner has no inputs, dependencies or output checks causing it to run only once
+WARN: target //:fast_runner has no inputs, dependencies or output checks causing it to run only once
+WARN: target //:slow_runner has no inputs, dependencies or output checks causing it to run only once
+INFO: Selected 2 targets.
+INFO: Build completed successfully. 2 targets completed (1 cache hits).
+INFO: Running //:slow_runner -> dist/slow_runner.sh with args []
+INFO: Running //:fails_runner -> dist/fails_runner.sh with args []
+failing runner
+FATAL: multiple binaries failed: failed to run //:fails_runner: exit status 1
+failed to run //:slow_runner: signal: killed
