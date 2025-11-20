@@ -6,7 +6,8 @@ import (
 	"io"
 )
 
-// Cas represents a content addressable store.
+// Cas is a content-addressable store.
+// That is: Every record is identified by its digest
 type Cas struct {
 	backend backends.CacheBackend
 }
@@ -27,7 +28,7 @@ func (c *Cas) Write(ctx context.Context, digest string, reader io.Reader) error 
 }
 
 // Load writes a digest for a given reader
-func (c *Cas) Load(ctx context.Context, digest string, reader io.Reader) (io.ReadCloser, error) {
+func (c *Cas) Load(ctx context.Context, digest string) (io.ReadCloser, error) {
 	return c.backend.Get(ctx, "cas", digest)
 }
 

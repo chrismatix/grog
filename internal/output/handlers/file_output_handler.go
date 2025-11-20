@@ -6,22 +6,20 @@ import (
 	"grog/internal/caching"
 	"grog/internal/config"
 	"grog/internal/model"
-	"io"
+	v1 "grog/internal/proto/gen"
 	"os"
 	"path/filepath"
-
-	"github.com/cespare/xxhash/v2"
 )
 
 // FileOutputHandler is the default output handler that writes files to the file system.
 // mostly passes directly through to the target cache which handles files
 type FileOutputHandler struct {
-	targetCache *caching.TargetCache
+	cas *caching.Cas
 }
 
-func NewFileOutputHandler(targetCache *caching.TargetCache) *FileOutputHandler {
+func NewFileOutputHandler(cas *caching.Cas) *FileOutputHandler {
 	return &FileOutputHandler{
-		targetCache: targetCache,
+		cas: cas,
 	}
 }
 
@@ -29,50 +27,41 @@ func (f *FileOutputHandler) Type() HandlerType {
 	return "file"
 }
 
-func (f *FileOutputHandler) Has(ctx context.Context, target model.Target, output model.Output) (bool, error) {
-	return f.targetCache.FileExists(ctx, target, output)
+func (f *FileOutputHandler) Has(ctx context.Context, output *v1.FileOutput) (bool, error) {
+	return f.cas.Exists(ctx, output.Digest.Hash)
 }
 
-func (f *FileOutputHandler) Write(ctx context.Context, target model.Target, output model.Output) (string, error) {
-	absOutputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.Identifier))
+func (f *FileOutputHandler) Write(ctx context.Context, target model.Target, output *v1.Output) error {
+	absOutputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.GetFile().Path))
 	file, err := os.Open(absOutputPath)
 	if err != nil {
-		return "", fmt.Errorf("declared output %s for target %s was not created", output, target.Label)
+		return fmt.Errorf("declared output %s for target %s was not created", output, target.Label)
 	}
 	defer file.Close()
 
-	hasher := xxhash.New()
-	tee := io.TeeReader(file, hasher)
-
-	if err := f.targetCache.WriteFileStream(ctx, target, output, tee); err != nil {
-		return "", err
+	if err := f.cas.Write(ctx, output.GetFile().Digest.GetHash(), file); err != nil {
+		return err
 	}
 
-	return fmt.Sprintf("%x", hasher.Sum64()), nil
+	return nil
 }
 
-func (f *FileOutputHandler) Load(ctx context.Context, target model.Target, output model.Output) (string, error) {
-	absOutputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.Identifier))
-	contentReader, err := f.targetCache.LoadFileStream(ctx, target, output)
+func (f *FileOutputHandler) Load(ctx context.Context, target model.Target, output *v1.Output) error {
+	absOutputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.GetFile().GetPath()))
+	contentReader, err := f.cas.Load(ctx, output.GetFile().GetDigest().GetHash())
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer contentReader.Close()
 
 	outputFile, err := os.Create(absOutputPath)
 	if err != nil {
-		return "", err
-	}
-
-	hasher := xxhash.New()
-	if _, err := io.Copy(outputFile, io.TeeReader(contentReader, hasher)); err != nil {
-		outputFile.Close()
-		return "", err
+		return err
 	}
 
 	if err := outputFile.Close(); err != nil {
-		return "", err
+		return err
 	}
 
-	return fmt.Sprintf("%x", hasher.Sum64()), nil
+	return nil
 }

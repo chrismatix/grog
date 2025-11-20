@@ -1,0 +1,42 @@
+syntax = "proto3";
+package grog.proto.v1;
+
+import "digest.proto";
+
+option go_package = "grog/proto/v1";
+
+
+// A file entry in a directory.
+message FileNode {
+  string name          = 1;
+  Digest digest        = 2;
+  bool   is_executable = 3;
+}
+
+// A subdirectory entry.
+message DirectoryNode {
+  string name   = 1;
+  Digest digest = 2;
+}
+
+// A symbolic link entry.
+message SymlinkNode {
+  string name   = 1; // symlink file name
+  string target = 2; // symlink target
+}
+
+// A single directory in the Merkle tree.
+message Directory {
+  repeated FileNode      files        = 1;
+  repeated DirectoryNode directories  = 2;
+  repeated SymlinkNode   symlinks     = 3;
+}
+
+message Tree {
+  // The root directory.
+  Directory root = 1;
+  // All the child directories.
+  //
+  // The same contents as DirectoryNode.digest, unrolled into a flat list.
+  repeated Directory children = 2;
+}
