@@ -34,7 +34,8 @@ func (e *CommandError) Error() string {
 }
 
 type Executor struct {
-	targetCache      *caching.TargetCacheNew
+	targetCache      *caching.TargetResultCache
+	taintCache       *caching.TaintCache
 	registry         *output.Registry
 	graph            *dag.DirectedTargetGraph
 	failFast         bool
@@ -59,7 +60,8 @@ func (e *Executor) addExecDuration(duration time.Duration) {
 }
 
 func NewExecutor(
-	targetCache *caching.TargetCacheNew,
+	targetCache *caching.TargetResultCache,
+	taintCache *caching.TaintCache,
 	registry *output.Registry,
 	graph *dag.DirectedTargetGraph,
 	failFast bool,
@@ -68,11 +70,12 @@ func NewExecutor(
 ) *Executor {
 	return &Executor{
 		targetCache:      targetCache,
+		taintCache:       taintCache,
 		registry:         registry,
 		graph:            graph,
 		failFast:         failFast,
 		loadOutputsMode:  loadOutputsMode,
-		targetHasher:     hashing.NewTargetHasher(graph, registry),
+		targetHasher:     hashing.NewTargetHasher(graph),
 		streamLogsToggle: console.NewStreamLogsToggle(streamLogs),
 	}
 }
@@ -130,7 +133,7 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, Stats, error
 
 		outputIdentifiers := e.getDependencyOutputIdentifiers(target)
 
-		err = e.targetHasher.SetTargetChangeHash(ctx, target)
+		err = e.targetHasher.SetTargetChangeHash(target)
 		if err != nil {
 			return dag.CacheMiss, err
 		}
@@ -224,18 +227,14 @@ func (e *Executor) getTaskFunc(
 	return func(update worker.StatusFunc) (dag.CacheResult, error) {
 		startTime := time.Now()
 
+		logger := console.GetLogger(ctx)
 		update(fmt.Sprintf("%s: checking cache.", target.Label))
 
-		targetResult, err := e.targetCache.Load(ctx, target.ChangeHash)
-		if err == nil || target.SkipsCache() {
-			hasCacheHit, err := e.registry.HasCacheHit(ctx, targetResult)
-			if err != nil {
-				return dag.CacheMiss, err
-			}
-			target.HasCacheHit = hasCacheHit
+		hasCacheHit, err := e.targetCache.Has(ctx, target.ChangeHash)
+		if err != nil {
+			logger.Warnf("failed to check target %s cache: %w", target.Label, err)
 		}
-
-		logger := console.GetLogger(ctx)
+		target.HasCacheHit = hasCacheHit
 
 		outputCheckErr := runOutputChecks(ctx, target, binToolPaths, outputIdentifiers)
 		if outputCheckErr != nil {
@@ -248,26 +247,25 @@ func (e *Executor) getTaskFunc(
 		}
 
 		// Check if the target is tainted
-		//isTainted, taintedErr := e.targetCache.IsTainted(ctx, *target)
-		//if taintedErr != nil {
-		//	logger.Errorf("Failed to check if target %s is tainted: %v", target.Label, taintedErr)
-		//}
-		//
-		//if isTainted {
-		//	logger.Debugf("running target %s due to being tainted", target.Label)
-		//}
+		isTainted, taintedErr := e.taintCache.IsTainted(ctx, target.Label)
+		if taintedErr != nil {
+			logger.Errorf("Failed to check if target %s is tainted: %v", target.Label, taintedErr)
+		}
+
+		if isTainted {
+			logger.Debugf("running target %s due to being tainted", target.Label)
+		}
 
 		// If either the inputs or the deps have changed we need to re-execute the target
 		// depsCached is also true when there are no deps
-		if target.HasCacheHit { //&& !isTainted {
+		if target.HasCacheHit && !isTainted && !target.SkipsCache() {
 			if e.loadOutputsMode == config.LoadOutputsMinimal {
 				update(fmt.Sprintf("%s: cache hit. skipped loading outputs because load_outputs=minimal.", target.Label))
 				logger.Debugf("%s: cache hit. skipped loading outputs because load_outputs=minimal", target.Label)
 				return dag.CacheHit, nil
 			}
 
-			// TODO in the case of skip cache this log statement is a bit misleading
-			update(fmt.Sprintf("%s: cache hit. loading outputs.", target.Label))
+			update(fmt.Sprintf("%s: cache hit. loading %s.", target.Label, console.FCountOutputs(len(target.AllOutputs()))))
 			loadingErr := e.loadCachedOutputs(ctx, target)
 			if loadingErr != nil {
 				// Don't return so that we instead break out and continue executing the target
@@ -299,7 +297,7 @@ func (e *Executor) getTaskFunc(
 			}
 		}
 
-		return e.executeTarget(ctx, target, binToolPaths, outputIdentifiers, update, false)
+		return e.executeTarget(ctx, target, binToolPaths, outputIdentifiers, update, isTainted)
 	}
 }
 
@@ -368,12 +366,14 @@ func (e *Executor) executeTarget(
 		return dag.CacheMiss, fmt.Errorf("build completed but failed to write outputs to cache for target %s:\n%w", target.Label, err)
 	}
 
-	//if isTainted {
-	//	err = e.targetCache.RemoveTaint(ctx, *target)
-	//	if err != nil {
-	//		logger.Errorf("Failed to remove taint from target %s: %v", target.Label, err)
-	//	}
-	//}
+	if isTainted {
+		go func() {
+			err = e.taintCache.Clear(ctx, target.Label)
+			if err != nil {
+				logger.Errorf("Failed to remove taint from target %s: %v", target.Label, err)
+			}
+		}()
+	}
 
 	return dag.CacheMiss, nil
 }

@@ -9,7 +9,7 @@ import (
 	"grog/internal/maps"
 	"grog/internal/model"
 	"grog/internal/output/handlers"
-	v1 "grog/internal/proto/gen"
+	"grog/internal/proto/gen"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -21,7 +21,7 @@ import (
 // Registry manages the available output handlers
 type Registry struct {
 	handlers     map[string]handlers.Handler
-	targetCache  *caching.TargetCacheNew
+	targetCache  *caching.TargetResultCache
 	cas          *caching.Cas
 	pool         pond.Pool
 	handlerMutex sync.RWMutex
@@ -41,7 +41,7 @@ type Registry struct {
 
 // NewRegistry creates a new registry with default handlers
 func NewRegistry(
-	targetCache *caching.TargetCacheNew,
+	targetCache *caching.TargetResultCache,
 	cas *caching.Cas,
 	enableCache bool,
 ) *Registry {
@@ -58,7 +58,7 @@ func NewRegistry(
 	}
 
 	// Register built-in handlers
-	r.Register(handlers.NewFileOutputHandler(targetCache))
+	r.Register(handlers.NewFileOutputHandler(cas))
 	r.Register(handlers.NewDirectoryOutputHandler(cas))
 
 	dockerBackend := config.Global.Docker.Backend
@@ -84,15 +84,15 @@ func (r *Registry) Register(handler handlers.Handler) {
 }
 
 // GetHandler retrieves a handler by type
-func (r *Registry) mustGetHandlerFromProto(output *v1.Output) handlers.Handler {
+func (r *Registry) mustGetHandlerFromProto(output *gen.Output) handlers.Handler {
 	var outputType string
 
 	switch output.Kind.(type) {
-	case *v1.Output_File:
+	case *gen.Output_File:
 		outputType = "file"
-	case *v1.Output_Directory:
+	case *gen.Output_Directory:
 		outputType = "directory"
-	case *v1.Output_DockerImage:
+	case *gen.Output_DockerImage:
 		outputType = "docker_image"
 	default:
 		panic(fmt.Errorf("unknown output kind: %T", output.Kind))
@@ -111,45 +111,6 @@ func (r *Registry) mustGetHandler(outputType string) handlers.Handler {
 		panic(fmt.Sprintf("handler for type %s not registered", outputType))
 	}
 	return handler
-}
-
-func (r *Registry) HasCacheHit(ctx context.Context, targetResult *v1.TargetResultCache) (bool, error) {
-	if !r.enableCache {
-		return false, nil
-	}
-	start := time.Now()
-	defer r.addCacheDuration(time.Since(start))
-	r.targetMutexMap.Lock(targetResult.ChangeHash)
-	defer r.targetMutexMap.Unlock(targetResult.ChangeHash)
-
-	foundMiss := atomic.Bool{}
-	var tasks []pond.Task
-
-	outputs := targetResult.GetOutputs()
-
-	for _, outputRef := range outputs {
-		localOutputRef := outputRef
-		task := r.pool.SubmitErr(func() error {
-			handler := r.mustGetHandler(localOutputRef)
-			handlerCacheHit, handlerErr := handler.Has(ctx, *target, localOutputRef)
-			if handlerErr != nil {
-				return fmt.Errorf("error checking for output %s with %s handler: %w", localOutputRef, handler.Type(), handlerErr)
-			}
-			if !handlerCacheHit {
-				foundMiss.Store(true)
-			}
-			return nil
-		})
-		tasks = append(tasks, task)
-	}
-
-	for _, t := range tasks {
-		if err := t.Wait(); err != nil {
-			return false, err
-		}
-	}
-
-	return !foundMiss.Load(), nil
 }
 
 // WriteOutputs writes the outputs for a target once
@@ -173,7 +134,7 @@ func (r *Registry) WriteOutputs(ctx context.Context, target *model.Target) error
 	outputs := target.AllOutputs()
 
 	var tasks []pond.Task
-	var targetOutputs []*v1.Output
+	var targetOutputs []*gen.Output
 
 	for _, outputRef := range outputs {
 		localOutputRef := outputRef
@@ -194,9 +155,16 @@ func (r *Registry) WriteOutputs(ctx context.Context, target *model.Target) error
 		}
 	}
 
-	targetCacheEntry := &v1.TargetResult{
-		ChangeHash: target.ChangeHash,
-		Outputs:    targetOutputs,
+	outputHash, err := getOutputHash(targetOutputs)
+	if err != nil {
+		return err
+	}
+
+	targetCacheEntry := &gen.TargetResult{
+		ChangeHash:              target.ChangeHash,
+		OutputHash:              outputHash,
+		Outputs:                 targetOutputs,
+		ExecutionDurationMillis: target.ExecutionTime.Milliseconds(),
 	}
 
 	target.OutputsLoaded = true
@@ -218,21 +186,21 @@ func (r *Registry) LoadOutputs(ctx context.Context, target *model.Target) error 
 		return nil
 	}
 
+	targetResult, err := r.targetCache.Load(ctx, target.ChangeHash)
+	if err != nil {
+		return err
+	}
+
 	logger := console.GetLogger(ctx)
 	logger.Debugf("%s: loading outputs", target.Label)
 
-	outputs := target.AllOutputs()
-
 	var tasks []pond.Task
-	for _, outputRef := range outputs {
+	for _, outputRef := range targetResult.Outputs {
 		localOutputRef := outputRef
 		task := r.pool.SubmitErr(func() error {
-			hash, err := r.mustGetHandler(localOutputRef.Type).Load(ctx, *target, localOutputRef)
+			err := r.mustGetHandlerFromProto(localOutputRef).Load(ctx, *target, localOutputRef)
 			if err != nil {
 				return err
-			}
-			if hash != "" {
-				r.cacheOutputHash(target, localOutputRef, hash)
 			}
 			return nil
 		})
@@ -246,12 +214,7 @@ func (r *Registry) LoadOutputs(ctx context.Context, target *model.Target) error 
 	}
 
 	target.OutputsLoaded = true
-	// Why this is needed:
-	// - When restoring from the remote cache we copy every file to the local cache
-	// - However, we don't explicitly restore the cache exists file
-	// TODO here we should only write the local cache exists file but it feels like the wrong place to do this
-	// since the output registry should not have to know about the file cache
-	return r.targetCache.WriteLocalCacheExistsFile(ctx, *target)
+	return nil
 }
 
 func (r *Registry) addCacheDuration(duration time.Duration) {

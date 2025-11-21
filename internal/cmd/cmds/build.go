@@ -4,9 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/fatih/color"
-	"github.com/spf13/cobra"
-	"go.uber.org/zap"
 	"grog/internal/analysis"
 	"grog/internal/caching"
 	"grog/internal/caching/backends"
@@ -24,6 +21,10 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/fatih/color"
+	"github.com/spf13/cobra"
+	"go.uber.org/zap"
 )
 
 var BuildCmd = &cobra.Command{
@@ -119,8 +120,9 @@ func runBuild(
 	if err != nil {
 		logger.Fatalf("could not instantiate cache: %v", err)
 	}
-	targetCache := caching.NewTargetCache(cache)
-	registry := output.NewRegistry(targetCache, config.Global.EnableCache)
+	targetCache := caching.NewTargetResultCache(cache)
+	cas := caching.NewCas(cache)
+	registry := output.NewRegistry(targetCache, cas, config.Global.EnableCache)
 
 	// Only lock the workspace once necessary, i.e., before we start building
 	if config.Global.SkipWorkspaceLock {
@@ -176,8 +178,8 @@ func runBuild(
 			cacheHits,
 			len(executionErrors))
 
-		for label, completion := range completionMap {
-			target, ok := graph.GetNodes()[label].(*model.Target)
+		for completionLabel, completion := range completionMap {
+			target, ok := graph.GetNodes()[completionLabel].(*model.Target)
 			if !ok {
 				continue
 			}

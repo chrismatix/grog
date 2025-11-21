@@ -2,6 +2,7 @@ package console
 
 import (
 	"fmt"
+
 	"github.com/fatih/color"
 	"go.uber.org/zap/zapcore"
 )
@@ -22,6 +23,11 @@ func FCount(count int, s string) string {
 // FCountTargets Format a target count
 func FCountTargets(count int) string {
 	return FCount(count, "target")
+}
+
+// FCountOutputs Format a target count
+func FCountOutputs(count int) string {
+	return FCount(count, "output")
 }
 
 // FCountPkg Format a package count

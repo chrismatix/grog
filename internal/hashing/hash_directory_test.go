@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// TestGetTree tests the GetTree function with various directory structures
+// TestGetTree tests the HashDirectory function with various directory structures
 func TestGetTree(t *testing.T) {
 	t.Run("SimpleDirectory", func(t *testing.T) {
 		// Create a temporary directory with simple structure
@@ -24,9 +24,9 @@ func TestGetTree(t *testing.T) {
 			t.Fatalf("Failed to create file2.txt: %v", err)
 		}
 
-		tree, err := GetTree(tempDir)
+		tree, err := HashDirectory(tempDir)
 		if err != nil {
-			t.Fatalf("GetTree failed: %v", err)
+			t.Fatalf("HashDirectory failed: %v", err)
 		}
 
 		if tree.Root == nil {
@@ -99,9 +99,9 @@ func TestGetTree(t *testing.T) {
 			t.Fatalf("Failed to create nested.txt: %v", err)
 		}
 
-		tree, err := GetTree(tempDir)
+		tree, err := HashDirectory(tempDir)
 		if err != nil {
-			t.Fatalf("GetTree failed: %v", err)
+			t.Fatalf("HashDirectory failed: %v", err)
 		}
 
 		// Check root has 1 file and 2 directories
@@ -153,9 +153,9 @@ func TestGetTree(t *testing.T) {
 			t.Fatalf("Failed to create symlink: %v", err)
 		}
 
-		tree, err := GetTree(tempDir)
+		tree, err := HashDirectory(tempDir)
 		if err != nil {
-			t.Fatalf("GetTree failed: %v", err)
+			t.Fatalf("HashDirectory failed: %v", err)
 		}
 
 		// Check we have 1 file and 1 symlink
@@ -184,9 +184,9 @@ func TestGetTree(t *testing.T) {
 		}
 		defer os.RemoveAll(tempDir)
 
-		tree, err := GetTree(tempDir)
+		tree, err := HashDirectory(tempDir)
 		if err != nil {
-			t.Fatalf("GetTree failed: %v", err)
+			t.Fatalf("HashDirectory failed: %v", err)
 		}
 
 		if tree.Root == nil {
@@ -205,7 +205,7 @@ func TestGetTree(t *testing.T) {
 	})
 
 	t.Run("NonExistentDirectory", func(t *testing.T) {
-		_, err := GetTree("/nonexistent/path/that/does/not/exist")
+		_, err := HashDirectory("/nonexistent/path/that/does/not/exist")
 		if err == nil {
 			t.Error("Expected error for non-existent directory, got nil")
 		}
@@ -228,14 +228,14 @@ func TestGetTree(t *testing.T) {
 		}
 
 		// Get tree twice
-		tree1, err := GetTree(tempDir)
+		tree1, err := HashDirectory(tempDir)
 		if err != nil {
-			t.Fatalf("GetTree failed: %v", err)
+			t.Fatalf("HashDirectory failed: %v", err)
 		}
 
-		tree2, err := GetTree(tempDir)
+		tree2, err := HashDirectory(tempDir)
 		if err != nil {
-			t.Fatalf("GetTree failed: %v", err)
+			t.Fatalf("HashDirectory failed: %v", err)
 		}
 
 		// Check that hashes are the same
@@ -303,9 +303,9 @@ func TestComputeDirectoryDigest(t *testing.T) {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
-	tree, err := GetTree(tempDir)
+	tree, err := HashDirectory(tempDir)
 	if err != nil {
-		t.Fatalf("GetTree failed: %v", err)
+		t.Fatalf("HashDirectory failed: %v", err)
 	}
 
 	// Compute digest of root directory

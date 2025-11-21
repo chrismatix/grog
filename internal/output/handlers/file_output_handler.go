@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"grog/internal/caching"
 	"grog/internal/config"
+	"grog/internal/hashing"
 	"grog/internal/model"
-	v1 "grog/internal/proto/gen"
+	"grog/internal/proto/gen"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -27,26 +29,43 @@ func (f *FileOutputHandler) Type() HandlerType {
 	return "file"
 }
 
-func (f *FileOutputHandler) Has(ctx context.Context, output *v1.FileOutput) (bool, error) {
-	return f.cas.Exists(ctx, output.Digest.Hash)
-}
-
-func (f *FileOutputHandler) Write(ctx context.Context, target model.Target, output *v1.Output) error {
-	absOutputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.GetFile().Path))
+func (f *FileOutputHandler) Write(ctx context.Context, target model.Target, output model.Output) (*gen.Output, error) {
+	relativePath := output.Identifier
+	absOutputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, relativePath))
 	file, err := os.Open(absOutputPath)
 	if err != nil {
-		return fmt.Errorf("declared output %s for target %s was not created", output, target.Label)
+		return nil, fmt.Errorf("declared output %s for target %s was not created", output, target.Label)
 	}
 	defer file.Close()
 
-	if err := f.cas.Write(ctx, output.GetFile().Digest.GetHash(), file); err != nil {
-		return err
+	fileHash, err := hashing.HashFile(absOutputPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash file %s: %w", absOutputPath, err)
 	}
 
-	return nil
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get file size %s: %w", absOutputPath, err)
+	}
+
+	if err := f.cas.Write(ctx, fileHash, file); err != nil {
+		return nil, err
+	}
+
+	return &gen.Output{
+		Kind: &gen.Output_File{
+			File: &gen.FileOutput{
+				Path: relativePath,
+				Digest: &gen.Digest{
+					Hash:      fileHash,
+					SizeBytes: fileInfo.Size(),
+				},
+			},
+		},
+	}, nil
 }
 
-func (f *FileOutputHandler) Load(ctx context.Context, target model.Target, output *v1.Output) error {
+func (f *FileOutputHandler) Load(ctx context.Context, target model.Target, output *gen.Output) error {
 	absOutputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.GetFile().GetPath()))
 	contentReader, err := f.cas.Load(ctx, output.GetFile().GetDigest().GetHash())
 	if err != nil {
@@ -56,6 +75,10 @@ func (f *FileOutputHandler) Load(ctx context.Context, target model.Target, outpu
 
 	outputFile, err := os.Create(absOutputPath)
 	if err != nil {
+		return err
+	}
+
+	if _, err := io.Copy(outputFile, contentReader); err != nil {
 		return err
 	}
 

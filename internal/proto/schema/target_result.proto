@@ -3,25 +3,39 @@ package grog.proto.v1;
 
 import "digest.proto";
 
-option go_package = "grog/proto/v1";
+option go_package = "grog/proto/gen";
 
 message FileOutput {
-  string path = 1; // Path relative to the target's working directory.
+  string path = 1; // Path relative to the target's package.
   Digest digest = 2;
   bool   is_executable = 3;
 }
 
 message DirectoryOutput {
-  // Path relative to the action's working directory.
+  // Path relative to the target's package.
   string path = 1;
 
   // Digest of the serialized Tree proto in CAS.
   Digest tree_digest = 2;
 }
 
+enum ImageMode {
+  TAR = 0;
+  REGISTRY = 2;
+}
+
 message DockerImageOutput {
-  string tag = 1;
-  string digest = 2;
+  // Where it's stored
+  ImageMode mode = 1;
+  // The tag under which to find the image locally when writing and where to
+  // load it to when restoring
+  string local_tag = 2;
+  // digest of the tar file when stored in cas
+  string digest = 3;
+  // digest of the manifest
+  string manifest_digest = 4;
+  // the remote tag for registry mode
+  string remote_tag = 5;
 }
 
 message Output {

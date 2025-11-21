@@ -1,21 +1,21 @@
 package handlers
 
 import (
-	"archive/tar"
-	"compress/gzip"
+	"bytes"
 	"context"
 	"fmt"
 	"grog/internal/caching"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/model"
-	v1 "grog/internal/proto/gen"
+	"grog/internal/proto/gen"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/cespare/xxhash/v2"
+	"google.golang.org/protobuf/proto"
 )
 
 // DirectoryOutputHandler handles directory outputs by compressing them to tar.gz files
@@ -25,7 +25,7 @@ type DirectoryOutputHandler struct {
 }
 
 // NewDirectoryOutputHandler creates a new DirectoryOutputHandler
-func NewDirectoryOutputHandler(targetCache *caching.TargetCache, cas *caching.Cas) *DirectoryOutputHandler {
+func NewDirectoryOutputHandler(cas *caching.Cas) *DirectoryOutputHandler {
 	return &DirectoryOutputHandler{
 		cas: cas,
 	}
@@ -35,18 +35,12 @@ func (d *DirectoryOutputHandler) Type() HandlerType {
 	return DirHandler
 }
 
-// Has checks if the directory output exists in the cache
-func (d *DirectoryOutputHandler) Has(ctx context.Context, output *v1.Output) (bool, error) {
-	// We check for the existence of the compressed file in the cache
-	return d.cas.Exists(ctx, output.GetDirectory().GetTreeDigest().Hash)
-}
-
 // Write compresses a directory into <output>.tar.gz and streams it into the cache.
 func (d *DirectoryOutputHandler) Write(
 	ctx context.Context,
 	target model.Target,
 	output model.Output,
-) (string, error) {
+) (*gen.Output, error) {
 	logger := console.GetLogger(ctx)
 
 	workspaceRelativePath := filepath.Join(target.Label.Package, output.Identifier)
@@ -54,144 +48,278 @@ func (d *DirectoryOutputHandler) Write(
 
 	logger.Debugf("compressing %s (target %s → %s)", directoryPath, target.Label, output)
 
+	childrenMap := make(map[string]*gen.Directory)
+	rootDirectory, sizeBytes, err := d.writeDirectoryRecursive(directoryPath, childrenMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build hash tree for %s for target %s: %w", directoryPath, target.Label, err)
+	}
+
+	children := make([]*gen.Directory, 0, len(childrenMap))
+	for _, dir := range childrenMap {
+		children = append(children, dir)
+	}
+
+	tree := &gen.Tree{
+		Root:     rootDirectory,
+		Children: children,
+	}
+	marshalledTree, err := proto.Marshal(tree)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal tree: %w", err)
+	}
+	hasher := xxhash.New()
+	if _, err := hasher.Write(marshalledTree); err != nil {
+		return nil, fmt.Errorf("failed to hash tree: %w", err)
+	}
+
+	treeDigest := fmt.Sprintf("%x", hasher.Sum64())
+	err = d.cas.Write(ctx, fmt.Sprintf("%x", hasher.Sum64()), bytes.NewReader(marshalledTree))
+	if err != nil {
+		return nil, fmt.Errorf("failed to write tree to cache: %w", err)
+	}
+
+	return &gen.Output{
+		Kind: &gen.Output_Directory{
+			Directory: &gen.DirectoryOutput{
+				Path: output.Identifier,
+				TreeDigest: &gen.Digest{
+					Hash:      treeDigest,
+					SizeBytes: sizeBytes,
+				},
+			},
+		},
+	}, nil
+}
+
+// writeDirectoryRecursive recursively builds a Directory message for the given path
+// and writes everything it encounters to the cas
+func (d *DirectoryOutputHandler) writeDirectoryRecursive(path string, childrenMap map[string]*gen.Directory) (*gen.Directory, int64, error) {
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to read directory %s: %w", path, err)
+	}
+
+	dir := &gen.Directory{
+		Files:       []*gen.FileNode{},
+		Directories: []*gen.DirectoryNode{},
+		Symlinks:    []*gen.SymlinkNode{},
+	}
+
+	// Sort entries for deterministic ordering
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Name() < entries[j].Name()
+	})
+
+	sizeBytes := int64(0)
+
+	for _, entry := range entries {
+		entryPath := filepath.Join(path, entry.Name())
+		info, err := entry.Info()
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to get info for %s: %w", entryPath, err)
+		}
+
+		switch {
+		case info.Mode()&os.ModeSymlink != 0:
+			// Handle symlink
+			target, err := os.Readlink(entryPath)
+			if err != nil {
+				return nil, 0, fmt.Errorf("failed to read symlink %s: %w", entryPath, err)
+			}
+			dir.Symlinks = append(dir.Symlinks, &gen.SymlinkNode{
+				Name:   entry.Name(),
+				Target: target,
+			})
+
+		case entry.IsDir():
+			// Handle subdirectory
+			subDir, dirSize, err := d.writeDirectoryRecursive(entryPath, childrenMap)
+			if err != nil {
+				return nil, 0, err
+			}
+
+			sizeBytes += dirSize
+
+			// Compute digest for the subdirectory
+			digest, err := computeDirectoryDigest(subDir)
+			if err != nil {
+				return nil, 0, fmt.Errorf("failed to compute digest for directory %s: %w", entryPath, err)
+			}
+
+			dir.Directories = append(dir.Directories, &gen.DirectoryNode{
+				Name:   entry.Name(),
+				Digest: digest,
+			})
+
+			// Add to children map
+			digestStr := digest.Hash
+			if _, exists := childrenMap[digestStr]; !exists {
+				childrenMap[digestStr] = subDir
+			}
+
+		default:
+			// Handle regular file
+			digest, err := computeFileDigest(entryPath)
+			if err != nil {
+				return nil, 0, fmt.Errorf("failed to compute digest for file %s: %w", entryPath, err)
+			}
+
+			sizeBytes += digest.GetSizeBytes()
+
+			dir.Files = append(dir.Files, &gen.FileNode{
+				Name:         entry.Name(),
+				Digest:       digest,
+				IsExecutable: info.Mode()&0111 != 0,
+			})
+		}
+	}
+
+	return dir, sizeBytes, nil
+}
+
+// computeDirectoryDigest computes the digest for a Directory message.
+func computeDirectoryDigest(dir *gen.Directory) (*gen.Digest, error) {
+	// Serialize the directory to bytes
+	data, err := proto.Marshal(dir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal directory: %w", err)
+	}
+
+	// Compute xxhash hash
+	hasher := xxhash.New()
+	if _, err := hasher.Write(data); err != nil {
+		return nil, fmt.Errorf("failed to hash directory: %w", err)
+	}
+
+	return &gen.Digest{
+		Hash:      fmt.Sprintf("%x", hasher.Sum64()),
+		SizeBytes: int64(len(data)),
+	}, nil
+}
+
+// computeFileDigest computes the digest for a file.
+func computeFileDigest(path string) (*gen.Digest, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file %s: %w", path, err)
+	}
+	defer file.Close()
+
+	hasher := xxhash.New()
+	size, err := io.Copy(hasher, file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash file %s: %w", path, err)
+	}
+
+	return &gen.Digest{
+		Hash:      fmt.Sprintf("%x", hasher.Sum64()),
+		SizeBytes: size,
+	}, nil
+}
+
+// Load fetches the tree from the CAS and then fetches all files from the cache
+func (d *DirectoryOutputHandler) Load(ctx context.Context, target model.Target, output *gen.Output) error {
+	logger := console.GetLogger(ctx)
+	dirPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.GetDirectory().GetPath()))
+
+	logger.Debugf("loading directory from cache for target %s → %s", target.Label, dirPath)
+
+	// Fetch the tree from CAS
+	treeDigest := output.GetDirectory().GetTreeDigest().Hash
+	treeBytes, err := d.cas.LoadBytes(ctx, treeDigest)
+	if err != nil {
+		return fmt.Errorf("failed to read tree from cache: %w", err)
+	}
+	// Unmarshal the tree
+	tree := &gen.Tree{}
+	if err := proto.Unmarshal(treeBytes, tree); err != nil {
+		return fmt.Errorf("failed to unmarshal tree: %w", err)
+	}
+
+	// Build a map of children directories by digest for easy lookup
+	childrenMap := make(map[string]*gen.Directory)
+	for _, child := range tree.Children {
+		digest, err := computeDirectoryDigest(child)
+		if err != nil {
+			return fmt.Errorf("failed to compute child directory digest: %w", err)
+		}
+		childrenMap[digest.Hash] = child
+	}
+
+	// Create the root directory
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", dirPath, err)
+	}
+
+	// Recursively load the directory structure
+	if err := d.loadDirectoryRecursive(ctx, dirPath, tree.Root, childrenMap); err != nil {
+		return fmt.Errorf("failed to load directory structure: %w", err)
+	}
+
 	return nil
 }
 
-// Load extracts the compressed directory from the cache and writes it to the target directory.
-//
-// This is a bit more complicated than the Write method because we need to extract the compressed
-// data to a temporary file first, then read it back into a tar reader and extract the files.
-//
-// This is because the tar reader doesn't support reading from a stream, so we need to write the
-// compressed data to a temporary file first.
-func (d *DirectoryOutputHandler) Load(ctx context.Context, target model.Target, output model.Output) (string, error) {
-	logger := console.GetLogger(ctx)
-	dirPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.Identifier))
+// loadDirectoryRecursive recursively reconstructs a directory from the Directory message
+func (d *DirectoryOutputHandler) loadDirectoryRecursive(ctx context.Context, path string, dir *gen.Directory, childrenMap map[string]*gen.Directory) error {
+	// Create all files
+	for _, fileNode := range dir.Files {
+		filePath := filepath.Join(path, fileNode.Name)
 
-	// Create a temporary file to store the compressed data
-	tempFile, err := os.CreateTemp("", fmt.Sprintf("%s_dir_output_*.tar.gz", target.ChangeHash))
-	if err != nil {
-		return "", err
-	}
-	tempFilePath := tempFile.Name()
-	defer console.WarnOnError(ctx, func() error {
-		if err := os.Remove(tempFilePath); err != nil {
-			return fmt.Errorf("failed to clean up tmp tar file file %s: %w", tempFilePath, err)
-		}
-		return nil
-	})
-
-	// Get the compressed file from the cache
-	contentReader, err := d.targetCache.LoadFileStream(ctx, target, output)
-	if err != nil {
-		return "", err
-	}
-	defer console.WarnOnError(ctx, contentReader.Close)
-
-	hasher := xxhash.New()
-	hashedReader := io.TeeReader(contentReader, hasher)
-
-	// Copy the compressed data to the temporary file
-	if _, err := io.Copy(tempFile, hashedReader); err != nil {
-		return "", err
-	}
-
-	// Close the file to ensure all data is written
-	if err := tempFile.Close(); err != nil {
-		return "", err
-	}
-
-	// Reopen the temporary file for reading
-	tempFile, err = os.Open(tempFilePath)
-	if err != nil {
-		return "", err
-	}
-	defer console.WarnOnError(ctx, tempFile.Close)
-
-	// Create the target directory if it doesn't exist
-	if err := os.MkdirAll(dirPath, 0755); err != nil {
-		return "", err
-	}
-
-	// Create a gzip reader
-	// NOTE does not need to be closed since it's closed by the tar reader
-	gzipReader, err := gzip.NewReader(tempFile)
-	if err != nil {
-		return "", err
-	}
-
-	// Create a tar reader
-	tarReader := tar.NewReader(gzipReader)
-
-	// Extract the files
-	fileCount := 0
-	for {
-		header, tarError := tarReader.Next()
-		if tarError == io.EOF {
-			break
-		}
-		if tarError != nil {
-			return "", fmt.Errorf("error reading tar header: %w", tarError)
+		// Fetch file contents from CAS
+		fileReader, err := d.cas.Load(ctx, fileNode.Digest.Hash)
+		if err != nil {
+			return fmt.Errorf("failed to read file %s from cache: %w", filePath, err)
 		}
 
-		// Get the target path
-		targetPath := filepath.Join(dirPath, header.Name)
+		file, err := os.Create(filePath)
+		if err != nil {
+			return fmt.Errorf("failed to create file %s: %w", filePath, err)
+		}
+		// Write file
+		mode := os.FileMode(0644)
+		if fileNode.IsExecutable {
+			mode = 0755
+		}
+		if _, err := io.Copy(file, fileReader); err != nil {
+			return fmt.Errorf("failed to write file %s: %w", filePath, err)
+		}
 
-		switch header.Typeflag {
-		case tar.TypeDir:
-			// Remove any files that already exist
-			if err := os.RemoveAll(targetPath); err != nil {
-				return "", err
-			}
-			if err := os.MkdirAll(targetPath, 0755); err != nil {
-				return "", err
-			}
-			fileCount++
-			continue
-
-		case tar.TypeSymlink:
-			// Ensure the parent directory exists
-			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-				return "", fmt.Errorf("failed to create parent directories for symlink %s: %w", targetPath, err)
-			}
-
-			// Remove any existing file/symlink so os.Symlink doesn't fail
-			if err := os.RemoveAll(targetPath); err != nil {
-				return "", fmt.Errorf("failed to remove existing path for symlink %s: %w", targetPath, err)
-			}
-
-			// header.Linkname holds the symlink target as written by FileInfoHeader
-			if err := os.Symlink(header.Linkname, targetPath); err != nil {
-				return "", fmt.Errorf("failed to create symlink %s -> %s: %w", targetPath, header.Linkname, err)
-			}
-
-			fileCount++
-			continue
-
-		default:
-			// Create parent directories if needed
-			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-				return "", fmt.Errorf("failed to create parent directories for file %s: %w", targetPath, err)
-			}
-
-			// Create the file
-			file, tarError := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY, os.FileMode(header.Mode))
-			if tarError != nil {
-				return "", fmt.Errorf("failed to create file %s: %w", targetPath, tarError)
-			}
-
-			if _, err := io.Copy(file, tarReader); err != nil {
-				return "", fmt.Errorf("failed to copy file %s: %w", targetPath, err)
-			}
-
-			if err := file.Close(); err != nil {
-				return "", fmt.Errorf("failed to close file %s: %w", targetPath, err)
-			}
-
-			fileCount++
+		err = file.Chmod(mode)
+		if err != nil {
+			return fmt.Errorf("failed to chmod file %s: %w", filePath, err)
 		}
 	}
 
-	logger.Debugf("Successfully extracted %d files to %s", fileCount, dirPath)
-	return fmt.Sprintf("%x", hasher.Sum64()), nil
+	// Create all subdirectories
+	for _, dirNode := range dir.Directories {
+		subDirPath := filepath.Join(path, dirNode.Name)
+
+		// Create the subdirectory
+		if err := os.MkdirAll(subDirPath, 0755); err != nil {
+			return fmt.Errorf("failed to create directory %s: %w", subDirPath, err)
+		}
+
+		// Get the child directory from the map
+		childDir, exists := childrenMap[dirNode.Digest.Hash]
+		if !exists {
+			return fmt.Errorf("child directory %s not found in children map", dirNode.Name)
+		}
+
+		// Recursively load the subdirectory
+		if err := d.loadDirectoryRecursive(ctx, subDirPath, childDir, childrenMap); err != nil {
+			return err
+		}
+	}
+
+	// Create all symlinks
+	for _, symlinkNode := range dir.Symlinks {
+		symlinkPath := filepath.Join(path, symlinkNode.Name)
+
+		// Create the symlink
+		if err := os.Symlink(symlinkNode.Target, symlinkPath); err != nil {
+			return fmt.Errorf("failed to create symlink %s: %w", symlinkPath, err)
+		}
+	}
+
+	return nil
 }

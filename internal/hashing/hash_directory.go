@@ -13,8 +13,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// GetTree takes a path to a directory and returns the Merkle Tree representation.
-func GetTree(path string) (*pb.Tree, error) {
+// HashDirectory takes a path to a directory and returns the Merkle Tree representation.
+func HashDirectory(path string) (*pb.Tree, error) {
 	// Map to store all directories by their digest
 	childrenMap := make(map[string]*pb.Directory)
 

@@ -24,8 +24,8 @@ func TestDirectoryOutputHandler_WriteAndLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create cache backend: %v", err)
 	}
-	targetCache := caching.NewTargetCache(cacheBackend)
-	handler := handlers.NewDirectoryOutputHandler(targetCache)
+	cas := caching.NewCas(cacheBackend)
+	handler := handlers.NewDirectoryOutputHandler(cas)
 
 	target := model.Target{Label: label.TL("pkg", "target"), ChangeHash: "hash"}
 	output := model.NewOutput("dir", "out")
@@ -39,6 +39,7 @@ func TestDirectoryOutputHandler_WriteAndLoad(t *testing.T) {
 		t.Fatalf("failed to write file: %v", err)
 	}
 
+	dirOutput, err := handler.Write(ctx, target, output)
 	if _, err := handler.Write(ctx, target, output); err != nil {
 		t.Fatalf("Write failed: %v", err)
 	}
@@ -47,7 +48,7 @@ func TestDirectoryOutputHandler_WriteAndLoad(t *testing.T) {
 		t.Fatalf("failed to remove directory: %v", err)
 	}
 
-	if _, err := handler.Load(ctx, target, output); err != nil {
+	if err := handler.Load(ctx, target, dirOutput); err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
 
