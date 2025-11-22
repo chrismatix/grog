@@ -1,5 +1,7 @@
 # TODOs
 
+- [ ] Improve directory writing and loading by generating write/load actions and then submitting them to a pool
+- [ ] Introduce a max concurrency for the cas backend
 - [ ] Improve shell completions to accept partial packages
 - [ ] Make it so that the displayed execution time for a test is cached
 - [ ] Add golangci-lint

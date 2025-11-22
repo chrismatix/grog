@@ -29,9 +29,19 @@ func (f *FileOutputHandler) Type() HandlerType {
 	return "file"
 }
 
+func (f *FileOutputHandler) Hash(_ context.Context, target model.Target, output model.Output) (string, error) {
+	absOutputPath := target.GetAbsOutputPath(output)
+	fileHash, err := hashing.HashFile(absOutputPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to hash file %s: %w", absOutputPath, err)
+	}
+	return fileHash, nil
+}
+
 func (f *FileOutputHandler) Write(ctx context.Context, target model.Target, output model.Output) (*gen.Output, error) {
 	relativePath := output.Identifier
-	absOutputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, relativePath))
+	absOutputPath := target.GetAbsOutputPath(output)
+
 	file, err := os.Open(absOutputPath)
 	if err != nil {
 		return nil, fmt.Errorf("declared output %s for target %s was not created", output, target.Label)
@@ -67,6 +77,14 @@ func (f *FileOutputHandler) Write(ctx context.Context, target model.Target, outp
 
 func (f *FileOutputHandler) Load(ctx context.Context, target model.Target, output *gen.Output) error {
 	absOutputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.GetFile().GetPath()))
+	existingHash, err := hashing.HashFile(absOutputPath)
+
+	// If the local hash is the same as the cached one we don't need to
+	// load the file from the CAS
+	if err == nil && existingHash == output.GetFile().GetDigest().GetHash() {
+		return nil
+	}
+
 	contentReader, err := f.cas.Load(ctx, output.GetFile().GetDigest().GetHash())
 	if err != nil {
 		return err

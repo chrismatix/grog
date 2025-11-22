@@ -18,8 +18,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// DirectoryOutputHandler handles directory outputs by compressing them to tar.gz files
-// and using the target cache to store them.
+// DirectoryOutputHandler handles directory outputs by turning them into a merkle tree
+// whose definition and file contents are stored in the CAS.
 type DirectoryOutputHandler struct {
 	cas *caching.Cas
 }
@@ -35,6 +35,45 @@ func (d *DirectoryOutputHandler) Type() HandlerType {
 	return DirHandler
 }
 
+func (d *DirectoryOutputHandler) Hash(ctx context.Context, target model.Target, output model.Output) (string, error) {
+	directoryPath := target.GetAbsOutputPath(output)
+	return d.getDirectoryHash(ctx, target, directoryPath)
+}
+
+// getDirectoryHash builds a hash tree for the given directory and returns the digest of the tree
+func (d *DirectoryOutputHandler) getDirectoryHash(ctx context.Context, target model.Target, directoryPath string) (string, error) {
+	logger := console.GetLogger(ctx)
+
+	logger.Debugf("compressing %s (target %s → %s)", directoryPath, target.Label, directoryPath)
+
+	childrenMap := make(map[string]*gen.Directory)
+	rootDirectory, _, err := d.writeDirectoryRecursive(ctx, directoryPath, childrenMap, false)
+	if err != nil {
+		return "", fmt.Errorf("failed to build hash tree for %s for target %s: %w", directoryPath, target.Label, err)
+	}
+
+	children := make([]*gen.Directory, 0, len(childrenMap))
+	for _, dir := range childrenMap {
+		children = append(children, dir)
+	}
+
+	tree := &gen.Tree{
+		Root:     rootDirectory,
+		Children: children,
+	}
+	marshalledTree, err := proto.MarshalOptions{Deterministic: true}.Marshal(tree)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal tree: %w", err)
+	}
+	hasher := xxhash.New()
+	if _, err := hasher.Write(marshalledTree); err != nil {
+		return "", fmt.Errorf("failed to hash tree: %w", err)
+	}
+
+	treeDigest := fmt.Sprintf("%x", hasher.Sum64())
+	return treeDigest, nil
+}
+
 // Write compresses a directory into <output>.tar.gz and streams it into the cache.
 func (d *DirectoryOutputHandler) Write(
 	ctx context.Context,
@@ -43,13 +82,11 @@ func (d *DirectoryOutputHandler) Write(
 ) (*gen.Output, error) {
 	logger := console.GetLogger(ctx)
 
-	workspaceRelativePath := filepath.Join(target.Label.Package, output.Identifier)
-	directoryPath := config.GetPathAbsoluteToWorkspaceRoot(workspaceRelativePath)
-
+	directoryPath := target.GetAbsOutputPath(output)
 	logger.Debugf("compressing %s (target %s → %s)", directoryPath, target.Label, output)
 
 	childrenMap := make(map[string]*gen.Directory)
-	rootDirectory, sizeBytes, err := d.writeDirectoryRecursive(directoryPath, childrenMap)
+	rootDirectory, sizeBytes, err := d.writeDirectoryRecursive(ctx, directoryPath, childrenMap, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build hash tree for %s for target %s: %w", directoryPath, target.Label, err)
 	}
@@ -63,7 +100,7 @@ func (d *DirectoryOutputHandler) Write(
 		Root:     rootDirectory,
 		Children: children,
 	}
-	marshalledTree, err := proto.Marshal(tree)
+	marshalledTree, err := proto.MarshalOptions{Deterministic: true}.Marshal(tree)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal tree: %w", err)
 	}
@@ -93,7 +130,12 @@ func (d *DirectoryOutputHandler) Write(
 
 // writeDirectoryRecursive recursively builds a Directory message for the given path
 // and writes everything it encounters to the cas
-func (d *DirectoryOutputHandler) writeDirectoryRecursive(path string, childrenMap map[string]*gen.Directory) (*gen.Directory, int64, error) {
+func (d *DirectoryOutputHandler) writeDirectoryRecursive(
+	ctx context.Context,
+	path string,
+	childrenMap map[string]*gen.Directory,
+	shouldWrite bool,
+) (*gen.Directory, int64, error) {
 	entries, err := os.ReadDir(path)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to read directory %s: %w", path, err)
@@ -133,7 +175,7 @@ func (d *DirectoryOutputHandler) writeDirectoryRecursive(path string, childrenMa
 
 		case entry.IsDir():
 			// Handle subdirectory
-			subDir, dirSize, err := d.writeDirectoryRecursive(entryPath, childrenMap)
+			subDir, dirSize, err := d.writeDirectoryRecursive(ctx, entryPath, childrenMap, shouldWrite)
 			if err != nil {
 				return nil, 0, err
 			}
@@ -164,6 +206,18 @@ func (d *DirectoryOutputHandler) writeDirectoryRecursive(path string, childrenMa
 				return nil, 0, fmt.Errorf("failed to compute digest for file %s: %w", entryPath, err)
 			}
 
+			file, err := os.Open(entryPath)
+			if err != nil {
+				return nil, 0, fmt.Errorf("failed to open file %s: %w", entryPath, err)
+			}
+
+			if shouldWrite {
+				err = d.cas.Write(ctx, digest.Hash, file)
+				if err != nil {
+					return nil, 0, fmt.Errorf("failed to write file %s to CAS: %w", entryPath, err)
+				}
+			}
+
 			sizeBytes += digest.GetSizeBytes()
 
 			dir.Files = append(dir.Files, &gen.FileNode{
@@ -180,7 +234,7 @@ func (d *DirectoryOutputHandler) writeDirectoryRecursive(path string, childrenMa
 // computeDirectoryDigest computes the digest for a Directory message.
 func computeDirectoryDigest(dir *gen.Directory) (*gen.Digest, error) {
 	// Serialize the directory to bytes
-	data, err := proto.Marshal(dir)
+	data, err := proto.MarshalOptions{Deterministic: true}.Marshal(dir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal directory: %w", err)
 	}
@@ -226,6 +280,14 @@ func (d *DirectoryOutputHandler) Load(ctx context.Context, target model.Target, 
 
 	// Fetch the tree from CAS
 	treeDigest := output.GetDirectory().GetTreeDigest().Hash
+
+	// Check the current directory hash against the cached tree
+	// so that we can avoid downloading the directory if it hasn't changed
+	localDirectoryDigest, err := d.getDirectoryHash(ctx, target, dirPath)
+	if err == nil && treeDigest == localDirectoryDigest {
+		return nil
+	}
+
 	treeBytes, err := d.cas.LoadBytes(ctx, treeDigest)
 	if err != nil {
 		return fmt.Errorf("failed to read tree from cache: %w", err)
@@ -244,6 +306,11 @@ func (d *DirectoryOutputHandler) Load(ctx context.Context, target model.Target, 
 			return fmt.Errorf("failed to compute child directory digest: %w", err)
 		}
 		childrenMap[digest.Hash] = child
+	}
+
+	// Remove the directory if it already exists
+	if err := os.RemoveAll(dirPath); err != nil {
+		return fmt.Errorf("failed to remove directory %s: %w", dirPath, err)
 	}
 
 	// Create the root directory

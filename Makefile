@@ -90,7 +90,7 @@ release-build: gen-proto
 	@cd dist && shasum -a 256 grog-$(GOOS)-$(GOARCH) > grog-$(GOOS)-$(GOARCH).sha256
 
 gen-proto:
-	protoc \
+	@protoc \
 		--proto_path=internal/proto/schema \
 		--go_out=internal/proto/gen \
 		--go_opt=paths=source_relative \

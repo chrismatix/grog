@@ -14,6 +14,10 @@ type Handler interface {
 	// Write writes the output to the output handler and returns its digest
 	Write(ctx context.Context, target model.Target, output model.Output) (*gen.Output, error)
 
+	// Hash only hashes the given output without writing it
+	// Useful for checking the current local state of the output resource
+	Hash(ctx context.Context, target model.Target, output model.Output) (string, error)
+
 	// Load loads the output from the output handler and returns its digest
 	Load(ctx context.Context, target model.Target, output *gen.Output) error
 }

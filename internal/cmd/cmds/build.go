@@ -122,7 +122,8 @@ func runBuild(
 	}
 	targetCache := caching.NewTargetResultCache(cache)
 	cas := caching.NewCas(cache)
-	registry := output.NewRegistry(targetCache, cas, config.Global.EnableCache)
+	taintCache := caching.NewTaintCache(cache)
+	registry := output.NewRegistry(cas)
 
 	// Only lock the workspace once necessary, i.e., before we start building
 	if config.Global.SkipWorkspaceLock {
@@ -139,7 +140,16 @@ func runBuild(
 		}()
 	}
 
-	executor := execution.NewExecutor(targetCache, registry, graph, failFast, streamLogs, loadOutputsMode)
+	executor := execution.NewExecutor(
+		targetCache,
+		taintCache,
+		registry,
+		graph,
+		failFast,
+		streamLogs,
+		config.Global.EnableCache,
+		loadOutputsMode,
+	)
 	completionMap, execStats, executionErr := executor.Execute(ctx)
 
 	elapsedTime := time.Since(startTime).Seconds()

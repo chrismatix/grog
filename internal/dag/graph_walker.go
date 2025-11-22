@@ -21,8 +21,7 @@ const (
 )
 
 // WalkCallback is called for each target and should return true if the target was cached
-// depsCached is true if all dependencies were cached or if there were no dependencies
-type WalkCallback func(ctx context.Context, node model.BuildNode, depsCached bool) (CacheResult, error)
+type WalkCallback func(ctx context.Context, node model.BuildNode) (CacheResult, error)
 
 type Completion struct {
 	IsSuccess   bool
@@ -35,9 +34,9 @@ type nodeInfo struct {
 	// node routine sends this when it's done
 	done chan Completion
 	// node routine receives this when it's ready
-	ready chan bool // sends depsCached
+	ready chan interface{}
 	// node routine receives this when it is supposed to stop
-	cancel chan struct{}
+	cancel chan interface{}
 
 	cancelOnce sync.Once
 }
@@ -115,8 +114,8 @@ func (w *Walker) Walk(
 		}
 
 		doneCh := make(chan Completion, 1)
-		readyCh := make(chan bool, 1)
-		cancelCh := make(chan struct{}, 1)
+		readyCh := make(chan interface{}, 1)
+		cancelCh := make(chan interface{}, 1)
 
 		w.nodeInfoMap[node.GetLabel()] = &nodeInfo{
 			done:   doneCh,
@@ -130,7 +129,7 @@ func (w *Walker) Walk(
 
 		// start all routines with no dependencies immediately
 		if len(w.graph.inEdges[node.GetLabel()]) == 0 {
-			w.startNode(node, true)
+			w.startNode(node)
 		}
 	}
 
@@ -172,12 +171,12 @@ func (w *Walker) cancelNode(node model.BuildNode) {
 }
 
 // startNode sends a ready message to a target if it is present in the graph (not idempotent!)
-func (w *Walker) startNode(node model.BuildNode, depsCached bool) {
+func (w *Walker) startNode(node model.BuildNode) {
 	w.nodeMutex.Lock()
 	defer w.nodeMutex.Unlock()
 	if info, ok := w.nodeInfoMap[node.GetLabel()]; ok {
 		go func() {
-			info.ready <- depsCached
+			info.ready <- true
 		}()
 	}
 }
@@ -219,20 +218,16 @@ func (w *Walker) onComplete(node model.BuildNode, completion Completion) {
 
 		// Check if dependant deps are satisfied
 		depsDone := true
-		depsCached := true
 		for _, dep := range w.graph.inEdges[dependant.GetLabel()] {
 			depCompletion, ok := w.completions[dep.GetLabel()]
 			if !ok || !depCompletion.IsSuccess {
 				depsDone = false
 			}
-			if depCompletion.CacheResult == CacheMiss {
-				depsCached = false
-			}
 		}
 
 		// If yes, send ready message to dependant
 		if depsDone {
-			w.startNode(dependant, depsCached)
+			w.startNode(dependant)
 		}
 	}
 }
@@ -256,9 +251,9 @@ func (w *Walker) nodeRoutine(
 	select {
 	case <-info.cancel:
 		return
-	case depsCached := <-info.ready:
+	case <-info.ready:
 		// call the callback
-		cacheResult, err := w.walkCallback(ctx, node, depsCached)
+		cacheResult, err := w.walkCallback(ctx, node)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				// Cancelling externally or via failFast leaves target uncompleted
@@ -267,13 +262,6 @@ func (w *Walker) nodeRoutine(
 			// don't account for cache hits in errors
 			w.onComplete(node, Completion{IsSuccess: false, Err: err})
 		} else {
-			if cacheResult == CacheHit && depsCached == false && node.GetType() == model.TargetNode {
-				// This should not happen and indicates an issue with the walkCallback
-				// Reason: When the deps were not cached the invalidation should
-				// propagate down the dependency chain
-				console.GetLogger(ctx).Warnf("unexpected cache hit for target %v when deps were not cached, forcing cache miss", node.GetLabel())
-				cacheResult = CacheMiss
-			}
 			w.onComplete(node, Completion{IsSuccess: true, Err: nil, CacheResult: cacheResult})
 		}
 		return

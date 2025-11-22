@@ -5,7 +5,14 @@ cases:
     grog_args:
       - build
 
-  # This loads the directory output from the cache
+  # Skips loading the output because it is present locally
+  - name: skip_loads_docker_tar_output
+    grog_args:
+      - build
+
+  - name: remove_docker_image
+    setup_command: "docker rmi grog-hello-world"
+
   - name: loads_docker_tar_output
     grog_args:
       - build

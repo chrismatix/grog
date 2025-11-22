@@ -165,9 +165,19 @@ func loadDependencyOutputsIfNeeded(ctx context.Context, logger *zap.SugaredLogge
 	}
 	targetCache := caching.NewTargetResultCache(cache)
 	cas := caching.NewCas(cache)
-	registry := output.NewRegistry(targetCache, cas, config.Global.EnableCache)
+	taintCache := caching.NewTaintCache(cache)
+	registry := output.NewRegistry(cas)
 
-	executor := execution.NewExecutor(targetCache, registry, graph, config.Global.FailFast, config.Global.StreamLogs, config.Global.GetLoadOutputsMode())
+	executor := execution.NewExecutor(
+		targetCache,
+		taintCache,
+		registry,
+		graph,
+		config.Global.FailFast,
+		config.Global.StreamLogs,
+		config.Global.EnableCache,
+		config.Global.GetLoadOutputsMode(),
+	)
 	logger.Infof("Loading outputs of direct dependencies due to load_outputs=minimal")
 	if err := executor.LoadDependencyOutputs(ctx, runTarget, func(_ string) {}); err != nil {
 		logger.Fatalf("could not load dependencies: %v", err)

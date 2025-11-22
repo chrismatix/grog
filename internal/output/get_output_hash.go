@@ -6,25 +6,31 @@ import (
 	"sort"
 
 	"github.com/cespare/xxhash/v2"
+	"google.golang.org/protobuf/proto"
 )
 
 func getOutputHash(outputs []*gen.Output) (string, error) {
-	sortOutputs(outputs)
+	if len(outputs) == 0 {
+		return "", nil
+	}
 
+	marshalOptions := proto.MarshalOptions{Deterministic: true}
 	// Calculate combined hash
-	hasher := xxhash.New()
+	digests := make([]string, len(outputs))
 	for _, output := range outputs {
 		var digest string
-		switch o := output.Kind.(type) {
-		case *gen.Output_File:
-			digest = o.File.Digest.Hash
-		case *gen.Output_Directory:
-			digest = o.Directory.TreeDigest.Hash
-		case *gen.Output_DockerImage:
-			digest = o.DockerImage.Digest
-		default:
-			return "", fmt.Errorf("unknown output type: %T", output.Kind)
+		data, err := marshalOptions.Marshal(output)
+		if err != nil {
+			return "", fmt.Errorf("failed to marshal output: %w", err)
 		}
+		digest = fmt.Sprintf("%x", xxhash.Sum64(data))
+		digests = append(digests, digest)
+	}
+
+	hasher := xxhash.New()
+	// Sort digests to ensure a consistent order
+	sort.Sort(sort.StringSlice(digests))
+	for _, digest := range digests {
 		_, err := hasher.WriteString(digest)
 		if err != nil {
 			return "", err
@@ -32,28 +38,4 @@ func getOutputHash(outputs []*gen.Output) (string, error) {
 	}
 
 	return fmt.Sprintf("%x", hasher.Sum64()), nil
-}
-
-func sortOutputs(outputs []*gen.Output) {
-	// Sort outputs by their path/tag to ensure consistent ordering
-	sort.Slice(outputs, func(i, j int) bool {
-		outputI := outputs[i]
-		outputJ := outputs[j]
-
-		return getOutputIdentifier(outputI) < getOutputIdentifier(outputJ)
-	})
-}
-
-// getOutputIdentifier For each output get some identifier that we can use for sorting
-func getOutputIdentifier(output *gen.Output) string {
-	switch output.Kind.(type) {
-	case *gen.Output_File:
-		return output.GetFile().Path
-	case *gen.Output_Directory:
-		return output.GetDirectory().Path
-	case *gen.Output_DockerImage:
-		return output.GetDockerImage().Tag
-	default:
-		return ""
-	}
 }

@@ -7,7 +7,7 @@ import (
 	"grog/internal/proto/gen"
 	"io"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 type TargetResultCache struct {
@@ -25,7 +25,7 @@ func (tc *TargetResultCache) GetBackend() backends.CacheBackend {
 }
 
 func (tc *TargetResultCache) Write(ctx context.Context, targetResult *gen.TargetResult) error {
-	marshalledBytes, err := proto.Marshal(targetResult)
+	marshalledBytes, err := proto.MarshalOptions{Deterministic: true}.Marshal(targetResult)
 	if err != nil {
 		return err
 	}

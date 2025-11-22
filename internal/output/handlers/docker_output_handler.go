@@ -33,14 +33,37 @@ func (d *DockerOutputHandler) Type() HandlerType {
 	return DockerHandler
 }
 
-// Has checks if the Docker image exists in the cache
-func (d *DockerOutputHandler) Has(ctx context.Context, output *gen.Output) (bool, error) {
-	// We check for the existence of the tarball in the cache
-	return d.cas.Exists(ctx, output.GetDockerImage().GetDigest())
+func (d *DockerOutputHandler) Hash(ctx context.Context, target model.Target, output model.Output) (string, error) {
+	logger := console.GetLogger(ctx)
+	imageName := output.Identifier
+
+	logger.Debugf("saving Docker image %s to tarball", imageName)
+
+	// Parse the image reference
+	ref, err := name.ParseReference(imageName)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse image reference %q: %w", imageName, err)
+	}
+
+	// Get the image from the Docker daemon
+	img, err := daemon.Image(ref)
+	if err != nil {
+		return "", fmt.Errorf("failed to get image %q from Docker daemon: %w", imageName, err)
+	}
+
+	hashReader := getTarballReader(ref, img)
+	hasher := xxhash.New()
+	_, err = io.Copy(hasher, hashReader)
+	if err != nil {
+		hashReader.Close()
+		return "", fmt.Errorf("failed to hash Docker image tarball for image %q: %w", imageName, err)
+	}
+
+	return fmt.Sprintf("%x", hasher.Sum64()), nil
 }
 
 // Write saves the Docker image as a tarball and stores it in the cache using go-containerregistry
-func (d *DockerOutputHandler) Write(ctx context.Context, target model.Target, output model.Output) (*gen.Output, error) {
+func (d *DockerOutputHandler) Write(ctx context.Context, _ model.Target, output model.Output) (*gen.Output, error) {
 	logger := console.GetLogger(ctx)
 	imageName := output.Identifier
 
@@ -58,26 +81,16 @@ func (d *DockerOutputHandler) Write(ctx context.Context, target model.Target, ou
 		return nil, fmt.Errorf("failed to get image %q from Docker daemon: %w", imageName, err)
 	}
 
-	manifestDigest, err := img.Digest()
+	localDigest, err := hashLocalTarball(ref, img)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get image manifest digest for image %q: %w", imageName, err)
+		return nil, err
 	}
-
-	hashReader := getTarballReader(ref, img)
-	hasher := xxhash.New()
-	_, err = io.Copy(hasher, hashReader)
-	if err != nil {
-		hashReader.Close()
-		return nil, fmt.Errorf("failed to hash Docker image tarball for image %q: %w", imageName, err)
-	}
-
-	digest := fmt.Sprintf("%x", hasher.Sum64())
-	// Get a completely new reader for actually writing the `
+	// Get a completely new reader for actually writing the image
 	writeReader := getTarballReader(ref, img)
 
 	// Stream the tarball from the pipe reader to the cache
 	logger.Debugf("streaming Docker image tarball to cache")
-	err = d.cas.Write(ctx, digest, writeReader)
+	err = d.cas.Write(ctx, localDigest, writeReader)
 	if err != nil {
 		// Ensure the pipe reader is closed even if WriteFileStream fails
 		writeReader.Close()
@@ -88,10 +101,9 @@ func (d *DockerOutputHandler) Write(ctx context.Context, target model.Target, ou
 	return &gen.Output{
 		Kind: &gen.Output_DockerImage{
 			DockerImage: &gen.DockerImageOutput{
-				Digest:         digest,
-				LocalTag:       imageName,
-				ManifestDigest: manifestDigest.String(),
-				Mode:           gen.ImageMode_TAR,
+				TarDigest: localDigest,
+				LocalTag:  imageName,
+				Mode:      gen.ImageMode_TAR,
 			},
 		},
 	}, nil
@@ -113,18 +125,41 @@ func getTarballReader(ref name.Reference, img v1.Image) (pipeRead io.ReadCloser)
 	return pipeRead
 }
 
+func hashLocalTarball(ref name.Reference, img v1.Image) (string, error) {
+	hashReader := getTarballReader(ref, img)
+	hasher := xxhash.New()
+	_, err := io.Copy(hasher, hashReader)
+	if err != nil {
+		hashReader.Close()
+		return "", fmt.Errorf("failed to hash Docker image tarball for image %q: %w", ref.Name(), err)
+	}
+	return fmt.Sprintf("%x", hasher.Sum64()), nil
+}
+
 // Load loads the Docker image tarball from the cache and imports it into the Docker engine using go-containerregistry
 func (d *DockerOutputHandler) Load(ctx context.Context, _ model.Target, output *gen.Output) error {
 	logger := console.GetLogger(ctx)
 	// The original image name/tag used when saving
 	imageName := output.GetDockerImage().GetLocalTag()
+	digest := output.GetDockerImage().GetTarDigest()
 
 	logger.Debugf("loading Docker image %s from cache using go-containerregistry", imageName)
 
 	// Parse the original reference to tag the image correctly after loading
-	_, err := name.ParseReference(imageName)
+	ref, err := name.ParseReference(imageName)
 	if err != nil {
 		return fmt.Errorf("failed to parse image reference %q: %w", imageName, err)
+	}
+
+	// Get the *local* image from the Docker daemon
+	existingImg, err := daemon.Image(ref)
+	if err == nil {
+		localDigest, err := hashLocalTarball(ref, existingImg)
+		if err == nil && digest == localDigest {
+			// The image already exists locally so no need to load it
+			logger.Debugf("image %s already exists locally so skipping load", imageName)
+			return nil
+		}
 	}
 
 	tag, err := name.NewTag(imageName)
@@ -133,7 +168,7 @@ func (d *DockerOutputHandler) Load(ctx context.Context, _ model.Target, output *
 	}
 
 	img, err := tarball.Image(func() (io.ReadCloser, error) {
-		return d.cas.Load(ctx, output.GetDockerImage().GetDigest())
+		return d.cas.Load(ctx, output.GetDockerImage().GetTarDigest())
 	}, &tag)
 	if err != nil {
 		return fmt.Errorf("failed to read image from tarball stream for %q: %w", imageName, err)

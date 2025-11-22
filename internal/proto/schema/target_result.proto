@@ -30,10 +30,11 @@ message DockerImageOutput {
   // The tag under which to find the image locally when writing and where to
   // load it to when restoring
   string local_tag = 2;
-  // digest of the tar file when stored in cas
-  string digest = 3;
-  // digest of the manifest
-  string manifest_digest = 4;
+  // digest of the tar file when stored in cas (tar mode)
+  string tar_digest = 3;
+  // this is the id return by docker inspect (registry mode)
+  // the docs describe it as a content-addressable identifier
+  string image_id = 4;
   // the remote tag for registry mode
   string remote_tag = 5;
 }

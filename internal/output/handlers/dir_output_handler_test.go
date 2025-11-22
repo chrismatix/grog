@@ -14,6 +14,14 @@ import (
 	"testing"
 )
 
+// TestDirectoryOutputHandler_WriteAndLoad tests writing and loading directory
+// outputs with the following structure:
+// pkg/out/
+// ├── file.txt (large file with repeated content)
+// ├── link.txt (symlink to file.txt)
+// └── nested/
+//
+//	└── nested.txt (file with different content)
 func TestDirectoryOutputHandler_WriteAndLoad(t *testing.T) {
 	ctx := context.Background()
 
@@ -31,21 +39,28 @@ func TestDirectoryOutputHandler_WriteAndLoad(t *testing.T) {
 	output := model.NewOutput("dir", "out")
 
 	dirPath := filepath.Join(rootDir, "pkg", "out")
-	if err := os.MkdirAll(dirPath, 0755); err != nil {
+	nestedPath := filepath.Join(dirPath, "nested")
+	if err := os.MkdirAll(nestedPath, 0755); err != nil {
 		t.Fatalf("failed to create directory: %v", err)
 	}
 	content := bytes.Repeat([]byte("hello world"), 1024*100)
 	if err := os.WriteFile(filepath.Join(dirPath, "file.txt"), content, 0644); err != nil {
 		t.Fatalf("failed to write file: %v", err)
 	}
+	nestedContent := []byte("nested content")
+	if err := os.WriteFile(filepath.Join(nestedPath, "nested.txt"), nestedContent, 0644); err != nil {
+		t.Fatalf("failed to write nested file: %v", err)
+	}
+	if err := os.Symlink("nested/nested.txt", filepath.Join(dirPath, "link.txt")); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+	if err := os.Symlink("../file.txt", filepath.Join(nestedPath, "uplink.txt")); err != nil {
+		t.Fatalf("failed to create upward symlink: %v", err)
+	}
 
 	dirOutput, err := handler.Write(ctx, target, output)
 	if _, err := handler.Write(ctx, target, output); err != nil {
 		t.Fatalf("Write failed: %v", err)
-	}
-
-	if err := os.RemoveAll(dirPath); err != nil {
-		t.Fatalf("failed to remove directory: %v", err)
 	}
 
 	if err := handler.Load(ctx, target, dirOutput); err != nil {
@@ -59,5 +74,29 @@ func TestDirectoryOutputHandler_WriteAndLoad(t *testing.T) {
 
 	if !bytes.Equal(loaded, content) {
 		t.Fatalf("restored file content mismatch")
+	}
+
+	loadedNested, err := os.ReadFile(filepath.Join(nestedPath, "nested.txt"))
+	if err != nil {
+		t.Fatalf("failed to read restored nested file: %v", err)
+	}
+	if !bytes.Equal(loadedNested, nestedContent) {
+		t.Fatalf("restored nested file content mismatch")
+	}
+
+	linkTarget, err := os.Readlink(filepath.Join(dirPath, "link.txt"))
+	if err != nil {
+		t.Fatalf("failed to read symlink: %v", err)
+	}
+	if linkTarget != "nested/nested.txt" {
+		t.Fatalf("restored symlink target mismatch, got %s, want nested/nested.txt", linkTarget)
+	}
+
+	uplinkTarget, err := os.Readlink(filepath.Join(nestedPath, "uplink.txt"))
+	if err != nil {
+		t.Fatalf("failed to read upward symlink: %v", err)
+	}
+	if uplinkTarget != "../file.txt" {
+		t.Fatalf("restored upward symlink target mismatch, got %s, want ../file.txt", uplinkTarget)
 	}
 }
