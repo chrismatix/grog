@@ -119,6 +119,7 @@ func (r *Registry) WriteOutputs(ctx context.Context, target *model.Target) (*gen
 
 	var tasks []pond.Task
 	var targetOutputs []*gen.Output
+	var outputsMutex sync.Mutex
 
 	for _, outputRef := range outputs {
 		localOutputRef := outputRef
@@ -127,7 +128,9 @@ func (r *Registry) WriteOutputs(ctx context.Context, target *model.Target) (*gen
 			if err != nil {
 				return err
 			}
+			outputsMutex.Lock()
 			targetOutputs = append(targetOutputs, output)
+			outputsMutex.Unlock()
 			return nil
 		})
 		tasks = append(tasks, task)
