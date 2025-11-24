@@ -13,6 +13,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
+	"sync/atomic"
 
 	"github.com/cespare/xxhash/v2"
 	"google.golang.org/protobuf/proto"
@@ -47,7 +49,7 @@ func (d *DirectoryOutputHandler) getDirectoryHash(ctx context.Context, target mo
 	logger.Debugf("compressing %s (target %s → %s)", directoryPath, target.Label, directoryPath)
 
 	childrenMap := make(map[string]*gen.Directory)
-	rootDirectory, _, err := d.writeDirectoryRecursive(ctx, directoryPath, childrenMap, false)
+	rootDirectory, _, err := d.writeDirectoryRecursive(ctx, directoryPath, childrenMap)
 	if err != nil {
 		return "", fmt.Errorf("failed to build hash tree for %s for target %s: %w", directoryPath, target.Label, err)
 	}
@@ -86,9 +88,14 @@ func (d *DirectoryOutputHandler) Write(
 	logger.Debugf("compressing %s (target %s → %s)", directoryPath, target.Label, output)
 
 	childrenMap := make(map[string]*gen.Directory)
-	rootDirectory, sizeBytes, err := d.writeDirectoryRecursive(ctx, directoryPath, childrenMap, true)
+	rootDirectory, fileUploads, err := d.writeDirectoryRecursive(ctx, directoryPath, childrenMap)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build hash tree for %s for target %s: %w", directoryPath, target.Label, err)
+	}
+
+	sizeBytes, err := d.uploadFiles(ctx, fileUploads)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upload directory files to cache: %w", err)
 	}
 
 	children := make([]*gen.Directory, 0, len(childrenMap))
@@ -128,17 +135,65 @@ func (d *DirectoryOutputHandler) Write(
 	}, nil
 }
 
+// uploadFiles uploads all files in parallel to the CAS
+// the CAS will implement its own concurrency and rate-limiting
+func (d *DirectoryOutputHandler) uploadFiles(ctx context.Context, fileUploads []fileUpload) (int64, error) {
+	var sizeBytes atomic.Int64
+
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(fileUploads))
+
+	for _, uploadAction := range fileUploads {
+		wg.Add(1)
+		localUploadAction := uploadAction
+		go func() {
+			defer wg.Done()
+			file, err := os.Open(localUploadAction.absolutePath)
+			if err != nil {
+				errChan <- err
+			}
+			defer file.Close()
+
+			err = d.cas.Write(ctx, localUploadAction.digest, file)
+			if err != nil {
+				errChan <- err
+			}
+			sizeBytes.Add(localUploadAction.size)
+		}()
+	}
+
+	go func() {
+		wg.Wait()
+		close(errChan)
+	}()
+
+	for err := range errChan {
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	return sizeBytes.Load(), nil
+}
+
+// Helper struct for recording file that need to be uploaded to the CAS
+// in parallel
+type fileUpload struct {
+	digest       string
+	absolutePath string
+	size         int64
+}
+
 // writeDirectoryRecursive recursively builds a Directory message for the given path
 // and writes everything it encounters to the cas
 func (d *DirectoryOutputHandler) writeDirectoryRecursive(
 	ctx context.Context,
 	path string,
 	childrenMap map[string]*gen.Directory,
-	shouldWrite bool,
-) (*gen.Directory, int64, error) {
+) (*gen.Directory, []fileUpload, error) {
 	entries, err := os.ReadDir(path)
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to read directory %s: %w", path, err)
+		return nil, nil, fmt.Errorf("failed to read directory %s: %w", path, err)
 	}
 
 	dir := &gen.Directory{
@@ -152,13 +207,13 @@ func (d *DirectoryOutputHandler) writeDirectoryRecursive(
 		return entries[i].Name() < entries[j].Name()
 	})
 
-	sizeBytes := int64(0)
+	var fileUploads []fileUpload
 
 	for _, entry := range entries {
 		entryPath := filepath.Join(path, entry.Name())
 		info, err := entry.Info()
 		if err != nil {
-			return nil, 0, fmt.Errorf("failed to get info for %s: %w", entryPath, err)
+			return nil, nil, fmt.Errorf("failed to get info for %s: %w", entryPath, err)
 		}
 
 		switch {
@@ -166,7 +221,7 @@ func (d *DirectoryOutputHandler) writeDirectoryRecursive(
 			// Handle symlink
 			target, err := os.Readlink(entryPath)
 			if err != nil {
-				return nil, 0, fmt.Errorf("failed to read symlink %s: %w", entryPath, err)
+				return nil, nil, fmt.Errorf("failed to read symlink %s: %w", entryPath, err)
 			}
 			dir.Symlinks = append(dir.Symlinks, &gen.SymlinkNode{
 				Name:   entry.Name(),
@@ -175,17 +230,17 @@ func (d *DirectoryOutputHandler) writeDirectoryRecursive(
 
 		case entry.IsDir():
 			// Handle subdirectory
-			subDir, dirSize, err := d.writeDirectoryRecursive(ctx, entryPath, childrenMap, shouldWrite)
+			subDir, recursiveFileUploads, err := d.writeDirectoryRecursive(ctx, entryPath, childrenMap)
 			if err != nil {
-				return nil, 0, err
+				return nil, nil, err
 			}
 
-			sizeBytes += dirSize
+			fileUploads = append(fileUploads, recursiveFileUploads...)
 
 			// Compute digest for the subdirectory
 			digest, err := computeDirectoryDigest(subDir)
 			if err != nil {
-				return nil, 0, fmt.Errorf("failed to compute digest for directory %s: %w", entryPath, err)
+				return nil, nil, fmt.Errorf("failed to compute digest for directory %s: %w", entryPath, err)
 			}
 
 			dir.Directories = append(dir.Directories, &gen.DirectoryNode{
@@ -203,22 +258,10 @@ func (d *DirectoryOutputHandler) writeDirectoryRecursive(
 			// Handle regular file
 			digest, err := computeFileDigest(entryPath)
 			if err != nil {
-				return nil, 0, fmt.Errorf("failed to compute digest for file %s: %w", entryPath, err)
+				return nil, nil, fmt.Errorf("failed to compute digest for file %s: %w", entryPath, err)
 			}
 
-			file, err := os.Open(entryPath)
-			if err != nil {
-				return nil, 0, fmt.Errorf("failed to open file %s: %w", entryPath, err)
-			}
-
-			if shouldWrite {
-				err = d.cas.Write(ctx, digest.Hash, file)
-				if err != nil {
-					return nil, 0, fmt.Errorf("failed to write file %s to CAS: %w", entryPath, err)
-				}
-			}
-
-			sizeBytes += digest.GetSizeBytes()
+			fileUploads = append(fileUploads, fileUpload{digest.Hash, entryPath, digest.GetSizeBytes()})
 
 			dir.Files = append(dir.Files, &gen.FileNode{
 				Name:         entry.Name(),
@@ -228,7 +271,7 @@ func (d *DirectoryOutputHandler) writeDirectoryRecursive(
 		}
 	}
 
-	return dir, sizeBytes, nil
+	return dir, fileUploads, nil
 }
 
 // computeDirectoryDigest computes the digest for a Directory message.
@@ -285,6 +328,7 @@ func (d *DirectoryOutputHandler) Load(ctx context.Context, target model.Target, 
 	// so that we can avoid downloading the directory if it hasn't changed
 	localDirectoryDigest, err := d.getDirectoryHash(ctx, target, dirPath)
 	if err == nil && treeDigest == localDirectoryDigest {
+		logger.Debugf("directory %s already exists locally so skipping load", dirPath)
 		return nil
 	}
 
