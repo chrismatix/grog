@@ -1,0 +1,37 @@
+targets:
+  - name: fast_runner
+    command: |
+      mkdir -p dist
+
+      cat > dist/fast_runner.sh <<'SCRIPT'
+      #!/bin/bash
+      sleep 1
+      exit 0
+      SCRIPT
+      chmod +x dist/fast_runner.sh
+    bin_output: dist/fast_runner.sh
+
+  - name: slow_runner
+    command: |
+      mkdir -p dist
+
+      cat > dist/slow_runner.sh <<'SCRIPT'
+      #!/bin/bash
+      sleep 2
+      exit 0
+      SCRIPT
+      chmod +x dist/slow_runner.sh
+    bin_output: dist/slow_runner.sh
+
+  - name: fails_runner
+    command: |
+      mkdir -p dist
+
+      cat > dist/fails_runner.sh <<'SCRIPT'
+      #!/bin/bash
+      echo "failing runner"
+      sleep 1
+      exit 1
+      SCRIPT
+      chmod +x dist/fails_runner.sh
+    bin_output: dist/fails_runner.sh

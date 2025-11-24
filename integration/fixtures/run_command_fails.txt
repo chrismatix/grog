@@ -4,4 +4,4 @@ INFO: Selected 1 target.
 INFO: Build completed successfully. 1 target completed (1 cache hits).
 INFO: Running //:creates_bin_tool -> dist/bin with args []
 expected 'foo'
-FATAL: failed to run binary: exit status 1
+FATAL: failed to run //:creates_bin_tool: exit status 1

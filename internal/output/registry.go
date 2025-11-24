@@ -193,7 +193,9 @@ func (r *Registry) LoadOutputs(
 	targetResult *gen.TargetResult,
 ) error {
 	start := time.Now()
-	defer r.addCacheDuration(time.Since(start))
+	defer func() {
+		r.addCacheDuration(time.Since(start))
+	}()
 	r.targetMutexMap.Lock(target.Label.String())
 	defer r.targetMutexMap.Unlock(target.Label.String())
 	if target.OutputsLoaded {
