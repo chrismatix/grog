@@ -29,7 +29,7 @@ func TestHashFile(t *testing.T) {
 			t.Fatalf("HashFile returned error: %v", err)
 		}
 		// xxHash of "Hello, world!" should be consistent
-		expectedHash := "f58336a78b6f9476"
+		expectedHash := "f3c34bf11915e869"
 		if hash != expectedHash {
 			t.Errorf("Expected hash %s, got %s", expectedHash, hash)
 		}
@@ -81,7 +81,7 @@ func TestHashFiles(t *testing.T) {
 
 		// The combined hash should be deterministic
 		// We can verify it's not empty
-		expectedHash := "66daafd15e5df82a"
+		expectedHash := "72ddf3ce77e7334c"
 		if hash != expectedHash {
 			t.Errorf("Expected hash %s, got %s", expectedHash, hash)
 		}

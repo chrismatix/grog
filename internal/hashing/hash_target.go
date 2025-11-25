@@ -2,7 +2,6 @@ package hashing
 
 import (
 	"fmt"
-	"github.com/cespare/xxhash/v2"
 	"grog/internal/config"
 	"grog/internal/model"
 	"slices"
@@ -30,7 +29,7 @@ func GetTargetChangeHash(target model.Target, dependencyHashes []string) (string
 
 // hashTargetDefinition computes the xxhash hash of a single file.
 func hashTargetDefinition(target model.Target, dependencyHashes []string) (string, error) {
-	hasher := xxhash.New()
+	hasher := GetHasher()
 
 	_, err := hasher.WriteString(target.Label.String())
 	_, err = hasher.WriteString(target.Command)

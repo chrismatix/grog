@@ -2,10 +2,10 @@ package output
 
 import (
 	"fmt"
+	"grog/internal/hashing"
 	"grog/internal/proto/gen"
 	"sort"
 
-	"github.com/cespare/xxhash/v2"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -23,11 +23,11 @@ func getOutputHash(outputs []*gen.Output) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to marshal output: %w", err)
 		}
-		digest = fmt.Sprintf("%x", xxhash.Sum64(data))
+		digest = hashing.HashBytes(data)
 		digests = append(digests, digest)
 	}
 
-	hasher := xxhash.New()
+	hasher := hashing.GetHasher()
 	// Sort digests to ensure a consistent order
 	sort.Sort(sort.StringSlice(digests))
 	for _, digest := range digests {

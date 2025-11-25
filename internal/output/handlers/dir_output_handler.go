@@ -7,6 +7,7 @@ import (
 	"grog/internal/caching"
 	"grog/internal/config"
 	"grog/internal/console"
+	"grog/internal/hashing"
 	"grog/internal/model"
 	"grog/internal/proto/gen"
 	"io"
@@ -16,7 +17,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/cespare/xxhash/v2"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -67,7 +67,7 @@ func (d *DirectoryOutputHandler) getDirectoryHash(ctx context.Context, target mo
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal tree: %w", err)
 	}
-	hasher := xxhash.New()
+	hasher := hashing.GetHasher()
 	if _, err := hasher.Write(marshalledTree); err != nil {
 		return "", fmt.Errorf("failed to hash tree: %w", err)
 	}
@@ -111,7 +111,7 @@ func (d *DirectoryOutputHandler) Write(
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal tree: %w", err)
 	}
-	hasher := xxhash.New()
+	hasher := hashing.GetHasher()
 	if _, err := hasher.Write(marshalledTree); err != nil {
 		return nil, fmt.Errorf("failed to hash tree: %w", err)
 	}
@@ -283,7 +283,7 @@ func computeDirectoryDigest(dir *gen.Directory) (*gen.Digest, error) {
 	}
 
 	// Compute xxhash hash
-	hasher := xxhash.New()
+	hasher := hashing.GetHasher()
 	if _, err := hasher.Write(data); err != nil {
 		return nil, fmt.Errorf("failed to hash directory: %w", err)
 	}
@@ -302,7 +302,7 @@ func computeFileDigest(path string) (*gen.Digest, error) {
 	}
 	defer file.Close()
 
-	hasher := xxhash.New()
+	hasher := hashing.GetHasher()
 	size, err := io.Copy(hasher, file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash file %s: %w", path, err)

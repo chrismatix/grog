@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"grog/internal/caching"
 	"grog/internal/console"
+	"grog/internal/hashing"
 	"grog/internal/model"
 	"grog/internal/proto/gen"
 	"io"
 
-	"github.com/cespare/xxhash/v2"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/daemon"
@@ -52,7 +52,7 @@ func (d *DockerOutputHandler) Hash(ctx context.Context, target model.Target, out
 	}
 
 	hashReader := getTarballReader(ref, img)
-	hasher := xxhash.New()
+	hasher := hashing.GetHasher()
 	_, err = io.Copy(hasher, hashReader)
 	if err != nil {
 		hashReader.Close()
@@ -127,7 +127,7 @@ func getTarballReader(ref name.Reference, img v1.Image) (pipeRead io.ReadCloser)
 
 func hashLocalTarball(ref name.Reference, img v1.Image) (string, error) {
 	hashReader := getTarballReader(ref, img)
-	hasher := xxhash.New()
+	hasher := hashing.GetHasher()
 	_, err := io.Copy(hasher, hashReader)
 	if err != nil {
 		hashReader.Close()

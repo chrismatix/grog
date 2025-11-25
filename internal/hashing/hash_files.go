@@ -6,8 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-
-	"github.com/cespare/xxhash/v2"
 )
 
 // HashFile computes the xxhash hash of a single file.
@@ -18,7 +16,7 @@ func HashFile(filePath string) (string, error) {
 	}
 	defer f.Close()
 
-	hasher := xxhash.New()
+	hasher := GetHasher()
 	if _, err := io.Copy(hasher, f); err != nil {
 		return "", err
 	}
@@ -29,7 +27,7 @@ func HashFile(filePath string) (string, error) {
 // HashFiles computes a combined xxhash hash for multiple files relative to packagePath
 // Sorts the array to ensure consistent outputs.
 func HashFiles(absolutePackagePath string, fileList []string) (string, error) {
-	combinedHasher := xxhash.New()
+	combinedHasher := GetHasher()
 	// Ensure consistent ordering.
 	sort.Strings(fileList)
 
