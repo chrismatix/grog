@@ -1,6 +1,7 @@
 package hashing
 
 import (
+	"fmt"
 	"grog/internal/dag"
 	"grog/internal/maps"
 	"grog/internal/model"
@@ -20,16 +21,17 @@ func NewTargetHasher(graph *dag.DirectedTargetGraph) *TargetHasher {
 	}
 }
 
-// SetTargetChangeHash computes and sets the target change hash which requires
-// the change hashes of the direct dependencies and therefore recurses
+// SetTargetChangeHash computes and sets the target change hash
 func (t *TargetHasher) SetTargetChangeHash(target *model.Target) error {
 	t.targetMutexMap.Lock(target.Label.String())
 	defer t.targetMutexMap.Unlock(target.Label.String())
 
 	if target.ChangeHash != "" {
+		// ChangeHash already set
 		return nil
 	}
 
+	// Collect the OutputHash values of all dependencies
 	dependencies := t.graph.GetDependencies(target)
 	dependencyHashes := make([]string, len(target.Dependencies))
 	for index, dependency := range dependencies {
@@ -39,11 +41,12 @@ func (t *TargetHasher) SetTargetChangeHash(target *model.Target) error {
 			continue
 		}
 
-		err := t.SetTargetChangeHash(targetDependency)
-		if err != nil {
-			return err
+		outputHash := targetDependency.OutputHash
+		if outputHash == "" {
+			return fmt.Errorf("dependency %s of %s has no output hash", targetDependency.Label, target.Label)
 		}
-		dependencyHashes[index] = targetDependency.ChangeHash
+
+		dependencyHashes[index] = targetDependency.OutputHash
 	}
 
 	changeHash, err := GetTargetChangeHash(*target, dependencyHashes)

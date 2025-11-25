@@ -3,9 +3,11 @@ package console
 import (
 	"context"
 	"fmt"
+	"time"
+	"unicode/utf8"
+
 	"github.com/fatih/color"
 	"go.uber.org/zap"
-	"unicode/utf8"
 )
 
 // TestLoggerKey context key for the TestLogger
@@ -86,13 +88,13 @@ func (tl *TestLogger) LogTestPassed(logger *zap.SugaredLogger, label string, exe
 }
 
 // LogTestPassedCached logs a test target as passed (cached).
-func (tl *TestLogger) LogTestPassedCached(logger *zap.SugaredLogger, label string, executionTime float64) {
+func (tl *TestLogger) LogTestPassedCached(logger *zap.SugaredLogger, label string, executionTimeSeconds float64) {
 	formattedLabel := tl.formatLabel(label)
-	logger.Infof("%s %s (cached) in %.1fs", formattedLabel, color.New(color.FgGreen).Sprintf("PASSED"), executionTime)
+	logger.Infof("%s %s (cached) in %.1fs", formattedLabel, color.New(color.FgGreen).Sprintf("PASSED"), executionTimeSeconds)
 }
 
 // LogTestFailed logs a test target as failed.
-func (tl *TestLogger) LogTestFailed(logger *zap.SugaredLogger, label string, executionTime float64) {
+func (tl *TestLogger) LogTestFailed(logger *zap.SugaredLogger, label string, executionTime time.Duration) {
 	formattedLabel := tl.formatLabel(label)
-	logger.Infof("%s %s in %.1fs", formattedLabel, color.New(color.FgRed).Sprintf("FAILED"), executionTime)
+	logger.Infof("%s %s in %.1fs", formattedLabel, color.New(color.FgRed).Sprintf("FAILED"), executionTime.Seconds())
 }

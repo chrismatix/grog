@@ -28,7 +28,7 @@ func TestWalkerBasic(t *testing.T) {
 	var executionOrder []label.TargetLabel
 	var mu sync.Mutex
 
-	walkFunc := func(ctx context.Context, node model.BuildNode, depsCached bool) (CacheResult, error) {
+	walkFunc := func(ctx context.Context, node model.BuildNode) (CacheResult, error) {
 		mu.Lock()
 		defer mu.Unlock()
 		executionOrder = append(executionOrder, node.GetLabel())
@@ -87,7 +87,7 @@ func TestWalkerLinearDependency(t *testing.T) {
 	var executionOrder []label.TargetLabel
 	var mu sync.Mutex
 
-	walkFunc := func(ctx context.Context, node model.BuildNode, depsCached bool) (CacheResult, error) {
+	walkFunc := func(ctx context.Context, node model.BuildNode) (CacheResult, error) {
 		mu.Lock()
 		defer mu.Unlock()
 		executionOrder = append(executionOrder, node.GetLabel())
@@ -166,7 +166,7 @@ func TestWalkerDiamondDependency(t *testing.T) {
 	var executedTargets []label.TargetLabel
 	var mu sync.Mutex
 
-	walkFunc := func(ctx context.Context, node model.BuildNode, depsCached bool) (CacheResult, error) {
+	walkFunc := func(ctx context.Context, node model.BuildNode) (CacheResult, error) {
 		mu.Lock()
 		defer mu.Unlock()
 		executedTargets = append(executedTargets, node.GetLabel())
@@ -235,7 +235,7 @@ func TestWalkerFailFast(t *testing.T) {
 	_ = graph.AddEdge(target2, target1)
 
 	// walkFunc that fails for target2
-	walkFunc := func(ctx context.Context, node model.BuildNode, depsCached bool) (CacheResult, error) {
+	walkFunc := func(ctx context.Context, node model.BuildNode) (CacheResult, error) {
 		if node.GetLabel().Name == "target2" {
 			return CacheMiss, errors.New("failed to execute target2")
 		}
@@ -306,7 +306,7 @@ func TestWalkerNonFailFast(t *testing.T) {
 	_ = graph.AddEdge(target3, target4)
 
 	// walkFunc that fails for target2
-	walkFunc := func(ctx context.Context, node model.BuildNode, depsCached bool) (CacheResult, error) {
+	walkFunc := func(ctx context.Context, node model.BuildNode) (CacheResult, error) {
 		if node.GetLabel().Name == "target1" {
 			return CacheMiss, errors.New("failed to execute target1")
 		}
@@ -374,7 +374,7 @@ func TestNoDoubleCancel(t *testing.T) {
 	_ = graph.AddEdge(target2, target3)
 
 	// walkFunc fails for both parent, succeeds (but never starts) for the child.
-	walkFunc := func(ctx context.Context, node model.BuildNode, depsCached bool) (CacheResult, error) {
+	walkFunc := func(ctx context.Context, node model.BuildNode) (CacheResult, error) {
 		if node.GetLabel().Name == "target1" || node.GetLabel().Name == "target2" {
 			return CacheMiss, errors.New("intentional failure: " + node.GetLabel().Name)
 		}

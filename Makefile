@@ -56,7 +56,7 @@ LD_FLAGS = -ldflags "\
 	-X 'main.commit=$(COMMIT)' \
 	-X 'main.buildDate=$(DATE)'"
 
-build:
+build: gen-proto
 	@go build -o dist/grog $(LD_FLAGS)
 
 build-with-coverage:
@@ -84,11 +84,17 @@ release: clean
 	@echo "Release build completed."
 
 # CGO_ENABLED=0 ensures static linking.
-release-build:
+release-build: gen-proto
 	@echo "Building for $(GOOS)/$(GOARCH)"
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(LD_FLAGS) -o dist/grog-$(GOOS)-$(GOARCH)
 	@cd dist && shasum -a 256 grog-$(GOOS)-$(GOARCH) > grog-$(GOOS)-$(GOARCH).sha256
 
+gen-proto:
+	@protoc \
+		--proto_path=internal/proto/schema \
+		--go_out=internal/proto/gen \
+		--go_opt=paths=source_relative \
+     	internal/proto/schema/*.proto
 
 # Clean built binaries
 clean:

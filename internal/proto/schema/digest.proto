@@ -1,0 +1,10 @@
+syntax = "proto3";
+package grog.proto.v1;
+
+option go_package = "grog/proto/gen";
+
+// A content digest for any blob stored in the CAS.
+message Digest {
+  string hash = 1;
+  int64  size_bytes = 2;
+}

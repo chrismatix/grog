@@ -29,7 +29,7 @@ var ChangesCmd = &cobra.Command{
 Can optionally include transitive dependents of changed targets to find all affected targets.`,
 	Example: `  grog changes --since=HEAD~1                      # Show targets changed in the last commit
   grog changes --since=main --dependents=transitive  # Show targets changed since main branch, including dependents
-  grog changes --since=v1.0.0 --target-type=test     # Show only test targets changed since v1.0.0`,
+  grog changes --since=v1.0.0 --target-type=test     # Show only test targets changed since git tag v1.0.0`,
 	Args: cobra.MaximumNArgs(0),
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := console.SetupCommand()

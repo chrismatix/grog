@@ -24,7 +24,7 @@ jobs:
 
       - name: Install pkl
         run: |
-          curl -L -o pkl-bin 'https://github.com/apple/pkl/releases/download/0.28.2/pkl-linux-amd64'
+          curl -L -o pkl-bin 'https://github.com/apple/pkl/releases/download/0.30.0/pkl-linux-amd64'
           chmod +x pkl-bin
           sudo mv pkl-bin /usr/local/bin/pkl
 

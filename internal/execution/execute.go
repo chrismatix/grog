@@ -13,6 +13,7 @@ import (
 	"grog/internal/model"
 	"grog/internal/output"
 	"grog/internal/output/handlers"
+	"grog/internal/proto/gen"
 	"grog/internal/worker"
 	"os"
 	"path/filepath"
@@ -34,7 +35,8 @@ func (e *CommandError) Error() string {
 }
 
 type Executor struct {
-	targetCache      *caching.TargetCache
+	targetCache      *caching.TargetResultCache
+	taintCache       *caching.TaintCache
 	registry         *output.Registry
 	graph            *dag.DirectedTargetGraph
 	failFast         bool
@@ -59,18 +61,22 @@ func (e *Executor) addExecDuration(duration time.Duration) {
 }
 
 func NewExecutor(
-	targetCache *caching.TargetCache,
+	targetCache *caching.TargetResultCache,
+	taintCache *caching.TaintCache,
 	registry *output.Registry,
 	graph *dag.DirectedTargetGraph,
 	failFast bool,
 	streamLogs bool,
+	enableCache bool,
 	loadOutputsMode config.LoadOutputsMode,
 ) *Executor {
 	return &Executor{
 		targetCache:      targetCache,
+		taintCache:       taintCache,
 		registry:         registry,
 		graph:            graph,
 		failFast:         failFast,
+		enableCache:      enableCache,
 		loadOutputsMode:  loadOutputsMode,
 		targetHasher:     hashing.NewTargetHasher(graph),
 		streamLogsToggle: console.NewStreamLogsToggle(streamLogs),
@@ -115,7 +121,7 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, Stats, error
 	defer workerPool.Shutdown()
 
 	// walkCallback will be called at max parallelism by the graph walker
-	walkCallback := func(ctx context.Context, node model.BuildNode, depsCached bool) (dag.CacheResult, error) {
+	walkCallback := func(ctx context.Context, node model.BuildNode) (dag.CacheResult, error) {
 		target, ok := node.(*model.Target)
 		if !ok {
 			// this is where we would add the execution of other node types
@@ -136,7 +142,7 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, Stats, error
 		}
 
 		// taskFunc will be run in the worker pool
-		taskFunc := e.getTaskFunc(ctx, target, binTools, outputIdentifiers, depsCached)
+		taskFunc := e.getTaskFunc(ctx, target, binTools, outputIdentifiers)
 		return workerPool.Run(taskFunc)
 	}
 
@@ -220,32 +226,28 @@ func (e *Executor) getTaskFunc(
 	target *model.Target,
 	binToolPaths BinToolMap,
 	outputIdentifiers OutputIdentifierMap,
-	depsCached bool,
 ) worker.TaskFunc[dag.CacheResult] {
 	return func(update worker.StatusFunc) (dag.CacheResult, error) {
 		startTime := time.Now()
 
-		update(fmt.Sprintf("%s: checking cache.", target.Label))
-		hasCacheHit, err := e.registry.HasCacheHit(ctx, target)
-		if err != nil {
-			return dag.CacheMiss, err
-		}
-		target.HasCacheHit = hasCacheHit
-
 		logger := console.GetLogger(ctx)
+		update(fmt.Sprintf("%s: checking cache.", target.Label))
+
+		targetResult, err := e.targetCache.Load(ctx, target.ChangeHash)
+		if err != nil {
+			// TODO distinguish between NotFound and cache backend errors
+			// logger.Warnf("failed to check target %s cache: %v", target.Label, err)
+		}
+		target.HasCacheHit = targetResult != nil
+		logger.Debugf("%s: loaded target result %v", target.Label, targetResult)
 
 		outputCheckErr := runOutputChecks(ctx, target, binToolPaths, outputIdentifiers)
 		if outputCheckErr != nil {
 			logger.Debugf("running target due to output check error: %v", outputCheckErr)
-		} else if depsCached == true && target.HasOutputChecksOnly() {
-			// Special type of target that only has output checks but no in- and outputs
-			// In this case the output checks (and the dependencies) are the only thing affecting re-running
-			logger.Debugf("skipping target %s due to passed output checks", target.Label)
-			return dag.CacheSkip, nil
 		}
 
 		// Check if the target is tainted
-		isTainted, taintedErr := e.targetCache.IsTainted(ctx, *target)
+		isTainted, taintedErr := e.taintCache.IsTainted(ctx, target.Label)
 		if taintedErr != nil {
 			logger.Errorf("Failed to check if target %s is tainted: %v", target.Label, taintedErr)
 		}
@@ -254,18 +256,22 @@ func (e *Executor) getTaskFunc(
 			logger.Debugf("running target %s due to being tainted", target.Label)
 		}
 
-		// If either the inputs or the deps have changed we need to re-execute the target
-		// depsCached is also true when there are no deps
-		if depsCached && hasCacheHit && !isTainted {
+		// Process a cache hit if:
+		// - The target result was loaded (HasCacheHit)
+		// - The target is not tainted (!isTainted)
+		// - The target does not have no-cache set (!target.SkipsCache)
+		// - The cache is enabled (enableCache)
+		if target.HasCacheHit && !isTainted && !target.SkipsCache() && e.enableCache {
 			if e.loadOutputsMode == config.LoadOutputsMinimal {
-				update(fmt.Sprintf("%s: cache hit. skipped loading outputs because load_outputs=minimal.", target.Label))
-				logger.Debugf("%s: cache hit. skipped loading outputs because load_outputs=minimal", target.Label)
+				// Important: Set the output hash so that descendants can compute their change hashes
+				target.OutputHash = targetResult.OutputHash
+				update(fmt.Sprintf("%s: cache hit. skipped loading %s because load_outputs=minimal.", target.Label, console.FCountOutputs(len(target.AllOutputs()))))
+				logger.Debugf("%s: cache hit. skipped loading %s because load_ outputs=minimal", target.Label, console.FCountOutputs(len(target.AllOutputs())))
 				return dag.CacheHit, nil
 			}
 
-			// TODO in the case of skip cache this log statement is a bit misleading
-			update(fmt.Sprintf("%s: cache hit. loading outputs.", target.Label))
-			loadingErr := e.loadCachedOutputs(ctx, target)
+			update(fmt.Sprintf("%s: cache hit. loading %s.", target.Label, console.FCountOutputs(len(target.AllOutputs()))))
+			loadingErr := e.registry.LoadOutputs(ctx, target, targetResult)
 			if loadingErr != nil {
 				// Don't return so that we instead break out and continue executing the target
 				logger.Errorf("%s re-running due to output loading failure: %v", target.Label, loadingErr)
@@ -273,7 +279,8 @@ func (e *Executor) getTaskFunc(
 				if target.IsTest() {
 					executionTime := time.Since(startTime).Seconds()
 					if testLogger := console.GetTestLogger(ctx); testLogger != nil {
-						testLogger.LogTestPassedCached(logger, target.Label.String(), executionTime)
+						// Log the cached execution time here
+						testLogger.LogTestPassedCached(logger, target.Label.String(), float64(targetResult.ExecutionDurationMillis)/1000)
 					} else {
 						logger.Infof("%s %s (cached) in %.1fs", target.Label, color.New(color.FgGreen).Sprintf("PASSED"), executionTime)
 					}
@@ -282,11 +289,8 @@ func (e *Executor) getTaskFunc(
 			}
 		}
 
-		if !hasCacheHit {
+		if !target.HasCacheHit {
 			logger.Debugf("running target %s due to cache miss", target.Label)
-		}
-		if !depsCached {
-			logger.Debugf("running target %s due to changed dependencis", target.Label)
 		}
 		if outputCheckErr != nil {
 			logger.Debugf("running target %s due to output check error", target.Label)
@@ -321,11 +325,11 @@ func (e *Executor) executeTarget(
 		execStart := time.Now()
 		err = executeTarget(ctx, target, binToolPaths, outputIdentifiers, e.streamLogsToggle.Enabled())
 		e.addExecDuration(time.Since(execStart))
-
 	} else {
 		logger.Debugf("skipped target %s due to no command", target.Label)
 	}
-	executionTime := time.Since(startTime).Seconds()
+	target.ExecutionTime = time.Since(startTime)
+	executionTimeSeconds := target.ExecutionTime.Seconds()
 
 	if err != nil {
 		logger.Debugf("target execution returned error %s: %s", target.Label, err)
@@ -333,9 +337,9 @@ func (e *Executor) executeTarget(
 			// Test errors we want to log differently
 			// Cancellations should just exit the execution
 			if testLogger := console.GetTestLogger(ctx); testLogger != nil {
-				testLogger.LogTestFailed(logger, target.Label.String(), executionTime)
+				testLogger.LogTestFailed(logger, target.Label.String(), target.ExecutionTime)
 			} else {
-				logger.Infof("%s %s in %.1fs", target.Label, color.New(color.FgRed).Sprintf("FAILED"), executionTime)
+				logger.Infof("%s %s in %.1fs", target.Label, color.New(color.FgRed).Sprintf("FAILED"), executionTimeSeconds)
 			}
 		}
 		return dag.CacheMiss, err
@@ -348,9 +352,9 @@ func (e *Executor) executeTarget(
 
 	if target.IsTest() {
 		if testLogger := console.GetTestLogger(ctx); testLogger != nil {
-			testLogger.LogTestPassed(logger, target.Label.String(), executionTime)
+			testLogger.LogTestPassed(logger, target.Label.String(), executionTimeSeconds)
 		} else {
-			logger.Infof("%s %s in %.1fs", target.Label, color.New(color.FgGreen).Sprintf("PASSED"), executionTime)
+			logger.Infof("%s %s in %.1fs", target.Label, color.New(color.FgGreen).Sprintf("PASSED"), executionTimeSeconds)
 		}
 	}
 
@@ -362,36 +366,61 @@ func (e *Executor) executeTarget(
 
 	// Write outputs to the cache:
 	update(fmt.Sprintf("%s complete. writing outputs...", target.Label))
-	err = e.registry.WriteOutputs(ctx, target)
+	err = e.OnTargetComplete(ctx, target)
 	if err != nil {
 		return dag.CacheMiss, fmt.Errorf("build completed but failed to write outputs to cache for target %s:\n%w", target.Label, err)
 	}
 
 	if isTainted {
-		err = e.targetCache.RemoveTaint(ctx, *target)
-		if err != nil {
-			logger.Errorf("Failed to remove taint from target %s: %v", target.Label, err)
-		}
+		go func() {
+			err = e.taintCache.Clear(ctx, target.Label)
+			if err != nil {
+				logger.Errorf("Failed to remove taint from target %s: %v", target.Label, err)
+			}
+		}()
 	}
 
 	return dag.CacheMiss, nil
 }
 
-func (e *Executor) loadCachedOutputs(
-	ctx context.Context,
-	target *model.Target,
-) error {
-	if target.SkipsCache() {
-		return nil
+// OnTargetComplete should be called when a target has completed executing
+// - writes the outputs if necessary
+// - computes and sets the output hash
+// - writes the target result to the cache
+// For no-cache targets it will set the OutputHash to the hash of the outputs
+func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target) error {
+	var targetResult *gen.TargetResult
+	var err error
+	if target.SkipsCache() || !e.enableCache {
+		targetResult, err = e.registry.GetNoCacheOutputHash(ctx, target)
+		// TODO should we even store this in the cache given that the target
+		// is no-cache? Probably fine from a user perspective
+		// since it's the target cache and not the output cache
+	} else if len(target.Outputs) == 0 {
+		// NOTE: This is a special and intentional design
+		// Targets that do not have any outputs expose their own change behavior as an output
+		// analogous to file_groups
+		targetResult = &gen.TargetResult{
+			ChangeHash: target.ChangeHash,
+			// TODO make this the input hash
+			OutputHash: target.ChangeHash,
+		}
+	} else {
+		targetResult, err = e.registry.WriteOutputs(ctx, target)
+	}
+	if err != nil {
+		return err
 	}
 
-	err := e.registry.LoadOutputs(ctx, target)
-	if err != nil {
-		return fmt.Errorf("failed to read outputs from cache for target %s: %w", target.Label, err)
-	}
-	return nil
+	target.OutputsLoaded = true
+	target.OutputHash = targetResult.OutputHash
+
+	return e.targetCache.Write(ctx, targetResult)
 }
 
+// LoadDependencyOutputs is used to load the outputs of the targets that a target depends on
+// Since there is a chance that the loading will fail it needs to be able to recursively re-run targets
+// Primarily used for the load_outputs=minimal mode which will avoid loading outputs until necessary.
 func (e *Executor) LoadDependencyOutputs(
 	ctx context.Context,
 	target *model.Target,
@@ -403,26 +432,41 @@ func (e *Executor) LoadDependencyOutputs(
 		target.Label,
 	)
 	for _, dep := range e.graph.GetTargetDependencies(target) {
-		err := e.loadCachedOutputs(ctx, dep)
-
-		if err != nil || dep.SkipsCache() {
-			logger.Debugf("%s: failed to load output for dependency %s (re-rerunning): err=%v no-cache=%t", target.Label, dep.Label, err, target.SkipsCache())
-			// In this case we need to also recursively re-load the dependencies of the dependency
-			if recursiveLoadErr := e.LoadDependencyOutputs(ctx, dep, update); recursiveLoadErr != nil {
-				return recursiveLoadErr
-			}
-
-			binTools, binToolErr := e.getBinToolPaths(dep)
+		localDep := dep
+		// Function to re-run a dependency in case we
+		rerunDependency := func() error {
+			binTools, binToolErr := e.getBinToolPaths(localDep)
 			if binToolErr != nil {
 				return binToolErr
 			}
 
-			outputIdentifiers := e.getDependencyOutputIdentifiers(dep)
+			outputIdentifiers := e.getDependencyOutputIdentifiers(localDep)
 
-			update(fmt.Sprintf("%s: re-running dependency %s (load_outputs_mode=minimal).", target.Label, dep.Label))
-			_, executionErr := e.executeTarget(ctx, dep, binTools, outputIdentifiers, update, false)
+			update(fmt.Sprintf("%s: re-running dependency %s (load_outputs_mode=minimal).", target.Label, localDep.Label))
+			_, executionErr := e.executeTarget(ctx, localDep, binTools, outputIdentifiers, update, false)
 			if executionErr != nil {
 				return executionErr
+			}
+			return nil
+		}
+
+		targetResult, err := e.targetCache.Load(ctx, localDep.ChangeHash)
+		if err != nil {
+			// We cannot even get the target cache: re-run immediately
+			return rerunDependency()
+		}
+
+		loadErr := e.registry.LoadOutputs(ctx, localDep, targetResult)
+
+		if loadErr != nil || localDep.SkipsCache() {
+			logger.Debugf("%s: failed to load output for dependency %s (re-rerunning): err=%v no-cache=%t", target.Label, localDep.Label, err, target.SkipsCache())
+			// In this case we need to also recursively re-load the dependencies of the dependency
+			if recursiveLoadErr := e.LoadDependencyOutputs(ctx, localDep, update); recursiveLoadErr != nil {
+				return recursiveLoadErr
+			}
+
+			if rerunError := rerunDependency(); rerunError != nil {
+				return rerunError
 			}
 		}
 	}

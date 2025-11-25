@@ -2,7 +2,9 @@ package model
 
 import (
 	"encoding/json"
+	"grog/internal/config"
 	"grog/internal/label"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -44,6 +46,8 @@ type Target struct {
 	// The output hash is used by descendant targets to determine whether they need to be rebuilt
 	OutputHash  string `json:"output_hash,omitempty"`
 	HasCacheHit bool   `json:"has_cache_hit,omitempty"`
+
+	ExecutionTime time.Duration `json:"-"`
 }
 
 type OutputCheck struct {
@@ -169,4 +173,9 @@ func (t *Target) Select() {
 
 func (t *Target) GetIsSelected() bool {
 	return t.IsSelected
+}
+
+func (t *Target) GetAbsOutputPath(output Output) string {
+	relativePath := output.Identifier
+	return config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(t.Label.Package, relativePath))
 }

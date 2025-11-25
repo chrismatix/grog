@@ -5,37 +5,36 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	dockerconfig "github.com/docker/cli/cli/config"
-	"github.com/docker/docker/api/types/image"
+	"grog/internal/proto/gen"
 	"io"
 	"strings"
 
-	"github.com/docker/docker/client"
-	"github.com/google/go-containerregistry/pkg/authn"
+	dockerconfig "github.com/docker/cli/cli/config"
+	"github.com/docker/docker/api/types/image"
+
 	"grog/internal/caching"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/model"
 
-	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1/daemon"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/docker/docker/client"
 )
 
 // DockerRegistryOutputHandler writes Docker images to and loads them from a registry specified by configuration.
 type DockerRegistryOutputHandler struct {
-	targetCache *caching.TargetCache
-	config      config.DockerConfig
+	cas          *caching.Cas
+	config       config.DockerConfig
+	dockerClient *client.Client
 }
 
 // NewDockerRegistryOutputHandler creates a new DockerRegistryOutputHandler.
 func NewDockerRegistryOutputHandler(
-	targetCache *caching.TargetCache,
+	cas *caching.Cas,
 	config config.DockerConfig,
 ) *DockerRegistryOutputHandler {
 	return &DockerRegistryOutputHandler{
-		targetCache: targetCache,
-		config:      config,
+		cas:    cas,
+		config: config,
 	}
 }
 
@@ -43,38 +42,63 @@ func (d *DockerRegistryOutputHandler) Type() HandlerType {
 	return DockerHandler
 }
 
-func (d *DockerRegistryOutputHandler) cacheImageName(target model.Target, output model.Output) string {
+func (d *DockerRegistryOutputHandler) Hash(ctx context.Context, target model.Target, output model.Output) (string, error) {
+	cli, err := d.lazyClient()
+	if err != nil {
+		return "", err
+	}
+
+	localImageName := output.Identifier
+	inspect, err := cli.ImageInspect(ctx, localImageName)
+	if err != nil {
+		return "", fmt.Errorf("%s: image output %s was not created: %w", target.Label.String(), localImageName, err)
+	}
+
+	return inspect.ID, nil
+}
+
+// lazyCient creates a new Docker client on demand
+func (d *DockerRegistryOutputHandler) lazyClient() (*client.Client, error) {
+	if d.dockerClient != nil {
+		return d.dockerClient, nil
+	}
+	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create docker client: %w", err)
+	}
+	d.dockerClient = dockerClient
+	return d.dockerClient, nil
+}
+
+func (d *DockerRegistryOutputHandler) cacheImageName(digest string) string {
 	workspaceDir := config.Global.WorkspaceRoot
 	workspacePrefix := config.GetWorkspaceCachePrefix(workspaceDir)
 
-	return fmt.Sprintf("%s/%s%s/%s", d.config.Registry,
-		workspacePrefix, d.targetCache.CachePath(target), d.targetCache.CacheKey(output))
-}
-
-// Has checks if the Docker image exists in the remote registry.
-func (d *DockerRegistryOutputHandler) Has(ctx context.Context, target model.Target, output model.Output) (bool, error) {
-	logger := console.GetLogger(ctx)
-	remoteImageName := d.cacheImageName(target, output)
-
-	logger.Debugf("checking existence of Docker image %s in registry", remoteImageName)
-	return d.targetCache.HasOutputMetaFile(ctx, target, output, "digest")
+	return fmt.Sprintf("%s/%s-%s", d.config.Registry,
+		workspacePrefix, digest)
 }
 
 // Write pushes the Docker image from the local Docker daemon to the remote registry.
-func (d *DockerRegistryOutputHandler) Write(ctx context.Context, target model.Target, output model.Output) error {
+func (d *DockerRegistryOutputHandler) Write(ctx context.Context, target model.Target, output model.Output) (*gen.Output, error) {
 	logger := console.GetLogger(ctx)
 	localImageName := output.Identifier
-	remoteCacheImageName := d.cacheImageName(target, output)
+
+	cli, err := d.lazyClient()
+	if err != nil {
+		return nil, err
+	}
+
+	inspect, err := cli.ImageInspect(ctx, localImageName)
+	if err != nil {
+		return nil, fmt.Errorf("%s: image output %s was not created: %w", target.Label.String(), localImageName, err)
+	}
+
+	remoteCacheImageName := d.cacheImageName(inspect.ID)
 
 	logger.Debugf("pushing Docker image %s to cache registry as %s", localImageName, remoteCacheImageName)
 
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		return fmt.Errorf("failed to create docker client: %w", err)
-	}
-	defer cli.Close()
 	if err := cli.ImageTag(ctx, localImageName, remoteCacheImageName); err != nil {
-		return fmt.Errorf("failed to tag image %q as %q: %w", localImageName, remoteCacheImageName, err)
+		return nil, fmt.Errorf("failed to tag image %q as %q: %w", localImageName, remoteCacheImageName, err)
 	}
 	// Clean up the image tag so that it does not pollute the user's docker machine
 	defer cli.ImageRemove(ctx, remoteCacheImageName, image.RemoveOptions{})
@@ -82,30 +106,33 @@ func (d *DockerRegistryOutputHandler) Write(ctx context.Context, target model.Ta
 	// Build the RegistryAuth header from ~/.docker/config.json / helpers
 	auth, err := makeRegistryAuth(remoteCacheImageName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Push via Docker daemon using that auth
 	reader, err := cli.ImagePush(ctx, remoteCacheImageName, image.PushOptions{
 		RegistryAuth: auth,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to push image %q to registry: %w", remoteCacheImageName, err)
+	}
 	defer reader.Close()
+
 	if _, err := io.Copy(io.Discard, reader); err != nil {
-		return fmt.Errorf("error reading push response: %w", err)
-	}
-
-	inspect, _, err := cli.ImageInspectWithRaw(ctx, remoteCacheImageName)
-	if err != nil {
-		return fmt.Errorf("failed to inspect pushed image %q: %w", remoteCacheImageName, err)
-	}
-
-	err = d.targetCache.WriteOutputMetaFile(ctx, target, output, "digest", inspect.ID)
-	if err != nil {
-		return fmt.Errorf("failed to write digest to cache: %w", err)
+		return nil, fmt.Errorf("error reading push response: %w", err)
 	}
 
 	logger.Debugf("successfully pushed Docker image %s to registry", remoteCacheImageName)
-	return nil
+	return &gen.Output{
+		Kind: &gen.Output_DockerImage{
+			DockerImage: &gen.DockerImageOutput{
+				LocalTag:  localImageName,
+				RemoteTag: remoteCacheImageName,
+				ImageId:   inspect.ID,
+				Mode:      gen.ImageMode_REGISTRY,
+			},
+		},
+	}, nil
 }
 
 func makeRegistryAuth(ref string) (string, error) {
@@ -134,57 +161,52 @@ func makeRegistryAuth(ref string) (string, error) {
 }
 
 // Load pulls the Docker image from the remote registry and writes it into the local Docker daemon.
-func (d *DockerRegistryOutputHandler) Load(ctx context.Context, target model.Target, output model.Output) error {
-	imageName := output.Identifier
-	// Get expected image digest
-	expectedDigest, err := d.targetCache.LoadOutputMetaFile(ctx, target, output, "digest")
-	if err != nil {
-		return fmt.Errorf("failed to load digest file %q: %w", imageName, err)
-	}
+func (d *DockerRegistryOutputHandler) Load(ctx context.Context, _ model.Target, output *gen.Output) error {
+	localImageName := output.GetDockerImage().GetLocalTag()
+	imageId := output.GetDockerImage().GetImageId()
 
 	logger := console.GetLogger(ctx)
-	localImageName := output.Identifier
 
-	localTag, err := name.NewTag(localImageName)
+	cli, err := d.lazyClient()
 	if err != nil {
-		return fmt.Errorf("failed to parse local image tag %q: %w", localImageName, err)
+		return err
 	}
 
-	// Ensure that we are only looking locally
-	localTag.Repository = name.Repository{}
-	if img, err := daemon.Image(localTag, daemon.WithContext(ctx)); err == nil {
-		digest, err := img.ConfigName()
-		if err == nil && digest.String() == expectedDigest {
-			logger.Debugf("image %s found locally with matching digest %s, skipping registry lookup", localTag, expectedDigest)
-			return nil
-		}
-		logger.Debugf("image %s found locally but digest mismatch (got %s, want %s)", localTag, digest.String(), expectedDigest)
-	} else {
-		logger.Debugf("image %s not found locally: %v", localTag, err)
+	// check if the image exists in the local Docker daemon
+	if _, err = cli.ImageInspect(ctx, imageId); err == nil {
+		logger.Debugf("image %s already exists in local Docker daemon, skipping pull", localImageName)
+		return nil
 	}
 
-	remoteImageName := d.cacheImageName(target, output)
+	remoteImageName := output.GetDockerImage().GetRemoteTag()
 	logger.Debugf("pulling Docker image %s from registry", remoteImageName)
 
-	// Create the local tag reference
-	remoteTag, err := name.NewTag(remoteImageName)
+	// Build the RegistryAuth header from ~/.docker/config.json / helpers
+	auth, err := makeRegistryAuth(remoteImageName)
 	if err != nil {
-		return fmt.Errorf("failed to parse remote image tag %q: %w", remoteImageName, err)
+		return err
 	}
 
-	// Pull the image from the remote registry
-	img, err := remote.Image(remoteTag, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+	pull, err := cli.ImagePull(ctx, remoteImageName, image.PullOptions{
+		RegistryAuth: auth,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to pull image %q from registry: %w", remoteImageName, err)
 	}
+	defer pull.Close()
 
-	// Write the image into the local Docker daemon
-	_, err = daemon.Write(localTag, img, daemon.WithContext(ctx))
-	if err != nil {
-		return fmt.Errorf("failed to write image %q to Docker daemon: %w", remoteImageName, err)
+	// Clean up the image tag so that it does not pollute the user's docker machine
+	defer func() {
+		if _, err := cli.ImageRemove(ctx, remoteImageName, image.RemoveOptions{}); err != nil {
+			logger.Warnf("failed to remove image %q from local Docker daemon: %v", remoteImageName, err)
+		}
+	}()
+
+	if err := cli.ImageTag(ctx, remoteImageName, localImageName); err != nil {
+		return fmt.Errorf("failed to tag cache image %q as %q: %w", remoteImageName, localImageName, err)
 	}
 
-	logger.Debugf("successfully loaded Docker image %s from registry tag %s", localImageName, remoteTag)
+	logger.Debugf("successfully loaded Docker image %s from registry tag %s", localImageName, remoteImageName)
 	logger.Infof("Loaded image %s from registry", localImageName)
 	return nil
 }

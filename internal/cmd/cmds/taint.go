@@ -1,17 +1,17 @@
 package cmds
 
 import (
-	"github.com/spf13/cobra"
 	"grog/internal/caching"
 	"grog/internal/caching/backends"
 	"grog/internal/completions"
 	"grog/internal/config"
 	"grog/internal/console"
-	"grog/internal/hashing"
 	"grog/internal/label"
 	"grog/internal/loading"
 	"grog/internal/model"
 	"grog/internal/selection"
+
+	"github.com/spf13/cobra"
 )
 
 var TaintCmd = &cobra.Command{
@@ -50,19 +50,16 @@ This is useful when you want to force a rebuild of specific targets.`,
 		if err != nil {
 			logger.Fatalf("could not instantiate cache: %v", err)
 		}
-		targetCache := caching.NewTargetCache(cache)
+		taintCache := caching.NewTaintCache(cache)
 
 		taintedCount := 0
-		targetHasher := hashing.NewTargetHasher(graph)
 		for _, node := range selectedNodes {
 			target, ok := node.(*model.Target)
 			if !ok {
 				continue
 			}
 
-			// In order for the cache key to be correct the ChangeHash needs to be set
-			err := targetHasher.SetTargetChangeHash(target)
-			err = targetCache.Taint(ctx, *target)
+			err = taintCache.Taint(ctx, target.Label)
 			if err != nil {
 				logger.Errorf("Failed to taint target %s: %v", target.Label, err)
 				continue

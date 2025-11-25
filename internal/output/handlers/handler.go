@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"grog/internal/model"
+	"grog/internal/proto/gen"
 )
 
 // Handler defines how to handle a specific type of build output
@@ -10,11 +11,15 @@ type Handler interface {
 	// Type returns the identifier for this output type (e.g., "dir", "docker")
 	Type() HandlerType
 
-	Has(ctx context.Context, target model.Target, output model.Output) (bool, error)
+	// Write writes the output to the output handler and returns its digest
+	Write(ctx context.Context, target model.Target, output model.Output) (*gen.Output, error)
 
-	Write(ctx context.Context, target model.Target, output model.Output) error
+	// Hash only hashes the given output without writing it
+	// Useful for checking the current local state of the output resource
+	Hash(ctx context.Context, target model.Target, output model.Output) (string, error)
 
-	Load(ctx context.Context, target model.Target, output model.Output) error
+	// Load loads the output from the output handler and returns its digest
+	Load(ctx context.Context, target model.Target, output *gen.Output) error
 }
 
 type HandlerType string
