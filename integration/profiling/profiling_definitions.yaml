@@ -113,12 +113,12 @@ profiles:
               - ../components/epsilon/dist/epsilon.txt
               - ../components/zeta/dist/zeta.txt
             dependencies:
-              - ../components/alpha:alpha
-              - ../components/beta:beta
-              - ../components/gamma:gamma
-              - ../components/delta:delta
-              - ../components/epsilon:epsilon
-              - ../components/zeta:zeta
+              - //deep/components/alpha:alpha
+              - //deep/components/beta:beta
+              - //deep/components/gamma:gamma
+              - //deep/components/delta:delta
+              - //deep/components/epsilon:epsilon
+              - //deep/components/zeta:zeta
             command: mkdir -p dist && cat ../components/alpha/dist/alpha.txt ../components/beta/dist/beta.txt ../components/gamma/dist/gamma.txt ../components/delta/dist/delta.txt ../components/epsilon/dist/epsilon.txt ../components/zeta/dist/zeta.txt > dist/aggregate.txt
             outputs:
               - dist/aggregate.txt
