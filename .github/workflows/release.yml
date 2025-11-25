@@ -30,6 +30,14 @@ jobs:
 
           pkl --version
 
+      - name: Install dependencies
+        run: |
+          go mod tidy
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+
+
       - name: Build release binaries
         run: make release
 
