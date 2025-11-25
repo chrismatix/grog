@@ -1,9 +1,29 @@
 # Dev Log
 
 > NOTE:
-> No longer actively maintained.
+> This diary is no longer actively updated. See the releases tab for more recent updates.
 
 Observations, ramblings, and learnings along the way.
+
+## 25-11-2025
+
+So it's been quite a while since I have written anything here.
+The main "hot" development phase of Grog was mostly over and while I am still shipping lots of changes they were mostly focused on ad-hoc usability improvements.
+
+However, last week I had a big realization about how Grog's entire approach to caching and target revalidation had been pretty flawed.
+Tl;dr Grog had been re-building targets whenever any of the dependent targets changed which seemed right at the time, but turns out to be inefficient.
+Take for instance a target that splits out the global `uv.lock` into a per-package lock file.
+If the global lock file changes, all packages that depend on it will be rebuilt.
+Bazel/Pants do it differently and have the target depend only on the **outputs** of its dependencies.
+
+(Un)fortunately, this was the type of change where you start pulling on the yarn thread and a lot of things come undone so it turned into a large multi-day refactoring effort.
+For instance, I realized that Bazel's use of a content adressable storage (CAS) was a pretty neat idea, because it also allows one to quite naturally store directories as Merkle trees.
+Previously, Grog had just tar gz'd directories to turn them into files, but with this approach you can actually reliably hash directories!
+This in turn means that Grog can now check if something needs to be loaded into the local repository before actually loading it.
+
+Interestingly, enough the final state of the code base is cleaner and easier to reason about than before.
+To be honest, I was a bit afraid that after all those months core parts of Grog had started to "rot" meaning that the code would not be understandable to me anymore and I would have a hard time refactoring it.
+
 
 ## 07-05-2025
 
