@@ -4,9 +4,6 @@ package grog.proto.v1;
 option go_package = "grog/proto/gen";
 
 // A content digest for any blob stored in the CAS.
-//
-// The 'hash' field is typically a hex-encoded SHA-256, but you can
-// swap this out as long as you are consistent across the system.
 message Digest {
   string hash = 1;
   int64  size_bytes = 2;

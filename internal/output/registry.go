@@ -162,6 +162,7 @@ func (r *Registry) GetNoCacheOutputHash(ctx context.Context, target *model.Targe
 
 	var tasks []pond.Task
 	var digests []string
+	var outputsMutex sync.Mutex
 
 	for _, outputRef := range outputs {
 		localOutputRef := outputRef
@@ -170,7 +171,9 @@ func (r *Registry) GetNoCacheOutputHash(ctx context.Context, target *model.Targe
 			if err != nil {
 				return err
 			}
+			outputsMutex.Lock()
 			digests = append(digests, outputDigest)
+			outputsMutex.Unlock()
 			return nil
 		})
 		tasks = append(tasks, task)
