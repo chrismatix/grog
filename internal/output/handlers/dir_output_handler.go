@@ -362,43 +362,48 @@ func (d *DirectoryOutputHandler) Load(ctx context.Context, target model.Target, 
 		return fmt.Errorf("failed to create directory %s: %w", dirPath, err)
 	}
 
+	// WaitGroup to wait for all goroutines to finish
+	var waitGroup sync.WaitGroup
+	errChan := make(chan error, len(tree.Children))
 	// Recursively load the directory structure
-	if err := d.loadDirectoryRecursive(ctx, dirPath, tree.Root, childrenMap); err != nil {
+	if err := d.loadDirectoryRecursive(ctx, dirPath, tree.Root, childrenMap, &waitGroup, errChan); err != nil {
 		return fmt.Errorf("failed to load directory structure: %w", err)
+	}
+
+	// Wait for all goroutines to finish
+	waitGroup.Wait()
+	close(errChan)
+	for err := range errChan {
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
 // loadDirectoryRecursive recursively reconstructs a directory from the Directory message
-func (d *DirectoryOutputHandler) loadDirectoryRecursive(ctx context.Context, path string, dir *gen.Directory, childrenMap map[string]*gen.Directory) error {
+func (d *DirectoryOutputHandler) loadDirectoryRecursive(
+	ctx context.Context,
+	path string,
+	dir *gen.Directory,
+	childrenMap map[string]*gen.Directory,
+	waitGroup *sync.WaitGroup,
+	errChan chan error,
+) error {
 	// Create all files
 	for _, fileNode := range dir.Files {
 		filePath := filepath.Join(path, fileNode.Name)
 
 		// Fetch file contents from CAS
-		fileReader, err := d.cas.Load(ctx, fileNode.Digest.Hash)
-		if err != nil {
-			return fmt.Errorf("failed to read file %s from cache: %w", filePath, err)
-		}
-
-		file, err := os.Create(filePath)
-		if err != nil {
-			return fmt.Errorf("failed to create file %s: %w", filePath, err)
-		}
-		// Write file
-		mode := os.FileMode(0644)
-		if fileNode.IsExecutable {
-			mode = 0755
-		}
-		if _, err := io.Copy(file, fileReader); err != nil {
-			return fmt.Errorf("failed to write file %s: %w", filePath, err)
-		}
-
-		err = file.Chmod(mode)
-		if err != nil {
-			return fmt.Errorf("failed to chmod file %s: %w", filePath, err)
-		}
+		go func() {
+			waitGroup.Add(1)
+			defer waitGroup.Done()
+			err := d.downloadFile(ctx, fileNode.Digest.Hash, filePath, fileNode.IsExecutable)
+			if err != nil {
+				errChan <- fmt.Errorf("failed to download file %s: %v", filePath, err)
+			}
+		}()
 	}
 
 	// Create all subdirectories
@@ -417,7 +422,7 @@ func (d *DirectoryOutputHandler) loadDirectoryRecursive(ctx context.Context, pat
 		}
 
 		// Recursively load the subdirectory
-		if err := d.loadDirectoryRecursive(ctx, subDirPath, childDir, childrenMap); err != nil {
+		if err := d.loadDirectoryRecursive(ctx, subDirPath, childDir, childrenMap, waitGroup, errChan); err != nil {
 			return err
 		}
 	}
@@ -432,5 +437,32 @@ func (d *DirectoryOutputHandler) loadDirectoryRecursive(ctx context.Context, pat
 		}
 	}
 
+	return nil
+}
+
+func (d *DirectoryOutputHandler) downloadFile(ctx context.Context, digest, localPath string, isExecutable bool) error {
+	// Fetch file contents from CAS
+	fileReader, err := d.cas.Load(ctx, digest)
+	if err != nil {
+		return fmt.Errorf("failed to read file %s from cache: %w", localPath, err)
+	}
+
+	file, err := os.Create(localPath)
+	if err != nil {
+		return fmt.Errorf("failed to create file %s: %w", localPath, err)
+	}
+	if _, err := io.Copy(file, fileReader); err != nil {
+		return fmt.Errorf("failed to write file %s: %w", localPath, err)
+	}
+
+	// Write file
+	mode := os.FileMode(0644)
+	if isExecutable {
+		mode = 0755
+	}
+	err = file.Chmod(mode)
+	if err != nil {
+		return fmt.Errorf("failed to chmod file %s: %w", localPath, err)
+	}
 	return nil
 }
