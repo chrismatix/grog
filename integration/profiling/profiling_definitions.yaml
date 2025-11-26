@@ -16,6 +16,7 @@ profiles:
             command: mkdir -p dist && cat data/*.txt > dist/preprocessed.txt
             outputs:
               - dist/preprocessed.txt
+              - dist/preprocessed.txt
           - name: bundle
             inputs:
               - dist/preprocessed.txt
@@ -24,94 +25,89 @@ profiles:
             command: mkdir -p dist && cat dist/preprocessed.txt dist/preprocessed.txt > dist/bundle.txt
             outputs:
               - dist/bundle.txt
+
+
   - name: deep
     targetsToBuild:
       - //deep/app:package
       - //deep/app:mirror
     files:
-      - path: deep/data/alpha_1.txt
+      - path: deep/components/alpha/data/alpha_1.txt
         sizeBytes: 2048
-      - path: deep/data/alpha_2.txt
+      - path: deep/components/alpha/data/alpha_2.txt
         sizeBytes: 2048
-      - path: deep/data/beta_1.txt
+      - path: deep/components/beta/data/beta_1.txt
         sizeBytes: 1024
-      - path: deep/data/beta_2.txt
+      - path: deep/components/beta/data/beta_2.txt
         sizeBytes: 1024
-      - path: deep/data/gamma_1.txt
+      - path: deep/components/gamma/data/gamma_1.txt
         sizeBytes: 4096
-      - path: deep/data/gamma_2.txt
+      - path: deep/components/gamma/data/gamma_2.txt
         sizeBytes: 4096
-      - path: deep/data/delta_1.txt
+      - path: deep/components/delta/data/delta_1.txt
         sizeBytes: 1024
-      - path: deep/data/delta_2.txt
+      - path: deep/components/delta/data/delta_2.txt
         sizeBytes: 1024
-      - path: deep/data/epsilon_1.txt
+      - path: deep/components/epsilon/data/epsilon_1.txt
         sizeBytes: 2048
-      - path: deep/data/epsilon_2.txt
+      - path: deep/components/epsilon/data/epsilon_2.txt
         sizeBytes: 2048
-      - path: deep/data/zeta_1.txt
+      - path: deep/components/zeta/data/zeta_1.txt
         sizeBytes: 1024
-      - path: deep/data/zeta_2.txt
+      - path: deep/components/zeta/data/zeta_2.txt
         sizeBytes: 1024
     packages:
       - path: deep/components/alpha
         targets:
           - name: alpha
             inputs:
-              - ../data/alpha_*.txt
-            command: mkdir -p dist && cat ../data/alpha_*.txt > dist/alpha.txt
+              - data/alpha_*.txt
+            command: mkdir -p dist && cat data/alpha_*.txt > dist/alpha.txt
             outputs:
               - dist/alpha.txt
       - path: deep/components/beta
         targets:
           - name: beta
             inputs:
-              - ../data/beta_*.txt
-            command: mkdir -p dist && cat ../data/beta_*.txt > dist/beta.txt
+              - data/beta_*.txt
+            command: mkdir -p dist && cat data/beta_*.txt > dist/beta.txt
             outputs:
               - dist/beta.txt
       - path: deep/components/gamma
         targets:
           - name: gamma
             inputs:
-              - ../data/gamma_*.txt
-            command: mkdir -p dist && cat ../data/gamma_*.txt > dist/gamma.txt
+              - data/gamma_*.txt
+            command: mkdir -p dist && cat data/gamma_*.txt > dist/gamma.txt
             outputs:
               - dist/gamma.txt
       - path: deep/components/delta
         targets:
           - name: delta
             inputs:
-              - ../data/delta_*.txt
-            command: mkdir -p dist && cat ../data/delta_*.txt > dist/delta.txt
+              - data/delta_*.txt
+            command: mkdir -p dist && cat data/delta_*.txt > dist/delta.txt
             outputs:
               - dist/delta.txt
       - path: deep/components/epsilon
         targets:
           - name: epsilon
             inputs:
-              - ../data/epsilon_*.txt
-            command: mkdir -p dist && cat ../data/epsilon_*.txt > dist/epsilon.txt
+              - data/epsilon_*.txt
+            command: mkdir -p dist && cat data/epsilon_*.txt > dist/epsilon.txt
             outputs:
               - dist/epsilon.txt
       - path: deep/components/zeta
         targets:
           - name: zeta
             inputs:
-              - ../data/zeta_*.txt
-            command: mkdir -p dist && cat ../data/zeta_*.txt > dist/zeta.txt
+              - data/zeta_*.txt
+            command: mkdir -p dist && cat data/zeta_*.txt > dist/zeta.txt
             outputs:
               - dist/zeta.txt
       - path: deep/app
         targets:
           - name: aggregate
-            inputs:
-              - ../components/alpha/dist/alpha.txt
-              - ../components/beta/dist/beta.txt
-              - ../components/gamma/dist/gamma.txt
-              - ../components/delta/dist/delta.txt
-              - ../components/epsilon/dist/epsilon.txt
-              - ../components/zeta/dist/zeta.txt
             dependencies:
               - //deep/components/alpha:alpha
               - //deep/components/beta:beta

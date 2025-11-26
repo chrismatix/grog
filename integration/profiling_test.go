@@ -39,7 +39,7 @@ type ProfilingTarget struct {
 	Outputs      []string `json:"outputs,omitempty" yaml:"outputs,omitempty"`
 }
 
-func TestProfilingBuild(t *testing.T) {
+func TestProfilingBuildIntegration(t *testing.T) {
 	definitions := loadProfilingDefinitions(t, filepath.Join("integration", "profiling", "profiling_definitions.yaml"))
 	if len(definitions) == 0 {
 		t.Fatalf("no profiling definitions found")
