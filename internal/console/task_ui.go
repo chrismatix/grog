@@ -21,6 +21,7 @@ type HeaderMsg string
 type TaskState struct {
 	Status       string
 	StartedAtSec int64
+	Progress     *Progress
 }
 
 type TaskStateMap map[int]TaskState
@@ -193,6 +194,9 @@ func (m *model) View() string {
 		if status, ok := m.tasks[i]; ok {
 			timePassed := int(time.Since(time.Unix(status.StartedAtSec, 0)).Seconds())
 			s += fmt.Sprintf("    %s %ds\n", status.Status, timePassed)
+			if status.Progress != nil && status.Progress.hasTotal() {
+				s += fmt.Sprintf("      %s\n", formatProgressBar(*status.Progress, 24))
+			}
 		}
 	}
 

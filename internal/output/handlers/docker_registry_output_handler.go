@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"grog/internal/proto/gen"
 	"io"
 	"strings"
 
@@ -16,6 +15,8 @@ import (
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/model"
+	"grog/internal/proto/gen"
+	"grog/internal/worker"
 
 	"github.com/docker/docker/client"
 )
@@ -79,7 +80,7 @@ func (d *DockerRegistryOutputHandler) cacheImageName(digest string) string {
 }
 
 // Write pushes the Docker image from the local Docker daemon to the remote registry.
-func (d *DockerRegistryOutputHandler) Write(ctx context.Context, target model.Target, output model.Output) (*gen.Output, error) {
+func (d *DockerRegistryOutputHandler) Write(ctx context.Context, target model.Target, output model.Output, _ *worker.ProgressTracker, _ worker.StatusFunc) (*gen.Output, error) {
 	logger := console.GetLogger(ctx)
 	localImageName := output.Identifier
 
@@ -161,7 +162,7 @@ func makeRegistryAuth(ref string) (string, error) {
 }
 
 // Load pulls the Docker image from the remote registry and writes it into the local Docker daemon.
-func (d *DockerRegistryOutputHandler) Load(ctx context.Context, _ model.Target, output *gen.Output) error {
+func (d *DockerRegistryOutputHandler) Load(ctx context.Context, _ model.Target, output *gen.Output, _ *worker.ProgressTracker, _ worker.StatusFunc) error {
 	localImageName := output.GetDockerImage().GetLocalTag()
 	imageId := output.GetDockerImage().GetImageId()
 

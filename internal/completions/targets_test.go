@@ -4,13 +4,19 @@ import (
 	"github.com/spf13/cobra"
 	"grog/internal/config"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
 	"testing"
 )
 
 func TestTargetPatternCompletionsAll(t *testing.T) {
+	if _, err := exec.LookPath("pkl"); err != nil {
+		t.Skip("pkl CLI not installed")
+	}
+
 	cases := []struct {
 		workingDirectory string
 		input            string
@@ -38,13 +44,13 @@ func TestTargetPatternCompletionsAll(t *testing.T) {
 		{"", "//package_1/nested:", []string{"//package_1/nested:nested"}},
 	}
 
-	testFile, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd failed: %v", err)
+	_, testFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatalf("could not determine test file location")
 	}
 
 	testDir := filepath.Dir(testFile)
-	testRepoPath := filepath.Join(testDir, "..", "integration", "test_repos", "completions")
+	testRepoPath := filepath.Join(testDir, "..", "..", "integration", "test_repos", "completions")
 
 	for _, c := range cases {
 		t.Run(c.workingDirectory+"-"+c.input, func(t *testing.T) {

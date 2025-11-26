@@ -3,14 +3,16 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+
 	"grog/internal/caching"
 	"grog/internal/config"
 	"grog/internal/hashing"
 	"grog/internal/model"
 	"grog/internal/proto/gen"
-	"io"
-	"os"
-	"path/filepath"
+	"grog/internal/worker"
 )
 
 // FileOutputHandler is the default output handler that writes files to the file system.
@@ -38,7 +40,7 @@ func (f *FileOutputHandler) Hash(_ context.Context, target model.Target, output 
 	return fileHash, nil
 }
 
-func (f *FileOutputHandler) Write(ctx context.Context, target model.Target, output model.Output) (*gen.Output, error) {
+func (f *FileOutputHandler) Write(ctx context.Context, target model.Target, output model.Output, tracker *worker.ProgressTracker, update worker.StatusFunc) (*gen.Output, error) {
 	relativePath := output.Identifier
 	absOutputPath := target.GetAbsOutputPath(output)
 
@@ -58,8 +60,24 @@ func (f *FileOutputHandler) Write(ctx context.Context, target model.Target, outp
 		return nil, fmt.Errorf("failed to get file size %s: %w", absOutputPath, err)
 	}
 
-	if err := f.cas.Write(ctx, fileHash, file); err != nil {
+	progress := tracker
+	if progress != nil {
+		progress = progress.SubTracker(fmt.Sprintf("%s: writing %s", target.Label, relativePath), fileInfo.Size())
+	} else {
+		progress = worker.NewProgressTracker(fmt.Sprintf("%s: writing %s", target.Label, relativePath), fileInfo.Size(), update)
+	}
+
+	reader := io.Reader(file)
+	if progress != nil {
+		reader = progress.WrapReader(file)
+	}
+
+	if err := f.cas.Write(ctx, fileHash, reader); err != nil {
 		return nil, err
+	}
+
+	if progress != nil {
+		progress.Complete()
 	}
 
 	return &gen.Output{
@@ -75,7 +93,7 @@ func (f *FileOutputHandler) Write(ctx context.Context, target model.Target, outp
 	}, nil
 }
 
-func (f *FileOutputHandler) Load(ctx context.Context, target model.Target, output *gen.Output) error {
+func (f *FileOutputHandler) Load(ctx context.Context, target model.Target, output *gen.Output, tracker *worker.ProgressTracker, update worker.StatusFunc) error {
 	absOutputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.GetFile().GetPath()))
 	existingHash, err := hashing.HashFile(absOutputPath)
 
@@ -85,19 +103,41 @@ func (f *FileOutputHandler) Load(ctx context.Context, target model.Target, outpu
 		return nil
 	}
 
+	progress := tracker
+	if progress != nil {
+		progress = progress.SubTracker(
+			fmt.Sprintf("%s: loading %s", target.Label, output.GetFile().GetPath()),
+			output.GetFile().GetDigest().GetSizeBytes(),
+		)
+	} else {
+		progress = worker.NewProgressTracker(
+			fmt.Sprintf("%s: loading %s", target.Label, output.GetFile().GetPath()),
+			output.GetFile().GetDigest().GetSizeBytes(),
+			update,
+		)
+	}
+
 	contentReader, err := f.cas.Load(ctx, output.GetFile().GetDigest().GetHash())
 	if err != nil {
 		return err
 	}
 	defer contentReader.Close()
+	reader := io.Reader(contentReader)
+	if progress != nil {
+		reader = progress.WrapReader(contentReader)
+	}
 
 	outputFile, err := os.Create(absOutputPath)
 	if err != nil {
 		return err
 	}
 
-	if _, err := io.Copy(outputFile, contentReader); err != nil {
+	if _, err := io.Copy(outputFile, reader); err != nil {
 		return err
+	}
+
+	if progress != nil {
+		progress.Complete()
 	}
 
 	if err := outputFile.Close(); err != nil {

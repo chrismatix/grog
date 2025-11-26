@@ -4,17 +4,19 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"grog/internal/caching"
-	"grog/internal/config"
-	"grog/internal/console"
-	"grog/internal/model"
-	"grog/internal/proto/gen"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"sync"
 	"sync/atomic"
+
+	"grog/internal/caching"
+	"grog/internal/config"
+	"grog/internal/console"
+	"grog/internal/model"
+	"grog/internal/proto/gen"
+	"grog/internal/worker"
 
 	"github.com/cespare/xxhash/v2"
 	"google.golang.org/protobuf/proto"
@@ -81,6 +83,8 @@ func (d *DirectoryOutputHandler) Write(
 	ctx context.Context,
 	target model.Target,
 	output model.Output,
+	tracker *worker.ProgressTracker,
+	update worker.StatusFunc,
 ) (*gen.Output, error) {
 	logger := console.GetLogger(ctx)
 
@@ -91,11 +95,6 @@ func (d *DirectoryOutputHandler) Write(
 	rootDirectory, fileUploads, err := d.writeDirectoryRecursive(ctx, directoryPath, childrenMap)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build hash tree for %s for target %s: %w", directoryPath, target.Label, err)
-	}
-
-	sizeBytes, err := d.uploadFiles(ctx, fileUploads)
-	if err != nil {
-		return nil, fmt.Errorf("failed to upload directory files to cache: %w", err)
 	}
 
 	children := make([]*gen.Directory, 0, len(childrenMap))
@@ -117,9 +116,44 @@ func (d *DirectoryOutputHandler) Write(
 	}
 
 	treeDigest := fmt.Sprintf("%x", hasher.Sum64())
-	err = d.cas.Write(ctx, fmt.Sprintf("%x", hasher.Sum64()), bytes.NewReader(marshalledTree))
+
+	totalBytes := int64(len(marshalledTree))
+	for _, upload := range fileUploads {
+		totalBytes += upload.size
+	}
+
+	progress := tracker
+	if progress != nil {
+		progress = progress.SubTracker(
+			fmt.Sprintf("%s: writing directory %s", target.Label, output.Identifier),
+			totalBytes,
+		)
+	} else {
+		progress = worker.NewProgressTracker(
+			fmt.Sprintf("%s: writing directory %s", target.Label, output.Identifier),
+			totalBytes,
+			update,
+		)
+	}
+
+	sizeBytes, err := d.uploadFiles(ctx, fileUploads, progress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upload directory files to cache: %w", err)
+	}
+
+	treeReader := bytes.NewReader(marshalledTree)
+	reader := io.Reader(treeReader)
+	if progress != nil {
+		reader = progress.WrapReader(treeReader)
+	}
+
+	err = d.cas.Write(ctx, fmt.Sprintf("%x", hasher.Sum64()), reader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to write tree to cache: %w", err)
+	}
+
+	if progress != nil {
+		progress.Complete()
 	}
 
 	return &gen.Output{
@@ -137,7 +171,7 @@ func (d *DirectoryOutputHandler) Write(
 
 // uploadFiles uploads all files in parallel to the CAS
 // the CAS will implement its own concurrency and rate-limiting
-func (d *DirectoryOutputHandler) uploadFiles(ctx context.Context, fileUploads []fileUpload) (int64, error) {
+func (d *DirectoryOutputHandler) uploadFiles(ctx context.Context, fileUploads []fileUpload, progress *worker.ProgressTracker) (int64, error) {
 	var sizeBytes atomic.Int64
 
 	var wg sync.WaitGroup
@@ -154,7 +188,12 @@ func (d *DirectoryOutputHandler) uploadFiles(ctx context.Context, fileUploads []
 			}
 			defer file.Close()
 
-			err = d.cas.Write(ctx, localUploadAction.digest, file)
+			reader := io.Reader(file)
+			if progress != nil {
+				reader = progress.WrapReader(file)
+			}
+
+			err = d.cas.Write(ctx, localUploadAction.digest, reader)
 			if err != nil {
 				errChan <- err
 			}
@@ -315,7 +354,7 @@ func computeFileDigest(path string) (*gen.Digest, error) {
 }
 
 // Load fetches the tree from the CAS and then fetches all files from the cache
-func (d *DirectoryOutputHandler) Load(ctx context.Context, target model.Target, output *gen.Output) error {
+func (d *DirectoryOutputHandler) Load(ctx context.Context, target model.Target, output *gen.Output, tracker *worker.ProgressTracker, update worker.StatusFunc) error {
 	logger := console.GetLogger(ctx)
 	dirPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.GetDirectory().GetPath()))
 
@@ -335,6 +374,24 @@ func (d *DirectoryOutputHandler) Load(ctx context.Context, target model.Target, 
 	treeBytes, err := d.cas.LoadBytes(ctx, treeDigest)
 	if err != nil {
 		return fmt.Errorf("failed to read tree from cache: %w", err)
+	}
+
+	totalBytes := output.GetDirectory().GetTreeDigest().GetSizeBytes() + int64(len(treeBytes))
+	progress := tracker
+	if progress != nil {
+		progress = progress.SubTracker(
+			fmt.Sprintf("%s: loading directory %s", target.Label, output.GetDirectory().GetPath()),
+			totalBytes,
+		)
+	} else {
+		progress = worker.NewProgressTracker(
+			fmt.Sprintf("%s: loading directory %s", target.Label, output.GetDirectory().GetPath()),
+			totalBytes,
+			update,
+		)
+	}
+	if progress != nil {
+		progress.Add(int64(len(treeBytes)))
 	}
 	// Unmarshal the tree
 	tree := &gen.Tree{}
@@ -366,7 +423,7 @@ func (d *DirectoryOutputHandler) Load(ctx context.Context, target model.Target, 
 	var waitGroup sync.WaitGroup
 	errChan := make(chan error, len(tree.Children))
 	// Recursively load the directory structure
-	if err := d.loadDirectoryRecursive(ctx, dirPath, tree.Root, childrenMap, &waitGroup, errChan); err != nil {
+	if err := d.loadDirectoryRecursive(ctx, dirPath, tree.Root, childrenMap, progress, &waitGroup, errChan); err != nil {
 		return fmt.Errorf("failed to load directory structure: %w", err)
 	}
 
@@ -379,6 +436,10 @@ func (d *DirectoryOutputHandler) Load(ctx context.Context, target model.Target, 
 		}
 	}
 
+	if progress != nil {
+		progress.Complete()
+	}
+
 	return nil
 }
 
@@ -388,6 +449,7 @@ func (d *DirectoryOutputHandler) loadDirectoryRecursive(
 	path string,
 	dir *gen.Directory,
 	childrenMap map[string]*gen.Directory,
+	progress *worker.ProgressTracker,
 	waitGroup *sync.WaitGroup,
 	errChan chan error,
 ) error {
@@ -399,7 +461,7 @@ func (d *DirectoryOutputHandler) loadDirectoryRecursive(
 		go func() {
 			waitGroup.Add(1)
 			defer waitGroup.Done()
-			err := d.downloadFile(ctx, fileNode.Digest.Hash, filePath, fileNode.IsExecutable)
+			err := d.downloadFile(ctx, fileNode.Digest.Hash, filePath, fileNode.IsExecutable, progress)
 			if err != nil {
 				errChan <- fmt.Errorf("failed to download file %s: %v", filePath, err)
 			}
@@ -422,7 +484,7 @@ func (d *DirectoryOutputHandler) loadDirectoryRecursive(
 		}
 
 		// Recursively load the subdirectory
-		if err := d.loadDirectoryRecursive(ctx, subDirPath, childDir, childrenMap, waitGroup, errChan); err != nil {
+		if err := d.loadDirectoryRecursive(ctx, subDirPath, childDir, childrenMap, progress, waitGroup, errChan); err != nil {
 			return err
 		}
 	}
@@ -440,18 +502,23 @@ func (d *DirectoryOutputHandler) loadDirectoryRecursive(
 	return nil
 }
 
-func (d *DirectoryOutputHandler) downloadFile(ctx context.Context, digest, localPath string, isExecutable bool) error {
+func (d *DirectoryOutputHandler) downloadFile(ctx context.Context, digest, localPath string, isExecutable bool, progress *worker.ProgressTracker) error {
 	// Fetch file contents from CAS
 	fileReader, err := d.cas.Load(ctx, digest)
 	if err != nil {
 		return fmt.Errorf("failed to read file %s from cache: %w", localPath, err)
 	}
+	defer fileReader.Close()
 
 	file, err := os.Create(localPath)
 	if err != nil {
 		return fmt.Errorf("failed to create file %s: %w", localPath, err)
 	}
-	if _, err := io.Copy(file, fileReader); err != nil {
+	reader := io.Reader(fileReader)
+	if progress != nil {
+		reader = progress.WrapReader(fileReader)
+	}
+	if _, err := io.Copy(file, reader); err != nil {
 		return fmt.Errorf("failed to write file %s: %w", localPath, err)
 	}
 

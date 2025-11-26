@@ -16,6 +16,7 @@ import (
 	"grog/internal/model"
 	"grog/internal/output"
 	"grog/internal/selection"
+	"grog/internal/worker"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -181,7 +182,7 @@ func loadDependencyOutputsIfNeeded(ctx context.Context, logger *zap.SugaredLogge
 		config.Global.GetLoadOutputsMode(),
 	)
 	logger.Infof("Loading outputs of direct dependencies due to load_outputs=minimal")
-	if err := executor.LoadDependencyOutputs(ctx, runTarget, func(_ string) {}); err != nil {
+	if err := executor.LoadDependencyOutputs(ctx, runTarget, func(_ worker.StatusUpdate) {}); err != nil {
 		logger.Fatalf("could not load dependencies: %v", err)
 	}
 }
