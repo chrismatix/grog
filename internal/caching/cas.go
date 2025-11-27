@@ -5,6 +5,7 @@ import (
 	"context"
 	"grog/internal/caching/backends"
 	"io"
+	"sync"
 )
 
 // Cas is a content-addressable store.
@@ -13,15 +14,14 @@ type Cas struct {
 	backend backends.CacheBackend
 	// Cache for exists queries since we assume that during the runtime of a build
 	// the cache backend cannot lose a digest (grog does not delete during a build)
-	keyExistsCache map[string]bool
+	keyExistsCache sync.Map
 }
 
 func NewCas(
 	cache backends.CacheBackend,
 ) *Cas {
 	return &Cas{
-		backend:        cache,
-		keyExistsCache: make(map[string]bool),
+		backend: cache,
 	}
 }
 
@@ -59,8 +59,8 @@ func (c *Cas) LoadBytes(ctx context.Context, digest string) ([]byte, error) {
 }
 
 func (c *Cas) Exists(ctx context.Context, digest string) (bool, error) {
-	if cached, ok := c.keyExistsCache[digest]; ok && cached {
-		return cached, nil
+	if cached, ok := c.keyExistsCache.Load(digest); ok && cached.(bool) {
+		return cached.(bool), nil
 	}
 
 	exists, err := c.backend.Exists(ctx, "cas", digest)
@@ -70,7 +70,7 @@ func (c *Cas) Exists(ctx context.Context, digest string) (bool, error) {
 
 	if exists {
 		// Only cache if the key exists
-		c.keyExistsCache[digest] = exists
+		c.keyExistsCache.Store(digest, exists)
 	}
 	return exists, nil
 }
