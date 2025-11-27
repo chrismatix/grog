@@ -59,7 +59,7 @@ func (d *DockerOutputHandler) Hash(ctx context.Context, target model.Target, out
 		return "", fmt.Errorf("failed to hash Docker image tarball for image %q: %w", imageName, err)
 	}
 
-	return fmt.Sprintf("%x", hasher.Sum64()), nil
+	return hasher.SumString(), nil
 }
 
 // Write saves the Docker image as a tarball and stores it in the cache using go-containerregistry
@@ -133,7 +133,7 @@ func hashLocalTarball(ref name.Reference, img v1.Image) (string, error) {
 		hashReader.Close()
 		return "", fmt.Errorf("failed to hash Docker image tarball for image %q: %w", ref.Name(), err)
 	}
-	return fmt.Sprintf("%x", hasher.Sum64()), nil
+	return hasher.SumString(), nil
 }
 
 // Load loads the Docker image tarball from the cache and imports it into the Docker engine using go-containerregistry
