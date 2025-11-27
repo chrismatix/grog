@@ -60,5 +60,21 @@ func formatProgressBar(p Progress, width int) string {
 		}
 	}
 
-	return fmt.Sprintf("[%s] %3d%%", string(bar), percent)
+	return fmt.Sprintf("[%s] %3d%% %s/%s", string(bar), percent, formatBytes(p.Current), formatBytes(p.Total))
+}
+
+// formatBytes renders a human-readable byte count for progress bars.
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit && exp < len("KMGTPE")-1; n /= unit {
+		div *= unit
+		exp++
+	}
+
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }

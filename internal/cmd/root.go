@@ -112,6 +112,11 @@ func init() {
 	RootCmd.PersistentFlags().Bool("stream-logs", false, "Forward all target build/test logs to stdout/-err")
 	err = viper.BindPFlag("stream_logs", RootCmd.PersistentFlags().Lookup("stream-logs"))
 
+	// disable_progress_tracker
+	RootCmd.PersistentFlags().Bool("disable-progress-tracker", false, "Disable progress tracking updates")
+	err = viper.BindPFlag("disable_progress_tracker", RootCmd.PersistentFlags().Lookup("disable-progress-tracker"))
+	viper.SetDefault("disable_progress_tracker", false)
+
 	// load_outputs
 	RootCmd.PersistentFlags().String("load-outputs", "all", "Level of output loading for cached targets. One of: all, minimal.")
 	err = viper.BindPFlag("load_outputs", RootCmd.PersistentFlags().Lookup("load-outputs"))

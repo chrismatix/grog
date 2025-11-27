@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"grog/internal/config"
 	"grog/internal/console"
 )
 
@@ -43,6 +44,10 @@ func NewProgressTracker(status string, total int64, update StatusFunc) *Progress
 		return nil
 	}
 
+	if config.Global.DisableProgressTracker {
+		return nil
+	}
+
 	return &ProgressTracker{
 		status:       status,
 		total:        total,
@@ -60,11 +65,12 @@ func (pt *ProgressTracker) SubTracker(status string, total int64) *ProgressTrack
 	}
 
 	child := &ProgressTracker{
-		status: status,
-		total:  total,
-		update: pt.update,
-		step:   computeStep(total),
-		parent: pt,
+		status:       status,
+		total:        total,
+		update:       pt.update,
+		step:         computeStep(total),
+		parent:       pt,
+		startedAtSec: pt.startedAtSec,
 	}
 
 	pt.mu.Lock()
@@ -74,9 +80,10 @@ func (pt *ProgressTracker) SubTracker(status string, total int64) *ProgressTrack
 	pt.children[child] = &progressState{status: status, total: total}
 	current, totalProgress := pt.aggregateLocked()
 	pt.step = computeStep(totalProgress)
+	trackerStatus := pt.statusForChildStatusLocked(status)
 	pt.mu.Unlock()
 
-	pt.maybeSend(status, current, totalProgress)
+	pt.maybeSend(trackerStatus, current, totalProgress)
 	return child
 }
 
@@ -147,7 +154,7 @@ func (pt *ProgressTracker) onChildDelta(child *ProgressTracker, delta int64) {
 	current, total := pt.aggregateLocked()
 	pt.step = computeStep(total)
 	send := pt.shouldSendLocked(current, total)
-	status := child.status
+	status := pt.statusForChildStatusLocked(child.status)
 	pt.mu.Unlock()
 
 	if send {
@@ -188,7 +195,7 @@ func (pt *ProgressTracker) shouldSendLocked(current, total int64) bool {
 }
 
 func (pt *ProgressTracker) send(status string, current, total int64) {
-	pt.update(StatusWithProgress(status, &console.Progress{Current: current, Total: total, StartedAtSec: total}))
+	pt.update(StatusWithProgress(status, &console.Progress{Current: current, Total: total, StartedAtSec: pt.startedAtSec}))
 }
 
 func computeStep(total int64) int64 {
@@ -207,6 +214,16 @@ func (pt *ProgressTracker) maybeSend(status string, current, total int64) {
 	if shouldSend {
 		pt.send(status, current, total)
 	}
+}
+
+// statusForChildStatusLocked picks the status string to display for aggregated
+// progress updates. Child status lines are shown only when the tracker has a
+// single child so the parent message stays visible when multiple subtasks run.
+func (pt *ProgressTracker) statusForChildStatusLocked(childStatus string) string {
+	if len(pt.children) == 1 {
+		return childStatus
+	}
+	return pt.status
 }
 
 type progressReader struct {
