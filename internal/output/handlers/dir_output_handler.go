@@ -86,6 +86,7 @@ func (d *DirectoryOutputHandler) Write(
 	tracker *worker.ProgressTracker,
 	update worker.StatusFunc,
 ) (*gen.Output, error) {
+	_ = update
 	logger := console.GetLogger(ctx)
 
 	directoryPath := target.GetAbsOutputPath(output)
@@ -127,12 +128,6 @@ func (d *DirectoryOutputHandler) Write(
 		progress = progress.SubTracker(
 			fmt.Sprintf("%s: writing directory %s", target.Label, output.Identifier),
 			totalBytes,
-		)
-	} else {
-		progress = worker.NewProgressTracker(
-			fmt.Sprintf("%s: writing directory %s", target.Label, output.Identifier),
-			totalBytes,
-			update,
 		)
 	}
 
@@ -355,6 +350,7 @@ func computeFileDigest(path string) (*gen.Digest, error) {
 
 // Load fetches the tree from the CAS and then fetches all files from the cache
 func (d *DirectoryOutputHandler) Load(ctx context.Context, target model.Target, output *gen.Output, tracker *worker.ProgressTracker, update worker.StatusFunc) error {
+	_ = update
 	logger := console.GetLogger(ctx)
 	dirPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.GetDirectory().GetPath()))
 
@@ -383,14 +379,6 @@ func (d *DirectoryOutputHandler) Load(ctx context.Context, target model.Target, 
 			fmt.Sprintf("%s: loading directory %s", target.Label, output.GetDirectory().GetPath()),
 			totalBytes,
 		)
-	} else {
-		progress = worker.NewProgressTracker(
-			fmt.Sprintf("%s: loading directory %s", target.Label, output.GetDirectory().GetPath()),
-			totalBytes,
-			update,
-		)
-	}
-	if progress != nil {
 		progress.Add(int64(len(treeBytes)))
 	}
 	// Unmarshal the tree
