@@ -95,3 +95,64 @@ func TestProgressTrackerConcurrentChildren(t *testing.T) {
 		t.Fatalf("unexpected progress total: %d", last.Progress.Total)
 	}
 }
+
+func TestProgressTrackerPrefersParentStatusWithMultipleChildren(t *testing.T) {
+	t.Helper()
+
+	var mu sync.Mutex
+	var updates []StatusUpdate
+	tracker := NewProgressTracker("root", 0, func(update StatusUpdate) {
+		mu.Lock()
+		defer mu.Unlock()
+		updates = append(updates, update)
+	})
+
+	childA := tracker.SubTracker("child-a", 1024)
+	childB := tracker.SubTracker("child-b", 1024)
+
+	childA.Add(1024)
+	childB.Add(1024)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if len(updates) == 0 {
+		t.Fatalf("expected updates")
+	}
+
+	last := updates[len(updates)-1]
+	if last.Status != "root" {
+		t.Fatalf("expected parent status when multiple children, got %q", last.Status)
+	}
+}
+
+func TestProgressTrackerUsesChildStatusWhenOnlyChild(t *testing.T) {
+	t.Helper()
+
+	var mu sync.Mutex
+	var updates []StatusUpdate
+	tracker := NewProgressTracker("root", 0, func(update StatusUpdate) {
+		mu.Lock()
+		defer mu.Unlock()
+		updates = append(updates, update)
+	})
+
+	child := tracker.SubTracker("child", 1024)
+	child.Add(1024)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if len(updates) == 0 {
+		t.Fatalf("expected updates")
+	}
+
+	last := updates[len(updates)-1]
+	if last.Status != "child" {
+		t.Fatalf("expected child status when only one child, got %q", last.Status)
+	}
+
+	if last.Progress == nil || last.Progress.StartedAtSec != tracker.startedAtSec {
+		t.Fatalf("expected child progress to inherit start time")
+	}
+}
