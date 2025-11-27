@@ -3,6 +3,8 @@ package worker
 import (
 	"sync"
 	"testing"
+
+	"grog/internal/config"
 )
 
 func TestProgressTrackerAggregatesChildren(t *testing.T) {
@@ -154,5 +156,19 @@ func TestProgressTrackerUsesChildStatusWhenOnlyChild(t *testing.T) {
 
 	if last.Progress == nil || last.Progress.StartedAtSec != tracker.startedAtSec {
 		t.Fatalf("expected child progress to inherit start time")
+	}
+}
+
+func TestProgressTrackerDisabledByConfig(t *testing.T) {
+	t.Helper()
+
+	config.Global.DisableProgressTracker = true
+	t.Cleanup(func() {
+		config.Global.DisableProgressTracker = false
+	})
+
+	tracker := NewProgressTracker("root", 0, func(StatusUpdate) {})
+	if tracker != nil {
+		t.Fatalf("expected tracker to be nil when disabled")
 	}
 }

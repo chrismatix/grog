@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"grog/internal/config"
 	"grog/internal/console"
 )
 
@@ -40,6 +41,10 @@ type progressState struct {
 // unknown upfront, pass 0 and provide totals through child trackers.
 func NewProgressTracker(status string, total int64, update StatusFunc) *ProgressTracker {
 	if update == nil {
+		return nil
+	}
+
+	if config.Global.DisableProgressTracker {
 		return nil
 	}
 

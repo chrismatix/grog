@@ -23,6 +23,9 @@ type WorkspaceConfig struct {
 	StreamLogs  bool   `mapstructure:"stream_logs"`
 	NumWorkers  int    `mapstructure:"num_workers"`
 	LoadOutputs string `mapstructure:"load_outputs"`
+	// DisableProgressTracker suppresses progress bar updates in task status output
+	// while still allowing status strings to be emitted.
+	DisableProgressTracker bool `mapstructure:"disable_progress_tracker"`
 	// HashAlgorithm selects the hash function used for cache keys and target
 	// change detection. Supported values: "xxh3" (default) or "sha256".
 	HashAlgorithm string `mapstructure:"hash_algorithm"`
