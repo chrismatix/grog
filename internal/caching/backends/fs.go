@@ -7,14 +7,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sync"
 )
 
 // FileSystemCache implements the CacheBackend interface using the file system for storage
 type FileSystemCache struct {
 	workspaceCacheDir string
-	// TODO is there a better way of making this thread-safe perhaps on a file level?
-	mutex sync.RWMutex
 }
 
 func (fsc *FileSystemCache) TypeName() string {
@@ -33,7 +30,6 @@ func NewFileSystemCache(ctx context.Context) (*FileSystemCache, error) {
 	console.GetLogger(ctx).Debugf("Instantiated fs cache at: %s", workspaceCacheDir)
 	return &FileSystemCache{
 		workspaceCacheDir: workspaceCacheDir,
-		mutex:             sync.RWMutex{},
 	}, nil
 }
 
@@ -47,8 +43,6 @@ func (fsc *FileSystemCache) buildFilePath(path, key string) string {
 func (fsc *FileSystemCache) Get(ctx context.Context, path, key string) (io.ReadCloser, error) {
 	logger := console.GetLogger(ctx)
 	logger.Debugf("Getting file from cache for path: %s, key: %s", path, key)
-	fsc.mutex.RLock()
-	defer fsc.mutex.RUnlock()
 
 	filePath := fsc.buildFilePath(path, key)
 
@@ -66,41 +60,38 @@ func (fsc *FileSystemCache) Set(ctx context.Context, path, key string, content i
 	logger := console.GetLogger(ctx)
 	logger.Debugf("Setting file in cache for path: %s, key: %s", path, key)
 
-	// Use Lock for writing operations
-	fsc.mutex.Lock()
-	defer fsc.mutex.Unlock()
-
 	// Make sure the directory exists
 	dir := filepath.Join(fsc.workspaceCacheDir, path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
 
+	// Write to a temp file first to ensure atomicity
+	tmpFile, err := os.CreateTemp(dir, "tmp-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmpFile.Name()) // Cleanup temp file if rename fails
+
+	// Copy the content from the reader to the file
+	if _, err = io.Copy(tmpFile, content); err != nil {
+		tmpFile.Close()
+		return err
+	}
+
+	// Close explicitly before rename
+	if err := tmpFile.Close(); err != nil {
+		return err
+	}
+
 	filePath := fsc.buildFilePath(path, key)
-
-	file, err := os.Create(filePath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	// Copy the content from the reader to the file, respecting context cancellation
-	_, err = io.Copy(file, content)
-	if err != nil {
-		// If there was an error, attempt to remove the partially written file
-		os.Remove(filePath)
-		return err
-	}
-
-	return nil
+	return os.Rename(tmpFile.Name(), filePath)
 }
 
 // Delete removes a cached file by its key
 func (fsc *FileSystemCache) Delete(ctx context.Context, path, key string) error {
 	logger := console.GetLogger(ctx)
 	logger.Debugf("Deleting file from cache for path: %s, key: %s", path, key)
-	fsc.mutex.Lock()
-	defer fsc.mutex.Unlock()
 
 	filePath := fsc.buildFilePath(path, key)
 
@@ -116,8 +107,6 @@ func (fsc *FileSystemCache) Delete(ctx context.Context, path, key string) error 
 // Exists checks if a file exists in the cache with the given key
 func (fsc *FileSystemCache) Exists(ctx context.Context, path, key string) (bool, error) {
 	logger := console.GetLogger(ctx)
-	fsc.mutex.RLock()
-	defer fsc.mutex.RUnlock()
 
 	filePath := fsc.buildFilePath(path, key)
 

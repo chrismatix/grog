@@ -21,9 +21,6 @@ const (
 )
 
 // A content digest for any blob stored in the CAS.
-//
-// The 'hash' field is typically a hex-encoded SHA-256, but you can
-// swap this out as long as you are consistent across the system.
 type Digest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
