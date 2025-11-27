@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"grog/internal/hashing"
+
 	"io"
 	"os"
 	"path/filepath"
@@ -18,7 +20,6 @@ import (
 	"grog/internal/proto/gen"
 	"grog/internal/worker"
 
-	"github.com/cespare/xxhash/v2"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -69,12 +70,12 @@ func (d *DirectoryOutputHandler) getDirectoryHash(ctx context.Context, target mo
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal tree: %w", err)
 	}
-	hasher := xxhash.New()
+	hasher := hashing.GetHasher()
 	if _, err := hasher.Write(marshalledTree); err != nil {
 		return "", fmt.Errorf("failed to hash tree: %w", err)
 	}
 
-	treeDigest := fmt.Sprintf("%x", hasher.Sum64())
+	treeDigest := hasher.SumString()
 	return treeDigest, nil
 }
 
@@ -111,14 +112,10 @@ func (d *DirectoryOutputHandler) Write(
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal tree: %w", err)
 	}
-	hasher := xxhash.New()
-	if _, err := hasher.Write(marshalledTree); err != nil {
-		return nil, fmt.Errorf("failed to hash tree: %w", err)
-	}
 
-	treeDigest := fmt.Sprintf("%x", hasher.Sum64())
+	treeDigest := hashing.HashBytes(marshalledTree)
 
-	totalBytes := int64(len(marshalledTree))
+	totalBytes := int64(0)
 	for _, upload := range fileUploads {
 		totalBytes += upload.size
 	}
@@ -136,13 +133,8 @@ func (d *DirectoryOutputHandler) Write(
 		return nil, fmt.Errorf("failed to upload directory files to cache: %w", err)
 	}
 
-	treeReader := bytes.NewReader(marshalledTree)
-	reader := io.Reader(treeReader)
-	if progress != nil {
-		reader = progress.WrapReader(treeReader)
-	}
+	err = d.cas.Write(ctx, treeDigest, bytes.NewReader(marshalledTree))
 
-	err = d.cas.Write(ctx, fmt.Sprintf("%x", hasher.Sum64()), reader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to write tree to cache: %w", err)
 	}
@@ -316,14 +308,14 @@ func computeDirectoryDigest(dir *gen.Directory) (*gen.Digest, error) {
 		return nil, fmt.Errorf("failed to marshal directory: %w", err)
 	}
 
-	// Compute xxhash hash
-	hasher := xxhash.New()
+	// Compute hash
+	hasher := hashing.GetHasher()
 	if _, err := hasher.Write(data); err != nil {
 		return nil, fmt.Errorf("failed to hash directory: %w", err)
 	}
 
 	return &gen.Digest{
-		Hash:      fmt.Sprintf("%x", hasher.Sum64()),
+		Hash:      hasher.SumString(),
 		SizeBytes: int64(len(data)),
 	}, nil
 }
@@ -336,14 +328,14 @@ func computeFileDigest(path string) (*gen.Digest, error) {
 	}
 	defer file.Close()
 
-	hasher := xxhash.New()
+	hasher := hashing.GetHasher()
 	size, err := io.Copy(hasher, file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash file %s: %w", path, err)
 	}
 
 	return &gen.Digest{
-		Hash:      fmt.Sprintf("%x", hasher.Sum64()),
+		Hash:      hasher.SumString(),
 		SizeBytes: size,
 	}, nil
 }
@@ -352,12 +344,13 @@ func computeFileDigest(path string) (*gen.Digest, error) {
 func (d *DirectoryOutputHandler) Load(ctx context.Context, target model.Target, output *gen.Output, tracker *worker.ProgressTracker, update worker.StatusFunc) error {
 	_ = update
 	logger := console.GetLogger(ctx)
-	dirPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.GetDirectory().GetPath()))
+	directoryOutput := output.GetDirectory()
+	dirPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, directoryOutput.GetPath()))
 
 	logger.Debugf("loading directory from cache for target %s → %s", target.Label, dirPath)
 
 	// Fetch the tree from CAS
-	treeDigest := output.GetDirectory().GetTreeDigest().Hash
+	treeDigest := directoryOutput.GetTreeDigest().Hash
 
 	// Check the current directory hash against the cached tree
 	// so that we can avoid downloading the directory if it hasn't changed
@@ -372,14 +365,13 @@ func (d *DirectoryOutputHandler) Load(ctx context.Context, target model.Target, 
 		return fmt.Errorf("failed to read tree from cache: %w", err)
 	}
 
-	totalBytes := output.GetDirectory().GetTreeDigest().GetSizeBytes() + int64(len(treeBytes))
+	totalBytes := directoryOutput.GetTreeDigest().GetSizeBytes()
 	progress := tracker
 	if progress != nil {
 		progress = progress.SubTracker(
-			fmt.Sprintf("%s: loading directory %s", target.Label, output.GetDirectory().GetPath()),
+			fmt.Sprintf("%s: loading directory %s", target.Label, directoryOutput.GetPath()),
 			totalBytes,
 		)
-		progress.Add(int64(len(treeBytes)))
 	}
 	// Unmarshal the tree
 	tree := &gen.Tree{}

@@ -4,8 +4,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	semver "github.com/blang/semver/v4"
+)
+
+const (
+	HashAlgorithmXXH3   = "xxh3"
+	HashAlgorithmSHA256 = "sha256"
 )
 
 type WorkspaceConfig struct {
@@ -17,6 +23,9 @@ type WorkspaceConfig struct {
 	StreamLogs  bool   `mapstructure:"stream_logs"`
 	NumWorkers  int    `mapstructure:"num_workers"`
 	LoadOutputs string `mapstructure:"load_outputs"`
+	// HashAlgorithm selects the hash function used for cache keys and target
+	// change detection. Supported values: "xxh3" (default) or "sha256".
+	HashAlgorithm string `mapstructure:"hash_algorithm"`
 	// SkipWorkspaceLock disables the workspace-level lock. This should only be
 	// used in situations where the user can guarantee that no concurrent grog
 	// processes operate on the same workspace, otherwise cache corruption may
@@ -99,6 +108,12 @@ func (w WorkspaceConfig) GetPlatform() string {
 }
 
 func (w WorkspaceConfig) Validate() error {
+	switch strings.ToLower(w.HashAlgorithm) {
+	case "", HashAlgorithmXXH3, HashAlgorithmSHA256:
+	default:
+		return fmt.Errorf("invalid hash_algorithm: %s. Must be either %s or %s", w.HashAlgorithm, HashAlgorithmXXH3, HashAlgorithmSHA256)
+	}
+
 	if w.Docker.Backend != "" &&
 		(w.Docker.Backend != DockerBackendFSTarball && w.Docker.Backend != DockerBackendRegistry) {
 		return fmt.Errorf("invalid docker backend: %s. Must be either %s or %s",

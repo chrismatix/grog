@@ -1,12 +1,14 @@
 package hashing
 
-import (
-	"fmt"
-
-	"github.com/cespare/xxhash/v2"
-)
-
-// HashString computes the xxhash hash of a string
+// HashString computes the configured hash of a string.
 func HashString(str string) string {
-	return fmt.Sprintf("%x", xxhash.Sum64String(str))
+	hasher := GetHasher()
+	_, _ = hasher.WriteString(str)
+	return hasher.SumString()
+}
+
+func HashBytes(bytes []byte) string {
+	hasher := GetHasher()
+	_, _ = hasher.Write(bytes)
+	return hasher.SumString()
 }

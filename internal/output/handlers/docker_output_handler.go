@@ -7,11 +7,11 @@ import (
 
 	"grog/internal/caching"
 	"grog/internal/console"
+	"grog/internal/hashing"
 	"grog/internal/model"
 	"grog/internal/proto/gen"
 	"grog/internal/worker"
 
-	"github.com/cespare/xxhash/v2"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/daemon"
@@ -54,14 +54,14 @@ func (d *DockerOutputHandler) Hash(ctx context.Context, target model.Target, out
 	}
 
 	hashReader := getTarballReader(ref, img)
-	hasher := xxhash.New()
+	hasher := hashing.GetHasher()
 	_, err = io.Copy(hasher, hashReader)
 	if err != nil {
 		hashReader.Close()
 		return "", fmt.Errorf("failed to hash Docker image tarball for image %q: %w", imageName, err)
 	}
 
-	return fmt.Sprintf("%x", hasher.Sum64()), nil
+	return hasher.SumString(), nil
 }
 
 // Write saves the Docker image as a tarball and stores it in the cache using go-containerregistry
@@ -129,13 +129,13 @@ func getTarballReader(ref name.Reference, img v1.Image) (pipeRead io.ReadCloser)
 
 func hashLocalTarball(ref name.Reference, img v1.Image) (string, error) {
 	hashReader := getTarballReader(ref, img)
-	hasher := xxhash.New()
+	hasher := hashing.GetHasher()
 	_, err := io.Copy(hasher, hashReader)
 	if err != nil {
 		hashReader.Close()
 		return "", fmt.Errorf("failed to hash Docker image tarball for image %q: %w", ref.Name(), err)
 	}
-	return fmt.Sprintf("%x", hasher.Sum64()), nil
+	return hasher.SumString(), nil
 }
 
 // Load loads the Docker image tarball from the cache and imports it into the Docker engine using go-containerregistry
