@@ -110,7 +110,11 @@ func (r *Registry) mustGetHandler(outputType string) handlers.Handler {
 	return handler
 }
 
-func (r *Registry) WriteOutputs(ctx context.Context, target *model.Target, update worker.StatusFunc) (*gen.TargetResult, error) {
+func (r *Registry) WriteOutputs(
+	ctx context.Context,
+	target *model.Target,
+	progress *worker.ProgressTracker,
+) (*gen.TargetResult, error) {
 	r.targetMutexMap.Lock(target.Label.String())
 	defer r.targetMutexMap.Unlock(target.Label.String())
 
@@ -118,12 +122,6 @@ func (r *Registry) WriteOutputs(ctx context.Context, target *model.Target, updat
 	logger.Debugf("%s: writing outputs", target.Label)
 
 	outputs := target.AllOutputs()
-
-	progress := worker.NewProgressTracker(
-		fmt.Sprintf("%s: writing outputs", target.Label),
-		0,
-		update,
-	)
 
 	var tasks []pond.Task
 	var targetOutputs []*gen.Output
@@ -205,7 +203,7 @@ func (r *Registry) LoadOutputs(
 	ctx context.Context,
 	target *model.Target,
 	targetResult *gen.TargetResult,
-	update worker.StatusFunc,
+	progress *worker.ProgressTracker,
 ) error {
 	start := time.Now()
 	defer func() {
@@ -220,12 +218,6 @@ func (r *Registry) LoadOutputs(
 
 	logger := console.GetLogger(ctx)
 	logger.Debugf("%s: loading outputs", target.Label)
-
-	progress := worker.NewProgressTracker(
-		fmt.Sprintf("%s: loading outputs", target.Label),
-		0,
-		update,
-	)
 
 	var tasks []pond.Task
 	for _, outputRef := range targetResult.Outputs {
