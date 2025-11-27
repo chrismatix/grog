@@ -3,6 +3,8 @@ package console
 import (
 	"fmt"
 	"time"
+
+	"github.com/fatih/color"
 )
 
 // RenderAfterSeconds determines how long to wait before rendering progress bars.
@@ -49,18 +51,17 @@ func formatProgressBar(p Progress, width int) string {
 	percent := p.percent()
 	filled := (percent * width) / 100
 
-	bar := make([]rune, width)
+	var barString string
 	for i := 0; i < width; i++ {
 		if i < filled {
-			bar[i] = '='
+			barString += color.GreenString("━")
 		} else if i == filled {
-			bar[i] = '>'
+			barString += color.GreenString("╸")
 		} else {
-			bar[i] = ' '
+			barString += " "
 		}
 	}
-
-	return fmt.Sprintf("[%s] %3d%% %s/%s", string(bar), percent, formatBytes(p.Current), formatBytes(p.Total))
+	return fmt.Sprintf("[%s] %3d%% %s/%s", barString, percent, formatBytes(p.Current), formatBytes(p.Total))
 }
 
 // formatBytes renders a human-readable byte count for progress bars.
