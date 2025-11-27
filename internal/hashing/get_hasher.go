@@ -49,7 +49,8 @@ func (h *xxh3Hasher) WriteString(s string) (int, error) {
 }
 
 func (h *xxh3Hasher) SumString() string {
-	return fmt.Sprintf("%x", h.hasher.Sum64())
+	sum128 := h.hasher.Sum128()
+	return fmt.Sprintf("%016x%016x", sum128.Hi, sum128.Lo)
 }
 
 type sha256Hasher struct {
@@ -69,8 +70,9 @@ func (h *sha256Hasher) WriteString(s string) (int, error) {
 }
 
 func (h *sha256Hasher) SumString() string {
-	return fmt.Sprintf("%x", h.hasher.Sum(nil))
+	return fmt.Sprintf("%016x", h.hasher.Sum(nil))
 }
 
+// Assert types
 var _ Hasher = (*xxh3Hasher)(nil)
 var _ Hasher = (*sha256Hasher)(nil)

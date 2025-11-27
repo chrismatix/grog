@@ -56,7 +56,7 @@ For instance, to set or override the `fail_fast` option set `GROG_FAIL_FAST=fals
 - **load_outputs**: Determines what outputs are loaded from the cache. Available options are:
   - `all` (default): Load all outputs from the cache.
   - `minimal`: Only load outputs of a target if a **direct dependant** needs to be re-built. This setting is useful to save bandwidth and disk space in CI settings.
-- **hash_algorithm**: Selects the hash function used for cache keys and change detection. `xxh3` (default) offers extremely fast, 64-bit hashes with a negligible collision probability for typical builds, while `sha256` is slower but cryptographically strong—use it if you are hashing untrusted inputs or want a vanishingly small risk of collisions despite the performance cost.
+- **hash_algorithm**: Selects the hash function used for cache keys and change detection. [`xxh3`](https://xxhash.com/) (default) offers extremely fast, 128-bit hashes with a negligible collision probability for typical builds, while `sha256` is slower but cryptographically strong—use it if you are hashing untrusted inputs or want a vanishingly small risk of collisions despite the performance cost.
 - **all_platforms**: When set to `true` skips the platform selection step and builds all targets for all platforms ([read more](/topics/querying)).
 - **skip_workspace_lock**: When `true`, Grog does not acquire a workspace-level lock before executing. **Warning:** Running multiple grog instances without locking can corrupt the workspace or cache.
 
