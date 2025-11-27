@@ -38,15 +38,12 @@ func NewProgressTracker(status string, total int64, update StatusFunc) *Progress
 		return nil
 	}
 
-	tracker := &ProgressTracker{
+	return &ProgressTracker{
 		status: status,
 		total:  total,
 		update: update,
 		step:   computeStep(total),
 	}
-
-	tracker.maybeSend(status, 0, total)
-	return tracker
 }
 
 // SubTracker creates a child tracker whose progress contributes to this

@@ -195,7 +195,7 @@ func (m *model) View() string {
 			timePassed := int(time.Since(time.Unix(status.StartedAtSec, 0)).Seconds())
 			s += fmt.Sprintf("    %s %ds\n", status.Status, timePassed)
 			if status.Progress != nil && status.Progress.hasTotal() {
-				s += fmt.Sprintf("      %s\n", formatProgressBar(*status.Progress, 24))
+				s += fmt.Sprintf("     ╰─%s\n", formatProgressBar(*status.Progress, 24))
 			}
 		}
 	}

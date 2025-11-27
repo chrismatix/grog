@@ -41,9 +41,11 @@ func formatProgressBar(p Progress, width int) string {
 	bar := make([]rune, width)
 	for i := 0; i < width; i++ {
 		if i < filled {
-			bar[i] = '█'
+			bar[i] = '='
+		} else if i == filled {
+			bar[i] = '>'
 		} else {
-			bar[i] = '░'
+			bar[i] = ' '
 		}
 	}
 

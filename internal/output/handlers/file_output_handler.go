@@ -63,8 +63,6 @@ func (f *FileOutputHandler) Write(ctx context.Context, target model.Target, outp
 	progress := tracker
 	if progress != nil {
 		progress = progress.SubTracker(fmt.Sprintf("%s: writing %s", target.Label, relativePath), fileInfo.Size())
-	} else {
-		progress = worker.NewProgressTracker(fmt.Sprintf("%s: writing %s", target.Label, relativePath), fileInfo.Size(), update)
 	}
 
 	reader := io.Reader(file)
@@ -108,12 +106,6 @@ func (f *FileOutputHandler) Load(ctx context.Context, target model.Target, outpu
 		progress = progress.SubTracker(
 			fmt.Sprintf("%s: loading %s", target.Label, output.GetFile().GetPath()),
 			output.GetFile().GetDigest().GetSizeBytes(),
-		)
-	} else {
-		progress = worker.NewProgressTracker(
-			fmt.Sprintf("%s: loading %s", target.Label, output.GetFile().GetPath()),
-			output.GetFile().GetDigest().GetSizeBytes(),
-			update,
 		)
 	}
 
