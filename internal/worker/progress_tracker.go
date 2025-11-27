@@ -3,6 +3,7 @@ package worker
 import (
 	"io"
 	"sync"
+	"time"
 
 	"grog/internal/console"
 )
@@ -20,6 +21,10 @@ type ProgressTracker struct {
 	current  int64
 	lastSent int64
 	step     int64
+
+	// Record the time at which the tracker was created
+	// so that the UI can decide whether to show a progress bar
+	startedAtSec int64
 
 	parent   *ProgressTracker
 	children map[*ProgressTracker]*progressState
@@ -39,10 +44,11 @@ func NewProgressTracker(status string, total int64, update StatusFunc) *Progress
 	}
 
 	return &ProgressTracker{
-		status: status,
-		total:  total,
-		update: update,
-		step:   computeStep(total),
+		status:       status,
+		total:        total,
+		update:       update,
+		startedAtSec: time.Now().Unix(),
+		step:         computeStep(total),
 	}
 }
 
@@ -182,7 +188,7 @@ func (pt *ProgressTracker) shouldSendLocked(current, total int64) bool {
 }
 
 func (pt *ProgressTracker) send(status string, current, total int64) {
-	pt.update(StatusWithProgress(status, &console.Progress{Current: current, Total: total}))
+	pt.update(StatusWithProgress(status, &console.Progress{Current: current, Total: total, StartedAtSec: total}))
 }
 
 func computeStep(total int64) int64 {

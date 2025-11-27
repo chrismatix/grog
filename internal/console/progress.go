@@ -1,12 +1,19 @@
 package console
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
+
+// RenderAfterSeconds determines how long to wait before rendering progress bars.
+const RenderAfterSeconds = 1
 
 // Progress represents a unit of work with a current and total value.
 // It is used to render progress bars in the task UI.
 type Progress struct {
-	Current int64
-	Total   int64
+	StartedAtSec int64
+	Current      int64
+	Total        int64
 }
 
 // percent clamps the progress to the 0-100 range.
@@ -28,6 +35,10 @@ func (p Progress) percent() int {
 
 func (p Progress) hasTotal() bool {
 	return p.Total > 0
+}
+
+func (p Progress) shouldRender() bool {
+	return p.hasTotal() && time.Since(time.Unix(p.StartedAtSec, 0)).Seconds() > RenderAfterSeconds
 }
 
 func formatProgressBar(p Progress, width int) string {
