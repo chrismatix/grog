@@ -10,6 +10,7 @@ import (
 
 	dockerconfig "github.com/docker/cli/cli/config"
 	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/pkg/jsonmessage"
 
 	"grog/internal/caching"
 	"grog/internal/config"
@@ -80,7 +81,7 @@ func (d *DockerRegistryOutputHandler) cacheImageName(digest string) string {
 }
 
 // Write pushes the Docker image from the local Docker daemon to the remote registry.
-func (d *DockerRegistryOutputHandler) Write(ctx context.Context, target model.Target, output model.Output, _ *worker.ProgressTracker, _ worker.StatusFunc) (*gen.Output, error) {
+func (d *DockerRegistryOutputHandler) Write(ctx context.Context, target model.Target, output model.Output, tracker *worker.ProgressTracker, _ worker.StatusFunc) (*gen.Output, error) {
 	logger := console.GetLogger(ctx)
 	localImageName := output.Identifier
 
@@ -119,7 +120,10 @@ func (d *DockerRegistryOutputHandler) Write(ctx context.Context, target model.Ta
 	}
 	defer reader.Close()
 
-	if _, err := io.Copy(io.Discard, reader); err != nil {
+	// Intercept Docker CLI JSON progress stream and bridge to our progress tracker
+	// Note: the top-level tracker is created by the registry and passed to this handler
+	// as the 4th argument. We create child trackers per-layer when totals are known.
+	if err := consumeDockerProgress(reader, tracker, "pushing", localImageName); err != nil {
 		return nil, fmt.Errorf("error reading push response: %w", err)
 	}
 
@@ -162,7 +166,7 @@ func makeRegistryAuth(ref string) (string, error) {
 }
 
 // Load pulls the Docker image from the remote registry and writes it into the local Docker daemon.
-func (d *DockerRegistryOutputHandler) Load(ctx context.Context, _ model.Target, output *gen.Output, _ *worker.ProgressTracker, _ worker.StatusFunc) error {
+func (d *DockerRegistryOutputHandler) Load(ctx context.Context, _ model.Target, output *gen.Output, tracker *worker.ProgressTracker, _ worker.StatusFunc) error {
 	localImageName := output.GetDockerImage().GetLocalTag()
 	imageId := output.GetDockerImage().GetImageId()
 
@@ -203,11 +207,96 @@ func (d *DockerRegistryOutputHandler) Load(ctx context.Context, _ model.Target, 
 		}
 	}()
 
+	// Read and bridge the Docker JSON progress from pull before tagging
+	if err := consumeDockerProgress(pull, tracker, "pulling", localImageName); err != nil {
+		return fmt.Errorf("error reading pull response: %w", err)
+	}
+
 	if err := cli.ImageTag(ctx, remoteImageName, localImageName); err != nil {
 		return fmt.Errorf("failed to tag cache image %q as %q: %w", remoteImageName, localImageName, err)
 	}
 
 	logger.Debugf("successfully loaded Docker image %s from registry tag %s", localImageName, remoteImageName)
 	logger.Infof("Loaded image %s from registry", localImageName)
+	return nil
+}
+
+// dockerLayerProgress holds per-layer tracking state for bridging JSON progress
+type dockerLayerProgress struct {
+	tracker     *worker.ProgressTracker
+	lastCurrent int64
+	total       int64
+}
+
+// consumeDockerProgress decodes Docker CLI JSON messages and bridges them into our ProgressTracker model.
+// It creates child trackers per layer (jm.ID) when a total is known and updates them as Current advances.
+// If parent is nil, the stream is still drained but no progress is emitted.
+func consumeDockerProgress(
+	reader io.Reader,
+	parent *worker.ProgressTracker,
+	phase string,
+	imageName string,
+) error {
+	if reader == nil {
+		return nil
+	}
+	dec := json.NewDecoder(reader)
+	layers := make(map[string]*dockerLayerProgress)
+
+	for {
+		var jm jsonmessage.JSONMessage
+		if err := dec.Decode(&jm); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+
+		if jm.Error != nil {
+			return jm.Error
+		}
+
+		// Only handle progress-bearing messages
+		if jm.ID == "" || jm.Progress == nil {
+			continue
+		}
+
+		current := jm.Progress.Current
+		total := jm.Progress.Total
+
+		state, ok := layers[jm.ID]
+		if !ok && total > 0 && parent != nil {
+			status := jm.Status
+			if status == "" {
+				status = phase
+			}
+			child := parent.SubTracker(fmt.Sprintf("%s %s", status, imageName), total)
+			if child != nil {
+				state = &dockerLayerProgress{tracker: child, total: total}
+				layers[jm.ID] = state
+			}
+		}
+
+		if state != nil {
+			// Guard against out-of-order or resetting currents
+			delta := current - state.lastCurrent
+			if delta < 0 {
+				// treat as absolute if we observe a reset
+				delta = current
+			}
+			if delta > 0 {
+				state.tracker.Add(delta)
+				state.lastCurrent = current
+			}
+			if total > 0 && current >= total {
+				state.tracker.Complete()
+			}
+		}
+	}
+
+	// Ensure all trackers are completed at end of stream
+	for _, st := range layers {
+		st.tracker.Complete()
+	}
 	return nil
 }

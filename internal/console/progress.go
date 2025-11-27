@@ -6,7 +6,7 @@ import (
 )
 
 // RenderAfterSeconds determines how long to wait before rendering progress bars.
-const RenderAfterSeconds = 1
+const RenderAfterSeconds = 2
 
 // Progress represents a unit of work with a current and total value.
 // It is used to render progress bars in the task UI.
