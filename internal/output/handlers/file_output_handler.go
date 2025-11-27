@@ -57,7 +57,7 @@ func (f *FileOutputHandler) Write(ctx context.Context, target model.Target, outp
 
 	fileInfo, err := file.Stat()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get file size %s: %w", absOutputPath, err)
+		return nil, fmt.Errorf("failed to get file sizeBytes %s: %w", absOutputPath, err)
 	}
 
 	progress := tracker

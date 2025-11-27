@@ -117,7 +117,7 @@ func (d *DirectoryOutputHandler) Write(
 
 	totalBytes := int64(0)
 	for _, upload := range fileUploads {
-		totalBytes += upload.size
+		totalBytes += upload.sizeBytes
 	}
 
 	progress := tracker
@@ -184,7 +184,7 @@ func (d *DirectoryOutputHandler) uploadFiles(ctx context.Context, fileUploads []
 			if err != nil {
 				errChan <- err
 			}
-			sizeBytes.Add(localUploadAction.size)
+			sizeBytes.Add(localUploadAction.sizeBytes)
 		}()
 	}
 
@@ -207,7 +207,7 @@ func (d *DirectoryOutputHandler) uploadFiles(ctx context.Context, fileUploads []
 type fileUpload struct {
 	digest       string
 	absolutePath string
-	size         int64
+	sizeBytes    int64
 }
 
 // writeDirectoryRecursive recursively builds a Directory message for the given path
@@ -308,14 +308,8 @@ func computeDirectoryDigest(dir *gen.Directory) (*gen.Digest, error) {
 		return nil, fmt.Errorf("failed to marshal directory: %w", err)
 	}
 
-	// Compute hash
-	hasher := hashing.GetHasher()
-	if _, err := hasher.Write(data); err != nil {
-		return nil, fmt.Errorf("failed to hash directory: %w", err)
-	}
-
 	return &gen.Digest{
-		Hash:      hasher.SumString(),
+		Hash:      hashing.HashBytes(data),
 		SizeBytes: int64(len(data)),
 	}, nil
 }
