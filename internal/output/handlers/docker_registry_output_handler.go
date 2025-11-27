@@ -81,7 +81,12 @@ func (d *DockerRegistryOutputHandler) cacheImageName(digest string) string {
 }
 
 // Write pushes the Docker image from the local Docker daemon to the remote registry.
-func (d *DockerRegistryOutputHandler) Write(ctx context.Context, target model.Target, output model.Output, tracker *worker.ProgressTracker, _ worker.StatusFunc) (*gen.Output, error) {
+func (d *DockerRegistryOutputHandler) Write(
+	ctx context.Context,
+	target model.Target,
+	output model.Output,
+	tracker *worker.ProgressTracker,
+) (*gen.Output, error) {
 	logger := console.GetLogger(ctx)
 	localImageName := output.Identifier
 
@@ -112,18 +117,18 @@ func (d *DockerRegistryOutputHandler) Write(ctx context.Context, target model.Ta
 	}
 
 	// Push via Docker daemon using that auth
-	reader, err := cli.ImagePush(ctx, remoteCacheImageName, image.PushOptions{
+	pushReader, err := cli.ImagePush(ctx, remoteCacheImageName, image.PushOptions{
 		RegistryAuth: auth,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to push image %q to registry: %w", remoteCacheImageName, err)
 	}
-	defer reader.Close()
+	defer pushReader.Close()
 
 	// Intercept Docker CLI JSON progress stream and bridge to our progress tracker
 	// Note: the top-level tracker is created by the registry and passed to this handler
 	// as the 4th argument. We create child trackers per-layer when totals are known.
-	if err := consumeDockerProgress(reader, tracker, "pushing", localImageName); err != nil {
+	if err := consumeDockerProgress(pushReader, tracker, fmt.Sprintf("%s: pulling cache for %s", target.Label, localImageName)); err != nil {
 		return nil, fmt.Errorf("error reading push response: %w", err)
 	}
 
@@ -166,7 +171,12 @@ func makeRegistryAuth(ref string) (string, error) {
 }
 
 // Load pulls the Docker image from the remote registry and writes it into the local Docker daemon.
-func (d *DockerRegistryOutputHandler) Load(ctx context.Context, _ model.Target, output *gen.Output, tracker *worker.ProgressTracker, _ worker.StatusFunc) error {
+func (d *DockerRegistryOutputHandler) Load(
+	ctx context.Context,
+	target model.Target,
+	output *gen.Output,
+	tracker *worker.ProgressTracker,
+) error {
 	localImageName := output.GetDockerImage().GetLocalTag()
 	imageId := output.GetDockerImage().GetImageId()
 
@@ -208,7 +218,7 @@ func (d *DockerRegistryOutputHandler) Load(ctx context.Context, _ model.Target, 
 	}()
 
 	// Read and bridge the Docker JSON progress from pull before tagging
-	if err := consumeDockerProgress(pull, tracker, "pulling", localImageName); err != nil {
+	if err := consumeDockerProgress(pull, tracker, fmt.Sprintf("%s: pulling cache for %s", target.Label, localImageName)); err != nil {
 		return fmt.Errorf("error reading pull response: %w", err)
 	}
 
@@ -234,8 +244,7 @@ type dockerLayerProgress struct {
 func consumeDockerProgress(
 	reader io.Reader,
 	parent *worker.ProgressTracker,
-	phase string,
-	imageName string,
+	status string,
 ) error {
 	if reader == nil {
 		return nil
@@ -244,36 +253,32 @@ func consumeDockerProgress(
 	layers := make(map[string]*dockerLayerProgress)
 
 	for {
-		var jm jsonmessage.JSONMessage
-		if err := dec.Decode(&jm); err != nil {
+		var jsonMessage jsonmessage.JSONMessage
+		if err := dec.Decode(&jsonMessage); err != nil {
 			if err == io.EOF {
 				break
 			}
 			return err
 		}
 
-		if jm.Error != nil {
-			return jm.Error
+		if jsonMessage.Error != nil {
+			return jsonMessage.Error
 		}
 
 		// Only handle progress-bearing messages
-		if jm.ID == "" || jm.Progress == nil {
+		if jsonMessage.ID == "" || jsonMessage.Progress == nil {
 			continue
 		}
 
-		current := jm.Progress.Current
-		total := jm.Progress.Total
+		current := jsonMessage.Progress.Current
+		total := jsonMessage.Progress.Total
 
-		state, ok := layers[jm.ID]
+		state, ok := layers[jsonMessage.ID]
 		if !ok && total > 0 && parent != nil {
-			status := jm.Status
-			if status == "" {
-				status = phase
-			}
-			child := parent.SubTracker(fmt.Sprintf("%s %s", status, imageName), total)
+			child := parent.SubTracker(status, total)
 			if child != nil {
 				state = &dockerLayerProgress{tracker: child, total: total}
-				layers[jm.ID] = state
+				layers[jsonMessage.ID] = state
 			}
 		}
 

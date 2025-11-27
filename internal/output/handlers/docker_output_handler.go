@@ -35,7 +35,7 @@ func (d *DockerOutputHandler) Type() HandlerType {
 	return DockerHandler
 }
 
-func (d *DockerOutputHandler) Hash(ctx context.Context, target model.Target, output model.Output) (string, error) {
+func (d *DockerOutputHandler) Hash(ctx context.Context, _ model.Target, output model.Output) (string, error) {
 	logger := console.GetLogger(ctx)
 	imageName := output.Identifier
 
@@ -65,7 +65,12 @@ func (d *DockerOutputHandler) Hash(ctx context.Context, target model.Target, out
 }
 
 // Write saves the Docker image as a tarball and stores it in the cache using go-containerregistry
-func (d *DockerOutputHandler) Write(ctx context.Context, _ model.Target, output model.Output, _ *worker.ProgressTracker, _ worker.StatusFunc) (*gen.Output, error) {
+func (d *DockerOutputHandler) Write(
+	ctx context.Context,
+	_ model.Target,
+	output model.Output,
+	_ *worker.ProgressTracker,
+) (*gen.Output, error) {
 	logger := console.GetLogger(ctx)
 	imageName := output.Identifier
 
@@ -139,7 +144,12 @@ func hashLocalTarball(ref name.Reference, img v1.Image) (string, error) {
 }
 
 // Load loads the Docker image tarball from the cache and imports it into the Docker engine using go-containerregistry
-func (d *DockerOutputHandler) Load(ctx context.Context, _ model.Target, output *gen.Output, _ *worker.ProgressTracker, _ worker.StatusFunc) error {
+func (d *DockerOutputHandler) Load(
+	ctx context.Context,
+	_ model.Target,
+	output *gen.Output,
+	_ *worker.ProgressTracker,
+) error {
 	logger := console.GetLogger(ctx)
 	// The original image name/tag used when saving
 	imageName := output.GetDockerImage().GetLocalTag()

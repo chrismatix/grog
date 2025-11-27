@@ -40,7 +40,12 @@ func (f *FileOutputHandler) Hash(_ context.Context, target model.Target, output 
 	return fileHash, nil
 }
 
-func (f *FileOutputHandler) Write(ctx context.Context, target model.Target, output model.Output, tracker *worker.ProgressTracker, update worker.StatusFunc) (*gen.Output, error) {
+func (f *FileOutputHandler) Write(
+	ctx context.Context,
+	target model.Target,
+	output model.Output,
+	tracker *worker.ProgressTracker,
+) (*gen.Output, error) {
 	relativePath := output.Identifier
 	absOutputPath := target.GetAbsOutputPath(output)
 
@@ -91,7 +96,12 @@ func (f *FileOutputHandler) Write(ctx context.Context, target model.Target, outp
 	}, nil
 }
 
-func (f *FileOutputHandler) Load(ctx context.Context, target model.Target, output *gen.Output, tracker *worker.ProgressTracker, update worker.StatusFunc) error {
+func (f *FileOutputHandler) Load(
+	ctx context.Context,
+	target model.Target,
+	output *gen.Output,
+	tracker *worker.ProgressTracker,
+) error {
 	absOutputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, output.GetFile().GetPath()))
 	existingHash, err := hashing.HashFile(absOutputPath)
 

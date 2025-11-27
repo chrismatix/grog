@@ -85,9 +85,7 @@ func (d *DirectoryOutputHandler) Write(
 	target model.Target,
 	output model.Output,
 	tracker *worker.ProgressTracker,
-	update worker.StatusFunc,
 ) (*gen.Output, error) {
-	_ = update
 	logger := console.GetLogger(ctx)
 
 	directoryPath := target.GetAbsOutputPath(output)
@@ -335,8 +333,12 @@ func computeFileDigest(path string) (*gen.Digest, error) {
 }
 
 // Load fetches the tree from the CAS and then fetches all files from the cache
-func (d *DirectoryOutputHandler) Load(ctx context.Context, target model.Target, output *gen.Output, tracker *worker.ProgressTracker, update worker.StatusFunc) error {
-	_ = update
+func (d *DirectoryOutputHandler) Load(
+	ctx context.Context,
+	target model.Target,
+	output *gen.Output,
+	tracker *worker.ProgressTracker,
+) error {
 	logger := console.GetLogger(ctx)
 	directoryOutput := output.GetDirectory()
 	dirPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, directoryOutput.GetPath()))

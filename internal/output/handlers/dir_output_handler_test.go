@@ -87,12 +87,12 @@ func TestDirectoryOutputHandler_WriteAndLoad(t *testing.T) {
 		t.Fatalf("failed to create upward symlink: %v", err)
 	}
 
-	dirOutput, err := handler.Write(ctx, target, output, nil, nil)
-	if _, err := handler.Write(ctx, target, output, nil, nil); err != nil {
+	dirOutput, err := handler.Write(ctx, target, output, nil)
+	if _, err := handler.Write(ctx, target, output, nil); err != nil {
 		t.Fatalf("Write failed: %v", err)
 	}
 
-	if err := handler.Load(ctx, target, dirOutput, nil, nil); err != nil {
+	if err := handler.Load(ctx, target, dirOutput, nil); err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
 
@@ -156,7 +156,7 @@ func TestDirectoryOutputHandler_Write_FailsOnCacheWrite(t *testing.T) {
 	target := model.Target{Label: label.TL("pkg", "target"), ChangeHash: "hash"}
 	output := model.NewOutput("dir", "out")
 
-	if _, err := handler.Write(ctx, target, output, nil, nil); err == nil {
+	if _, err := handler.Write(ctx, target, output, nil); err == nil {
 		t.Fatal("expected Write to fail when cache Set fails, got nil error")
 	}
 }
@@ -184,7 +184,7 @@ func TestDirectoryOutputHandler_Load_FailsOnCacheLoad(t *testing.T) {
 		}},
 	}
 
-	if err := handler.Load(ctx, target, dirOut, nil, nil); err == nil {
+	if err := handler.Load(ctx, target, dirOut, nil); err == nil {
 		t.Fatal("expected Load to fail when cache Get fails, got nil error")
 	}
 }

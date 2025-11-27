@@ -132,7 +132,7 @@ func (r *Registry) WriteOutputs(ctx context.Context, target *model.Target, updat
 	for _, outputRef := range outputs {
 		localOutputRef := outputRef
 		task := r.pool.SubmitErr(func() error {
-			output, err := r.mustGetHandler(localOutputRef.Type).Write(ctx, *target, localOutputRef, progress, update)
+			output, err := r.mustGetHandler(localOutputRef.Type).Write(ctx, *target, localOutputRef, progress)
 			if err != nil {
 				return err
 			}
@@ -231,7 +231,7 @@ func (r *Registry) LoadOutputs(
 	for _, outputRef := range targetResult.Outputs {
 		localOutputRef := outputRef
 		task := r.pool.SubmitErr(func() error {
-			err := r.mustGetHandlerFromProto(localOutputRef).Load(ctx, *target, localOutputRef, progress, update)
+			err := r.mustGetHandlerFromProto(localOutputRef).Load(ctx, *target, localOutputRef, progress)
 			if err != nil {
 				return err
 			}
