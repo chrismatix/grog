@@ -12,9 +12,11 @@ import (
 )
 
 func TestProfilingBuildIntegrated(t *testing.T) {
+	t.Skip()
 
 	t.Run("test", func(t *testing.T) {
-		repoPath := "/Users/christophproschel/codingprojects/binit/core" // materializeProfilingRepo(t, definition)
+		// TODO supply your local repo path
+		repoPath := ""
 
 		callBuildFunction(t, repoPath)
 
@@ -25,8 +27,10 @@ func TestProfilingBuildIntegrated(t *testing.T) {
 func callBuildFunction(t *testing.T, repoPath string) {
 	testLogger := zaptest.NewLogger(t).Sugar()
 
-	config.Global.Root = "/Users/christophproschel/.grog"
+	// TODO supply your local cache root
+	config.Global.Root = ""
 	config.Global.WorkspaceRoot = repoPath
+	config.Global.EnableCache = true
 	graph := loading.MustLoadGraphForBuild(t.Context(), testLogger)
 
 	cmds.RunBuild(
