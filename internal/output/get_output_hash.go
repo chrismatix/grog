@@ -16,7 +16,7 @@ func getOutputHash(outputs []*gen.Output) (string, error) {
 
 	marshalOptions := proto.MarshalOptions{Deterministic: true}
 	// Calculate combined hash
-	digests := make([]string, len(outputs))
+	digests := make([]string, 0, len(outputs))
 	for _, output := range outputs {
 		var digest string
 		data, err := marshalOptions.Marshal(output)
@@ -37,5 +37,5 @@ func getOutputHash(outputs []*gen.Output) (string, error) {
 		}
 	}
 
-	return fmt.Sprintf("%x", hasher.Sum64()), nil
+	return hasher.SumString(), nil
 }

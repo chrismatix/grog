@@ -72,7 +72,7 @@ func (d *DirectoryOutputHandler) getDirectoryHash(ctx context.Context, target mo
 		return "", fmt.Errorf("failed to hash tree: %w", err)
 	}
 
-	treeDigest := fmt.Sprintf("%x", hasher.Sum64())
+	treeDigest := hasher.SumString()
 	return treeDigest, nil
 }
 
@@ -116,8 +116,8 @@ func (d *DirectoryOutputHandler) Write(
 		return nil, fmt.Errorf("failed to hash tree: %w", err)
 	}
 
-	treeDigest := fmt.Sprintf("%x", hasher.Sum64())
-	err = d.cas.Write(ctx, fmt.Sprintf("%x", hasher.Sum64()), bytes.NewReader(marshalledTree))
+	treeDigest := hasher.SumString()
+	err = d.cas.Write(ctx, treeDigest, bytes.NewReader(marshalledTree))
 	if err != nil {
 		return nil, fmt.Errorf("failed to write tree to cache: %w", err)
 	}
@@ -282,14 +282,14 @@ func computeDirectoryDigest(dir *gen.Directory) (*gen.Digest, error) {
 		return nil, fmt.Errorf("failed to marshal directory: %w", err)
 	}
 
-	// Compute xxhash hash
+	// Compute hash
 	hasher := hashing.GetHasher()
 	if _, err := hasher.Write(data); err != nil {
 		return nil, fmt.Errorf("failed to hash directory: %w", err)
 	}
 
 	return &gen.Digest{
-		Hash:      fmt.Sprintf("%x", hasher.Sum64()),
+		Hash:      hasher.SumString(),
 		SizeBytes: int64(len(data)),
 	}, nil
 }
@@ -309,7 +309,7 @@ func computeFileDigest(path string) (*gen.Digest, error) {
 	}
 
 	return &gen.Digest{
-		Hash:      fmt.Sprintf("%x", hasher.Sum64()),
+		Hash:      hasher.SumString(),
 		SizeBytes: size,
 	}, nil
 }

@@ -27,7 +27,7 @@ func GetTargetChangeHash(target model.Target, dependencyHashes []string) (string
 	return fmt.Sprintf("%s_%s", targetDefinitionHash, inputContentHash), err
 }
 
-// hashTargetDefinition computes the xxhash hash of a single file.
+// hashTargetDefinition computes the configured hash of a single file.
 func hashTargetDefinition(target model.Target, dependencyHashes []string) (string, error) {
 	hasher := GetHasher()
 
@@ -45,7 +45,7 @@ func hashTargetDefinition(target model.Target, dependencyHashes []string) (strin
 		return "", err
 	}
 	// Return the hash as a hexadecimal string.
-	return fmt.Sprintf("%x", hasher.Sum64()), nil
+	return hasher.SumString(), nil
 }
 
 func sorted(s []string) string {

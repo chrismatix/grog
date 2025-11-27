@@ -1,16 +1,14 @@
 package hashing
 
-import (
-	"fmt"
-
-	"github.com/zeebo/xxh3"
-)
-
-// HashString computes the xxhash hash of a string
+// HashString computes the configured hash of a string.
 func HashString(str string) string {
-	return fmt.Sprintf("%x", xxh3.HashString(str))
+	hasher := GetHasher()
+	_, _ = hasher.WriteString(str)
+	return hasher.SumString()
 }
 
 func HashBytes(bytes []byte) string {
-	return fmt.Sprintf("%x", xxh3.Hash128(bytes))
+	hasher := GetHasher()
+	_, _ = hasher.Write(bytes)
+	return hasher.SumString()
 }

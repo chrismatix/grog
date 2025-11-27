@@ -8,7 +8,7 @@ import (
 	"sort"
 )
 
-// HashFile computes the xxhash hash of a single file.
+// HashFile computes the configured hash of a single file.
 func HashFile(filePath string) (string, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
@@ -21,10 +21,10 @@ func HashFile(filePath string) (string, error) {
 		return "", err
 	}
 	// Return the hash as a hexadecimal string.
-	return fmt.Sprintf("%x", hasher.Sum64()), nil
+	return hasher.SumString(), nil
 }
 
-// HashFiles computes a combined xxhash hash for multiple files relative to packagePath
+// HashFiles computes a combined hash for multiple files relative to packagePath
 // Sorts the array to ensure consistent outputs.
 func HashFiles(absolutePackagePath string, fileList []string) (string, error) {
 	combinedHasher := GetHasher()
@@ -53,5 +53,5 @@ func HashFiles(absolutePackagePath string, fileList []string) (string, error) {
 	}
 
 	// Return the combined hash as a hexadecimal string.
-	return fmt.Sprintf("%x", combinedHasher.Sum64()), nil
+	return combinedHasher.SumString(), nil
 }

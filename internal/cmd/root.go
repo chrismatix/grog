@@ -168,6 +168,7 @@ func initConfig(cmd *cobra.Command) error {
 	viper.SetDefault("os", runtime.GOOS)
 	viper.SetDefault("arch", runtime.GOARCH)
 	viper.SetDefault("cache.gcs.shared_cache", true)
+	viper.SetDefault("hash_algorithm", config.HashAlgorithmXXH3)
 	viper.SetDefault("environment_variables", make(map[string]string))
 
 	names := []string{"grog"}
@@ -221,6 +222,8 @@ func initConfig(cmd *cobra.Command) error {
 	if err := viper.Unmarshal(&config.Global); err != nil {
 		return fmt.Errorf("Failed to parse config: %v\n", err)
 	}
+
+	config.Global.HashAlgorithm = strings.ToLower(config.Global.HashAlgorithm)
 
 	logger := console.InitLogger()
 	logger.Debugf("Using config file: %s", viper.ConfigFileUsed())
