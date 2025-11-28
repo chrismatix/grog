@@ -40,6 +40,10 @@ var RootCmd = &cobra.Command{
 			return err
 		}
 
+		if !console.UseTea() {
+			config.Global.DisableProgressTracker = true
+		}
+
 		if err := config.Global.ValidateGrogVersion(Version); err != nil {
 			console.InitLogger().Fatalf("Invalid grog version: %v", err)
 		}

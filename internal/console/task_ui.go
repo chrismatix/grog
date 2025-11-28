@@ -39,7 +39,8 @@ func StartTaskUI(ctx context.Context) (context.Context, *tea.Program, func(tea.M
 
 	var opts []tea.ProgramOption
 	opts = append(opts, tea.WithContext(ctx))
-	if !UseTea() {
+	useTea := UseTea()
+	if !useTea {
 		// If we're in daemon mode don't render the TUI
 		opts = append(opts, tea.WithInput(nil), tea.WithoutRenderer())
 	}
