@@ -25,7 +25,7 @@ func TestSimpleTasks(t *testing.T) {
 		i := i
 		go func() {
 			res, err := pool.Run(func(update StatusFunc) (int, error) {
-				update("running")
+				update(Status("running"))
 				time.Sleep(10 * time.Millisecond)
 				return i, nil
 			})

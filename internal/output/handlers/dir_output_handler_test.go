@@ -1,46 +1,46 @@
 package handlers_test
 
 import (
-    "bytes"
-    "context"
-    "errors"
-    "io"
-    "grog/internal/caching"
-    "grog/internal/caching/backends"
-    "grog/internal/config"
-    "grog/internal/label"
-    "grog/internal/model"
-    "grog/internal/output/handlers"
-    "grog/internal/proto/gen"
-    "os"
-    "path/filepath"
-    "testing"
+	"bytes"
+	"context"
+	"errors"
+	"grog/internal/caching"
+	"grog/internal/caching/backends"
+	"grog/internal/config"
+	"grog/internal/label"
+	"grog/internal/model"
+	"grog/internal/output/handlers"
+	"grog/internal/proto/gen"
+	"io"
+	"os"
+	"path/filepath"
+	"testing"
 )
 
 // mockCacheBackend is a simple mock for CacheBackend to simulate failures
 type mockCacheBackend struct {
-    setErr error
-    getErr error
+	setErr error
+	getErr error
 }
 
 func (m *mockCacheBackend) TypeName() string { return "mock" }
 func (m *mockCacheBackend) Get(ctx context.Context, path, key string) (io.ReadCloser, error) {
-    if m.getErr != nil {
-        return nil, m.getErr
-    }
-    return io.NopCloser(bytes.NewReader(nil)), nil
+	if m.getErr != nil {
+		return nil, m.getErr
+	}
+	return io.NopCloser(bytes.NewReader(nil)), nil
 }
 func (m *mockCacheBackend) Set(ctx context.Context, path, key string, content io.Reader) error {
-    if m.setErr != nil {
-        return m.setErr
-    }
-    // drain content to simulate full read
-    _, _ = io.Copy(io.Discard, content)
-    return nil
+	if m.setErr != nil {
+		return m.setErr
+	}
+	// drain content to simulate full read
+	_, _ = io.Copy(io.Discard, content)
+	return nil
 }
 func (m *mockCacheBackend) Delete(ctx context.Context, path string, key string) error { return nil }
 func (m *mockCacheBackend) Exists(ctx context.Context, path string, key string) (bool, error) {
-    return false, nil
+	return false, nil
 }
 
 // TestDirectoryOutputHandler_WriteAndLoad tests writing and loading directory
@@ -87,12 +87,12 @@ func TestDirectoryOutputHandler_WriteAndLoad(t *testing.T) {
 		t.Fatalf("failed to create upward symlink: %v", err)
 	}
 
-	dirOutput, err := handler.Write(ctx, target, output)
-	if _, err := handler.Write(ctx, target, output); err != nil {
+	dirOutput, err := handler.Write(ctx, target, output, nil)
+	if _, err := handler.Write(ctx, target, output, nil); err != nil {
 		t.Fatalf("Write failed: %v", err)
 	}
 
-	if err := handler.Load(ctx, target, dirOutput); err != nil {
+	if err := handler.Load(ctx, target, dirOutput, nil); err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
 
@@ -134,57 +134,57 @@ func TestDirectoryOutputHandler_WriteAndLoad(t *testing.T) {
 // cache backend fails on Set (writing either files or the tree), the Write
 // operation returns an error.
 func TestDirectoryOutputHandler_Write_FailsOnCacheWrite(t *testing.T) {
-    ctx := context.Background()
+	ctx := context.Background()
 
-    rootDir := t.TempDir()
-    config.Global = config.WorkspaceConfig{Root: rootDir, WorkspaceRoot: rootDir}
+	rootDir := t.TempDir()
+	config.Global = config.WorkspaceConfig{Root: rootDir, WorkspaceRoot: rootDir}
 
-    // Prepare a minimal directory
-    dirPath := filepath.Join(rootDir, "pkg", "out")
-    if err := os.MkdirAll(dirPath, 0o755); err != nil {
-        t.Fatalf("failed to create directory: %v", err)
-    }
-    if err := os.WriteFile(filepath.Join(dirPath, "file.txt"), []byte("data"), 0o644); err != nil {
-        t.Fatalf("failed to write file: %v", err)
-    }
+	// Prepare a minimal directory
+	dirPath := filepath.Join(rootDir, "pkg", "out")
+	if err := os.MkdirAll(dirPath, 0o755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dirPath, "file.txt"), []byte("data"), 0o644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
 
-    // Mock cache that fails on Set
-    failing := &mockCacheBackend{setErr: errors.New("backend set failed")}
-    cas := caching.NewCas(failing)
-    handler := handlers.NewDirectoryOutputHandler(cas)
+	// Mock cache that fails on Set
+	failing := &mockCacheBackend{setErr: errors.New("backend set failed")}
+	cas := caching.NewCas(failing)
+	handler := handlers.NewDirectoryOutputHandler(cas)
 
-    target := model.Target{Label: label.TL("pkg", "target"), ChangeHash: "hash"}
-    output := model.NewOutput("dir", "out")
+	target := model.Target{Label: label.TL("pkg", "target"), ChangeHash: "hash"}
+	output := model.NewOutput("dir", "out")
 
-    if _, err := handler.Write(ctx, target, output); err == nil {
-        t.Fatal("expected Write to fail when cache Set fails, got nil error")
-    }
+	if _, err := handler.Write(ctx, target, output, nil); err == nil {
+		t.Fatal("expected Write to fail when cache Set fails, got nil error")
+	}
 }
 
 // TestDirectoryOutputHandler_Load_FailsOnCacheLoad ensures that when the
 // cache backend fails on Get (loading the tree), the Load operation returns an error.
 func TestDirectoryOutputHandler_Load_FailsOnCacheLoad(t *testing.T) {
-    ctx := context.Background()
+	ctx := context.Background()
 
-    rootDir := t.TempDir()
-    config.Global = config.WorkspaceConfig{Root: rootDir, WorkspaceRoot: rootDir}
+	rootDir := t.TempDir()
+	config.Global = config.WorkspaceConfig{Root: rootDir, WorkspaceRoot: rootDir}
 
-    // Mock cache that fails on Get
-    failing := &mockCacheBackend{getErr: errors.New("backend get failed")}
-    cas := caching.NewCas(failing)
-    handler := handlers.NewDirectoryOutputHandler(cas)
+	// Mock cache that fails on Get
+	failing := &mockCacheBackend{getErr: errors.New("backend get failed")}
+	cas := caching.NewCas(failing)
+	handler := handlers.NewDirectoryOutputHandler(cas)
 
-    target := model.Target{Label: label.TL("pkg", "target"), ChangeHash: "hash"}
+	target := model.Target{Label: label.TL("pkg", "target"), ChangeHash: "hash"}
 
-    // Prepare a minimal output pointing to some digest
-    dirOut := &gen.Output{
-        Kind: &gen.Output_Directory{Directory: &gen.DirectoryOutput{
-            Path: "out",
-            TreeDigest: &gen.Digest{Hash: "deadbeef", SizeBytes: 0},
-        }},
-    }
+	// Prepare a minimal output pointing to some digest
+	dirOut := &gen.Output{
+		Kind: &gen.Output_Directory{Directory: &gen.DirectoryOutput{
+			Path:       "out",
+			TreeDigest: &gen.Digest{Hash: "deadbeef", SizeBytes: 0},
+		}},
+	}
 
-    if err := handler.Load(ctx, target, dirOut); err == nil {
-        t.Fatal("expected Load to fail when cache Get fails, got nil error")
-    }
+	if err := handler.Load(ctx, target, dirOut, nil); err == nil {
+		t.Fatal("expected Load to fail when cache Get fails, got nil error")
+	}
 }

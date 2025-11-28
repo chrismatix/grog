@@ -3,6 +3,11 @@ package output
 import (
 	"context"
 	"fmt"
+	"runtime"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"grog/internal/caching"
 	"grog/internal/config"
 	"grog/internal/console"
@@ -11,10 +16,7 @@ import (
 	"grog/internal/model"
 	"grog/internal/output/handlers"
 	"grog/internal/proto/gen"
-	"runtime"
-	"sync"
-	"sync/atomic"
-	"time"
+	"grog/internal/worker"
 
 	"github.com/alitto/pond/v2"
 )
@@ -108,7 +110,11 @@ func (r *Registry) mustGetHandler(outputType string) handlers.Handler {
 	return handler
 }
 
-func (r *Registry) WriteOutputs(ctx context.Context, target *model.Target) (*gen.TargetResult, error) {
+func (r *Registry) WriteOutputs(
+	ctx context.Context,
+	target *model.Target,
+	progress *worker.ProgressTracker,
+) (*gen.TargetResult, error) {
 	r.targetMutexMap.Lock(target.Label.String())
 	defer r.targetMutexMap.Unlock(target.Label.String())
 
@@ -124,7 +130,7 @@ func (r *Registry) WriteOutputs(ctx context.Context, target *model.Target) (*gen
 	for _, outputRef := range outputs {
 		localOutputRef := outputRef
 		task := r.pool.SubmitErr(func() error {
-			output, err := r.mustGetHandler(localOutputRef.Type).Write(ctx, *target, localOutputRef)
+			output, err := r.mustGetHandler(localOutputRef.Type).Write(ctx, *target, localOutputRef, progress)
 			if err != nil {
 				return err
 			}
@@ -197,6 +203,7 @@ func (r *Registry) LoadOutputs(
 	ctx context.Context,
 	target *model.Target,
 	targetResult *gen.TargetResult,
+	progress *worker.ProgressTracker,
 ) error {
 	start := time.Now()
 	defer func() {
@@ -216,7 +223,7 @@ func (r *Registry) LoadOutputs(
 	for _, outputRef := range targetResult.Outputs {
 		localOutputRef := outputRef
 		task := r.pool.SubmitErr(func() error {
-			err := r.mustGetHandlerFromProto(localOutputRef).Load(ctx, *target, localOutputRef)
+			err := r.mustGetHandlerFromProto(localOutputRef).Load(ctx, *target, localOutputRef, progress)
 			if err != nil {
 				return err
 			}
