@@ -54,9 +54,9 @@ func formatProgressBar(p Progress, width int) string {
 	var barString string
 	for i := 0; i < width; i++ {
 		if i < filled {
-			barString += color.GreenString("━")
+			barString += color.GreenString("=")
 		} else if i == filled {
-			barString += color.GreenString("╸")
+			barString += color.GreenString(">")
 		} else {
 			barString += " "
 		}
