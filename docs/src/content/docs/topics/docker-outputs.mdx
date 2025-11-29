@@ -26,7 +26,7 @@ Grog supports two storage backends for Docker images:
 
 #### Filesystem Backend (Default)
 
-The filesystem backend stores Docker images as tarballs using your configured (remote) filesystem cache:
+The filesystem backend stores Docker images as content-addressable blobs (manifest, config, and layers) using your configured (remote) filesystem cache:
 
 ```toml
 [docker]
@@ -38,11 +38,11 @@ backend = "tarball"  # This is the default, so it's optional
 - Simple to set up
 - Works with any filesystem cache
 - No additional infrastructure required
+- Layers and manifests are deduplicated across images, reducing cache size
 
 **Disadvantages:**
 
-- More storage-intensive as layers aren't deduplicated between images
-- Slower for large images
+- Loading still streams layers back into the Docker daemon locally
 
 #### Registry Backend
 

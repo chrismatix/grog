@@ -37,6 +37,12 @@ message DockerImageOutput {
   string image_id = 4;
   // the remote tag for registry mode
   string remote_tag = 5;
+  // Digest of the serialized manifest stored in CAS (filesystem backend).
+  Digest manifest_digest = 6;
+  // Digest of the config blob stored in CAS (filesystem backend).
+  Digest config_digest = 7;
+  // Digests of the image layers stored in CAS (filesystem backend).
+  repeated Digest layer_digests = 8;
 }
 
 message Output {
