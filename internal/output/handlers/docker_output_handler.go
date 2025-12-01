@@ -410,7 +410,7 @@ func (d *DockerOutputHandler) loadFromCasLayers(
 	}
 
 	logger.Debugf("successfully loaded Docker image %s (written tag: %s)", imageName, writtenTag)
-	logger.Infof("Loaded image %s (layers)", imageName)
+	logger.Infof("Loaded image %s from cache backend", imageName)
 
 	if progress != nil {
 		progress.Complete()
