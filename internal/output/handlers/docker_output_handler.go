@@ -218,7 +218,7 @@ func (d *DockerOutputHandler) Write(
 	return &gen.Output{
 		Kind: &gen.Output_DockerImage{
 			DockerImage: &gen.DockerImageOutput{
-				Mode:           gen.ImageMode_TAR,
+				Mode:           gen.ImageMode_LAYERS,
 				LocalTag:       imageName,
 				TarDigest:      artifacts.manifestDigest,
 				ManifestDigest: &gen.Digest{Hash: artifacts.manifestDigest, SizeBytes: artifacts.manifestSize},
@@ -229,33 +229,6 @@ func (d *DockerOutputHandler) Write(
 	}, nil
 }
 
-func getTarballReader(ref name.Reference, img v1.Image) (pipeRead io.ReadCloser) {
-	// Create a pipe to stream the tarball directly to the cache
-	pipeRead, pipeWrite := io.Pipe()
-
-	// Write the image to the tarball stream in a separate goroutine
-	go func() {
-		defer pipeWrite.Close() // Close the writer when tarball.Write completes or errors
-		if err := tarball.Write(ref, img, pipeWrite); err != nil {
-			// Propagate the error by closing the pipe writer with the error
-			pipeWrite.CloseWithError(fmt.Errorf("failed to write image %q to tarball stream: %w", ref.Name(), err))
-		}
-	}()
-
-	return pipeRead
-}
-
-func hashLocalTarball(ref name.Reference, img v1.Image) (string, int64, error) {
-	hashReader := getTarballReader(ref, img)
-	defer hashReader.Close()
-	hasher := hashing.GetHasher()
-	size, err := io.Copy(hasher, hashReader)
-	if err != nil {
-		return "", 0, fmt.Errorf("failed to hash Docker image tarball for image %q: %w", ref.Name(), err)
-	}
-	return hasher.SumString(), size, nil
-}
-
 // Load loads the Docker image from the cache and imports it into the Docker engine using go-containerregistry
 func (d *DockerOutputHandler) Load(
 	ctx context.Context,
@@ -264,7 +237,7 @@ func (d *DockerOutputHandler) Load(
 	tracker *worker.ProgressTracker,
 ) error {
 	dockerImage := output.GetDockerImage()
-	if dockerImage.GetMode() != gen.ImageMode_TAR {
+	if dockerImage.GetMode() != gen.ImageMode_LAYERS {
 		return fmt.Errorf("cannot restore %s docker cache as layer cache is configured", dockerImage.GetMode())
 	}
 	return d.loadFromCasLayers(ctx, target, output.GetDockerImage(), tracker)
