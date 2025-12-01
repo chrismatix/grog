@@ -115,6 +115,10 @@ func (r *Registry) WriteOutputs(
 	target *model.Target,
 	progress *worker.ProgressTracker,
 ) (*gen.TargetResult, error) {
+	start := time.Now()
+	defer func() {
+		r.addCacheDuration(time.Since(start))
+	}()
 	r.targetMutexMap.Lock(target.Label.String())
 	defer r.targetMutexMap.Unlock(target.Label.String())
 

@@ -277,7 +277,9 @@ func (e *Executor) getTaskFunc(
 				update,
 			)
 
+			cacheStart := time.Now()
 			loadingErr := e.registry.LoadOutputs(ctx, target, targetResult, progress)
+			target.CacheTime += time.Since(cacheStart)
 			if loadingErr != nil {
 				// Don't return so that we instead break out and continue executing the target
 				logger.Errorf("%s re-running due to output loading failure: %v", target.Label, loadingErr)
@@ -417,7 +419,9 @@ func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, u
 			0,
 			update,
 		)
+		cacheStart := time.Now()
 		targetResult, err = e.registry.WriteOutputs(ctx, target, progress)
+		target.CacheTime += time.Since(cacheStart)
 	}
 	if err != nil {
 		return err
@@ -425,6 +429,11 @@ func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, u
 
 	target.OutputsLoaded = true
 	target.OutputHash = targetResult.OutputHash
+
+	cacheStart := time.Now()
+	defer func() {
+		target.CacheTime += time.Since(cacheStart)
+	}()
 
 	return e.targetCache.Write(ctx, targetResult)
 }

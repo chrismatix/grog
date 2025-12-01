@@ -48,6 +48,7 @@ type Target struct {
 	HasCacheHit bool   `json:"has_cache_hit,omitempty"`
 
 	ExecutionTime time.Duration `json:"-"`
+	CacheTime     time.Duration `json:"-"`
 }
 
 type OutputCheck struct {

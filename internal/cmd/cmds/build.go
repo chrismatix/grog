@@ -161,6 +161,20 @@ func runBuild(
 			execStats.ExecDuration.Seconds(),
 			execStats.CacheDuration.Seconds(),
 		)
+
+		if criticalPath, ok := graph.GetSelectedSubgraph().FindCriticalPath(); ok && len(criticalPath.Nodes) > 0 {
+			var criticalPathLabels []string
+			for _, node := range criticalPath.Nodes {
+				criticalPathLabels = append(criticalPathLabels, node.GetLabel().String())
+			}
+
+			logger.Infof(
+				"Critical path: %s (exec %.3fs, cache %.3fs)",
+				strings.Join(criticalPathLabels, " -> "),
+				criticalPath.ExecutionDuration.Seconds(),
+				criticalPath.CacheDuration.Seconds(),
+			)
+		}
 	}
 
 	if executionErr != nil {
