@@ -3,14 +3,17 @@ package loading
 import (
 	"context"
 	"grog/internal/analysis"
+	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/dag"
 	"grog/internal/model"
+	"time"
 
 	"go.uber.org/zap"
 )
 
 func MustLoadGraphForBuild(ctx context.Context, logger *zap.SugaredLogger) *dag.DirectedTargetGraph {
+	startTime := time.Now()
 	packages, err := LoadAllPackages(ctx)
 	if err != nil {
 		logger.Fatalf(
@@ -28,9 +31,18 @@ func MustLoadGraphForBuild(ctx context.Context, logger *zap.SugaredLogger) *dag.
 		logger.Fatalf("could not build graph: %v", err)
 	}
 
-	logger.Infof("%s loaded, %s configured.",
-		console.FCountPkg(len(packages)),
-		console.FCountTargets(len(nodes.GetTargets())))
+	if config.Global.DisableNonDeterministicLogging {
+		logger.Infof("%s loaded, %s configured.",
+			console.FCountPkg(len(packages)),
+			console.FCountTargets(len(nodes.GetTargets())))
+	} else {
+		elapsedTime := time.Since(startTime).Seconds()
+		logger.Infof("%s loaded in %.2fs, %s configured.",
+			console.FCountPkg(len(packages)),
+			elapsedTime,
+			console.FCountTargets(len(nodes.GetTargets())),
+		)
+	}
 	return graph
 }
 

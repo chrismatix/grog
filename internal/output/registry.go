@@ -3,11 +3,6 @@ package output
 import (
 	"context"
 	"fmt"
-	"runtime"
-	"sync"
-	"sync/atomic"
-	"time"
-
 	"grog/internal/caching"
 	"grog/internal/config"
 	"grog/internal/console"
@@ -17,6 +12,8 @@ import (
 	"grog/internal/output/handlers"
 	"grog/internal/proto/gen"
 	"grog/internal/worker"
+	"runtime"
+	"sync"
 
 	"github.com/alitto/pond/v2"
 )
@@ -27,8 +24,6 @@ type Registry struct {
 	cas          *caching.Cas
 	pool         pond.Pool
 	handlerMutex sync.RWMutex
-	// Total time spent on registry operations
-	cacheDurationNs atomic.Int64
 
 	// Features like load_outputs=minimal may load outputs concurrently
 	// In this case we want to make sure that that only happens once per target
@@ -205,10 +200,6 @@ func (r *Registry) LoadOutputs(
 	targetResult *gen.TargetResult,
 	progress *worker.ProgressTracker,
 ) error {
-	start := time.Now()
-	defer func() {
-		r.addCacheDuration(time.Since(start))
-	}()
 	r.targetMutexMap.Lock(target.Label.String())
 	defer r.targetMutexMap.Unlock(target.Label.String())
 	if target.OutputsLoaded {
@@ -241,16 +232,4 @@ func (r *Registry) LoadOutputs(
 	target.OutputsLoaded = true
 	target.OutputHash = targetResult.OutputHash
 	return nil
-}
-
-func (r *Registry) addCacheDuration(duration time.Duration) {
-	if duration <= 0 {
-		return
-	}
-	r.cacheDurationNs.Add(duration.Nanoseconds())
-}
-
-// CacheDuration returns the total time spent on registry operations.
-func (r *Registry) CacheDuration() time.Duration {
-	return time.Duration(r.cacheDurationNs.Load())
 }
