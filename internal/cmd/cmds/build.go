@@ -150,17 +150,11 @@ func runBuild(
 		config.Global.EnableCache,
 		loadOutputsMode,
 	)
-	completionMap, execStats, executionErr := executor.Execute(ctx)
+	completionMap, executionErr := executor.Execute(ctx)
 
 	elapsedTime := time.Since(startTime).Seconds()
 	// Mostly used to keep our test fixtures deterministic
 	if !config.Global.DisableNonDeterministicLogging {
-		logger.Infof(
-			"Elapsed time: %.3fs (exec %.3fs, cache %.3fs)",
-			elapsedTime,
-			execStats.ExecDuration.Seconds(),
-			execStats.CacheDuration.Seconds(),
-		)
 
 		if criticalPath, ok := graph.GetSelectedSubgraph().FindCriticalPath(); ok && len(criticalPath.Nodes) > 0 {
 			var criticalPathLabels []string
@@ -169,10 +163,16 @@ func runBuild(
 			}
 
 			logger.Infof(
-				"Critical path: %s (exec %.3fs, cache %.3fs)",
-				strings.Join(criticalPathLabels, " -> "),
+				"Elapsed time: %.3fs (critical path: exec %.3fs, cache %.3fs)",
+				elapsedTime,
 				criticalPath.ExecutionDuration.Seconds(),
 				criticalPath.CacheDuration.Seconds(),
+			)
+			logger.Debugf("Critical path: %s", strings.Join(criticalPathLabels, " -> "))
+		} else {
+			logger.Infof(
+				"Elapsed time: %.3fs",
+				elapsedTime,
 			)
 		}
 	}
