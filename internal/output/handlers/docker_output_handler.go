@@ -91,6 +91,7 @@ func collectImageArtifacts(imageName string, img v1.Image) (*imageArtifacts, err
 	}, nil
 }
 
+// Hash hashes the local Docker image manifest which should be the source of truth for the image
 func (d *DockerOutputHandler) Hash(ctx context.Context, _ model.Target, output model.Output) (string, error) {
 	logger := console.GetLogger(ctx)
 	imageName := output.Identifier

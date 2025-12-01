@@ -103,9 +103,9 @@ func (pt *ProgressTracker) Add(delta int64) {
 	pt.step = computeStep(total)
 	send := parent == nil && pt.shouldSendLocked(current, total)
 	status := pt.status
-	pt.mu.Unlock()
 
 	if parent != nil {
+		pt.mu.Unlock()
 		parent.onChildDelta(pt, delta)
 		return
 	}
@@ -113,6 +113,7 @@ func (pt *ProgressTracker) Add(delta int64) {
 	if send {
 		pt.send(status, current, total)
 	}
+	pt.mu.Unlock()
 }
 
 func (pt *ProgressTracker) WrapReader(reader io.Reader) io.Reader {
@@ -233,6 +234,8 @@ type progressReader struct {
 
 func (p *progressReader) Read(buf []byte) (int, error) {
 	n, err := p.reader.Read(buf)
-	p.tracker.Add(int64(n))
+	if n > 0 {
+		p.tracker.Add(int64(n))
+	}
 	return n, err
 }
