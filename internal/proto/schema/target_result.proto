@@ -20,7 +20,7 @@ message DirectoryOutput {
 }
 
 enum ImageMode {
-  TAR = 0;
+  LAYERS = 0;
   REGISTRY = 2;
 }
 

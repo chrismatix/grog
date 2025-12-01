@@ -264,11 +264,10 @@ func (d *DockerOutputHandler) Load(
 	tracker *worker.ProgressTracker,
 ) error {
 	dockerImage := output.GetDockerImage()
-	if dockerImage.GetManifestDigest() != nil && dockerImage.GetConfigDigest() != nil && len(dockerImage.GetLayerDigests()) > 0 {
-		return d.loadFromCasLayers(ctx, target, dockerImage, tracker)
+	if dockerImage.GetMode() != gen.ImageMode_TAR {
+		return fmt.Errorf("cannot restore %s docker cache as layer cache is configured", dockerImage.GetMode())
 	}
-
-	return d.loadFromTarball(ctx, target, dockerImage, tracker)
+	return d.loadFromCasLayers(ctx, target, output.GetDockerImage(), tracker)
 }
 
 func (d *DockerOutputHandler) loadFromCasLayers(
@@ -412,91 +411,6 @@ func (d *DockerOutputHandler) loadFromCasLayers(
 
 	logger.Debugf("successfully loaded Docker image %s (written tag: %s)", imageName, writtenTag)
 	logger.Infof("Loaded image %s from cache backend", imageName)
-
-	if progress != nil {
-		progress.Complete()
-	}
-
-	return nil
-}
-
-func (d *DockerOutputHandler) loadFromTarball(
-	ctx context.Context,
-	target model.Target,
-	dockerImage *gen.DockerImageOutput,
-	tracker *worker.ProgressTracker,
-) error {
-	logger := console.GetLogger(ctx)
-	imageName := dockerImage.GetLocalTag()
-	digest := dockerImage.GetTarDigest()
-
-	logger.Debugf("loading Docker image %s from tarball cache using go-containerregistry", imageName)
-
-	// Parse the original reference to tag the image correctly after loading
-	ref, err := name.ParseReference(imageName)
-	if err != nil {
-		return fmt.Errorf("failed to parse image reference %q: %w", imageName, err)
-	}
-
-	// Get the *local* image from the Docker daemon
-	existingImg, err := daemon.Image(ref)
-	if err == nil {
-		localDigest, _, err := hashLocalTarball(ref, existingImg)
-		if err == nil && digest == localDigest {
-			// The image already exists locally so no need to load it
-			logger.Debugf("image %s already exists locally so skipping load", imageName)
-			return nil
-		}
-	}
-
-	tag, err := name.NewTag(imageName)
-	if err != nil {
-		return fmt.Errorf("failed to parse image tag %q: %w", imageName, err)
-	}
-
-	progress := tracker
-	if progress != nil {
-		tarballSize, err := d.getCachedTarballSize(ctx, digest, tag)
-		if err != nil {
-			return err
-		}
-
-		if tarballSize > 0 {
-			progress = progress.SubTracker(
-				fmt.Sprintf("%s: loading docker image %s", target.Label, imageName),
-				tarballSize,
-			)
-		}
-	}
-
-	img, err := tarball.Image(func() (io.ReadCloser, error) {
-		reader, err := d.cas.Load(ctx, digest)
-		if err != nil {
-			return nil, err
-		}
-
-		if progress != nil {
-			return struct {
-				io.Reader
-				io.Closer
-			}{
-				Reader: progress.WrapReader(reader),
-				Closer: reader,
-			}, nil
-		}
-
-		return reader, nil
-	}, &tag)
-	if err != nil {
-		return fmt.Errorf("failed to read image from tarball stream for %q: %w", imageName, err)
-	}
-
-	writtenTag, err := daemon.Write(tag, img)
-	if err != nil {
-		return fmt.Errorf("failed to write image %q to Docker daemon: %w", imageName, err)
-	}
-	logger.Debugf("successfully loaded Docker image %s (written tag: %s)", imageName, writtenTag)
-	logger.Infof("Loaded image %s (tar)", imageName)
 
 	if progress != nil {
 		progress.Complete()
