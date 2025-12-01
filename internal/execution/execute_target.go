@@ -166,10 +166,15 @@ func getCommand(toolMap BinToolMap, outputMap OutputIdentifierMap, command strin
 		return "", fmt.Errorf("failed to parse run template: %w", err)
 	}
 
+	userCommand := command
+	if !config.Global.DisableDefaultShellFlags {
+		userCommand = fmt.Sprintf("set -eu\n%s", command)
+	}
+
 	data := templateData{
 		BinToolMap:          toolMap,
 		OutputIdentifierMap: outputMap,
-		UserCommand:         command,
+		UserCommand:         userCommand,
 	}
 
 	var buf bytes.Buffer

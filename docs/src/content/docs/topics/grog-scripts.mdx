@@ -56,6 +56,8 @@ You can run a script from any directory with either a relative or absolute path 
 1. Build the script target including its dependencies.
 2. Execute the file using `sh` (`.py` files need a shebang to specify the interpreter).
 
+By default, Grog prepends `set -eu` before invoking your script to fail fast on unset variables and errors. Set the `disable_default_shell_flags` configuration option (or pass `--disable-default-shell-flags`) to opt out when needed.
+
 Use `--` to forward additional parameters to the script.
 
 ## Comparison to binary output targets
