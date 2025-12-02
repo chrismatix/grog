@@ -121,6 +121,11 @@ func init() {
 	err = viper.BindPFlag("disable_progress_tracker", RootCmd.PersistentFlags().Lookup("disable-progress-tracker"))
 	viper.SetDefault("disable_progress_tracker", false)
 
+	// disable_default_shell_flags
+	RootCmd.PersistentFlags().Bool("disable-default-shell-flags", false, "Do not prepend \"set -eu\" to target commands")
+	err = viper.BindPFlag("disable_default_shell_flags", RootCmd.PersistentFlags().Lookup("disable-default-shell-flags"))
+	viper.SetDefault("disable_default_shell_flags", false)
+
 	// load_outputs
 	RootCmd.PersistentFlags().String("load-outputs", "all", "Level of output loading for cached targets. One of: all, minimal.")
 	err = viper.BindPFlag("load_outputs", RootCmd.PersistentFlags().Lookup("load-outputs"))
