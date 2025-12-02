@@ -138,7 +138,7 @@ func buildAndRunTargets(ctx context.Context, logger *zap.SugaredLogger, graph *d
 		targetPatterns = append(targetPatterns, pattern)
 	}
 
-	runBuild(
+	RunBuild(
 		ctx,
 		logger,
 		targetPatterns,
