@@ -26,6 +26,8 @@ type WorkspaceConfig struct {
 	// DisableProgressTracker suppresses progress bar updates in task status output
 	// while still allowing status strings to be emitted.
 	DisableProgressTracker bool `mapstructure:"disable_progress_tracker"`
+	// DisableDefaultShellFlags prevents Grog from prepending "set -eu" to user commands.
+	DisableDefaultShellFlags bool `mapstructure:"disable_default_shell_flags"`
 	// HashAlgorithm selects the hash function used for cache keys and target
 	// change detection. Supported values: "xxh3" (default) or "sha256".
 	HashAlgorithm string `mapstructure:"hash_algorithm"`

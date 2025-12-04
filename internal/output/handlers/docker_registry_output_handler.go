@@ -128,7 +128,7 @@ func (d *DockerRegistryOutputHandler) Write(
 	// Intercept Docker CLI JSON progress stream and bridge to our progress tracker
 	// Note: the top-level tracker is created by the registry and passed to this handler
 	// as the 4th argument. We create child trackers per-layer when totals are known.
-	if err := consumeDockerProgress(pushReader, tracker, fmt.Sprintf("%s: pulling cache for %s", target.Label, localImageName)); err != nil {
+	if err := consumeDockerProgress(pushReader, tracker, fmt.Sprintf("%s: pushing cache for %s", target.Label, localImageName)); err != nil {
 		return nil, fmt.Errorf("error reading push response: %w", err)
 	}
 

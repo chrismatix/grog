@@ -49,7 +49,7 @@ func (d *DirectoryOutputHandler) Hash(ctx context.Context, target model.Target, 
 func (d *DirectoryOutputHandler) getDirectoryHash(ctx context.Context, target model.Target, directoryPath string) (string, error) {
 	logger := console.GetLogger(ctx)
 
-	logger.Debugf("compressing %s (target %s → %s)", directoryPath, target.Label, directoryPath)
+	logger.Debugf("hashing directory %s (target %s)", directoryPath, target.Label)
 
 	childrenMap := make(map[string]*gen.Directory)
 	rootDirectory, _, err := d.writeDirectoryRecursive(ctx, directoryPath, childrenMap)
@@ -57,10 +57,7 @@ func (d *DirectoryOutputHandler) getDirectoryHash(ctx context.Context, target mo
 		return "", fmt.Errorf("failed to build hash tree for %s for target %s: %w", directoryPath, target.Label, err)
 	}
 
-	children := make([]*gen.Directory, 0, len(childrenMap))
-	for _, dir := range childrenMap {
-		children = append(children, dir)
-	}
+	children := getSortedChildren(childrenMap)
 
 	tree := &gen.Tree{
 		Root:     rootDirectory,
@@ -77,6 +74,21 @@ func (d *DirectoryOutputHandler) getDirectoryHash(ctx context.Context, target mo
 
 	treeDigest := hasher.SumString()
 	return treeDigest, nil
+}
+
+func getSortedChildren(childrenMap map[string]*gen.Directory) []*gen.Directory {
+	// Sort children by digest to ensure deterministic tree construction
+	childDigests := make([]string, 0, len(childrenMap))
+	for digest := range childrenMap {
+		childDigests = append(childDigests, digest)
+	}
+	sort.Strings(childDigests)
+
+	children := make([]*gen.Directory, 0, len(childrenMap))
+	for _, digest := range childDigests {
+		children = append(children, childrenMap[digest])
+	}
+	return children
 }
 
 // Write compresses a directory into <output>.tar.gz and streams it into the cache.
@@ -97,10 +109,7 @@ func (d *DirectoryOutputHandler) Write(
 		return nil, fmt.Errorf("failed to build hash tree for %s for target %s: %w", directoryPath, target.Label, err)
 	}
 
-	children := make([]*gen.Directory, 0, len(childrenMap))
-	for _, dir := range childrenMap {
-		children = append(children, dir)
-	}
+	children := getSortedChildren(childrenMap)
 
 	tree := &gen.Tree{
 		Root:     rootDirectory,
@@ -354,6 +363,10 @@ func (d *DirectoryOutputHandler) Load(
 	if err == nil && treeDigest == localDirectoryDigest {
 		logger.Debugf("directory %s already exists locally so skipping load", dirPath)
 		return nil
+	} else if err != nil {
+		logger.Debugf("failed to check directory hash: %v", err)
+	} else {
+		logger.Debugf("directory %s does not exist locally or has changed so reloading", dirPath)
 	}
 
 	treeBytes, err := d.cas.LoadBytes(ctx, treeDigest)

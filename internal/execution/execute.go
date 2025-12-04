@@ -17,7 +17,6 @@ import (
 	"grog/internal/worker"
 	"os"
 	"path/filepath"
-	"sync/atomic"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -44,20 +43,6 @@ type Executor struct {
 	loadOutputsMode  config.LoadOutputsMode
 	targetHasher     *hashing.TargetHasher
 	streamLogsToggle *console.StreamLogsToggle
-	execDurationNs   atomic.Int64
-}
-
-// Stats capture aggregated executor metrics.
-type Stats struct {
-	ExecDuration  time.Duration
-	CacheDuration time.Duration
-}
-
-func (e *Executor) addExecDuration(duration time.Duration) {
-	if duration <= 0 {
-		return
-	}
-	e.execDurationNs.Add(duration.Nanoseconds())
 }
 
 func NewExecutor(
@@ -84,7 +69,7 @@ func NewExecutor(
 }
 
 // Execute executes the targets in the given graph and returns the completion map
-func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, Stats, error) {
+func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	numWorkers := config.Global.NumWorkers
 	stdLogger := console.GetLogger(ctx)
 
@@ -147,12 +132,7 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, Stats, error
 	}
 
 	walker := dag.NewWalker(e.graph, walkCallback, e.failFast)
-	completionMap, err := walker.Walk(ctx)
-	stats := Stats{
-		ExecDuration:  time.Duration(e.execDurationNs.Load()),
-		CacheDuration: e.registry.CacheDuration(),
-	}
-	return completionMap, stats, err
+	return walker.Walk(ctx)
 }
 
 // getBinToolPaths From all the direct dependencies of a target, get their bin_output if defined
@@ -207,16 +187,16 @@ func (e *Executor) getDependencyOutputIdentifiers(target *model.Target) OutputId
 
 func getTargetOutputIdentifiers(target *model.Target) []string {
 	var identifiers []string
-	for _, output := range target.AllOutputs() {
-		if !output.IsSet() {
+	for _, targetOutput := range target.AllOutputs() {
+		if !targetOutput.IsSet() {
 			continue
 		}
-		if output.Type == string(handlers.FileHandler) || output.Type == string(handlers.DirHandler) {
-			workspaceRelativePath := filepath.Join(target.Label.Package, output.Identifier)
+		if targetOutput.Type == string(handlers.FileHandler) || targetOutput.Type == string(handlers.DirHandler) {
+			workspaceRelativePath := filepath.Join(target.Label.Package, targetOutput.Identifier)
 			identifiers = append(identifiers, config.GetPathAbsoluteToWorkspaceRoot(workspaceRelativePath))
 			continue
 		}
-		identifiers = append(identifiers, output.Identifier)
+		identifiers = append(identifiers, targetOutput.Identifier)
 	}
 	return identifiers
 }
@@ -277,7 +257,9 @@ func (e *Executor) getTaskFunc(
 				update,
 			)
 
+			cacheStart := time.Now()
 			loadingErr := e.registry.LoadOutputs(ctx, target, targetResult, progress)
+			target.CacheTime += time.Since(cacheStart)
 			if loadingErr != nil {
 				// Don't return so that we instead break out and continue executing the target
 				logger.Errorf("%s re-running due to output loading failure: %v", target.Label, loadingErr)
@@ -328,9 +310,7 @@ func (e *Executor) executeTarget(
 	if target.Command != "" {
 		update(worker.Status(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis())))
 		logger.Debugf("running target %s: %s", target.Label, target.CommandEllipsis())
-		execStart := time.Now()
 		err = executeTarget(ctx, target, binToolPaths, outputIdentifiers, e.streamLogsToggle.Enabled())
-		e.addExecDuration(time.Since(execStart))
 	} else {
 		logger.Debugf("skipped target %s due to no command", target.Label)
 	}
@@ -417,7 +397,9 @@ func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, u
 			0,
 			update,
 		)
+		cacheStart := time.Now()
 		targetResult, err = e.registry.WriteOutputs(ctx, target, progress)
+		target.CacheTime += time.Since(cacheStart)
 	}
 	if err != nil {
 		return err
@@ -425,6 +407,11 @@ func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, u
 
 	target.OutputsLoaded = true
 	target.OutputHash = targetResult.OutputHash
+
+	cacheStart := time.Now()
+	defer func() {
+		target.CacheTime += time.Since(cacheStart)
+	}()
 
 	return e.targetCache.Write(ctx, targetResult)
 }

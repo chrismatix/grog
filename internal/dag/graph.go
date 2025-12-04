@@ -6,6 +6,7 @@ import (
 	"grog/internal/label"
 	"grog/internal/model"
 	"sort"
+	"time"
 )
 
 // DirectedTargetGraph represents a directed graph of build targets.
@@ -233,6 +234,119 @@ func (g *DirectedTargetGraph) FindCycle() ([]model.BuildNode, bool) {
 	}
 
 	return nil, false // No cycle detected in the entire graph
+}
+
+type CriticalPath struct {
+	Nodes             []model.BuildNode
+	ExecutionDuration time.Duration
+	CacheDuration     time.Duration
+}
+
+// FindCriticalPath returns the longest path in the graph based on execution + cache time.
+// It also returns the total execution and cache durations for that path.
+func (g *DirectedTargetGraph) FindCriticalPath() (CriticalPath, bool) {
+	if len(g.nodes) == 0 {
+		return CriticalPath{}, false
+	}
+
+	indegree := make(map[label.TargetLabel]int)
+	for lbl := range g.nodes {
+		indegree[lbl] = len(g.inEdges[lbl])
+	}
+
+	var queue []model.BuildNode
+	for lbl, node := range g.nodes {
+		if indegree[lbl] == 0 {
+			queue = append(queue, node)
+		}
+	}
+
+	var order []model.BuildNode
+	for len(queue) > 0 {
+		node := queue[0]
+		queue = queue[1:]
+		order = append(order, node)
+
+		for _, neighbor := range g.outEdges[node.GetLabel()] {
+			indegree[neighbor.GetLabel()]--
+			if indegree[neighbor.GetLabel()] == 0 {
+				queue = append(queue, neighbor)
+			}
+		}
+	}
+
+	if len(order) == 0 || len(order) != len(g.nodes) {
+		return CriticalPath{}, false
+	}
+
+	type pathInfo struct {
+		path  []model.BuildNode
+		exec  time.Duration
+		cache time.Duration
+	}
+
+	getDurations := func(node model.BuildNode) (time.Duration, time.Duration) {
+		if target, ok := node.(*model.Target); ok {
+			return target.ExecutionTime, target.CacheTime
+		}
+		return 0, 0
+	}
+
+	best := make(map[label.TargetLabel]pathInfo)
+
+	for _, node := range order {
+		current, ok := best[node.GetLabel()]
+		if !ok {
+			execDuration, cacheDuration := getDurations(node)
+			current = pathInfo{
+				path:  []model.BuildNode{node},
+				exec:  execDuration,
+				cache: cacheDuration,
+			}
+			best[node.GetLabel()] = current
+		}
+
+		for _, neighbor := range g.outEdges[node.GetLabel()] {
+			neighborExec, neighborCache := getDurations(neighbor)
+			candidateExec := current.exec + neighborExec
+			candidateCache := current.cache + neighborCache
+			candidateTotal := candidateExec + candidateCache
+
+			existing, exists := best[neighbor.GetLabel()]
+			existingTotal := existing.exec + existing.cache
+
+			if !exists || candidateTotal > existingTotal {
+				pathCopy := append([]model.BuildNode{}, current.path...)
+				pathCopy = append(pathCopy, neighbor)
+				best[neighbor.GetLabel()] = pathInfo{
+					path:  pathCopy,
+					exec:  candidateExec,
+					cache: candidateCache,
+				}
+			}
+		}
+	}
+
+	var bestPath pathInfo
+	var found bool
+	for _, info := range best {
+		total := info.exec + info.cache
+		bestTotal := bestPath.exec + bestPath.cache
+		if !found || total > bestTotal {
+			bestPath = info
+			found = true
+		}
+	}
+
+	if !found {
+		return CriticalPath{}, false
+	}
+
+	return CriticalPath{
+		Nodes:             bestPath.path,
+		ExecutionDuration: bestPath.exec,
+		CacheDuration:     bestPath.cache,
+	}, true
 }
 
 // GraphJSON is a helper struct for JSON serialization
