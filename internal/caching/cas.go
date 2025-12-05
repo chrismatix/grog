@@ -36,7 +36,6 @@ func (c *Cas) Write(ctx context.Context, digest string, reader io.Reader) error 
 		return nil
 	}
 
-	c.keyExistsCache.Store(digest, true)
 	err := c.backend.Set(ctx, "cas", digest, reader)
 	if err == nil {
 		// Mark the digest as existing in case later targets create the same digest
