@@ -148,6 +148,8 @@ func (r *Registry) WriteOutputs(
 		return nil, err
 	}
 
+	logger.Debugf("%s: outputs written", target.Label)
+
 	return &gen.TargetResult{
 		ChangeHash:              target.ChangeHash,
 		OutputHash:              outputHash,
@@ -231,5 +233,7 @@ func (r *Registry) LoadOutputs(
 
 	target.OutputsLoaded = true
 	target.OutputHash = targetResult.OutputHash
+
+	logger.Debugf("%s: outputs loaded", target.Label)
 	return nil
 }

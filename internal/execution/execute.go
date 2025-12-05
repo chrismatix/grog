@@ -246,7 +246,7 @@ func (e *Executor) getTaskFunc(
 				// Important: Set the output hash so that descendants can compute their change hashes
 				target.OutputHash = targetResult.OutputHash
 				update(worker.Status(fmt.Sprintf("%s: cache hit. skipped loading %s because load_outputs=minimal.", target.Label, console.FCountOutputs(len(target.AllOutputs())))))
-				logger.Debugf("%s: cache hit. skipped loading %s because load_ outputs=minimal", target.Label, console.FCountOutputs(len(target.AllOutputs())))
+				logger.Debugf("%s: cache hit. skipped loading %s because load_outputs=minimal", target.Label, console.FCountOutputs(len(target.AllOutputs())))
 				return dag.CacheHit, nil
 			}
 
