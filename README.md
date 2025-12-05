@@ -39,6 +39,30 @@ chmod +x /usr/local/bin/grog
 
 Grog's documentation is available at [grog.build](https://grog.build).
 
+## VHS terminal demo
+
+You can record a quick cached build demo with [VHS](https://github.com/charmbracelet/vhs) using the `integration/test_repos/binary_output` workspace:
+
+1. Build the CLI once so the tape can reuse the resulting binary:
+
+   ```shell
+   go build -o dist/grog .
+   ```
+
+2. Warm the cache so the first recorded build shows cache hits:
+
+   ```shell
+   cd integration/test_repos/binary_output && ../../../dist/grog build //...
+   ```
+
+3. Generate the GIF/WebM outputs:
+
+   ```shell
+   vhs docs/vhs/binary-output-cache.tape
+   ```
+
+The tape produces `docs/public/vhs/binary-output-cache.gif` and `.webm`, capturing a cached build, an `echo "" >> bin_tool.sh` dependency change, and a follow-up build that reuses unaffected targets while running tasks in parallel.
+
 Additionally, the command line reference documentation can be viewed with `grog help`.
 
 ## Versioning
