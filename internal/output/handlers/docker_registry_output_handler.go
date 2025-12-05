@@ -76,6 +76,11 @@ func (d *DockerRegistryOutputHandler) cacheImageName(digest string) string {
 	workspaceDir := config.Global.WorkspaceRoot
 	workspacePrefix := config.GetWorkspaceCachePrefix(workspaceDir)
 
+	// strip the leading sha256: prefix from the digest
+	if strings.Contains(digest, ":") {
+		digest = strings.Split(digest, ":")[1]
+	}
+
 	return fmt.Sprintf("%s/%s-%s", d.config.Registry,
 		workspacePrefix, digest)
 }
@@ -177,6 +182,10 @@ func (d *DockerRegistryOutputHandler) Load(
 	output *gen.Output,
 	tracker *worker.ProgressTracker,
 ) error {
+	dockerImage := output.GetDockerImage()
+	if dockerImage.GetMode() != gen.ImageMode_REGISTRY {
+		return fmt.Errorf("cannot restore %s docker cache as registry cache is configured", dockerImage.GetMode())
+	}
 	localImageName := output.GetDockerImage().GetLocalTag()
 	imageId := output.GetDockerImage().GetImageId()
 

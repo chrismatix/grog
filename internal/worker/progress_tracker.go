@@ -103,9 +103,9 @@ func (pt *ProgressTracker) Add(delta int64) {
 	pt.step = computeStep(total)
 	send := parent == nil && pt.shouldSendLocked(current, total)
 	status := pt.status
-	pt.mu.Unlock()
 
 	if parent != nil {
+		pt.mu.Unlock()
 		parent.onChildDelta(pt, delta)
 		return
 	}
@@ -113,14 +113,25 @@ func (pt *ProgressTracker) Add(delta int64) {
 	if send {
 		pt.send(status, current, total)
 	}
+	pt.mu.Unlock()
 }
 
+// WrapReader returns a reader that updates the tracker on each read.
+// Wrapping multiple readers is safe, because Add() is thread-safe.
 func (pt *ProgressTracker) WrapReader(reader io.Reader) io.Reader {
 	if pt == nil {
 		return reader
 	}
 
 	return &progressReader{reader: reader, tracker: pt}
+}
+
+func (pt *ProgressTracker) WrapReadCloser(readCloser io.ReadCloser) io.ReadCloser {
+	if pt == nil {
+		return readCloser
+	}
+
+	return &progressReadCloser{readCloser: readCloser, tracker: pt}
 }
 
 func (pt *ProgressTracker) Complete() {
@@ -155,11 +166,11 @@ func (pt *ProgressTracker) onChildDelta(child *ProgressTracker, delta int64) {
 	pt.step = computeStep(total)
 	send := pt.shouldSendLocked(current, total)
 	status := pt.statusForChildStatusLocked(child.status)
-	pt.mu.Unlock()
 
 	if send {
 		pt.send(status, current, total)
 	}
+	pt.mu.Unlock()
 }
 
 func (pt *ProgressTracker) aggregateLocked() (int64, int64) {
@@ -233,6 +244,25 @@ type progressReader struct {
 
 func (p *progressReader) Read(buf []byte) (int, error) {
 	n, err := p.reader.Read(buf)
-	p.tracker.Add(int64(n))
+	if n > 0 {
+		p.tracker.Add(int64(n))
+	}
 	return n, err
+}
+
+type progressReadCloser struct {
+	readCloser io.ReadCloser
+	tracker    *ProgressTracker
+}
+
+func (p *progressReadCloser) Read(buf []byte) (int, error) {
+	n, err := p.readCloser.Read(buf)
+	if n > 0 {
+		p.tracker.Add(int64(n))
+	}
+	return n, err
+}
+
+func (p *progressReadCloser) Close() error {
+	return p.readCloser.Close()
 }
