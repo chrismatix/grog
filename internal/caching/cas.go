@@ -35,7 +35,14 @@ func (c *Cas) Write(ctx context.Context, digest string, reader io.Reader) error 
 		// If the digest already exists, we don't need to write it again
 		return nil
 	}
-	return c.backend.Set(ctx, "cas", digest, reader)
+
+	c.keyExistsCache.Store(digest, true)
+	err := c.backend.Set(ctx, "cas", digest, reader)
+	if err == nil {
+		// Mark the digest as existing in case later targets create the same digest
+		c.keyExistsCache.Store(digest, true)
+	}
+	return err
 }
 
 // WriteBytes writes a digest for a given reader
