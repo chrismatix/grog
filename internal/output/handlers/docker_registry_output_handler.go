@@ -182,6 +182,10 @@ func (d *DockerRegistryOutputHandler) Load(
 	output *gen.Output,
 	tracker *worker.ProgressTracker,
 ) error {
+	dockerImage := output.GetDockerImage()
+	if dockerImage.GetMode() != gen.ImageMode_REGISTRY {
+		return fmt.Errorf("cannot restore %s docker cache as registry cache is configured", dockerImage.GetMode())
+	}
 	localImageName := output.GetDockerImage().GetLocalTag()
 	imageId := output.GetDockerImage().GetImageId()
 
