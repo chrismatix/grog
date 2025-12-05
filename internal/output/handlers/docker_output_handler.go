@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 
 	"grog/internal/caching"
 	"grog/internal/console"
@@ -38,58 +39,8 @@ func (d *DockerOutputHandler) Type() HandlerType {
 	return DockerHandler
 }
 
-type imageArtifacts struct {
-	manifest       *v1.Manifest
-	manifestBytes  []byte
-	manifestDigest string
-	manifestSize   int64
-	configBytes    []byte
-	configDigest   string
-	configSize     int64
-	layers         []v1.Layer
-}
-
-func collectImageArtifacts(imageName string, img v1.Image) (*imageArtifacts, error) {
-	manifest, err := img.Manifest()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read manifest for image %q: %w", imageName, err)
-	}
-
-	manifestBytes, err := img.RawManifest()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read raw manifest for image %q: %w", imageName, err)
-	}
-
-	manifestDigest, err := img.Digest()
-	if err != nil {
-		return nil, fmt.Errorf("failed to compute manifest digest for image %q: %w", imageName, err)
-	}
-
-	configBytes, err := img.RawConfigFile()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config for image %q: %w", imageName, err)
-	}
-
-	layers, err := img.Layers()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read layers for image %q: %w", imageName, err)
-	}
-
-	if len(layers) != len(manifest.Layers) {
-		return nil, fmt.Errorf("manifest for image %q describes %d layers but %d layers were loaded", imageName, len(manifest.Layers), len(layers))
-	}
-
-	return &imageArtifacts{
-		manifest:       manifest,
-		manifestBytes:  manifestBytes,
-		manifestDigest: manifestDigest.String(),
-		manifestSize:   int64(len(manifestBytes)),
-		configBytes:    configBytes,
-		configDigest:   manifest.Config.Digest.String(),
-		configSize:     manifest.Config.Size,
-		layers:         layers,
-	}, nil
-}
+// imageArtifacts kept for potential future use; currently not used.
+type imageArtifacts struct{}
 
 // Hash hashes the local Docker image manifest which should be the source of truth for the image
 func (d *DockerOutputHandler) Hash(ctx context.Context, _ model.Target, output model.Output) (string, error) {
@@ -142,21 +93,41 @@ func (d *DockerOutputHandler) Write(
 		return nil, fmt.Errorf("failed to get image %q from Docker daemon: %w", imageName, err)
 	}
 
-	artifacts, err := collectImageArtifacts(imageName, img)
+	// Collect manifest/config/layers
+	manifest, err := img.Manifest()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read manifest for image %q: %w", imageName, err)
 	}
+	manifestBytes, err := img.RawManifest()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read raw manifest for image %q: %w", imageName, err)
+	}
+	manifestDigest := hashing.HashBytes(manifestBytes)
 
-	configSize := artifacts.configSize
+	configBytes, err := img.RawConfigFile()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config for image %q: %w", imageName, err)
+	}
+	configDigest := manifest.Config.Digest.String()
+	configSize := manifest.Config.Size
 	if configSize == 0 {
-		configSize = int64(len(artifacts.configBytes))
+		configSize = int64(len(configBytes))
+	}
+	layers, err := img.Layers()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read layers for image %q: %w", imageName, err)
+	}
+	if len(layers) != len(manifest.Layers) {
+		return nil, fmt.Errorf("manifest for image %q describes %d layers but %d layers were loaded", imageName, len(manifest.Layers), len(layers))
+	}
+	imageId, err := img.ConfigName()
+	if err != nil {
+		return nil, fmt.Errorf("failed to compute image id for %q: %w", imageName, err)
 	}
 
-	totalBytes := artifacts.manifestSize + configSize
-	layerDigests := make([]*gen.Digest, 0, len(artifacts.manifest.Layers))
-	for _, layer := range artifacts.manifest.Layers {
-		totalBytes += layer.Size
-		layerDigests = append(layerDigests, &gen.Digest{Hash: layer.Digest.String(), SizeBytes: layer.Size})
+	totalBytes := int64(len(manifestBytes)) + configSize
+	for _, l := range manifest.Layers {
+		totalBytes += l.Size
 	}
 
 	progress := tracker
@@ -168,45 +139,57 @@ func (d *DockerOutputHandler) Write(
 	}
 
 	// Write config blob
-	configReader := bytes.NewReader(artifacts.configBytes)
-	var reader io.Reader = configReader
+	var configReader io.Reader = bytes.NewReader(configBytes)
 	if progress != nil {
-		reader = progress.WrapReader(configReader)
+		configReader = progress.WrapReader(configReader)
 	}
-	if err := d.cas.Write(ctx, artifacts.configDigest, reader); err != nil {
+	if err := d.cas.Write(ctx, configDigest, configReader); err != nil {
 		return nil, fmt.Errorf("failed to write config blob for image %s: %w", imageName, err)
 	}
 
 	// Write each layer individually
-	for idx, layer := range artifacts.layers {
-		descriptor := artifacts.manifest.Layers[idx]
-		layerReader, err := layer.Compressed()
+	var wg sync.WaitGroup
+	errCh := make(chan error, len(layers))
+
+	for idx, layer := range layers {
+		wg.Add(1)
+		go func(idx int, layer v1.Layer) {
+			defer wg.Done()
+
+			descriptor := manifest.Layers[idx]
+			layerReader, err := layer.Compressed()
+			if err != nil {
+				errCh <- fmt.Errorf("failed to open layer %d for image %s: %w", idx, imageName, err)
+				return
+			}
+			defer layerReader.Close()
+
+			reader := layerReader
+			if progress != nil {
+				reader = progress.WrapReadCloser(reader)
+			}
+
+			if err := d.cas.Write(ctx, descriptor.Digest.String(), reader); err != nil {
+				errCh <- fmt.Errorf("failed to write layer %s to cache: %w", descriptor.Digest, err)
+				return
+			}
+		}(idx, layer)
+	}
+
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
 		if err != nil {
-			return nil, fmt.Errorf("failed to open layer %d for image %s: %w", idx, imageName, err)
-		}
-
-		reader = layerReader
-		if progress != nil {
-			reader = progress.WrapReader(layerReader)
-		}
-
-		if err := d.cas.Write(ctx, descriptor.Digest.String(), reader); err != nil {
-			layerReader.Close()
-			return nil, fmt.Errorf("failed to write layer %s to cache: %w", descriptor.Digest, err)
-		}
-
-		if err := layerReader.Close(); err != nil {
-			return nil, fmt.Errorf("failed to close layer reader for %s: %w", descriptor.Digest, err)
+			return nil, err
 		}
 	}
-
 	// Write manifest blob
-	manifestReader := bytes.NewReader(artifacts.manifestBytes)
-	reader = manifestReader
+	var manifestReader io.Reader = bytes.NewReader(manifestBytes)
 	if progress != nil {
-		reader = progress.WrapReader(manifestReader)
+		manifestReader = progress.WrapReader(manifestReader)
 	}
-	if err := d.cas.Write(ctx, artifacts.manifestDigest, reader); err != nil {
+	if err := d.cas.Write(ctx, manifestDigest, manifestReader); err != nil {
 		return nil, fmt.Errorf("failed to write manifest for image %s: %w", imageName, err)
 	}
 
@@ -220,10 +203,9 @@ func (d *DockerOutputHandler) Write(
 			DockerImage: &gen.DockerImageOutput{
 				Mode:           gen.ImageMode_LAYERS,
 				LocalTag:       imageName,
-				TarDigest:      artifacts.manifestDigest,
-				ManifestDigest: &gen.Digest{Hash: artifacts.manifestDigest, SizeBytes: artifacts.manifestSize},
-				ConfigDigest:   &gen.Digest{Hash: artifacts.configDigest, SizeBytes: configSize},
-				LayerDigests:   layerDigests,
+				ImageId:        imageId.String(),
+				ManifestDigest: &gen.Digest{Hash: manifestDigest, SizeBytes: int64(len(manifestBytes))},
+				ConfigDigest:   &gen.Digest{Hash: configDigest, SizeBytes: configSize},
 			},
 		},
 	}, nil
@@ -262,7 +244,8 @@ func (d *DockerOutputHandler) loadFromCasLayers(
 	}
 
 	if existingImg, err := daemon.Image(ref); err == nil {
-		if existingDigest, err := existingImg.Digest(); err == nil && manifestDigest != nil && existingDigest.String() == manifestDigest.GetHash() {
+		existingImageId, err := existingImg.ConfigName()
+		if err == nil && dockerImage.GetImageId() != "" && existingImageId.String() == dockerImage.GetImageId() {
 			logger.Debugf("image %s already exists locally so skipping load", imageName)
 			return nil
 		}
@@ -276,10 +259,6 @@ func (d *DockerOutputHandler) loadFromCasLayers(
 	manifest, err := v1.ParseManifest(bytes.NewReader(manifestBytes))
 	if err != nil {
 		return fmt.Errorf("failed to parse manifest for image %s: %w", imageName, err)
-	}
-
-	if len(manifest.Layers) != len(dockerImage.GetLayerDigests()) {
-		return fmt.Errorf("cached manifest for %s has %d layers but output recorded %d", imageName, len(manifest.Layers), len(dockerImage.GetLayerDigests()))
 	}
 
 	manifestSize := manifestDigest.GetSizeBytes()
@@ -323,20 +302,14 @@ func (d *DockerOutputHandler) loadFromCasLayers(
 		return fmt.Errorf("failed to parse config for image %s: %w", imageName, err)
 	}
 
-	layerDigests := dockerImage.GetLayerDigests()
-	layers := make([]v1.Layer, 0, len(layerDigests))
-	for idx, layerDigest := range layerDigests {
-		descriptor := manifest.Layers[idx]
-		if descriptor.Digest.String() != layerDigest.GetHash() {
-			return fmt.Errorf("layer digest mismatch for image %s: manifest has %s but output recorded %s", imageName, descriptor.Digest, layerDigest.GetHash())
-		}
-
+	layers := make([]v1.Layer, 0, len(manifest.Layers))
+	for idx, descriptor := range manifest.Layers {
+		desc := descriptor // capture
 		opener := func() (io.ReadCloser, error) {
-			reader, err := d.cas.Load(ctx, layerDigest.GetHash())
+			reader, err := d.cas.Load(ctx, desc.Digest.String())
 			if err != nil {
 				return nil, err
 			}
-
 			if progress != nil {
 				return struct {
 					io.Reader
@@ -346,16 +319,14 @@ func (d *DockerOutputHandler) loadFromCasLayers(
 					Closer: reader,
 				}, nil
 			}
-
 			return reader, nil
 		}
-
-		layer, err := tarball.LayerFromOpener(opener, tarball.WithMediaType(descriptor.MediaType))
+		layer, err := tarball.LayerFromOpener(opener, tarball.WithMediaType(desc.MediaType))
 		if err != nil {
-			return fmt.Errorf("failed to reconstruct layer %s for image %s: %w", descriptor.Digest, imageName, err)
+			return fmt.Errorf("failed to reconstruct layer %s for image %s: %w", desc.Digest, imageName, err)
 		}
-
 		layers = append(layers, layer)
+		_ = idx
 	}
 
 	imgWithConfig, err := mutate.ConfigFile(empty.Image, configFile)

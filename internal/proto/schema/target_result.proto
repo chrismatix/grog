@@ -30,19 +30,18 @@ message DockerImageOutput {
   // The tag under which to find the image locally when writing and where to
   // load it to when restoring
   string local_tag = 2;
-  // digest of the tar file when stored in cas (tar mode)
-  string tar_digest = 3;
+
   // this is the id return by docker inspect (registry mode)
-  // the docs describe it as a content-addressable identifier
-  string image_id = 4;
+  // the docs describe it as a content-addressable identifier of the config
+  // see also image.ConfigName() in go-containerregistry
+  string image_id = 3;
   // the remote tag for registry mode
-  string remote_tag = 5;
+  string remote_tag = 4;
   // Digest of the serialized manifest stored in CAS (filesystem backend).
-  Digest manifest_digest = 6;
+  Digest manifest_digest = 5;
   // Digest of the config blob stored in CAS (filesystem backend).
-  Digest config_digest = 7;
-  // Digests of the image layers stored in CAS (filesystem backend).
-  repeated Digest layer_digests = 8;
+  Digest config_digest = 6;
+  // Field 7 was reserved for layer_digests; intentionally removed.
 }
 
 message Output {
