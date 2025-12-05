@@ -166,11 +166,11 @@ func (pt *ProgressTracker) onChildDelta(child *ProgressTracker, delta int64) {
 	pt.step = computeStep(total)
 	send := pt.shouldSendLocked(current, total)
 	status := pt.statusForChildStatusLocked(child.status)
-	pt.mu.Unlock()
 
 	if send {
 		pt.send(status, current, total)
 	}
+	pt.mu.Unlock()
 }
 
 func (pt *ProgressTracker) aggregateLocked() (int64, int64) {
