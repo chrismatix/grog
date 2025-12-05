@@ -198,6 +198,11 @@ func (d *DockerRegistryOutputHandler) Load(
 
 	// check if the image exists in the local Docker daemon
 	if _, err = cli.ImageInspect(ctx, imageId); err == nil {
+		// The image content exists, but we must ensure the requested tag points to it.
+		// If we don't do this, the ID might exist but the tag (localImageName) might be missing.
+		if err := cli.ImageTag(ctx, imageId, localImageName); err != nil {
+			return fmt.Errorf("failed to tag existing image %q as %q: %w", imageId, localImageName, err)
+		}
 		logger.Debugf("image %s already exists in local Docker daemon, skipping pull", localImageName)
 		return nil
 	}
