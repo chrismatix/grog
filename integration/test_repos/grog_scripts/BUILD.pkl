@@ -4,9 +4,9 @@ targets {
   new {
     name = "some_target"
     inputs {
-      "run.grog.sh"
+      "some_target.sh"
     }
-    bin_output = "run.grog.sh"
+    bin_output = "some_target.sh"
     tags {
       "no-cache"
     }
