@@ -17,7 +17,7 @@ We need to check the following four constraints for the paths defined by each ta
 1. all inputs must be relative to the package path
 2. all outputs point to files within the repository
 TODO 3. warn if a target's inputs intersect with another target's outputs without them explicitly depending on each other
-TODO 4. error if a target's inputs intersect with its own outputs
+TODO 4. error if a target's inputs intersect with its own outputs?
 
 TODO: We don't yet check that a parent package does not include inputs from children. Should we?
 */

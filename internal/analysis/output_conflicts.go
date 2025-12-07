@@ -18,6 +18,12 @@ type outputRecord struct {
 	path   string
 }
 
+// detectOutputConflicts checks for conflicting output declarations between targets.
+// A conflict happens when:
+// - two targets write to the same file, directory, docker image (or overlap of dir and file)
+// - two targets are not in each other's dependency ancestors
+// This is an error, because there is no guarantee which target will execute first
+// and overwrite the other's outputs.
 func detectOutputConflicts(graph *dag.DirectedTargetGraph) error {
 	var fileOutputs []outputRecord
 	var dirOutputs []outputRecord
@@ -134,6 +140,7 @@ func pathsOverlap(a, b string) bool {
 	return pathWithin(a, b) || pathWithin(b, a)
 }
 
+// targetsAreOrdered returns true if a and b are in the same dependency chain.
 func targetsAreOrdered(graph *dag.DirectedTargetGraph, a, b model.BuildNode, ancestorCache map[label.TargetLabel]map[label.TargetLabel]struct{}) bool {
 	if ancestorCache == nil {
 		ancestorCache = make(map[label.TargetLabel]map[label.TargetLabel]struct{})
@@ -152,6 +159,7 @@ func targetsAreOrdered(graph *dag.DirectedTargetGraph, a, b model.BuildNode, anc
 	return false
 }
 
+// getAncestorSet returns a set of all ancestors of the given node, including the node itself.
 func getAncestorSet(graph *dag.DirectedTargetGraph, node model.BuildNode, cache map[label.TargetLabel]map[label.TargetLabel]struct{}) map[label.TargetLabel]struct{} {
 	if ancestors, ok := cache[node.GetLabel()]; ok {
 		return ancestors

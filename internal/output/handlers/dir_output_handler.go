@@ -446,9 +446,9 @@ func (d *DirectoryOutputHandler) loadDirectoryRecursive(
 	for _, fileNode := range dir.Files {
 		filePath := filepath.Join(path, fileNode.Name)
 
+		waitGroup.Add(1)
 		// Fetch file contents from CAS
 		go func() {
-			waitGroup.Add(1)
 			defer waitGroup.Done()
 			err := d.downloadFile(ctx, fileNode.Digest.Hash, filePath, fileNode.IsExecutable, progress)
 			if err != nil {
