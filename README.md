@@ -1,17 +1,23 @@
 # Grog
 
-![Tests Badge](https://github.com/chrismatix/grog/actions/workflows/test.yml/badge.svg)
+<p>
+  <img src="docs/src/assets/grog-full.svg" width="200" />
+  <br>
+  <img src="https://github.com/chrismatix/grog/actions/workflows/test.yml/badge.svg" alt="Test status">
+  <img src="https://img.shields.io/github/v/release/chrismatix/grog.svg" alt="release version">
+</p>
 
 The monorepo build tool for the grug-brained developer.
 
-<img src="docs/vhs/demo.gif" alt="Grog demo" width="1200">
+Grog **is** a mono-repo build tool that is agnostic on how you run your build commands.
 
+Grog **delivers** cached incremental runs, parallel execution, and more!
 
-Grog **is** a mono-repo build tool that is agnostic on how you run your build commands, but instead focuses on caching and parallel execution.
+What it feels like:
 
-Grog **is not** a complete replacement for Bazel or Pants. Instead, think of it as the intermediary step that will allow your team to keep using existing build tools while benefitting from cached parallel runs.
+<img src="docs/vhs/demo.gif" alt="Grog demo" width="600">
 
-Read more in [Why grog?](https://grog.build/why-grog/)
+Read more in [Why grog?](https://grog.build/why-grog/) 
 
 ## Highlights
 
@@ -41,32 +47,6 @@ chmod +x /usr/local/bin/grog
 ## Documentation
 
 Grog's documentation is available at [grog.build](https://grog.build).
-
-## VHS terminal demo
-
-You can record a quick cached build demo with [VHS](https://github.com/charmbracelet/vhs) using the `integration/test_repos/binary_output` workspace:
-
-1. Build the CLI once so the tape can reuse the resulting binary:
-
-   ```shell
-   go build -o dist/grog .
-   ```
-
-2. Warm the cache so the first recorded build shows cache hits:
-
-   ```shell
-   cd integration/test_repos/binary_output && ../../../dist/grog build //...
-   ```
-
-3. Generate the GIF/WebM outputs:
-
-   ```shell
-   vhs docs/vhs/binary-output-cache.tape
-   ```
-
-The tape produces `docs/public/vhs/binary-output-cache.gif` and `.webm`, capturing a cached build, an `echo "" >> bin_tool.sh` dependency change, and a follow-up build that reuses unaffected targets while running tasks in parallel.
-
-Additionally, the command line reference documentation can be viewed with `grog help`.
 
 ## Versioning
 
