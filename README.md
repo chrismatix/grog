@@ -17,7 +17,7 @@ What it feels like:
 
 <img src="docs/vhs/demo.gif" alt="Grog demo" width="600">
 
-Read more in [Why grog?](https://grog.build/why-grog/) 
+Read more in [Why grog?](https://grog.build/why-grog/)
 
 ## Highlights
 
