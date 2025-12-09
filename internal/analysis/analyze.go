@@ -39,5 +39,9 @@ func BuildGraph(nodes model.BuildNodeMap) (*dag.DirectedTargetGraph, error) {
 		return &dag.DirectedTargetGraph{}, fmt.Errorf("cycle detected: %s", strings.Join(chain, " -> "))
 	}
 
+	if err := detectOutputConflicts(graph); err != nil {
+		return &dag.DirectedTargetGraph{}, err
+	}
+
 	return graph, nil
 }
