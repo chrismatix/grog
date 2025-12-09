@@ -1,0 +1,3 @@
+[submodule "examples/python_monorepo"]
+	path = examples/python_monorepo
+	url = git@github.com:chrismatix/uv-pex-monorepo.git

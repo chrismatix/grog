@@ -14,19 +14,28 @@ Type "cd ../../examples/python_monorepo"
 Enter
 Type "git reset --hard"
 Enter
+
+# Clean to ensure that the dummy change is not cached
+Type "grog clean"
+Enter
+Wait
+
 # Pre-build the app once
 Type "grog build"
 Enter
 Wait
+
 Type "grog test"
 Enter
 Wait
+
 Ctrl+L
 Show
 
 Type "grog graph"
 Enter
-Sleep 100ms
+
+Sleep 300ms
 Type "# Our build graph."
 Enter
 Sleep 2000ms
@@ -36,15 +45,24 @@ Ctrl+L
 Type "grog build"
 Enter
 Wait
-Sleep 100ms
+
+Sleep 2000ms
+
+Type "grog test"
+Enter
+Wait
+
+Sleep 300ms
+
 Type "# All cached all good!"
 Enter
 Sleep 2000ms
 Ctrl+L
 
-Type "# Let's simulate a partial change"
+Type "# Let's simulate a change to a dependency."
 Enter
-Type "echo '// Im a change!' >> lib/proto/schema/sarcasm.proto"
+Sleep 200ms
+Type "echo '# Im a change!' >> lib/format/format/__init__.py"
 Enter
 
 Sleep 500ms
@@ -53,11 +71,6 @@ Type "grog build"
 Enter
 Wait
 
-Sleep 2000ms
-
-Type "grog test"
-Enter
-Wait
 
 Sleep 2000ms
 
