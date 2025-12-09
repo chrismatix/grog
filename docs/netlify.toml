@@ -5,3 +5,6 @@ to = "https://github.com/chrismatix/grog/releases/download/:splat"
 [[redirects]]
 from = "/latest/*"
 to = "https://github.com/chrismatix/grog/releases/latest/download/:splat"
+
+[build.environment]
+NETLIFY_SKIP_SUBMODULES = "1"
