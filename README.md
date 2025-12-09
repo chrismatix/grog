@@ -7,11 +7,11 @@
   <img src="https://img.shields.io/github/v/release/chrismatix/grog.svg" alt="release version">
 </p>
 
-The monorepo build tool for the grug-brained developer.
+Grog **is** the monorepo build tool for the [grug-brained](https://grugbrain.dev/) developer.
 
-Grog **is** a mono-repo build tool that is agnostic on how you run your build commands.
+Grog **is** fully agnostic on how you run your builds.
 
-Grog **delivers** cached incremental runs, parallel execution, and more!
+Grog **delivers** cached incremental runs, parallel execution, [and more](https://grog.build/get-started)!
 
 What it feels like:
 
