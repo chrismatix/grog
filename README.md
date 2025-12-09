@@ -1,12 +1,21 @@
 # Grog
 
-![Tests Badge](https://github.com/chrismatix/grog/actions/workflows/test.yml/badge.svg)
+<p>
+  <img src="docs/src/assets/grog-full.svg" width="200" />
+  <br>
+  <img src="https://github.com/chrismatix/grog/actions/workflows/test.yml/badge.svg" alt="Test status">
+  <img src="https://img.shields.io/github/v/release/chrismatix/grog.svg" alt="release version">
+</p>
 
-The build tool for the grug-brained developer.
+Grog **is** the monorepo build tool for the [grug-brained](https://grugbrain.dev/) developer.
 
-Grog **is** a mono-repo build tool that is agnostic on how you run your build commands, but instead focuses on caching and parallel execution.
+Grog **is** fully agnostic on how you run your builds.
 
-Grog **is not** a complete replacement for Bazel or Pants. Instead, think of it as the intermediary step that will allow your team to keep using existing build tools while benefitting from cached parallel runs.
+Grog **delivers** cached incremental runs, parallel execution, [and more](https://grog.build/get-started)!
+
+What it feels like:
+
+<img src="docs/vhs/demo.gif" alt="Grog demo" width="600">
 
 Read more in [Why grog?](https://grog.build/why-grog/)
 
@@ -38,8 +47,6 @@ chmod +x /usr/local/bin/grog
 ## Documentation
 
 Grog's documentation is available at [grog.build](https://grog.build).
-
-Additionally, the command line reference documentation can be viewed with `grog help`.
 
 ## Versioning
 

@@ -389,7 +389,8 @@ func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, u
 		targetResult = &gen.TargetResult{
 			ChangeHash: target.ChangeHash,
 			// TODO make this the input hash
-			OutputHash: target.ChangeHash,
+			OutputHash:              target.ChangeHash,
+			ExecutionDurationMillis: target.ExecutionTime.Milliseconds(),
 		}
 	} else {
 		progress := worker.NewProgressTracker(
