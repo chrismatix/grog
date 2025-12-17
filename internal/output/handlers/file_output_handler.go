@@ -9,6 +9,7 @@ import (
 
 	"grog/internal/caching"
 	"grog/internal/config"
+	"grog/internal/console"
 	"grog/internal/hashing"
 	"grog/internal/model"
 	"grog/internal/proto/gen"
@@ -75,6 +76,7 @@ func (f *FileOutputHandler) Write(
 		reader = progress.WrapReader(file)
 	}
 
+	console.GetLogger(ctx).Debugf("writing file output %s with digest %s", absOutputPath, fileHash)
 	if err := f.cas.Write(ctx, fileHash, reader); err != nil {
 		return nil, err
 	}
@@ -119,6 +121,7 @@ func (f *FileOutputHandler) Load(
 		)
 	}
 
+	console.GetLogger(ctx).Debugf("loading file output %s with digest %s", absOutputPath, output.GetFile().GetDigest().GetHash())
 	contentReader, err := f.cas.Load(ctx, output.GetFile().GetDigest().GetHash())
 	if err != nil {
 		return err

@@ -143,6 +143,7 @@ func (d *DockerOutputHandler) Write(
 	if progress != nil {
 		configReader = progress.WrapReader(configReader)
 	}
+	logger.Debugf("writing Docker config %s for image %s to CAS", configDigest, imageName)
 	if err := d.cas.Write(ctx, configDigest, configReader); err != nil {
 		return nil, fmt.Errorf("failed to write config blob for image %s: %w", imageName, err)
 	}
@@ -169,6 +170,7 @@ func (d *DockerOutputHandler) Write(
 				reader = progress.WrapReadCloser(reader)
 			}
 
+			logger.Debugf("writing Docker layer %s for image %s to CAS", descriptor.Digest, imageName)
 			if err := d.cas.Write(ctx, descriptor.Digest.String(), reader); err != nil {
 				errCh <- fmt.Errorf("failed to write layer %s to cache: %w", descriptor.Digest, err)
 				return
@@ -189,6 +191,7 @@ func (d *DockerOutputHandler) Write(
 	if progress != nil {
 		manifestReader = progress.WrapReader(manifestReader)
 	}
+	logger.Debugf("writing Docker manifest %s for image %s to CAS", manifestDigest, imageName)
 	if err := d.cas.Write(ctx, manifestDigest, manifestReader); err != nil {
 		return nil, fmt.Errorf("failed to write manifest for image %s: %w", imageName, err)
 	}
@@ -251,6 +254,7 @@ func (d *DockerOutputHandler) loadFromCasLayers(
 		}
 	}
 
+	logger.Debugf("loading Docker manifest %s for image %s from CAS", manifestDigest.GetHash(), imageName)
 	manifestBytes, err := d.cas.LoadBytes(ctx, manifestDigest.GetHash())
 	if err != nil {
 		return fmt.Errorf("failed to read manifest for image %s from cache: %w", imageName, err)
@@ -266,6 +270,7 @@ func (d *DockerOutputHandler) loadFromCasLayers(
 		manifestSize = int64(len(manifestBytes))
 	}
 
+	logger.Debugf("loading Docker config %s for image %s from CAS", configDigest.GetHash(), imageName)
 	configReader, err := d.cas.Load(ctx, configDigest.GetHash())
 	if err != nil {
 		return fmt.Errorf("failed to read config for image %s from cache: %w", imageName, err)
@@ -306,6 +311,7 @@ func (d *DockerOutputHandler) loadFromCasLayers(
 	for idx, descriptor := range manifest.Layers {
 		desc := descriptor // capture
 		opener := func() (io.ReadCloser, error) {
+			logger.Debugf("loading Docker layer %s for image %s from CAS", desc.Digest.String(), imageName)
 			reader, err := d.cas.Load(ctx, desc.Digest.String())
 			if err != nil {
 				return nil, err
@@ -364,6 +370,7 @@ func (d *DockerOutputHandler) loadFromCasLayers(
 }
 
 func (d *DockerOutputHandler) getCachedTarballSize(ctx context.Context, digest string, tag name.Tag) (int64, error) {
+	console.GetLogger(ctx).Debugf("loading cached Docker tarball %s", digest)
 	img, err := tarball.Image(func() (io.ReadCloser, error) {
 		return d.cas.Load(ctx, digest)
 	}, &tag)

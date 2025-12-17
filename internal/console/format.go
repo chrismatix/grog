@@ -44,6 +44,8 @@ func getMessagePrefix(level zapcore.Level) string {
 	red := color.New(color.FgRed).SprintFunc()
 
 	switch level {
+	case TraceLevel:
+		levelText = cyan("TRACE:")
 	case zapcore.DebugLevel:
 		levelText = cyan("DEBUG:") // Cyan
 	case zapcore.InfoLevel:

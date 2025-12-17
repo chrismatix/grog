@@ -5,9 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go.uber.org/zap"
-	grogconfig "grog/internal/config"
-	"grog/internal/console"
 	"io"
 	"strings"
 
@@ -15,6 +12,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+
+	grogconfig "grog/internal/config"
+	"grog/internal/console"
 )
 
 // S3Client defines the interface for S3 operations.
@@ -118,7 +118,7 @@ type S3Cache struct {
 	prefix          string
 	workspacePrefix string
 	client          S3Client
-	logger          *zap.SugaredLogger
+	logger          *console.Logger
 }
 
 func (s *S3Cache) TypeName() string {
@@ -169,7 +169,7 @@ func NewS3CacheWithClient(
 	workspacePrefix := strings.Trim(grogconfig.GetWorkspaceCachePrefix(workspaceDir), "/")
 
 	logger := console.GetLogger(ctx)
-	logger.Debugf("Instantiated s3 cache at bucket %s with prefix %s and workspace dir %s",
+	logger.Tracef("Instantiated s3 cache at bucket %s with prefix %s and workspace dir %s",
 		cacheConfig.Bucket,
 		prefix,
 		workspacePrefix)
@@ -199,7 +199,7 @@ func (s *S3Cache) buildPath(path, key string) string {
 func (s *S3Cache) Get(ctx context.Context, path, key string) (io.ReadCloser, error) {
 	logger := console.GetLogger(ctx)
 	s3Path := s.buildPath(path, key)
-	logger.Debugf("Getting file from s3 for path: %s", s3Path)
+	logger.Tracef("Getting file from s3 for path: %s", s3Path)
 
 	return s.client.GetObject(ctx, s.bucketName, s3Path)
 }
@@ -208,7 +208,7 @@ func (s *S3Cache) Get(ctx context.Context, path, key string) (io.ReadCloser, err
 func (s *S3Cache) Set(ctx context.Context, path, key string, content io.Reader) error {
 	logger := console.GetLogger(ctx)
 	s3Path := s.buildPath(path, key)
-	logger.Debugf("Setting file in s3 for path: %s", s3Path)
+	logger.Tracef("Setting file in s3 for path: %s", s3Path)
 
 	return s.client.PutObject(ctx, s.bucketName, s3Path, content)
 }
@@ -217,7 +217,7 @@ func (s *S3Cache) Set(ctx context.Context, path, key string, content io.Reader) 
 func (s *S3Cache) Delete(ctx context.Context, path string, key string) error {
 	logger := console.GetLogger(ctx)
 	s3Path := s.buildPath(path, key)
-	logger.Debugf("Deleting file from s3 for path: %s", s3Path)
+	logger.Tracef("Deleting file from s3 for path: %s", s3Path)
 
 	return s.client.DeleteObject(ctx, s.bucketName, s3Path)
 }
@@ -226,7 +226,7 @@ func (s *S3Cache) Delete(ctx context.Context, path string, key string) error {
 func (s *S3Cache) Exists(ctx context.Context, path string, key string) (bool, error) {
 	logger := console.GetLogger(ctx)
 	s3Path := s.buildPath(path, key)
-	logger.Debugf("Checking existence of file in s3 for path: %s", s3Path)
+	logger.Tracef("Checking existence of file in s3 for path: %s", s3Path)
 
 	return s.client.ObjectExists(ctx, s.bucketName, s3Path)
 }

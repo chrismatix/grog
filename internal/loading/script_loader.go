@@ -9,9 +9,9 @@ import (
 	"strings"
 
 	"grog/internal/config"
+	"grog/internal/console"
 	"grog/internal/model"
 
-	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
 
@@ -153,7 +153,7 @@ func prependUnique(values []string, element string) []string {
 	return append([]string{element}, values...)
 }
 
-func LoadScriptTarget(ctx context.Context, logger *zap.SugaredLogger, filePath string) (*model.Target, error) {
+func LoadScriptTarget(ctx context.Context, logger *console.Logger, filePath string) (*model.Target, error) {
 	packagePath, err := config.GetPackagePath(filePath)
 	if err != nil {
 		return nil, err
