@@ -20,27 +20,58 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
+	"github.com/shirou/gopsutil/mem"
+	"golang.org/x/sync/semaphore"
 )
 
 // DockerOutputHandler caches docker images either as tarball's or in a registry
 type DockerOutputHandler struct {
 	cas *caching.Cas
+
+	// Shared across the handler instance: caps total concurrent in-flight layer bytes.
+	maxInFlightBytes int64
+	inFlightBytes    *semaphore.Weighted
 }
 
 // NewDockerOutputHandler creates a new DockerOutputHandler
-func NewDockerOutputHandler(cas *caching.Cas) *DockerOutputHandler {
-	return &DockerOutputHandler{
-		cas: cas,
+func NewDockerOutputHandler(ctx context.Context, cas *caching.Cas) *DockerOutputHandler {
+	logger := console.GetLogger(ctx)
+	freeMemory, err := freeSystemMemoryBytes()
+	if err != nil {
+		logger.Warnf("failed to determine free system memory: %v", err)
+		// Fall back to a very conservative default: 1024 MiB
+		freeMemory = 1024 << 20
+	} else {
+		// By default only use half of the system memory for Docker layers.
+		// TODO: We should turn this into a global budget
+		freeMemory /= 2
 	}
+
+	// Ensure we never end up with a 0/negative budget ().
+	if freeMemory < 64<<20 {
+		freeMemory = 64 << 20 // 64 MiB minimum
+	}
+	logger.Debugf("using %d MiB of system memory for Docker layer caching", freeMemory>>20)
+
+	return &DockerOutputHandler{
+		cas:              cas,
+		maxInFlightBytes: int64(freeMemory),
+		inFlightBytes:    semaphore.NewWeighted(int64(freeMemory)),
+	}
+}
+
+func freeSystemMemoryBytes() (uint64, error) {
+	vm, err := mem.VirtualMemory()
+	if err != nil {
+		return 0, err
+	}
+	return vm.Available, nil
 }
 
 // Type returns the type of the handler
 func (d *DockerOutputHandler) Type() HandlerType {
 	return DockerHandler
 }
-
-// imageArtifacts kept for potential future use; currently not used.
-type imageArtifacts struct{}
 
 // Hash hashes the local Docker image manifest which should be the source of truth for the image
 func (d *DockerOutputHandler) Hash(ctx context.Context, _ model.Target, output model.Output) (string, error) {
@@ -69,7 +100,6 @@ func (d *DockerOutputHandler) Hash(ctx context.Context, _ model.Target, output m
 	return hashing.HashBytes(rawManifest), nil
 }
 
-// Write saves the Docker image layers and manifest into the cache using go-containerregistry
 func (d *DockerOutputHandler) Write(
 	ctx context.Context,
 	target model.Target,
@@ -126,8 +156,8 @@ func (d *DockerOutputHandler) Write(
 	}
 
 	totalBytes := int64(len(manifestBytes)) + configSize
-	for _, l := range manifest.Layers {
-		totalBytes += l.Size
+	for _, layer := range manifest.Layers {
+		totalBytes += layer.Size
 	}
 
 	progress := tracker
@@ -157,6 +187,23 @@ func (d *DockerOutputHandler) Write(
 			defer wg.Done()
 
 			descriptor := manifest.Layers[idx]
+
+			// Use descriptor.Size (compressed size) as the "cost" to bound global in-flight work.
+			cost := descriptor.Size
+			if cost <= 0 {
+				cost = 1 << 20 // 1 MiB fallback to avoid zero-cost acquisitions
+			}
+			if cost > d.maxInFlightBytes {
+				// Allow very large layers to run by themselves (serialize them against the cap).
+				cost = d.maxInFlightBytes
+			}
+
+			if err := d.inFlightBytes.Acquire(ctx, cost); err != nil {
+				errCh <- fmt.Errorf("failed to acquire in-flight budget for layer %d (%s): %w", idx, descriptor.Digest, err)
+				return
+			}
+			defer d.inFlightBytes.Release(cost)
+
 			layerReader, err := layer.Compressed()
 			if err != nil {
 				errCh <- fmt.Errorf("failed to open layer %d for image %s: %w", idx, imageName, err)
