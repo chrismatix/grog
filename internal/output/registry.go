@@ -37,6 +37,7 @@ type Registry struct {
 
 // NewRegistry creates a new registry with default handlers
 func NewRegistry(
+	ctx context.Context,
 	cas *caching.Cas,
 ) *Registry {
 	r := &Registry{
@@ -59,7 +60,7 @@ func NewRegistry(
 	} else {
 		// The backend setting is validated in the config package
 		// so we can assume it's either "docker" or "fs-tarball"
-		r.Register(handlers.NewDockerOutputHandler(cas))
+		r.Register(handlers.NewDockerOutputHandler(ctx, cas))
 	}
 	return r
 }

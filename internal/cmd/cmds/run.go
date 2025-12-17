@@ -169,7 +169,7 @@ func loadDependencyOutputsIfNeeded(ctx context.Context, logger *console.Logger, 
 	targetCache := caching.NewTargetResultCache(cache)
 	cas := caching.NewCas(cache)
 	taintCache := caching.NewTaintCache(cache)
-	registry := output.NewRegistry(cas)
+	registry := output.NewRegistry(ctx, cas)
 
 	executor := execution.NewExecutor(
 		targetCache,
