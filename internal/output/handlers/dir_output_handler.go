@@ -140,6 +140,7 @@ func (d *DirectoryOutputHandler) Write(
 		return nil, fmt.Errorf("failed to upload directory files to cache: %w", err)
 	}
 
+	logger.Debugf("writing directory tree digest %s for %s", treeDigest, directoryPath)
 	err = d.cas.Write(ctx, treeDigest, bytes.NewReader(marshalledTree))
 
 	if err != nil {
@@ -166,6 +167,7 @@ func (d *DirectoryOutputHandler) Write(
 // uploadFiles uploads all files in parallel to the CAS
 // the CAS will implement its own concurrency and rate-limiting
 func (d *DirectoryOutputHandler) uploadFiles(ctx context.Context, fileUploads []fileUpload, progress *worker.ProgressTracker) (int64, error) {
+	logger := console.GetLogger(ctx)
 	var sizeBytes atomic.Int64
 
 	var wg sync.WaitGroup
@@ -176,6 +178,7 @@ func (d *DirectoryOutputHandler) uploadFiles(ctx context.Context, fileUploads []
 		localUploadAction := uploadAction
 		go func() {
 			defer wg.Done()
+			logger.Debugf("uploading %s to CAS digest %s", localUploadAction.absolutePath, localUploadAction.digest)
 			file, err := os.Open(localUploadAction.absolutePath)
 			if err != nil {
 				errChan <- err
@@ -369,6 +372,7 @@ func (d *DirectoryOutputHandler) Load(
 		logger.Debugf("directory %s does not exist locally or has changed so reloading", dirPath)
 	}
 
+	logger.Debugf("loading directory tree digest %s for %s", treeDigest, dirPath)
 	treeBytes, err := d.cas.LoadBytes(ctx, treeDigest)
 	if err != nil {
 		return fmt.Errorf("failed to read tree from cache: %w", err)
@@ -448,13 +452,14 @@ func (d *DirectoryOutputHandler) loadDirectoryRecursive(
 
 		waitGroup.Add(1)
 		// Fetch file contents from CAS
-		go func() {
+		go func(filePath string, digest string) {
 			defer waitGroup.Done()
-			err := d.downloadFile(ctx, fileNode.Digest.Hash, filePath, fileNode.IsExecutable, progress)
+			console.GetLogger(ctx).Debugf("loading file for directory output %s from digest %s", filePath, digest)
+			err := d.downloadFile(ctx, digest, filePath, fileNode.IsExecutable, progress)
 			if err != nil {
 				errChan <- fmt.Errorf("failed to download file %s: %v", filePath, err)
 			}
-		}()
+		}(filePath, fileNode.Digest.Hash)
 	}
 
 	// Create all subdirectories

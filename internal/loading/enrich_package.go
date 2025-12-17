@@ -2,16 +2,16 @@ package loading
 
 import (
 	"fmt"
-	"grog/internal/config"
-	"grog/internal/label"
-	"grog/internal/model"
-	"grog/internal/output"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/bmatcuk/doublestar/v4"
-	"go.uber.org/zap"
+	"grog/internal/config"
+	"grog/internal/console"
+	"grog/internal/label"
+	"grog/internal/model"
+	"grog/internal/output"
 )
 
 // getEnrichedPackage enriches the parsing dto with the following information
@@ -19,7 +19,7 @@ import (
 // - resolves the globs in the inputs
 // - applies any defaults
 // - parses the deps into target labels
-func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg PackageDTO) (*model.Package, error) {
+func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageDTO) (*model.Package, error) {
 	targets := make(map[label.TargetLabel]*model.Target)
 	aliases := make(map[label.TargetLabel]*model.Alias)
 	absolutePackagePath := config.GetPathAbsoluteToWorkspaceRoot(packagePath)
@@ -138,7 +138,7 @@ func getEnrichedPackage(logger *zap.SugaredLogger, packagePath string, pkg Packa
 
 // resolveInputs resolves the glob patterns in the inputs and excludeInputs
 func resolveInputs(
-	logger *zap.SugaredLogger,
+	logger *console.Logger,
 	absolutePackagePath string,
 	inputs []string,
 	excludeInputs []string,

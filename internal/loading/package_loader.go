@@ -3,7 +3,7 @@ package loading
 import (
 	"context"
 
-	"go.uber.org/zap"
+	"grog/internal/console"
 )
 
 // Loader Implement this to provide a loader for a user provided BUILD file format
@@ -19,10 +19,10 @@ type Loader interface {
 type PackageLoader struct {
 	loaders   []Loader
 	fileNames []string
-	logger    *zap.SugaredLogger
+	logger    *console.Logger
 }
 
-func NewPackageLoader(logger *zap.SugaredLogger) *PackageLoader {
+func NewPackageLoader(logger *console.Logger) *PackageLoader {
 	return &PackageLoader{
 		logger: logger,
 		// register loaders here

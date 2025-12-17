@@ -2,23 +2,77 @@ package console
 
 import (
 	"context"
+	"fmt"
+	"strings"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fatih/color"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"grog/internal/config"
-	"strings"
 )
 
+// TraceLevel represents the most verbose logging level supported by grog.
+const TraceLevel zapcore.Level = zapcore.DebugLevel - 1
+
+// Logger wraps zap's SugaredLogger to add a trace level helper and preserve
+// the sugared logging ergonomics throughout the codebase.
+type Logger struct {
+	*zap.SugaredLogger
+	traceEnabled bool
+}
+
+func newLogger(logger *zap.SugaredLogger, level zapcore.Level) *Logger {
+	return &Logger{SugaredLogger: logger, traceEnabled: level <= TraceLevel}
+}
+
+// NewFromSugared wraps an existing zap.SugaredLogger into a console.Logger with the given level.
+// Use this in tests to adapt observed/test loggers to the console logger type expected by production code.
+func NewFromSugared(logger *zap.SugaredLogger, level zapcore.Level) *Logger {
+	return newLogger(logger, level)
+}
+
+// Tracef logs at the trace level when enabled.
+func (l *Logger) Tracef(template string, args ...interface{}) {
+	if l == nil || !l.traceEnabled {
+		return
+	}
+
+	if checkedEntry := l.Desugar().WithOptions(zap.AddCallerSkip(1)).Check(TraceLevel, fmt.Sprintf(template, args...)); checkedEntry != nil {
+		checkedEntry.Write()
+	}
+}
+
+func (l *Logger) With(args ...interface{}) *Logger {
+	return &Logger{
+		SugaredLogger: l.SugaredLogger.With(args...),
+		traceEnabled:  l.traceEnabled,
+	}
+}
+
+func (l *Logger) Named(name string) *Logger {
+	return &Logger{
+		SugaredLogger: l.SugaredLogger.Named(name),
+		traceEnabled:  l.traceEnabled,
+	}
+}
+
+func (l *Logger) WithOptions(opts ...zap.Option) *Logger {
+	return &Logger{
+		SugaredLogger: l.SugaredLogger.WithOptions(opts...),
+		traceEnabled:  l.traceEnabled,
+	}
+}
+
 // InitLogger returns a new logger that writes to stdout.
-func InitLogger() *zap.SugaredLogger {
+func InitLogger() *Logger {
 	return InitLoggerWithTea(nil)
 }
 
 // InitLoggerWithTea returns a new logger that writes to the given Program.
 // Leave the Program empty to write to stdout
-func InitLoggerWithTea(program *tea.Program) *zap.SugaredLogger {
+func InitLoggerWithTea(program *tea.Program) *Logger {
 	logPath := config.Global.LogOutputPath
 	if logPath == "" {
 		// default to stdout
@@ -44,7 +98,7 @@ func InitLoggerWithTea(program *tea.Program) *zap.SugaredLogger {
 	var level zapcore.Level
 	switch strings.ToLower(logLevel) {
 	case "trace":
-		level = zap.DebugLevel
+		level = TraceLevel
 		// Trace mode is debug + caller
 		cfg.DisableStacktrace = false
 		cfg.DisableCaller = false
@@ -83,20 +137,20 @@ func InitLoggerWithTea(program *tea.Program) *zap.SugaredLogger {
 			level,
 		)
 
-		return zap.New(teaCore).Sugar()
+		return newLogger(zap.New(teaCore).Sugar(), level)
 	}
 
 	logger, err := cfg.Build()
 	if err != nil {
 		panic(err)
 	}
-	return logger.Sugar()
+	return newLogger(logger.Sugar(), level)
 }
 
 type ctxLoggerKey struct{}
 
-func WithLogger(ctx context.Context, logger *zap.SugaredLogger) context.Context {
-	if storedLogger, ok := ctx.Value(ctxLoggerKey{}).(*zap.SugaredLogger); ok {
+func WithLogger(ctx context.Context, logger *Logger) context.Context {
+	if storedLogger, ok := ctx.Value(ctxLoggerKey{}).(*Logger); ok {
 		if storedLogger == logger {
 			return ctx
 		}
@@ -113,8 +167,8 @@ func WithTeaLogger(ctx context.Context, program *tea.Program) context.Context {
 	return context.WithValue(loggerCtx, programKey{}, program)
 }
 
-func GetLogger(ctx context.Context) *zap.SugaredLogger {
-	if logger, ok := ctx.Value(ctxLoggerKey{}).(*zap.SugaredLogger); ok {
+func GetLogger(ctx context.Context) *Logger {
+	if logger, ok := ctx.Value(ctxLoggerKey{}).(*Logger); ok {
 		return logger
 	}
 	logger := InitLogger()

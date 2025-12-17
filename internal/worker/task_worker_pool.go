@@ -10,7 +10,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fatih/color"
-	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
 	"grog/internal/config"
@@ -46,7 +45,7 @@ type job[T any] struct {
 }
 
 type TaskWorkerPool[T any] struct {
-	logger     *zap.SugaredLogger
+	logger     *console.Logger
 	maxWorkers int
 	totalTasks int
 
@@ -65,7 +64,7 @@ type TaskWorkerPool[T any] struct {
 }
 
 func NewTaskWorkerPool[T any](
-	logger *zap.SugaredLogger,
+	logger *console.Logger,
 	maxWorkers int,
 	sendMsg func(msg tea.Msg),
 	totalTasks int,

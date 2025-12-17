@@ -2,17 +2,16 @@ package loading
 
 import (
 	"context"
+	"time"
+
 	"grog/internal/analysis"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/dag"
 	"grog/internal/model"
-	"time"
-
-	"go.uber.org/zap"
 )
 
-func MustLoadGraphForBuild(ctx context.Context, logger *zap.SugaredLogger) *dag.DirectedTargetGraph {
+func MustLoadGraphForBuild(ctx context.Context, logger *console.Logger) *dag.DirectedTargetGraph {
 	startTime := time.Now()
 	packages, err := LoadAllPackages(ctx)
 	if err != nil {
@@ -46,7 +45,7 @@ func MustLoadGraphForBuild(ctx context.Context, logger *zap.SugaredLogger) *dag.
 	return graph
 }
 
-func MustLoadGraphForQuery(ctx context.Context, logger *zap.SugaredLogger) *dag.DirectedTargetGraph {
+func MustLoadGraphForQuery(ctx context.Context, logger *console.Logger) *dag.DirectedTargetGraph {
 	packages, err := LoadAllPackages(ctx)
 	if err != nil {
 		logger.Fatalf("could not load packages: %v", err)

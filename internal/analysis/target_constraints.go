@@ -2,14 +2,14 @@ package analysis
 
 import (
 	"fmt"
-	"grog/internal/config"
-	"grog/internal/model"
 	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/fatih/color"
-	"go.uber.org/zap"
+	"grog/internal/config"
+	"grog/internal/console"
+	"grog/internal/model"
 )
 
 /*
@@ -24,7 +24,7 @@ TODO: We don't yet check that a parent package does not include inputs from chil
 
 // CheckTargetConstraints checks that the paths defined by each target are valid
 // logs any warnings on the way
-func CheckTargetConstraints(logger *zap.SugaredLogger, nodeMap model.BuildNodeMap) (errs []error) {
+func CheckTargetConstraints(logger *console.Logger, nodeMap model.BuildNodeMap) (errs []error) {
 	// iterate over targets in alphabetical order for consistent logging
 	for _, node := range nodeMap.NodesAlphabetically() {
 		target, ok := node.(*model.Target)

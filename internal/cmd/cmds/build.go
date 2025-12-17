@@ -4,6 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/fatih/color"
+	"github.com/spf13/cobra"
+
 	"grog/internal/analysis"
 	"grog/internal/caching"
 	"grog/internal/caching/backends"
@@ -18,13 +25,6 @@ import (
 	"grog/internal/model"
 	"grog/internal/output"
 	"grog/internal/selection"
-	"os"
-	"strings"
-	"time"
-
-	"github.com/fatih/color"
-	"github.com/spf13/cobra"
-	"go.uber.org/zap"
 )
 
 var BuildCmd = &cobra.Command{
@@ -70,7 +70,7 @@ func AddBuildCmd(rootCmd *cobra.Command) {
 // RunBuild runs the build/test command for the given target pattern
 func RunBuild(
 	ctx context.Context,
-	logger *zap.SugaredLogger,
+	logger *console.Logger,
 	targetPatterns []label.TargetPattern,
 	graph *dag.DirectedTargetGraph,
 	testFilter selection.TargetTypeSelection,

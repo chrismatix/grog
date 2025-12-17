@@ -5,12 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go.uber.org/zap"
-	"grog/internal/config"
-	"grog/internal/console"
 	"io"
 	"path/filepath"
 	"strings"
+
+	"grog/internal/config"
+	"grog/internal/console"
 )
 
 // GCSCache implements the CacheBackend interface using Google Cloud Storage.
@@ -19,7 +19,7 @@ type GCSCache struct {
 	prefix          string
 	workspacePrefix string
 	client          *storage.Client
-	logger          *zap.SugaredLogger
+	logger          *console.Logger
 }
 
 func (gcs *GCSCache) TypeName() string {
@@ -58,7 +58,7 @@ func NewGCSCache(
 	}
 
 	logger := console.GetLogger(ctx)
-	logger.Debugf("Instantiated GCS cache at bucket %s with prefix %s and workspace dir %s",
+	logger.Tracef("Instantiated GCS cache at bucket %s with prefix %s and workspace dir %s",
 		cacheConfig.Bucket,
 		prefix,
 		workspacePrefix)
@@ -88,11 +88,11 @@ func (gcs *GCSCache) buildPath(path, key string) string {
 func (gcs *GCSCache) Get(ctx context.Context, path, key string) (io.ReadCloser, error) {
 	logger := console.GetLogger(ctx)
 	gcsPath := gcs.buildPath(path, key)
-	logger.Debugf("Getting file from GCS for path: %s", gcsPath)
+	logger.Tracef("Getting file from GCS for path: %s", gcsPath)
 
 	rc, err := gcs.client.Bucket(gcs.bucketName).Object(gcsPath).NewReader(ctx)
 	if err != nil {
-		logger.Debugf("Failed to get file from GCS for path: %s, key: %s: %v", path, key, err)
+		logger.Tracef("Failed to get file from GCS for path: %s, key: %s: %v", path, key, err)
 		return nil, fmt.Errorf("failed to create reader: %w", err)
 	}
 
@@ -103,7 +103,7 @@ func (gcs *GCSCache) Get(ctx context.Context, path, key string) (io.ReadCloser, 
 func (gcs *GCSCache) Set(ctx context.Context, path, key string, content io.Reader) error {
 	logger := console.GetLogger(ctx)
 	gcsPath := gcs.buildPath(path, key)
-	logger.Debugf("Setting file in GCS for path: %s", gcsPath)
+	logger.Tracef("Setting file in GCS for path: %s", gcsPath)
 
 	wc := gcs.client.Bucket(gcs.bucketName).Object(gcsPath).NewWriter(ctx)
 
@@ -122,7 +122,7 @@ func (gcs *GCSCache) Set(ctx context.Context, path, key string, content io.Reade
 func (gcs *GCSCache) Delete(ctx context.Context, path string, key string) error {
 	logger := console.GetLogger(ctx)
 	gcsPath := gcs.buildPath(path, key)
-	logger.Debugf("Deleting file from GCS for path: %s", gcsPath)
+	logger.Tracef("Deleting file from GCS for path: %s", gcsPath)
 
 	err := gcs.client.Bucket(gcs.bucketName).Object(gcsPath).Delete(ctx)
 	if err != nil {
@@ -136,11 +136,11 @@ func (gcs *GCSCache) Delete(ctx context.Context, path string, key string) error 
 func (gcs *GCSCache) Exists(ctx context.Context, path string, key string) (bool, error) {
 	logger := console.GetLogger(ctx)
 	gcsPath := gcs.buildPath(path, key)
-	logger.Debugf("Checking existence of file in GCS for path: %s", gcsPath)
+	logger.Tracef("Checking existence of file in GCS for path: %s", gcsPath)
 
 	_, err := gcs.client.Bucket(gcs.bucketName).Object(gcsPath).Attrs(ctx)
 	if errors.Is(err, storage.ErrObjectNotExist) {
-		logger.Debugf("File does not exist: %s", gcsPath)
+		logger.Tracef("File does not exist: %s", gcsPath)
 		return false, nil
 	}
 	if err != nil {

@@ -3,9 +3,10 @@ package caching
 import (
 	"bytes"
 	"context"
-	"grog/internal/caching/backends"
 	"io"
 	"sync"
+
+	"grog/internal/caching/backends"
 )
 
 // Cas is a content-addressable store.

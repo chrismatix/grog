@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"sync"
+
+	"grog/internal/console"
 )
 
 // RemoteWrapper is the default implementation when using a remote cache
@@ -39,12 +41,15 @@ func (rw *RemoteWrapper) TypeName() string {
 // If the file is not found locally, it retrieves it from the remote cache
 // and stores it in the local file system cache for future access.
 func (rw *RemoteWrapper) Get(ctx context.Context, path, key string) (io.ReadCloser, error) {
+	logger := console.GetLogger(ctx)
+	logger.Tracef("Remote wrapper fetching path: %s, key: %s", path, key)
 	// Try to get the file from the local file system cache
 	reader, err := rw.fs.Get(ctx, path, key)
 	if err == nil {
 		return reader, nil
 	}
 
+	logger.Tracef("Local cache miss for path: %s, key: %s; trying remote cache", path, key)
 	// File not found locally, try the remote cache
 	remoteReader, err := rw.remote.Get(ctx, path, key)
 	if err != nil {
@@ -63,6 +68,7 @@ func (rw *RemoteWrapper) Get(ctx context.Context, path, key string) (io.ReadClos
 
 // Set stores a file in both the local file system cache and the remote cache concurrently.
 func (rw *RemoteWrapper) Set(ctx context.Context, path, key string, content io.Reader) error {
+	console.GetLogger(ctx).Tracef("Remote wrapper writing path: %s, key: %s", path, key)
 	// Create pipes for the two cache destinations
 	fsRead, fsWrite := io.Pipe()
 	remoteRead, remoteWrite := io.Pipe()
@@ -149,6 +155,7 @@ func (rw *RemoteWrapper) Set(ctx context.Context, path, key string, content io.R
 
 // Delete removes a cached file from both the local file system cache and the remote cache.
 func (rw *RemoteWrapper) Delete(ctx context.Context, path string, key string) error {
+	console.GetLogger(ctx).Tracef("Remote wrapper deleting path: %s, key: %s", path, key)
 	// Delete the file from the local file system cache
 	err := rw.fs.Delete(ctx, path, key)
 	if err != nil {
@@ -162,15 +169,18 @@ func (rw *RemoteWrapper) Delete(ctx context.Context, path string, key string) er
 
 // Exists checks if a file exists in either the local file system cache or the remote cache.
 func (rw *RemoteWrapper) Exists(ctx context.Context, path string, key string) (bool, error) {
+	logger := console.GetLogger(ctx)
 	// Check if the file exists in the local file system cache
 	localExists, err := rw.fs.Exists(ctx, path, key)
 	if err != nil {
 		return false, err
 	}
 	if localExists {
+		logger.Tracef("Remote wrapper local hit for path: %s, key: %s", path, key)
 		return true, nil
 	}
 
+	logger.Tracef("Remote wrapper checking remote existence for path: %s, key: %s", path, key)
 	// Check if the file exists in the remote cache
 	return rw.remote.Exists(ctx, path, key)
 }
