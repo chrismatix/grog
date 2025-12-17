@@ -3,12 +3,14 @@ package analysis
 import (
 	"github.com/stretchr/testify/assert"
 	"grog/internal/config"
+	"grog/internal/console"
 	"grog/internal/output"
 	"os"
 	"testing"
 
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 	"grog/internal/label"
 	"grog/internal/model"
@@ -155,9 +157,9 @@ func TestCheckPathConstraints(t *testing.T) {
 			// Given
 			observedZapCore, observedLogs := observer.New(zap.WarnLevel)
 			observedLogger := zap.New(observedZapCore).Sugar()
-
+			logger := console.NewFromSugared(observedLogger, zapcore.WarnLevel)
 			// Execute the function under test
-			errs := CheckTargetConstraints(observedLogger, tt.targetMap)
+			errs := CheckTargetConstraints(logger, tt.targetMap)
 
 			// Check logged warnings count
 			if observedLogs.Len() != tt.expectWarningCount {

@@ -3,11 +3,13 @@ package main
 import (
 	"grog/internal/cmd/cmds"
 	"grog/internal/config"
+	"grog/internal/console"
 	"grog/internal/label"
 	"grog/internal/loading"
 	"grog/internal/selection"
 	"testing"
 
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
 )
 
@@ -25,7 +27,7 @@ func TestProfilingBuildIntegrated(t *testing.T) {
 }
 
 func callBuildFunction(t *testing.T, repoPath string) {
-	testLogger := zaptest.NewLogger(t).Sugar()
+	testLogger := console.NewFromSugared(zaptest.NewLogger(t).Sugar(), zapcore.DebugLevel)
 
 	// TODO supply your local cache root
 	config.Global.Root = ""

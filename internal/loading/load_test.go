@@ -2,7 +2,9 @@ package loading
 
 import (
 	"fmt"
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
+	"grog/internal/console"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -177,7 +179,7 @@ func TestResolveInputs(t *testing.T) {
 		},
 	}
 
-	testLogger := zaptest.NewLogger(t).Sugar()
+	testLogger := console.NewFromSugared(zaptest.NewLogger(t).Sugar(), zapcore.DebugLevel)
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create a temporary directory for the test case.

@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	tea "github.com/charmbracelet/bubbletea"
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
+	"grog/internal/console"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -15,7 +17,7 @@ func TestSimpleTasks(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	testLogger := zaptest.NewLogger(t).Sugar()
+	testLogger := console.NewFromSugared(zaptest.NewLogger(t).Sugar(), zapcore.DebugLevel)
 	pool := NewTaskWorkerPool[int](testLogger, 2, func(_ tea.Msg) {}, 0)
 	pool.StartWorkers(ctx)
 
@@ -44,7 +46,7 @@ func TestSimpleTasks(t *testing.T) {
 
 func TestCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	testLogger := zaptest.NewLogger(t).Sugar()
+	testLogger := console.NewFromSugared(zaptest.NewLogger(t).Sugar(), zapcore.DebugLevel)
 	p := NewTaskWorkerPool[any](testLogger, 1, func(_ tea.Msg) {}, 0)
 	p.StartWorkers(ctx)
 
@@ -67,7 +69,7 @@ func TestCancellation(t *testing.T) {
 }
 
 func TestShutdownBeforeRun(t *testing.T) {
-	testLogger := zaptest.NewLogger(t).Sugar()
+	testLogger := console.NewFromSugared(zaptest.NewLogger(t).Sugar(), zapcore.DebugLevel)
 	pool := NewTaskWorkerPool[any](testLogger, 1, func(_ tea.Msg) {}, 0)
 	pool.Shutdown()
 
@@ -83,7 +85,7 @@ func TestPanicOnJobChannel(t *testing.T) {
 	// rapidly start, shutdown, cancel, then Run
 	for i := 0; i < 5; i++ {
 		ctx, cancel := context.WithCancel(context.Background())
-		testLogger := zaptest.NewLogger(t).Sugar()
+		testLogger := console.NewFromSugared(zaptest.NewLogger(t).Sugar(), zapcore.DebugLevel)
 		p := NewTaskWorkerPool[int](testLogger, 2, func(_ tea.Msg) {}, 0)
 		p.StartWorkers(ctx)
 		p.Shutdown() // must really close jobCh now
@@ -103,7 +105,7 @@ func TestPanicOnJobChannel(t *testing.T) {
 func TestRunWithConcurrentShutdown(t *testing.T) {
 	for i := 0; i < 200; i++ {
 		ctx, cancel := context.WithCancel(context.Background())
-		testLogger := zaptest.NewLogger(t).Sugar()
+		testLogger := console.NewFromSugared(zaptest.NewLogger(t).Sugar(), zapcore.DebugLevel)
 		p := NewTaskWorkerPool[int](testLogger, 1, func(_ tea.Msg) {}, 0)
 		p.StartWorkers(ctx)
 
@@ -132,7 +134,7 @@ func TestTaskError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	testLogger := zaptest.NewLogger(t).Sugar()
+	testLogger := console.NewFromSugared(zaptest.NewLogger(t).Sugar(), zapcore.DebugLevel)
 	pool := NewTaskWorkerPool[string](testLogger, 1, func(_ tea.Msg) {}, 0)
 	pool.StartWorkers(ctx)
 

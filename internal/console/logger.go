@@ -27,6 +27,12 @@ func newLogger(logger *zap.SugaredLogger, level zapcore.Level) *Logger {
 	return &Logger{SugaredLogger: logger, traceEnabled: level <= TraceLevel}
 }
 
+// NewFromSugared wraps an existing zap.SugaredLogger into a console.Logger with the given level.
+// Use this in tests to adapt observed/test loggers to the console logger type expected by production code.
+func NewFromSugared(logger *zap.SugaredLogger, level zapcore.Level) *Logger {
+	return newLogger(logger, level)
+}
+
 // Tracef logs at the trace level when enabled.
 func (l *Logger) Tracef(template string, args ...interface{}) {
 	if l == nil || !l.traceEnabled {
