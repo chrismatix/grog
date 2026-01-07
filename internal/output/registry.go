@@ -115,9 +115,9 @@ func (r *Registry) WriteOutputs(
 	defer r.targetMutexMap.Unlock(target.Label.String())
 
 	logger := console.GetLogger(ctx)
-	logger.Debugf("%s: writing outputs", target.Label)
-
 	outputs := target.AllOutputs()
+
+	logger.Debugf("%s: writing outputs", target.Label)
 
 	var tasks []pond.Task
 	var targetOutputs []*gen.Output
@@ -133,6 +133,7 @@ func (r *Registry) WriteOutputs(
 			outputsMutex.Lock()
 			targetOutputs = append(targetOutputs, output)
 			outputsMutex.Unlock()
+			logger.Debugf("%s: output %s written", target.Label, localOutputRef.Type)
 			return nil
 		})
 		tasks = append(tasks, task)
@@ -148,6 +149,8 @@ func (r *Registry) WriteOutputs(
 	if err != nil {
 		return nil, err
 	}
+
+	logger.Debugf("%s: outputs written", target.Label)
 
 	return &gen.TargetResult{
 		ChangeHash:              target.ChangeHash,
@@ -214,6 +217,7 @@ func (r *Registry) LoadOutputs(
 	var tasks []pond.Task
 	for _, outputRef := range targetResult.Outputs {
 		localOutputRef := outputRef
+		logger.Debugf("%s: loading output %s", target.Label, localOutputRef.GetKind())
 		task := r.pool.SubmitErr(func() error {
 			err := r.mustGetHandlerFromProto(localOutputRef).Load(ctx, *target, localOutputRef, progress)
 			if err != nil {
@@ -230,6 +234,7 @@ func (r *Registry) LoadOutputs(
 		}
 	}
 
+	logger.Debugf("%s: outputs loaded", target.Label)
 	target.OutputsLoaded = true
 	target.OutputHash = targetResult.OutputHash
 	return nil
