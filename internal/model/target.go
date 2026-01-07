@@ -18,7 +18,7 @@ type Target struct {
 	// The file in which this target was defined
 	SourceFilePath string `json:"-"`
 
-	Command              string              `json:"cmd"`
+	Command              string              `json:"command"`
 	Dependencies         []label.TargetLabel `json:"dependencies,omitempty"`
 	Inputs               []string            `json:"inputs,omitempty"`
 	ExcludeInputs        []string            `json:"exclude_inputs,omitempty"`

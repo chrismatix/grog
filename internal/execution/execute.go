@@ -351,6 +351,7 @@ func (e *Executor) executeTarget(
 	}
 
 	// Write outputs to the cache:
+	logger.Debugf("writing outputs for target %s", target.Label)
 	update(worker.Status(fmt.Sprintf("%s complete. writing outputs...", target.Label)))
 	err = e.OnTargetComplete(ctx, target, update)
 	if err != nil {
@@ -375,24 +376,27 @@ func (e *Executor) executeTarget(
 // - writes the target result to the cache
 // For no-cache targets it will set the OutputHash to the hash of the outputs
 func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, update worker.StatusFunc) error {
+	logger := console.GetLogger(ctx)
 	var targetResult *gen.TargetResult
 	var err error
 	if target.SkipsCache() || !e.enableCache {
+		logger.Debugf("%s: skipping cache write", target.Label)
 		targetResult, err = e.registry.GetNoCacheOutputHash(ctx, target)
 		// TODO should we even store this in the cache given that the target
 		// is no-cache? Probably fine from a user perspective
 		// since it's the target cache and not the output cache
-	} else if len(target.Outputs) == 0 {
+	} else if len(target.AllOutputs()) == 0 {
+		logger.Debugf("%s: no outputs to write", target.Label)
 		// NOTE: This is a special and intentional design
 		// Targets that do not have any outputs expose their own change behavior as an output
 		// analogous to file_groups
 		targetResult = &gen.TargetResult{
-			ChangeHash: target.ChangeHash,
-			// TODO make this the input hash
+			ChangeHash:              target.ChangeHash,
 			OutputHash:              target.ChangeHash,
 			ExecutionDurationMillis: target.ExecutionTime.Milliseconds(),
 		}
 	} else {
+		logger.Debugf("%s: writing %d outputs", target.Label, len(target.AllOutputs()))
 		progress := worker.NewProgressTracker(
 			fmt.Sprintf("%s: writing %s", target.Label, console.FCountOutputs(len(target.AllOutputs()))),
 			0,
