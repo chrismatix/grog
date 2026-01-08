@@ -102,6 +102,56 @@ func TestSelectTargetsForBuild(t *testing.T) {
 		}
 	})
 
+	t.Run("dependency chain reports the correct failing edge", func(t *testing.T) {
+		graph := dag.NewDirectedGraph()
+
+		rootTarget := &model.Target{
+			Label: label.TargetLabel{
+				Name:    "root_target",
+				Package: "pkg",
+			},
+			Tags: []string{testTag},
+		}
+		firstDependency := &model.Target{
+			Label: label.TargetLabel{
+				Name:    "first_dep",
+				Package: "pkg",
+			},
+			Tags: []string{testTag},
+		}
+		secondDependency := &model.Target{
+			Label: label.TargetLabel{
+				Name:    "second_dep",
+				Package: "pkg",
+			},
+			Tags:      []string{testTag},
+			Platforms: []string{"linux/arm64"},
+		}
+
+		graph.AddNode(rootTarget)
+		graph.AddNode(firstDependency)
+		graph.AddNode(secondDependency)
+
+		if err := graph.AddEdge(firstDependency, rootTarget); err != nil {
+			t.Fatalf("Unexpected error adding edge: %v", err)
+		}
+		if err := graph.AddEdge(secondDependency, rootTarget); err != nil {
+			t.Fatalf("Unexpected error adding edge: %v", err)
+		}
+
+		selector := New([]label.TargetPattern{pattern}, []string{testTag}, []string{}, NonTestOnly)
+		_, _, err = selector.SelectTargetsForBuild(graph)
+		if err == nil {
+			t.Fatal("Expected error due to dependency platform mismatch, but got nil")
+		}
+		if !strings.Contains(err.Error(), "root_target because it depends on //pkg:second_dep") {
+			t.Errorf("Expected error to cite second_dep, got: %v", err)
+		}
+		if strings.Contains(err.Error(), "first_dep -> second_dep") {
+			t.Errorf("Expected error not to include unrelated dependency chain, got: %v", err)
+		}
+	})
+
 	t.Run("filtering by test flag", func(t *testing.T) {
 		graph := dag.NewDirectedGraph()
 
