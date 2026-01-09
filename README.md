@@ -15,7 +15,7 @@ Grog **delivers** cached incremental runs, parallel execution, [and more](https:
 
 What it feels like:
 
-<img src="docs/vhs/demo.gif" alt="Grog demo" width="600">
+<img src="docs/src/assets/vhs/demo.gif" alt="Grog demo" width="600">
 
 Read more in [Why grog?](https://grog.build/why-grog/)
 

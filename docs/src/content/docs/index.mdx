@@ -1,13 +1,97 @@
 ---
 title: Grog
-description: Grog helps you simplify and speed up your monorepo builds by caching and parallelizing your existing build commands.
+description: A lightweight build orchestrator for faster monorepo runs.
 template: splash
 hero:
-  tagline: Grog is the mono-repo build tool for the grug-brained dev.
+  tagline: The monorepo build tool for the grug-brained dev.
   image:
     file: ../../assets/grog-full.svg
   actions:
-    - text: Get Started!
+    - text: Get Started
       link: /get-started/
       icon: right-arrow
+    - text: Why Grog?
+      link: /why-grog/
+features:
+  - title: Cache what matters
+    details: Reuse build outputs across runs with local or remote caching.
+  - title: Parallel by default
+    details: Run independent targets at the same time to keep CI moving.
+  - title: Bring your own commands
+    details: Keep your existing scripts, Make targets, and CLI tools.
+  - title: Clear build graphs
+    details: Declare inputs, outputs, and dependencies in simple BUILD files.
 ---
+
+import {
+  Card,
+  CardGrid,
+  Steps,
+  LinkCard,
+} from "@astrojs/starlight/components";
+import demoVideo from "../../assets/vhs/demo.webm";
+
+## What is Grog?
+
+Grog coordinates the commands you already use and runs only what changed in parallel. It tracks inputs, caches outputs, and keeps the rest of your repo idle.
+
+## How it works
+
+<Steps>
+  <ol>
+    <li>
+      <strong>Describe targets.</strong> Declare commands, inputs, outputs, and dependencies in BUILD files.
+    </li>
+    <li>
+      <strong>Run a build.</strong> Grog schedules the graph, runs tasks in parallel, and caches results.
+    </li>
+    <li>
+      <strong>Rerun faster.</strong> Only targets affected by a change execute again.
+    </li>
+  </ol>
+</Steps>
+
+## Grog in motion
+
+
+<video src={demoVideo} width="800" autoplay loop muted playsinline>
+  <track kind="captions" />
+  Your browser does not support the video tag.
+</video>
+
+## Highlights
+
+<CardGrid>
+  <Card title="File-aware caching" icon="document">
+    Use content hashing to avoid repeating work across machines and branches.
+  </Card>
+  <Card title="Language agnostic" icon="translate">
+    Build Go, Node, Rust, Python, or anything else that runs in a shell.
+  </Card>
+  <Card title="Remote caching" icon="cloud-download">
+    Cache artifacts locally or share them with your team through cloud storage.
+  </Card>
+  <Card title="Simple config" icon="open-book">
+    Sane defaults with readable [BUILD](/build-configuration/) files and even [Makefiles](/build-configuration/#makefile-integration).
+  </Card>
+</CardGrid>
+
+## Next steps
+
+<CardGrid>
+  <LinkCard
+    title="Install and run Grog"
+    description="Get the CLI installed and initialize your repo."
+    href="/get-started/"
+  />
+  <LinkCard
+    title="Understand the build model"
+    description="Learn how Grog maps targets, inputs, and outputs."
+    href="/build-configuration/"
+  />
+  <LinkCard
+    title="Tune your config"
+    description="Explore settings for caching, parallelism, and storage."
+    href="/reference/configuration/"
+  />
+</CardGrid>

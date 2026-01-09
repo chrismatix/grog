@@ -193,6 +193,8 @@ func initConfig(cmd *cobra.Command) error {
 		names = append([]string{"grog." + viper.GetString("profile")}, names...)
 	}
 
+	logger := console.InitLogger()
+
 	var found bool
 	for _, name := range names {
 		viper.SetConfigName(name)
@@ -204,6 +206,7 @@ func initConfig(cmd *cobra.Command) error {
 			return err
 		}
 		found = true
+		logger.Debugf("Loaded config file: %s", viper.ConfigFileUsed())
 		break
 	}
 	if !found {
@@ -239,7 +242,6 @@ func initConfig(cmd *cobra.Command) error {
 
 	config.Global.HashAlgorithm = strings.ToLower(config.Global.HashAlgorithm)
 
-	logger := console.InitLogger()
 	logger.Debugf("Using config file: %s", viper.ConfigFileUsed())
 	logger.Debugf("Running on %s", config.Global.GetPlatform())
 

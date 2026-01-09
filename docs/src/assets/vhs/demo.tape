@@ -10,7 +10,7 @@ Set Theme "Dracula"
 Set Padding 16
 
 Hide
-Type "cd ../../examples/python_monorepo"
+Type "cd ../../../examples/python_monorepo"
 Enter
 Type "git reset --hard"
 Enter
