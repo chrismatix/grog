@@ -85,6 +85,11 @@ func (w WorkspaceConfig) GetWorkspaceCacheDirectory() string {
 	return filepath.Join(w.GetWorkspaceRootDir(), "cache")
 }
 
+// GetCasDirectory returns the directory under $GROG_ROOT that hosts the shared CAS.
+func (w WorkspaceConfig) GetCasDirectory() string {
+	return filepath.Join(w.Root, "cas")
+}
+
 func (w WorkspaceConfig) IsDebug() bool {
 	return w.LogLevel == "debug"
 }
