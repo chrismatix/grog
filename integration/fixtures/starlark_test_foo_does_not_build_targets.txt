@@ -1,0 +1,5 @@
+INFO: 3 packages loaded, 6 targets configured.
+INFO: Selected 2 targets.
+Hello test streamed output
+INFO: //foo:foo_test PASSED in 0.0s
+INFO: Test completed successfully. 2 targets completed (1 cache hits).

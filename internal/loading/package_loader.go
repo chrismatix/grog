@@ -31,6 +31,7 @@ func NewPackageLoader(logger *console.Logger) *PackageLoader {
 			YamlLoader{},
 			MakefileLoader{},
 			PklLoader{},
+			StarlarkLoader{},
 			ScriptLoader{},
 		},
 	}

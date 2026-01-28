@@ -1,0 +1,7 @@
+INFO: 3 packages loaded, 6 targets configured.
+INFO: Selected 3 targets.
+bar content
+foo content 1
+foo content 2
+INFO: //bar:bar_test PASSED in 0.0s
+INFO: Test completed successfully. 3 targets completed (2 cache hits).
