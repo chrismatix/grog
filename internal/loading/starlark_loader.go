@@ -27,12 +27,26 @@ type starlarkPackageCollector struct {
 	defaultPlatforms []string
 }
 
+// moduleLoadContext tracks loaded modules and in-progress loads for cycle detection
+type moduleLoadContext struct {
+	// cache stores already-loaded modules
+	cache map[string]starlark.StringDict
+	// loading tracks modules currently being loaded to detect cycles
+	loading map[string]bool
+}
+
 // Load reads the file at the specified filePath and evaluates it as Starlark code.
 func (sl StarlarkLoader) Load(ctx context.Context, filePath string) (PackageDTO, bool, error) {
 	collector := &starlarkPackageCollector{
 		targets:      make([]*TargetDTO, 0),
 		aliases:      make([]*AliasDTO, 0),
 		environments: make([]*EnvironmentDTO, 0),
+	}
+
+	// Create module load context for caching and cycle detection
+	loadContext := &moduleLoadContext{
+		cache:   make(map[string]starlark.StringDict),
+		loading: make(map[string]bool),
 	}
 
 	// Create predeclared functions and values
@@ -46,14 +60,14 @@ func (sl StarlarkLoader) Load(ctx context.Context, filePath string) (PackageDTO,
 	}
 
 	// Add environment variables to predeclared
-	for k, v := range config.Global.EnvironmentVariables {
-		predeclared[k] = starlark.String(v)
+	for key, value := range config.Global.EnvironmentVariables {
+		predeclared[key] = starlark.String(value)
 	}
 
 	thread := &starlark.Thread{
 		Name: filePath,
 		Load: func(thread *starlark.Thread, module string) (starlark.StringDict, error) {
-			return sl.loadModule(thread, module, filePath, collector)
+			return sl.loadModule(thread, module, filePath, collector, loadContext)
 		},
 	}
 
@@ -63,35 +77,56 @@ func (sl StarlarkLoader) Load(ctx context.Context, filePath string) (PackageDTO,
 		return PackageDTO{}, false, fmt.Errorf("failed to evaluate Starlark file %s: %w", filePath, err)
 	}
 
-	pkg := PackageDTO{
+	packageDTO := PackageDTO{
 		Targets:          collector.targets,
 		Aliases:          collector.aliases,
 		Environments:     collector.environments,
 		DefaultPlatforms: collector.defaultPlatforms,
 	}
 
-	return pkg, true, nil
+	return packageDTO, true, nil
 }
 
 // loadModule implements the load() function for importing other Starlark files
-func (sl StarlarkLoader) loadModule(thread *starlark.Thread, module string, currentFile string, collector *starlarkPackageCollector) (starlark.StringDict, error) {
+// with caching and cycle detection
+func (sl StarlarkLoader) loadModule(thread *starlark.Thread, module string, currentFile string, collector *starlarkPackageCollector, loadContext *moduleLoadContext) (starlark.StringDict, error) {
 	// Resolve module path relative to workspace root or current file
 	var modulePath string
 
 	if len(module) > 2 && module[:2] == "//" {
 		// Absolute path from workspace root
-		relPath := module[2:]
-		modulePath = filepath.Join(config.Global.WorkspaceRoot, relPath)
+		relativePath := module[2:]
+		modulePath = filepath.Join(config.Global.WorkspaceRoot, relativePath)
 	} else {
 		// Relative path from current file
-		currentDir := filepath.Dir(currentFile)
-		modulePath = filepath.Join(currentDir, module)
+		currentDirectory := filepath.Dir(currentFile)
+		modulePath = filepath.Join(currentDirectory, module)
+	}
+
+	// Clean the path to normalize it for cache lookups
+	modulePath = filepath.Clean(modulePath)
+
+	// Check cache first - if already loaded, return cached result
+	if cached, ok := loadContext.cache[modulePath]; ok {
+		return cached, nil
+	}
+
+	// Check if currently being loaded - this indicates a cycle
+	if loadContext.loading[modulePath] {
+		return nil, fmt.Errorf("cycle detected: module %s is already being loaded", module)
 	}
 
 	// Check if file exists
 	if _, err := os.Stat(modulePath); os.IsNotExist(err) {
 		return nil, fmt.Errorf("module not found: %s (resolved to %s)", module, modulePath)
 	}
+
+	// Mark as currently loading to detect cycles
+	loadContext.loading[modulePath] = true
+	defer func() {
+		// Remove from loading set when done
+		delete(loadContext.loading, modulePath)
+	}()
 
 	// Create predeclared functions for the loaded module
 	predeclared := starlark.StringDict{
@@ -104,15 +139,15 @@ func (sl StarlarkLoader) loadModule(thread *starlark.Thread, module string, curr
 	}
 
 	// Add environment variables
-	for k, v := range config.Global.EnvironmentVariables {
-		predeclared[k] = starlark.String(v)
+	for key, value := range config.Global.EnvironmentVariables {
+		predeclared[key] = starlark.String(value)
 	}
 
 	// Create a new thread for the module with the same load function
 	moduleThread := &starlark.Thread{
 		Name: modulePath,
-		Load: func(t *starlark.Thread, m string) (starlark.StringDict, error) {
-			return sl.loadModule(t, m, modulePath, collector)
+		Load: func(threadInner *starlark.Thread, moduleInner string) (starlark.StringDict, error) {
+			return sl.loadModule(threadInner, moduleInner, modulePath, collector, loadContext)
 		},
 	}
 
@@ -121,6 +156,9 @@ func (sl StarlarkLoader) loadModule(thread *starlark.Thread, module string, curr
 	if err != nil {
 		return nil, fmt.Errorf("failed to load module %s: %w", module, err)
 	}
+
+	// Cache the result before returning
+	loadContext.cache[modulePath] = globals
 
 	return globals, nil
 }

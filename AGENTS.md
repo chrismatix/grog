@@ -18,7 +18,7 @@
 - Functions that perform I/O, blocking work, or are part of the execution pipeline should accept a `context.Context` as their first parameter when practical. Thread the context through to downstream calls instead of creating background contexts.
 - Tests should be table-driven when the same logic is exercised with multiple inputs, should use `t.Run` subtests, and any helper functions that call `t.Fatalf`/`t.Helper` should invoke `t.Helper()`.
 - Keep new public (exported) identifiers documented with sentence-case comments.
-- Prefer spelling out descriptive variable names rather than relying on heavy abbreviation, even if shorter identifiers are considered idiomatic Go in other projects.
+- **Avoid abbreviations in variable names**: Spell out descriptive names in full. For example, use `loadContext` instead of `loadCtx`, `relativePath` instead of `relPath`, `key` and `value` instead of `k` and `v`. This applies even when shorter identifiers might be considered idiomatic in other Go projects.
 
 ## Go module and dependency management
 - If you add or upgrade Go dependencies, run `go mod tidy` before committing so that `go.mod` and `go.sum` stay minimal.
