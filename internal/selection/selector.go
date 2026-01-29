@@ -54,14 +54,23 @@ func (s *Selector) nodeMatchesFilters(
 ) bool {
 	target, ok := node.(*model.Target)
 	if !ok {
-		// TODO implement environments here
-		return true
+		// For non-Target nodes (like Alias, Environment), still check pattern matching
+		return s.nodeMatchesPatterns(node)
 	}
 
 	return s.targetMatchesTypeSelection(target) &&
 		s.targetMatchesPatterns(target) &&
 		s.targetTagsMatch(target) &&
 		!s.targetExcludeTagsMatch(target)
+}
+
+func (s *Selector) nodeMatchesPatterns(node model.BuildNode) bool {
+	for _, pattern := range s.Patterns {
+		if pattern.Matches(node.GetLabel()) {
+			return true
+		}
+	}
+	return len(s.Patterns) == 0
 }
 
 func (s *Selector) targetMatchesPatterns(target *model.Target) bool {
