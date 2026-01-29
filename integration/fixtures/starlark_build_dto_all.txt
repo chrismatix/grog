@@ -1,6 +1,5 @@
 INFO: 4 packages loaded, 9 targets configured.
-INFO: Selected 3 targets.
-Hello streamed output
+INFO: Selected 2 targets.
 env=from_starlark
 included
-INFO: Build completed successfully. 3 targets completed (0 cache hits).
+INFO: Build completed successfully. 2 targets completed (0 cache hits).
