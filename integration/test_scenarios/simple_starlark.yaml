@@ -13,6 +13,16 @@ cases:
       - build
       - //bar
 
+  - name: starlark_build_foo_alias
+    grog_args:
+      - build
+      - //foo:foo_alias
+
+  - name: starlark_build_macro_example
+    grog_args:
+      - build
+      - //macros:macro_example
+
   - name: starlark_test_bar_should_build_deps
     grog_args:
       - test
@@ -22,3 +32,34 @@ cases:
     grog_args:
       - test
       - //foo:foo_test
+
+  - name: starlark_build_dto_all
+    grog_args:
+      - build
+      - --platform=linux/amd64
+      - //attrs:dto_all
+
+  - name: starlark_build_dto_constants
+    grog_args:
+      - build
+      - --platform=linux/amd64
+      - //attrs:dto_constants
+
+  - name: starlark_list_bin_outputs
+    grog_args:
+      - list
+      - --target-type=bin_output
+      - //...
+
+  - name: starlark_list_tagged_targets
+    grog_args:
+      - list
+      - --tag=starlark-dto
+      - //...
+
+  - name: starlark_graph_dto_attributes
+    grog_args:
+      - graph
+      - -o
+      - json
+      - //attrs:dto_all

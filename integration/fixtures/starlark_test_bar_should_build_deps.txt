@@ -1,4 +1,4 @@
-INFO: 3 packages loaded, 6 targets configured.
+INFO: 4 packages loaded, 9 targets configured.
 INFO: Selected 3 targets.
 bar content
 foo content 1
