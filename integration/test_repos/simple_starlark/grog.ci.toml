@@ -1,0 +1,6 @@
+stream_logs = true
+
+[environment_variables]
+GROG_OS = "linux"
+GROG_ARCH = "amd64"
+GROG_PLATFORM = "linux/amd64"
