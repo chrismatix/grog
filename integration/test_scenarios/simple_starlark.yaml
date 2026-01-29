@@ -1,0 +1,65 @@
+name: starlark builds
+repo: simple_starlark
+cases:
+  # This should only build foo
+  - name: starlark_build_only_foo
+    grog_args:
+      - build
+      - //foo
+
+  # This should select foo as well
+  - name: starlark_build_bar_should_also_build_foo
+    grog_args:
+      - build
+      - //bar
+
+  - name: starlark_build_foo_alias
+    grog_args:
+      - build
+      - //foo:foo_alias
+
+  - name: starlark_build_macro_example
+    grog_args:
+      - build
+      - //macros:macro_example
+
+  - name: starlark_test_bar_should_build_deps
+    grog_args:
+      - test
+      - //bar:bar_test
+
+  - name: starlark_test_foo_does_not_build_targets
+    grog_args:
+      - test
+      - //foo:foo_test
+
+  - name: starlark_build_dto_all
+    grog_args:
+      - build
+      - --platform=linux/amd64
+      - //attrs:dto_all
+
+  - name: starlark_build_dto_constants
+    grog_args:
+      - build
+      - --platform=linux/amd64
+      - //attrs:dto_constants
+
+  - name: starlark_list_bin_outputs
+    grog_args:
+      - list
+      - --target-type=bin_output
+      - //...
+
+  - name: starlark_list_tagged_targets
+    grog_args:
+      - list
+      - --tag=starlark-dto
+      - //...
+
+  - name: starlark_graph_dto_attributes
+    grog_args:
+      - graph
+      - -o
+      - json
+      - //attrs:dto_all
