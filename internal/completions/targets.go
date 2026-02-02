@@ -19,9 +19,13 @@ func TargetPatternCompletion(_ *cobra.Command, _ []string, toComplete string, ta
 		return nil, cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveError
 	}
 
+	// Track input format to preserve it in completions
+	isAbsolute := strings.HasPrefix(toComplete, "//")
+	isRelativeTarget := strings.HasPrefix(toComplete, ":")
+
 	pattern := label.ParsePartialTargetPattern(currentPkg, toComplete)
 	searchDir := pattern.Prefix()
-	if searchDir == "" && !strings.HasPrefix(toComplete, "//") {
+	if searchDir == "" && !isAbsolute {
 		searchDir = currentPkg
 	}
 
@@ -47,21 +51,31 @@ func TargetPatternCompletion(_ *cobra.Command, _ []string, toComplete string, ta
 					continue
 				}
 				if selector.Match(target) {
-					targets = append(targets, targetLabel.String())
+					if isRelativeTarget {
+						targets = append(targets, ":"+targetLabel.Name)
+					} else {
+						targets = append(targets, targetLabel.String())
+					}
 				}
 			}
 			for aliasLabel := range pkg.Aliases {
 				if pattern.Target() != "" && !strings.HasPrefix(aliasLabel.Name, pattern.Target()) {
 					continue
 				}
-				targets = append(targets, aliasLabel.String())
+				if isRelativeTarget {
+					targets = append(targets, ":"+aliasLabel.Name)
+				} else {
+					targets = append(targets, aliasLabel.String())
+				}
 			}
 			continue
 		}
 		if searchDir == "" {
 			// We are at the root package so just add the directory
 			segment := strings.Split(pkgPath, "/")[0]
-			dirs[segment] = struct{}{}
+			if pattern.Target() == "" || strings.HasPrefix(segment, pattern.Target()) {
+				dirs[segment] = struct{}{}
+			}
 		} else if strings.HasPrefix(pkgPath, searchDir) {
 			// pkgPath searchDir/foo/bar/bar
 			rest := strings.TrimPrefix(pkgPath, searchDir+"/")

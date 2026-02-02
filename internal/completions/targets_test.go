@@ -36,6 +36,13 @@ func TestTargetPatternCompletionsAll(t *testing.T) {
 		{"package_1", "foo_", []string{"//package_1:foo_foo", "//package_1:foo_test"}},
 		{"package_1", "foo_test", []string{"//package_1:foo_test"}},
 		{"", "//package_1/nested:", []string{"//package_1/nested:nested"}},
+		// Test relative target completion (input starts with ":")
+		{"package_1", ":foo", []string{":foo", ":foo_foo", ":foo_test"}},
+		{"package_1", ":foo_", []string{":foo_foo", ":foo_test"}},
+		{"package_1", ":", []string{":bar", ":foo", ":foo_foo", ":foo_test"}},
+		// Test partial directory completion from root
+		{"", "pack", []string{"//package_1", "//package_2"}},
+		{"", "package_1", []string{"//package_1"}},
 	}
 
 	testFile, err := os.Getwd()
