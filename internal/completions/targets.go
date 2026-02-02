@@ -70,6 +70,9 @@ func TargetPatternCompletion(_ *cobra.Command, _ []string, toComplete string, ta
 			}
 			continue
 		}
+		if isRelativeTarget {
+			continue
+		}
 		if searchDir == "" {
 			// We are at the root package so just add the directory
 			segment := strings.Split(pkgPath, "/")[0]
