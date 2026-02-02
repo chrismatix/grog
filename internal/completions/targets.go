@@ -18,9 +18,17 @@ func TargetPatternCompletion(_ *cobra.Command, _ []string, toComplete string, ta
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveError
 	}
+	if currentPkg == "." {
+		currentPkg = ""
+	}
+
+	relativeTargetCompletion := strings.HasPrefix(toComplete, ":")
 
 	pattern := label.ParsePartialTargetPattern(currentPkg, toComplete)
 	searchDir := pattern.Prefix()
+	if searchDir == "." {
+		searchDir = ""
+	}
 	if searchDir == "" && !strings.HasPrefix(toComplete, "//") {
 		searchDir = currentPkg
 	}
@@ -47,15 +55,26 @@ func TargetPatternCompletion(_ *cobra.Command, _ []string, toComplete string, ta
 					continue
 				}
 				if selector.Match(target) {
-					targets = append(targets, targetLabel.String())
+					completion := targetLabel.String()
+					if relativeTargetCompletion {
+						completion = ":" + targetLabel.Name
+					}
+					targets = append(targets, completion)
 				}
 			}
 			for aliasLabel := range pkg.Aliases {
 				if pattern.Target() != "" && !strings.HasPrefix(aliasLabel.Name, pattern.Target()) {
 					continue
 				}
-				targets = append(targets, aliasLabel.String())
+				completion := aliasLabel.String()
+				if relativeTargetCompletion {
+					completion = ":" + aliasLabel.Name
+				}
+				targets = append(targets, completion)
 			}
+			continue
+		}
+		if relativeTargetCompletion {
 			continue
 		}
 		if searchDir == "" {

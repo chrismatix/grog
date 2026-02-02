@@ -1,0 +1,8 @@
+amends ".../pkl/package.pkl"
+
+targets {
+  new {
+    name = "build"
+    command = "echo 'hello backend build'"
+  }
+}

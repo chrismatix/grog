@@ -16,7 +16,7 @@ func TestTargetPatternCompletionsAll(t *testing.T) {
 		input            string
 		expect           []string
 	}{
-		{"", "", []string{"//:bin", "//package_1", "//package_2"}},
+		{"", "", []string{"//:bin", "//backend", "//package_1", "//package_2"}},
 		{"", "//package_1/", []string{
 			"//package_1/nested",
 			"//package_1:bar",
@@ -35,7 +35,10 @@ func TestTargetPatternCompletionsAll(t *testing.T) {
 		{"package_1", "foo", []string{"//package_1:foo", "//package_1:foo_foo", "//package_1:foo_test"}},
 		{"package_1", "foo_", []string{"//package_1:foo_foo", "//package_1:foo_test"}},
 		{"package_1", "foo_test", []string{"//package_1:foo_test"}},
+		{"package_1", ":fo", []string{":foo", ":foo_foo", ":foo_test"}},
+		{"package_1", ":ba", []string{":bar"}},
 		{"", "//package_1/nested:", []string{"//package_1/nested:nested"}},
+		{"", "back", []string{"//backend"}},
 	}
 
 	testFile, err := os.Getwd()
