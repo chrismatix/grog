@@ -153,7 +153,7 @@ func ParsePartialTargetPattern(currentPackage, pattern string) TargetPattern {
 	if len(prefix) > 0 {
 		if prefix[len(prefix)-1] == '/' {
 			prefix = prefix[:len(prefix)-1]
-		} else if colonIndex <= 0 {
+		} else if colonIndex <= 0 && !recursive {
 			// We are dealing with a partial package path, e.g. //foo
 			isPrefixPartial = true
 		}
