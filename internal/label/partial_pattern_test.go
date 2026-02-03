@@ -6,22 +6,25 @@ func TestParsePartialTargetPattern(t *testing.T) {
 	currentPkg := "foo/bar"
 
 	cases := []struct {
-		pattern   string
-		prefix    string
-		target    string
-		recursive bool
+		pattern       string
+		prefix        string
+		target        string
+		recursive     bool
+		prefixPartial bool
 	}{
-		{":baz", "foo/bar", "baz", false},
-		{"//foo:b", "foo", "b", false},
-		{"//foo/...", "foo", "", true},
-		{"//foo/...:b", "foo", "b", true},
-		{"qux", "foo/bar", "qux", false},
+		{":baz", "foo/bar", "baz", false, false},
+		{"//foo:b", "foo", "b", false, false},
+		{"//foo/...", "foo", "", true, false},
+		{"//foo/...:b", "foo", "b", true, false},
+		{"qux", "foo/bar", "qux", false, false},
+		{"//fo", "fo", "", false, true},
+		{"//foofoo", "foofoo", "", false, true},
 	}
 
 	for _, c := range cases {
-		p := ParsePartialTargetPattern(currentPkg, c.pattern)
-		if p.prefix != c.prefix || p.targetPattern != c.target || p.recursive != c.recursive {
-			t.Errorf("ParsePartialTargetPattern(%q) = {prefix:%q target:%q recursive:%v}; want {prefix:%q target:%q recursive:%v}", c.pattern, p.prefix, p.targetPattern, p.recursive, c.prefix, c.target, c.recursive)
+		actual := ParsePartialTargetPattern(currentPkg, c.pattern)
+		if actual.prefix != c.prefix || actual.targetPattern != c.target || actual.recursive != c.recursive || actual.isPrefixPartial != c.prefixPartial {
+			t.Errorf("ParsePartialTargetPattern(%q) = {prefix:%q target:%q recursive:%v}; want {prefix:%q target:%q recursive:%v}", c.pattern, actual.prefix, actual.targetPattern, actual.recursive, c.prefix, c.target, c.recursive)
 		}
 	}
 }
