@@ -111,6 +111,9 @@ func LoadPackages(ctx context.Context, startDir string) ([]*model.Package, error
 	if loadError != nil {
 		return nil, loadError
 	}
+	if contextErr := loadContext.Err(); contextErr != nil {
+		return nil, contextErr
+	}
 
 	packages := make([]*model.Package, 0, len(loadedPackages))
 	for _, loadedPackage := range loadedPackages {
