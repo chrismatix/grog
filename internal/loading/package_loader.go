@@ -6,7 +6,8 @@ import (
 	"grog/internal/console"
 )
 
-// Loader Implement this to provide a loader for a user provided BUILD file format
+// Loader Implement this to provide a loader for a user provided BUILD file format.
+// Load must be safe for concurrent use by multiple goroutines.
 type Loader interface {
 	// Matches indicates if the loader can load the specified file name
 	Matches(fileName string) bool
@@ -30,7 +31,7 @@ func NewPackageLoader(logger *console.Logger) *PackageLoader {
 			JsonLoader{},
 			YamlLoader{},
 			MakefileLoader{},
-			PklLoader{},
+			&PklLoader{},
 			StarlarkLoader{},
 			ScriptLoader{},
 		},
@@ -42,9 +43,9 @@ func (p *PackageLoader) LoadIfMatched(ctx context.Context, filePath string, file
 	for _, loader := range p.loaders {
 		if loader.Matches(fileName) {
 			p.logger.Debugf("Loading package from %s using loader %s", filePath, loader)
-			pkgDto, matched, err := loader.Load(ctx, filePath)
-			pkgDto.SourceFilePath = filePath
-			return pkgDto, matched, err
+			packageDTO, matched, err := loader.Load(ctx, filePath)
+			packageDTO.SourceFilePath = filePath
+			return packageDTO, matched, err
 		}
 	}
 
