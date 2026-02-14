@@ -30,10 +30,10 @@ func NewTeaWriter(program *tea.Program) *TeaWriter {
 
 func (w TeaWriter) Write(b []byte) (int, error) {
 	outStr := strings.TrimRight(string(b), "\n")
-	if UseTea() && !w.isDone {
+	if !w.isDone {
 		w.Program.Println(outStr)
 	} else {
-		// Log directly to stdout in non-tty (e.g. CI) environments
+		// Log directly to stdout after the program shuts down
 		fmt.Println(outStr)
 	}
 
