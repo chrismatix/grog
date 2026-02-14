@@ -12,6 +12,7 @@ import (
 // FileSystemCache implements the CacheBackend interface using the file system for storage
 type FileSystemCache struct {
 	workspaceCacheDir string
+	sharedCasDir      string
 }
 
 func (fsc *FileSystemCache) TypeName() string {
@@ -21,22 +22,34 @@ func (fsc *FileSystemCache) TypeName() string {
 // NewFileSystemCache creates a new cache using the configured cache directory
 func NewFileSystemCache(ctx context.Context) (*FileSystemCache, error) {
 	workspaceCacheDir := config.Global.GetWorkspaceCacheDirectory()
+	sharedCasDir := config.Global.GetCasDirectory()
 
 	// Ensure the root directory exists
 	if err := os.MkdirAll(workspaceCacheDir, 0755); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(sharedCasDir, 0755); err != nil {
 		return nil, err
 	}
 
 	console.GetLogger(ctx).Tracef("Instantiated fs cache at: %s", workspaceCacheDir)
 	return &FileSystemCache{
 		workspaceCacheDir: workspaceCacheDir,
+		sharedCasDir:      sharedCasDir,
 	}, nil
 }
 
 // buildFilePath constructs the full file path for a cached item
 func (fsc *FileSystemCache) buildFilePath(path, key string) string {
-	dir := filepath.Join(fsc.workspaceCacheDir, path)
+	dir := filepath.Join(fsc.getBaseDir(path), path)
 	return filepath.Join(dir, key)
+}
+
+func (fsc *FileSystemCache) getBaseDir(path string) string {
+	if path == "cas" {
+		return fsc.sharedCasDir
+	}
+	return fsc.workspaceCacheDir
 }
 
 // Get retrieves a cached file by its key
@@ -61,7 +74,7 @@ func (fsc *FileSystemCache) Set(ctx context.Context, path, key string, content i
 	logger.Tracef("Setting file in cache for path: %s, key: %s", path, key)
 
 	// Make sure the directory exists
-	dir := filepath.Join(fsc.workspaceCacheDir, path)
+	dir := filepath.Join(fsc.getBaseDir(path), path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
