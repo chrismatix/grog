@@ -14,6 +14,7 @@ func TestParsePartialTargetPattern(t *testing.T) {
 	}{
 		{":baz", "foo/bar", "baz", false, false},
 		{"//foo:b", "foo", "b", false, false},
+		{"//foo:...", "foo", "...", false, false},
 		{"//foo/...", "foo", "", true, false},
 		{"//foo/...:b", "foo", "b", true, false},
 		{"qux", "foo/bar", "qux", false, false},

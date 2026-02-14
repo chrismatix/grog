@@ -99,6 +99,13 @@ func TargetPatternCompletion(command *cobra.Command, _ []string, toComplete stri
 		targets = append(targets, collectTargets(packages, searchDirectory, targetPrefix, selector, isRelativeTarget)...)
 	}
 
+	wildcardPackagePath := searchDirectory
+	packagesForWildcardChecks := packages
+	if isPrefixPartial {
+		wildcardPackagePath = originalPrefix
+		packagesForWildcardChecks = packagesForOriginalPrefix
+	}
+
 	// Directory suggestions are computed from two sources:
 	// 1) Siblings under the search directory (root or parent).
 	// 2) Child directories under the original prefix if it resolves to a package.
@@ -112,12 +119,30 @@ func TargetPatternCompletion(command *cobra.Command, _ []string, toComplete stri
 	}
 
 	var completions []string
+	wildcardDirectorySuggestions := make(map[string]bool)
 	for fullPath, hasChildren := range directorySuggestions {
 		completion := "//" + fullPath
 		if isPrefixPartial && hasChildren {
 			completion += "/"
 		}
 		completions = append(completions, completion)
+		if hasChildren {
+			wildcardDirectorySuggestions["//"+fullPath+"/..."] = true
+		}
+	}
+
+	if !isRelativeTarget && (!isPrefixPartial || originalPrefixExists) {
+		if packageHasChildDirectories(packagesForWildcardChecks, wildcardPackagePath) {
+			if wildcardPackagePath == "" {
+				wildcardDirectorySuggestions["//..."] = true
+			} else {
+				wildcardDirectorySuggestions["//"+wildcardPackagePath+"/..."] = true
+			}
+		}
+	}
+
+	for wildcardCompletion := range wildcardDirectorySuggestions {
+		completions = append(completions, wildcardCompletion)
 	}
 
 	// If only targets remain (no directories), add a trailing ":" to make it clear that
@@ -137,6 +162,21 @@ func TargetPatternCompletion(command *cobra.Command, _ []string, toComplete stri
 			colonPrefix = "//:"
 		}
 		completions = append(completions, colonPrefix)
+	}
+
+	if !isPrefixPartial || originalPrefixExists {
+		if packageHasMatchingTargets(packagesForWildcardChecks, wildcardPackagePath, selector) {
+			if isRelativeTarget {
+				completions = append(completions, ":...")
+			} else {
+				targetPackagePrefix := wildcardPackagePath
+				if targetPackagePrefix == "" {
+					completions = append(completions, "//:...")
+				} else {
+					completions = append(completions, "//"+targetPackagePrefix+":...")
+				}
+			}
+		}
 	}
 
 	// If there is only a single target and no directory completions just offer that
@@ -192,6 +232,42 @@ func collectTargets(packages []*model.Package, packagePath string, targetPrefix 
 		}
 	}
 	return targets
+}
+
+func packageHasMatchingTargets(packages []*model.Package, packagePath string, selector *selection.Selector) bool {
+	for _, packageEntry := range packages {
+		normalizedPath := normalizePackagePath(packageEntry.Path)
+		if normalizedPath != packagePath {
+			continue
+		}
+		for _, target := range packageEntry.Targets {
+			if selector.Match(target) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func packageHasChildDirectories(packages []*model.Package, packagePath string) bool {
+	normalizedPrefix := normalizePackagePath(packagePath)
+	prefixWithSeparator := normalizedPrefix
+	if prefixWithSeparator != "" {
+		prefixWithSeparator += "/"
+	}
+	for _, packageEntry := range packages {
+		normalizedPath := normalizePackagePath(packageEntry.Path)
+		if normalizedPrefix == "" {
+			if normalizedPath != "" {
+				return true
+			}
+			continue
+		}
+		if strings.HasPrefix(normalizedPath, prefixWithSeparator) {
+			return true
+		}
+	}
+	return false
 }
 
 // collectSiblingDirectories returns directories that are siblings of the search directory.
