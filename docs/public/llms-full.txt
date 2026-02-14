@@ -1,0 +1,59 @@
+# Grog Docs: Expanded LLM Context
+
+## Project
+Grog is a language-agnostic build orchestrator for monorepos.
+It executes target graphs in parallel, hashes inputs for incremental builds, and reuses cached outputs locally or remotely.
+
+- Website: https://grog.build/
+- Repository: https://github.com/chrismatix/grog
+- Canonical short index: https://grog.build/llms.txt
+- Sitemap index: https://grog.build/sitemap-index.xml
+
+## Typical Workflow
+1. Install the `grog` binary.
+2. Initialize repository config.
+3. Define build targets in BUILD files.
+4. Run `grog build` on labels or packages.
+5. Re-run to benefit from caching and incremental execution.
+
+## Common Commands
+- `grog build //...` - build all targets in the repo.
+- `grog build //package:target_name` - build one target.
+- `grog test //...` - run targets intended for test workflows.
+- `grog check //...` - validate graph and config without executing builds.
+- Query workflows: see querying docs for labels, tag filtering, and reverse dependencies.
+
+## High-Value Docs
+### Getting Started
+- https://grog.build/get-started/ - install, init, first targets, and command basics.
+- https://grog.build/why-grog/ - when to use Grog and its operating model.
+
+### Build and Target Model
+- https://grog.build/build-configuration/ - target definitions, dependencies, labels, and Makefile integration.
+- https://grog.build/reference/target-configuration/ - full target field reference.
+- https://grog.build/reference/target-aliases/ - reusable alias patterns.
+
+### Performance and Execution
+- https://grog.build/topics/remote-caching/ - shared cache setup and behavior.
+- https://grog.build/topics/multi-platform-builds/ - platform-aware build execution.
+- https://grog.build/topics/sandboxing/ - isolation and reproducibility considerations.
+
+### Outputs and Tooling
+- https://grog.build/topics/binary-outputs/
+- https://grog.build/topics/docker-outputs/
+- https://grog.build/topics/grog-scripts/
+- https://grog.build/topics/script-functions/
+- https://grog.build/topics/shell-completions/
+- https://grog.build/topics/visualization/
+
+### Querying and CI
+- https://grog.build/topics/querying/ - label syntax, selection patterns, tag filters, and CI usage patterns.
+- https://grog.build/recipes/github-actions/ - CI integration examples.
+
+### Full Reference
+- https://grog.build/reference/configuration/
+- https://grog.build/reference/labels/
+- https://grog.build/reference/troubleshooting/
+- https://grog.build/reference/cli/grog/ - root CLI reference and links to all subcommands.
+
+For complete and up-to-date discovery of every docs URL, use the sitemap index.
