@@ -25,8 +25,10 @@ func ParseTargetPattern(currentPackage string, pattern string) (TargetPattern, e
 		}
 
 		targetName := pattern[colonIdx+1:]
-		if err := validateName(targetName); err != nil {
-			return TargetPattern{}, err
+		if targetName != "..." {
+			if err := validateName(targetName); err != nil {
+				return TargetPattern{}, err
+			}
 		}
 
 		return TargetPattern{prefix: currentPackage, targetPattern: targetName}, nil
