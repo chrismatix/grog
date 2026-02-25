@@ -19,24 +19,6 @@ func BuildGraph(nodes model.BuildNodeMap) (*dag.DirectedTargetGraph, error) {
 				return &dag.DirectedTargetGraph{}, fmt.Errorf("dependency %s of node %s not found", depLabel, node.GetLabel())
 			}
 
-			// Only test targets can depend on other test targets
-			if model.IsTestTargetNode(dep) && !model.IsTestTargetNode(node) {
-				return &dag.DirectedTargetGraph{}, fmt.Errorf("test target %s cannot depend on non-test target %s", depLabel, node.GetLabel())
-			}
-
-			targetNode, isTargetNode := node.(*model.Target)
-			dependencyTarget, isDependencyTarget := dep.(*model.Target)
-			// Non-test, non-testonly targets must not depend on testonly targets.
-			if isTargetNode && isDependencyTarget &&
-				!targetNode.IsTestOnly() && !targetNode.IsTest() &&
-				dependencyTarget.IsTestOnly() {
-				return &dag.DirectedTargetGraph{}, fmt.Errorf("%s depends on %s which is tagged %q",
-					targetNode.Label,
-					dependencyTarget.Label,
-					model.TagTestOnly,
-				)
-			}
-
 			err := graph.AddEdge(dep, node)
 			if err != nil {
 				return &dag.DirectedTargetGraph{}, err
