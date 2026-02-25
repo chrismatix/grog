@@ -9,6 +9,7 @@ import (
 	"github.com/fatih/color"
 	"grog/internal/config"
 	"grog/internal/console"
+	"grog/internal/label"
 	"grog/internal/model"
 )
 
@@ -47,7 +48,75 @@ func CheckTargetConstraints(logger *console.Logger, nodeMap model.BuildNodeMap) 
 		}
 	}
 
+	dependencyConstraintErrors := checkDependencyConstraints(nodeMap)
+	errs = append(errs, dependencyConstraintErrors...)
+
 	return
+}
+
+func checkDependencyConstraints(nodeMap model.BuildNodeMap) (errs []error) {
+	for _, node := range nodeMap.NodesAlphabetically() {
+		target, isTarget := node.(*model.Target)
+		if !isTarget {
+			continue
+		}
+
+		for _, dependencyLabel := range target.Dependencies {
+			dependencyTarget := resolveDependencyTarget(nodeMap, dependencyLabel)
+			if dependencyTarget == nil {
+				continue
+			}
+
+			if dependencyTarget.IsTest() && !target.IsTest() {
+				errs = append(errs, fmt.Errorf("%s depends on %s which is a test target",
+					target.Label,
+					dependencyTarget.Label,
+				))
+				continue
+			}
+
+			if dependencyTarget.IsTestOnly() && !target.IsTestOnly() && !target.IsTest() {
+				errs = append(errs, fmt.Errorf("%s depends on %s which is tagged %q",
+					target.Label,
+					dependencyTarget.Label,
+					model.TagTestOnly,
+				))
+			}
+		}
+	}
+
+	return
+}
+
+func resolveDependencyTarget(
+	nodeMap model.BuildNodeMap,
+	dependencyLabel label.TargetLabel,
+) *model.Target {
+	currentDependencyLabel := dependencyLabel
+	visitedDependencyLabels := make(map[label.TargetLabel]struct{})
+	for {
+		if _, alreadyVisited := visitedDependencyLabels[currentDependencyLabel]; alreadyVisited {
+			return nil
+		}
+		visitedDependencyLabels[currentDependencyLabel] = struct{}{}
+
+		dependencyNode, hasDependencyNode := nodeMap[currentDependencyLabel]
+		if !hasDependencyNode {
+			return nil
+		}
+
+		dependencyTarget, isTarget := dependencyNode.(*model.Target)
+		if isTarget {
+			return dependencyTarget
+		}
+
+		dependencyAlias, isAlias := dependencyNode.(*model.Alias)
+		if !isAlias {
+			return nil
+		}
+
+		currentDependencyLabel = dependencyAlias.Actual
+	}
 }
 
 // checkInputPathsRelative checks that all inputs are relative to the package path
