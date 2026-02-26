@@ -220,7 +220,9 @@ func (e *Executor) getTaskFunc(
 			// logger.Warnf("failed to check target %s cache: %v", target.Label, err)
 		}
 		target.HasCacheHit = targetResult != nil
-		logger.Debugf("%s: loaded target result %s", target.Label, formatTargetResultForDebug(targetResult))
+		if logger.DebugEnabled() {
+			logger.Debugf("%s: loaded target result %s", target.Label, formatTargetResultForDebug(targetResult))
+		}
 
 		outputCheckErr := runOutputChecks(ctx, target, binToolPaths, outputIdentifiers)
 		if outputCheckErr != nil {
