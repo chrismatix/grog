@@ -13,6 +13,7 @@ import (
 	"grog/internal/proto/gen"
 	"grog/internal/worker"
 	"runtime"
+	"slices"
 	"sync"
 
 	"github.com/alitto/pond/v2"
@@ -211,6 +212,10 @@ func (r *Registry) LoadOutputs(
 		return nil
 	}
 
+	if err := validateTargetResultOutputs(target, targetResult); err != nil {
+		return err
+	}
+
 	logger := console.GetLogger(ctx)
 	logger.Debugf("%s: loading outputs", target.Label)
 
@@ -238,4 +243,74 @@ func (r *Registry) LoadOutputs(
 	target.OutputsLoaded = true
 	target.OutputHash = targetResult.OutputHash
 	return nil
+}
+
+func validateTargetResultOutputs(target *model.Target, targetResult *gen.TargetResult) error {
+	if targetResult == nil {
+		return fmt.Errorf("%s: cached target result is nil", target.Label)
+	}
+
+	expectedOutputDefinitions := target.OutputDefinitions()
+	loadedOutputDefinitions, err := getOutputDefinitionsFromProto(targetResult.Outputs)
+	if err != nil {
+		return fmt.Errorf("%s: invalid output entry in cached target result: %w", target.Label, err)
+	}
+
+	if len(expectedOutputDefinitions) != len(loadedOutputDefinitions) {
+		return fmt.Errorf(
+			"%s: cached outputs mismatch: expected %d outputs %v, got %d outputs %v",
+			target.Label,
+			len(expectedOutputDefinitions),
+			expectedOutputDefinitions,
+			len(loadedOutputDefinitions),
+			loadedOutputDefinitions,
+		)
+	}
+
+	sortedExpectedOutputDefinitions := slices.Clone(expectedOutputDefinitions)
+	sortedLoadedOutputDefinitions := slices.Clone(loadedOutputDefinitions)
+	slices.Sort(sortedExpectedOutputDefinitions)
+	slices.Sort(sortedLoadedOutputDefinitions)
+
+	for index := range sortedExpectedOutputDefinitions {
+		if sortedExpectedOutputDefinitions[index] != sortedLoadedOutputDefinitions[index] {
+			return fmt.Errorf(
+				"%s: cached outputs mismatch: expected outputs %v, got outputs %v",
+				target.Label,
+				expectedOutputDefinitions,
+				loadedOutputDefinitions,
+			)
+		}
+	}
+
+	return nil
+}
+
+func getOutputDefinitionsFromProto(outputs []*gen.Output) ([]string, error) {
+	outputDefinitions := make([]string, 0, len(outputs))
+	for outputIndex, output := range outputs {
+		outputDefinition, err := getOutputDefinitionFromProto(output)
+		if err != nil {
+			return nil, fmt.Errorf("entry %d: %w", outputIndex, err)
+		}
+		outputDefinitions = append(outputDefinitions, outputDefinition)
+	}
+	return outputDefinitions, nil
+}
+
+func getOutputDefinitionFromProto(output *gen.Output) (string, error) {
+	if output == nil {
+		return "", fmt.Errorf("output is nil")
+	}
+
+	switch outputKind := output.Kind.(type) {
+	case *gen.Output_File:
+		return model.NewOutput(string(handlers.FileHandler), outputKind.File.GetPath()).String(), nil
+	case *gen.Output_Directory:
+		return model.NewOutput(string(handlers.DirHandler), outputKind.Directory.GetPath()).String(), nil
+	case *gen.Output_DockerImage:
+		return model.NewOutput(string(handlers.DockerHandler), outputKind.DockerImage.GetLocalTag()).String(), nil
+	default:
+		return "", fmt.Errorf("unknown output kind: %T", output.Kind)
+	}
 }

@@ -21,6 +21,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fatih/color"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type CommandError struct {
@@ -219,7 +220,9 @@ func (e *Executor) getTaskFunc(
 			// logger.Warnf("failed to check target %s cache: %v", target.Label, err)
 		}
 		target.HasCacheHit = targetResult != nil
-		logger.Debugf("%s: loaded target result %v", target.Label, targetResult)
+		if logger.DebugEnabled() {
+			logger.Debugf("%s: loaded target result %s", target.Label, formatTargetResultForDebug(targetResult))
+		}
 
 		outputCheckErr := runOutputChecks(ctx, target, binToolPaths, outputIdentifiers)
 		if outputCheckErr != nil {
@@ -293,6 +296,22 @@ func (e *Executor) getTaskFunc(
 
 		return e.executeTarget(ctx, target, binToolPaths, outputIdentifiers, update, isTainted)
 	}
+}
+
+func formatTargetResultForDebug(targetResult *gen.TargetResult) string {
+	if targetResult == nil {
+		return "<nil>"
+	}
+
+	marshalledResult, err := protojson.MarshalOptions{
+		EmitUnpopulated: true,
+		UseProtoNames:   true,
+	}.Marshal(targetResult)
+	if err != nil {
+		return fmt.Sprintf("%v", targetResult)
+	}
+
+	return string(marshalledResult)
 }
 
 func (e *Executor) executeTarget(
