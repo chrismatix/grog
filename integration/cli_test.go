@@ -99,6 +99,11 @@ func TestCliScenarios(t *testing.T) {
 		t.Fatalf("no test tables found")
 	}
 
+	repoCounts := make(map[string]int)
+	for _, tt := range testTables {
+		repoCounts[tt.Repo]++
+	}
+
 	for _, tt := range testTables {
 		if tt.RequiresCredentials {
 			if os.Getenv("REQUIRES_CREDENTIALS") == "" {
@@ -106,7 +111,12 @@ func TestCliScenarios(t *testing.T) {
 			}
 		}
 
+		tt := tt
+
 		t.Run(tt.Name, func(t *testing.T) {
+			if repoCounts[tt.Repo] == 1 {
+				t.Parallel()
+			}
 
 			// Clear repository cache
 			if !tt.SkipClean {
