@@ -7,6 +7,7 @@ import (
 	"grog/internal/console"
 	"grog/internal/label"
 	"grog/internal/model"
+	"runtime"
 	"sync"
 
 	"github.com/boyter/gocodewalker"
@@ -31,48 +32,92 @@ func LoadPackages(ctx context.Context, startDir string) ([]*model.Package, error
 	// e.g. when a user defines both BUILD.json and BUILD.py in the same directory
 	// packagePath -> sourceFilePath
 	loadedPackages := make(map[string]*model.Package)
-	loadedMu := &sync.Mutex{}
+	var loadedMutex sync.Mutex
 
-	for f := range fileListQueue {
-		// TODO this should be processed in a worker as well
+	loadContext, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-		pkgDto, matched, err := packageLoader.LoadIfMatched(ctx, f.Location, f.Filename)
-		if err != nil {
-			return nil, err
+	workerCount := config.Global.NumWorkers
+	if workerCount < 1 {
+		workerCount = runtime.NumCPU()
+	}
+
+	var errorOnce sync.Once
+	var loadError error
+	setError := func(err error) {
+		if err == nil {
+			return
 		}
-
-		if !matched {
-			continue
-		}
-
-		packagePath, err := config.GetPackagePath(f.Location)
-		if err != nil {
-			return nil, err
-		}
-
-		pkg, err := getEnrichedPackage(logger, packagePath, pkgDto)
-		if err != nil {
+		errorOnce.Do(func() {
+			loadError = err
 			fmt.Println(err)
-			return nil, err
-		}
+			cancel()
+		})
+	}
 
-		// Merge into existing package if it exists or set
-		loadedMu.Lock()
-		if existingPackage, ok := loadedPackages[packagePath]; ok {
-			// This mutates the existingPackage
-			mergingErr := mergePackages(pkg, existingPackage)
-			if mergingErr != nil {
-				return nil, mergingErr
+	var waitGroup sync.WaitGroup
+	waitGroup.Add(workerCount)
+
+	for workerIndex := 0; workerIndex < workerCount; workerIndex++ {
+		go func() {
+			defer waitGroup.Done()
+			for fileEntry := range fileListQueue {
+				if loadContext.Err() != nil {
+					continue
+				}
+
+				packageDTO, matched, err := packageLoader.LoadIfMatched(loadContext, fileEntry.Location, fileEntry.Filename)
+				if err != nil {
+					setError(err)
+					continue
+				}
+
+				if !matched {
+					continue
+				}
+
+				packagePath, err := config.GetPackagePath(fileEntry.Location)
+				if err != nil {
+					setError(err)
+					continue
+				}
+
+				packageModel, err := getEnrichedPackage(logger, packagePath, packageDTO)
+				if err != nil {
+					setError(err)
+					continue
+				}
+
+				// Merge into existing package if it exists or set
+				loadedMutex.Lock()
+				existingPackage, ok := loadedPackages[packagePath]
+				if ok {
+					// This mutates the existingPackage
+					mergeError := mergePackages(packageModel, existingPackage)
+					loadedMutex.Unlock()
+					if mergeError != nil {
+						setError(mergeError)
+					}
+					continue
+				}
+
+				loadedPackages[packagePath] = packageModel
+				loadedMutex.Unlock()
 			}
-		} else {
-			loadedPackages[packagePath] = pkg
-		}
-		loadedMu.Unlock()
+		}()
+	}
+
+	waitGroup.Wait()
+	if loadError != nil {
+		return nil, loadError
+	}
+	if contextErr := loadContext.Err(); contextErr != nil {
+		return nil, contextErr
 	}
 
 	packages := make([]*model.Package, 0, len(loadedPackages))
-	for _, pkg := range loadedPackages {
-		packages = append(packages, pkg)
+	for _, loadedPackage := range loadedPackages {
+		packages = append(packages, loadedPackage)
 	}
 
 	return packages, nil

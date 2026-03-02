@@ -70,6 +70,8 @@ type WorkspaceConfig struct {
 
 	// Require that the running grog version matches this semver range
 	RequiredGrogVersion string `mapstructure:"requires_grog"`
+
+	DebugCompletion bool `mapstructure:"debug_completion"`
 }
 
 var Global WorkspaceConfig

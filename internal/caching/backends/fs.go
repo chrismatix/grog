@@ -73,14 +73,16 @@ func (fsc *FileSystemCache) Set(ctx context.Context, path, key string, content i
 	logger := console.GetLogger(ctx)
 	logger.Tracef("Setting file in cache for path: %s, key: %s", path, key)
 
-	// Make sure the directory exists
-	dir := fsc.getDir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	filePath := fsc.buildFilePath(path, key)
+	destinationDirectory := filepath.Dir(filePath)
+
+	// Make sure the destination directory exists. Keys can include path separators.
+	if err := os.MkdirAll(destinationDirectory, 0755); err != nil {
 		return err
 	}
 
 	// Write to a temp file first to ensure atomicity
-	tmpFile, err := os.CreateTemp(dir, "tmp-*")
+	tmpFile, err := os.CreateTemp(destinationDirectory, "tmp-*")
 	if err != nil {
 		return err
 	}
@@ -97,7 +99,6 @@ func (fsc *FileSystemCache) Set(ctx context.Context, path, key string, content i
 		return err
 	}
 
-	filePath := fsc.buildFilePath(path, key)
 	return os.Rename(tmpFile.Name(), filePath)
 }
 

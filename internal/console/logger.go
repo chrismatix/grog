@@ -44,6 +44,14 @@ func (l *Logger) Tracef(template string, args ...interface{}) {
 	}
 }
 
+// DebugEnabled reports whether debug level logs are currently enabled.
+func (l *Logger) DebugEnabled() bool {
+	if l == nil {
+		return false
+	}
+	return l.Desugar().Core().Enabled(zap.DebugLevel)
+}
+
 func (l *Logger) With(args ...interface{}) *Logger {
 	return &Logger{
 		SugaredLogger: l.SugaredLogger.With(args...),

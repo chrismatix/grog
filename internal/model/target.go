@@ -11,6 +11,12 @@ import (
 
 var _ BuildNode = &Target{}
 
+const (
+	TagNoCache            = "no-cache"
+	TagMultiplatformCache = "multiplatform-cache"
+	TagTestOnly           = "testonly"
+)
+
 // Target defines a build step that depends on Dependencies (other targets)
 // and Inputs (files) and produces Outputs.
 type Target struct {
@@ -67,22 +73,25 @@ func (t *Target) HasBinOutput() bool {
 	return t.BinOutput.IsSet()
 }
 
-func (t *Target) SkipsCache() bool {
+func (t *Target) HasTag(tagName string) bool {
 	for _, tag := range t.Tags {
-		if tag == "no-cache" {
+		if tag == tagName {
 			return true
 		}
 	}
 	return false
 }
 
+func (t *Target) SkipsCache() bool {
+	return t.HasTag(TagNoCache)
+}
+
 func (t *Target) IsMultiplatformCache() bool {
-	for _, tag := range t.Tags {
-		if tag == "multiplatform-cache" {
-			return true
-		}
-	}
-	return false
+	return t.HasTag(TagMultiplatformCache)
+}
+
+func (t *Target) IsTestOnly() bool {
+	return t.HasTag(TagTestOnly)
 }
 
 func (t *Target) CommandEllipsis() string {

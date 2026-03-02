@@ -76,6 +76,18 @@ func TestTargetPatternMatching(t *testing.T) {
 		t.Error("Pattern //foo:bar should match //foo:bar exactly")
 	}
 
+	// Pattern that selects all targets in a single package: "//foo:..."
+	patternAllTargets, err := ParseTargetPattern("", "//foo:...")
+	if err != nil {
+		t.Fatalf("Failed to parse pattern: %v", err)
+	}
+	if !patternAllTargets.Matches(tl("//foo:bar")) {
+		t.Error("Pattern //foo:... should match //foo:bar")
+	}
+	if patternAllTargets.Matches(tl("//foo/sub:bar")) {
+		t.Error("Pattern //foo:... should not match targets in subpackages")
+	}
+
 	// Pattern with short-hand notation: "//foo"
 	patternShortHandExact, err := ParseTargetPattern("", "//foo")
 	if err != nil {
@@ -107,5 +119,14 @@ func TestCurrentPackageTargetPattern(t *testing.T) {
 	}
 	if patternColon.Matches(TargetLabel{Package: currentPkg, Name: "foo"}) {
 		t.Error("Relative pattern ':bar' should not match target 'foo' in current package")
+	}
+
+	// Relative pattern ":..." should match any target in the current package.
+	patternAllTargets, err := ParseTargetPattern(currentPkg, ":...")
+	if err != nil {
+		t.Fatalf("Failed to parse relative wildcard pattern: %v", err)
+	}
+	if !patternAllTargets.Matches(TargetLabel{Package: currentPkg, Name: "bar"}) {
+		t.Error("Relative pattern ':...' should match any target in the current package")
 	}
 }

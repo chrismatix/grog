@@ -68,6 +68,9 @@ func validateName(name string) error {
 	if name == "" {
 		return fmt.Errorf("target name is empty")
 	}
+	if name == "..." {
+		return fmt.Errorf("target name %q is reserved for wildcard target patterns", name)
+	}
 	for _, c := range name {
 		switch {
 		case c >= 'a' && c <= 'z':

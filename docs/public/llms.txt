@@ -1,0 +1,31 @@
+# Grog Docs
+
+Grog is a lightweight monorepo build orchestrator focused on fast incremental runs, parallel execution, and cache reuse.
+
+- Canonical docs: https://grog.build/
+- Project repository: https://github.com/chrismatix/grog
+- Sitemap: https://grog.build/sitemap-index.xml
+- Expanded AI index: https://grog.build/llms-full.txt
+
+## Start Here
+- https://grog.build/get-started/ - installation, initialization, and first BUILD targets.
+- https://grog.build/why-grog/ - goals and tradeoffs.
+- https://grog.build/build-configuration/ - BUILD files, dependencies, inputs/outputs, and scripting.
+
+## Core Topics
+- https://grog.build/topics/remote-caching/
+- https://grog.build/topics/multi-platform-builds/
+- https://grog.build/topics/binary-outputs/
+- https://grog.build/topics/docker-outputs/
+- https://grog.build/topics/querying/
+- https://grog.build/topics/shell-completions/
+- https://grog.build/topics/sandboxing/
+- https://grog.build/topics/visualization/
+
+## Reference
+- https://grog.build/reference/configuration/
+- https://grog.build/reference/target-configuration/
+- https://grog.build/reference/target-aliases/
+- https://grog.build/reference/cli/grog/
+
+Use the sitemap for complete page discovery, including all CLI subcommand references.

@@ -206,7 +206,7 @@ target_empty:
 			for index, expected := range tc.expectedTargets {
 				target := pkg.Targets[index]
 				if target.Command != expected.Command {
-					t.Errorf("for target %q, expected command %q, got %q", index, expected.Command, target.Command)
+					t.Errorf("for target %d, expected command %q, got %q", index, expected.Command, target.Command)
 				}
 				compareStringSlices(t, expected.Dependencies, target.Dependencies, index, "Dependencies")
 				compareStringSlices(t, expected.Inputs, target.Inputs, index, "Inputs")
@@ -219,12 +219,12 @@ target_empty:
 // compareStringSlices compares two slices of strings.
 func compareStringSlices(t *testing.T, expected, got []string, targetIndex int, field string) {
 	if len(expected) != len(got) {
-		t.Errorf("target %q: expected %s length %d; got %d", targetIndex, field, len(expected), len(got))
+		t.Errorf("target %d: expected %s length %d; got %d", targetIndex, field, len(expected), len(got))
 		return
 	}
 	for i, exp := range expected {
 		if exp != got[i] {
-			t.Errorf("target %q: expected %s[%d] %q; got %q", targetIndex, field, i, exp, got[i])
+			t.Errorf("target %d: expected %s[%d] %q; got %q", targetIndex, field, i, exp, got[i])
 		}
 	}
 }

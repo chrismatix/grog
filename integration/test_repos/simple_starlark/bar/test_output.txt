@@ -1,0 +1,4 @@
+bar content
+foo content 1
+foo content 2
+some text
