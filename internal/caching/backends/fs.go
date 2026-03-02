@@ -41,15 +41,15 @@ func NewFileSystemCache(ctx context.Context) (*FileSystemCache, error) {
 
 // buildFilePath constructs the full file path for a cached item
 func (fsc *FileSystemCache) buildFilePath(path, key string) string {
-	dir := filepath.Join(fsc.getBaseDir(path), path)
+	dir := fsc.getDir(path)
 	return filepath.Join(dir, key)
 }
 
-func (fsc *FileSystemCache) getBaseDir(path string) string {
+func (fsc *FileSystemCache) getDir(path string) string {
 	if path == "cas" {
 		return fsc.sharedCasDir
 	}
-	return fsc.workspaceCacheDir
+	return filepath.Join(fsc.workspaceCacheDir, path)
 }
 
 // Get retrieves a cached file by its key
@@ -74,7 +74,7 @@ func (fsc *FileSystemCache) Set(ctx context.Context, path, key string, content i
 	logger.Tracef("Setting file in cache for path: %s, key: %s", path, key)
 
 	// Make sure the directory exists
-	dir := filepath.Join(fsc.getBaseDir(path), path)
+	dir := fsc.getDir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
