@@ -277,6 +277,100 @@ func (e *errorReader) Read(p []byte) (n int, err error) {
 	return 0, errors.New("broken reader")
 }
 
+// mockBackgroundWriter implements BackgroundWriter for testing async mode.
+type mockBackgroundWriter struct {
+	fns []func() error
+}
+
+func (m *mockBackgroundWriter) Go(_ context.Context, _ string, fn func() error) {
+	m.fns = append(m.fns, fn)
+}
+
+func (m *mockBackgroundWriter) RunAll() []error {
+	var errs []error
+	for _, fn := range m.fns {
+		if err := fn(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errs
+}
+
+func TestRemoteWrapper_SetAsync(t *testing.T) {
+	ctx := context.Background()
+	path := "test/path"
+	key := "test_key"
+	content := "async test content"
+
+	t.Run("local write succeeds, remote queued", func(t *testing.T) {
+		fs := &FileSystemCache{
+			workspaceCacheDir: t.TempDir(),
+		}
+		var remoteContent bytes.Buffer
+		remote := &mockCacheBackend{
+			setFunc: func(ctx context.Context, path, key string, content io.Reader) error {
+				_, err := io.Copy(&remoteContent, content)
+				return err
+			},
+		}
+
+		bg := &mockBackgroundWriter{}
+		rw := NewRemoteWrapper(fs, remote)
+		rw.SetAsyncMode(bg)
+
+		// Set should complete immediately (only local write)
+		err := rw.Set(ctx, path, key, strings.NewReader(content))
+		if err != nil {
+			t.Fatalf("Set failed: %v", err)
+		}
+
+		// Remote should NOT have been written yet
+		if remoteContent.Len() > 0 {
+			t.Error("remote should not have been written yet")
+		}
+
+		// Verify local content
+		localReader, err := fs.Get(ctx, path, key)
+		if err != nil {
+			t.Fatalf("failed to get local file: %v", err)
+		}
+		defer localReader.Close()
+		localContent, _ := io.ReadAll(localReader)
+		if string(localContent) != content {
+			t.Errorf("expected local content %q, got %q", content, string(localContent))
+		}
+
+		// Now run the background tasks
+		errs := bg.RunAll()
+		if len(errs) != 0 {
+			t.Errorf("background writes failed: %v", errs)
+		}
+
+		// Verify remote content
+		if remoteContent.String() != content {
+			t.Errorf("expected remote content %q, got %q", content, remoteContent.String())
+		}
+	})
+
+	t.Run("local write fails, remote not queued", func(t *testing.T) {
+		fs := &FileSystemCache{
+			workspaceCacheDir: "/invalid/path",
+		}
+		remote := &mockCacheBackend{}
+		bg := &mockBackgroundWriter{}
+		rw := NewRemoteWrapper(fs, remote)
+		rw.SetAsyncMode(bg)
+
+		err := rw.Set(ctx, path, key, strings.NewReader(content))
+		if err == nil {
+			t.Fatal("expected Set to fail")
+		}
+		if len(bg.fns) != 0 {
+			t.Error("no background tasks should be queued when local write fails")
+		}
+	})
+}
+
 func TestRemoteWrapper_Delete(t *testing.T) {
 	ctx := context.Background()
 	path := "test/path"

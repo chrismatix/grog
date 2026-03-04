@@ -10,6 +10,12 @@ import (
 	"grog/internal/console"
 )
 
+// BackgroundWriter is the interface used by RemoteWrapper to defer
+// remote cache uploads to background goroutines.
+type BackgroundWriter interface {
+	Go(ctx context.Context, name string, fn func() error)
+}
+
 // RemoteWrapper is the default implementation when using a remote cache
 // It implements the logic of using the local file system first and
 // falling back to the remote cache if the file is not found locally
@@ -17,6 +23,7 @@ import (
 type RemoteWrapper struct {
 	fs     *FileSystemCache
 	remote CacheBackend
+	bgWriter BackgroundWriter
 }
 
 func NewRemoteWrapper(
@@ -31,6 +38,13 @@ func NewRemoteWrapper(
 
 func (rw *RemoteWrapper) GetFS() *FileSystemCache {
 	return rw.fs
+}
+
+// SetAsyncMode enables async cache writes. When set, Set() will write
+// to the local FS synchronously and defer the remote upload to the
+// BackgroundWriter.
+func (rw *RemoteWrapper) SetAsyncMode(bg BackgroundWriter) {
+	rw.bgWriter = bg
 }
 
 func (rw *RemoteWrapper) TypeName() string {
@@ -66,8 +80,48 @@ func (rw *RemoteWrapper) Get(ctx context.Context, path, key string) (io.ReadClos
 	return rw.fs.Get(ctx, path, key)
 }
 
-// Set stores a file in both the local file system cache and the remote cache concurrently.
+// Set stores a file in both the local file system cache and the remote cache.
+// When async mode is enabled (via SetAsyncMode), the local write happens
+// synchronously and the remote upload is deferred to the BackgroundWriter.
+// Otherwise both writes happen concurrently and Set blocks until both complete.
 func (rw *RemoteWrapper) Set(ctx context.Context, path, key string, content io.Reader) error {
+	if rw.bgWriter != nil {
+		return rw.setAsync(ctx, path, key, content)
+	}
+	return rw.setSync(ctx, path, key, content)
+}
+
+// setAsync writes to local FS first, then queues the remote upload.
+func (rw *RemoteWrapper) setAsync(ctx context.Context, path, key string, content io.Reader) error {
+	logger := console.GetLogger(ctx)
+	logger.Tracef("Remote wrapper async writing path: %s, key: %s", path, key)
+
+	// Write to local FS synchronously — this is fast and needed by dependents
+	if err := rw.fs.Set(ctx, path, key, content); err != nil {
+		return fmt.Errorf("filesystem cache error: %w", err)
+	}
+
+	// Queue the remote upload to run in the background
+	rw.bgWriter.Go(ctx, fmt.Sprintf("remote-upload %s/%s", path, key), func() error {
+		// Read back from local FS for the remote upload
+		reader, err := rw.fs.Get(ctx, path, key)
+		if err != nil {
+			return fmt.Errorf("failed to read local cache for remote upload: %w", err)
+		}
+		defer reader.Close()
+
+		if err := rw.remote.Set(ctx, path, key, reader); err != nil {
+			return fmt.Errorf("remote cache error: %w", err)
+		}
+		logger.Tracef("Remote wrapper async upload complete: %s/%s", path, key)
+		return nil
+	})
+
+	return nil
+}
+
+// setSync is the original behavior: write to local FS and remote concurrently.
+func (rw *RemoteWrapper) setSync(ctx context.Context, path, key string, content io.Reader) error {
 	console.GetLogger(ctx).Tracef("Remote wrapper writing path: %s, key: %s", path, key)
 	// Create pipes for the two cache destinations
 	fsRead, fsWrite := io.Pipe()

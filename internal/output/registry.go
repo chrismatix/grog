@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"grog/internal/caching"
+	"grog/internal/caching/backends"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/hashing"
@@ -15,6 +16,7 @@ import (
 	"runtime"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/alitto/pond/v2"
 )
@@ -34,6 +36,10 @@ type Registry struct {
 	hashCache       map[string]string
 	outputHashMutex sync.RWMutex
 	outputHashCache map[string]map[model.Output]string
+
+	// bgWriter is set when async cache writes are enabled.
+	// It coordinates deferred remote uploads.
+	bgWriter *caching.BackgroundWriteGroup
 }
 
 // NewRegistry creates a new registry with default handlers
@@ -64,6 +70,78 @@ func NewRegistry(
 		r.Register(handlers.NewDockerOutputHandler(ctx, cas))
 	}
 	return r
+}
+
+// EnableAsyncWrites enables deferred remote cache uploads. When enabled,
+// local filesystem writes happen synchronously (so dependents can proceed)
+// while remote uploads (GCS/S3/Docker registry) run in the background.
+// Call Flush() after execution to wait for all uploads to complete.
+func (r *Registry) EnableAsyncWrites() {
+	bg := caching.NewBackgroundWriteGroup(8)
+	r.bgWriter = bg
+
+	// Enable async mode on the CAS backend (RemoteWrapper) for file/dir outputs
+	if rw, ok := r.cas.GetBackend().(*backends.RemoteWrapper); ok {
+		rw.SetAsyncMode(bg)
+	}
+
+	// Enable async mode on Docker registry handler
+	r.handlerMutex.RLock()
+	defer r.handlerMutex.RUnlock()
+	for _, h := range r.handlers {
+		if dh, ok := h.(*handlers.DockerRegistryOutputHandler); ok {
+			dh.SetBackgroundWriter(bg)
+		}
+	}
+}
+
+// Flush waits for all deferred cache writes to complete and logs progress.
+// It is a no-op if async writes are not enabled or nothing was queued.
+// Returns any errors from failed uploads (non-fatal).
+func (r *Registry) Flush(ctx context.Context) []error {
+	if r.bgWriter == nil {
+		return nil
+	}
+
+	total := r.bgWriter.Total()
+	if total == 0 {
+		return nil
+	}
+
+	logger := console.GetLogger(ctx)
+	logger.Infof("Flushing %d background cache write(s)...", total)
+
+	// Periodically log progress while waiting
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				completed := r.bgWriter.Completed()
+				if completed < total {
+					logger.Infof("Flushing cache writes... [%d/%d]", completed, total)
+				}
+			case <-done:
+				return
+			}
+		}
+	}()
+
+	errs := r.bgWriter.Wait()
+	close(done)
+
+	if len(errs) > 0 {
+		logger.Warnf("%d of %d background cache write(s) failed:", len(errs), total)
+		for _, err := range errs {
+			logger.Warnf("  - %v", err)
+		}
+	} else {
+		logger.Infof("All %d cache write(s) flushed successfully.", total)
+	}
+
+	return errs
 }
 
 // Register adds a new output handler to the registry

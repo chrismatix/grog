@@ -147,6 +147,11 @@ func init() {
 	err = viper.BindPFlag("profile", RootCmd.PersistentFlags().Lookup("profile"))
 	viper.SetDefault("profile", "")
 
+	// async_cache_writes
+	RootCmd.PersistentFlags().Bool("async-cache-writes", false, "Defer remote cache uploads to background goroutines")
+	err = viper.BindPFlag("async_cache_writes", RootCmd.PersistentFlags().Lookup("async-cache-writes"))
+	viper.SetDefault("async_cache_writes", false)
+
 	// disable_tea
 	RootCmd.PersistentFlags().Bool("disable-tea", false, "Disable interactive TUI (Bubble Tea)")
 	err = viper.BindPFlag("disable_tea", RootCmd.PersistentFlags().Lookup("disable-tea"))

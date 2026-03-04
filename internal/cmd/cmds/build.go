@@ -125,6 +125,10 @@ func RunBuild(
 	taintCache := caching.NewTaintCache(cache)
 	registry := output.NewRegistry(ctx, cas)
 
+	if config.Global.AsyncCacheWrites {
+		registry.EnableAsyncWrites()
+	}
+
 	// Only lock the workspace once necessary, i.e., before we start building
 	if config.Global.SkipWorkspaceLock {
 		logger.Warn("Skipping workspace lock. Concurrent grog executions may corrupt the cache or workspace state.")
@@ -151,6 +155,9 @@ func RunBuild(
 		loadOutputsMode,
 	)
 	completionMap, executionErr := executor.Execute(ctx)
+
+	// Flush deferred cache writes (no-op if async not enabled)
+	registry.Flush(ctx)
 
 	elapsedTime := time.Since(startTime).Seconds()
 	// Mostly used to keep our test fixtures deterministic

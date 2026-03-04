@@ -27,6 +27,13 @@ type DockerRegistryOutputHandler struct {
 	cas          *caching.Cas
 	config       config.DockerConfig
 	dockerClient *client.Client
+	bgWriter     AsyncBackgroundWriter
+}
+
+// AsyncBackgroundWriter is the interface used to defer slow operations
+// (like Docker push) to background goroutines.
+type AsyncBackgroundWriter interface {
+	Go(ctx context.Context, name string, fn func() error)
 }
 
 // NewDockerRegistryOutputHandler creates a new DockerRegistryOutputHandler.
@@ -38,6 +45,13 @@ func NewDockerRegistryOutputHandler(
 		cas:    cas,
 		config: config,
 	}
+}
+
+// SetBackgroundWriter enables async mode for Docker pushes. When set,
+// Write() computes the image digest synchronously and defers the push
+// to the BackgroundWriter.
+func (d *DockerRegistryOutputHandler) SetBackgroundWriter(bg AsyncBackgroundWriter) {
+	d.bgWriter = bg
 }
 
 func (d *DockerRegistryOutputHandler) Type() HandlerType {
@@ -86,6 +100,8 @@ func (d *DockerRegistryOutputHandler) cacheImageName(digest string) string {
 }
 
 // Write pushes the Docker image from the local Docker daemon to the remote registry.
+// When a BackgroundWriter is configured, the push is deferred and only the image
+// inspection (fast) happens synchronously.
 func (d *DockerRegistryOutputHandler) Write(
 	ctx context.Context,
 	target model.Target,
@@ -107,37 +123,19 @@ func (d *DockerRegistryOutputHandler) Write(
 
 	remoteCacheImageName := d.cacheImageName(inspect.ID)
 
-	logger.Debugf("pushing Docker image %s to cache registry as %s", localImageName, remoteCacheImageName)
-
-	if err := cli.ImageTag(ctx, localImageName, remoteCacheImageName); err != nil {
-		return nil, fmt.Errorf("failed to tag image %q as %q: %w", localImageName, remoteCacheImageName, err)
-	}
-	// Clean up the image tag so that it does not pollute the user's docker machine
-	defer cli.ImageRemove(ctx, remoteCacheImageName, image.RemoveOptions{})
-
-	// Build the RegistryAuth header from ~/.docker/config.json / helpers
-	auth, err := makeRegistryAuth(remoteCacheImageName)
-	if err != nil {
-		return nil, err
-	}
-
-	// Push via Docker daemon using that auth
-	pushReader, err := cli.ImagePush(ctx, remoteCacheImageName, image.PushOptions{
-		RegistryAuth: auth,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to push image %q to registry: %w", remoteCacheImageName, err)
-	}
-	defer pushReader.Close()
-
-	// Intercept Docker CLI JSON progress stream and bridge to our progress tracker
-	// Note: the top-level tracker is created by the registry and passed to this handler
-	// as the 4th argument. We create child trackers per-layer when totals are known.
-	if err := consumeDockerProgress(pushReader, tracker, fmt.Sprintf("%s: pushing cache for %s", target.Label, localImageName)); err != nil {
-		return nil, fmt.Errorf("error reading push response: %w", err)
+	if d.bgWriter != nil {
+		// Async mode: return the output immediately, defer the push
+		logger.Debugf("deferring Docker push of %s to background", localImageName)
+		d.bgWriter.Go(ctx, fmt.Sprintf("docker-push %s", localImageName), func() error {
+			return d.pushImage(ctx, cli, localImageName, remoteCacheImageName, nil)
+		})
+	} else {
+		// Sync mode: push inline (original behavior)
+		if err := d.pushImage(ctx, cli, localImageName, remoteCacheImageName, tracker); err != nil {
+			return nil, err
+		}
 	}
 
-	logger.Debugf("successfully pushed Docker image %s to registry", remoteCacheImageName)
 	return &gen.Output{
 		Kind: &gen.Output_DockerImage{
 			DockerImage: &gen.DockerImageOutput{
@@ -148,6 +146,45 @@ func (d *DockerRegistryOutputHandler) Write(
 			},
 		},
 	}, nil
+}
+
+// pushImage tags and pushes a Docker image to the registry.
+func (d *DockerRegistryOutputHandler) pushImage(
+	ctx context.Context,
+	cli *client.Client,
+	localImageName, remoteCacheImageName string,
+	tracker *worker.ProgressTracker,
+) error {
+	logger := console.GetLogger(ctx)
+	logger.Debugf("pushing Docker image %s to cache registry as %s", localImageName, remoteCacheImageName)
+
+	if err := cli.ImageTag(ctx, localImageName, remoteCacheImageName); err != nil {
+		return fmt.Errorf("failed to tag image %q as %q: %w", localImageName, remoteCacheImageName, err)
+	}
+	// Clean up the image tag so that it does not pollute the user's docker machine
+	defer cli.ImageRemove(ctx, remoteCacheImageName, image.RemoveOptions{})
+
+	// Build the RegistryAuth header from ~/.docker/config.json / helpers
+	auth, err := makeRegistryAuth(remoteCacheImageName)
+	if err != nil {
+		return err
+	}
+
+	// Push via Docker daemon using that auth
+	pushReader, err := cli.ImagePush(ctx, remoteCacheImageName, image.PushOptions{
+		RegistryAuth: auth,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to push image %q to registry: %w", remoteCacheImageName, err)
+	}
+	defer pushReader.Close()
+
+	if err := consumeDockerProgress(pushReader, tracker, fmt.Sprintf("pushing cache for %s", localImageName)); err != nil {
+		return fmt.Errorf("error reading push response: %w", err)
+	}
+
+	logger.Debugf("successfully pushed Docker image %s to registry", remoteCacheImageName)
+	return nil
 }
 
 func makeRegistryAuth(ref string) (string, error) {
