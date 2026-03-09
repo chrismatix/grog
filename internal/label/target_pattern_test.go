@@ -130,3 +130,50 @@ func TestCurrentPackageTargetPattern(t *testing.T) {
 		t.Error("Relative pattern ':...' should match any target in the current package")
 	}
 }
+
+func TestParsePatternsOrMatchCurrentPackageAndSubpackages(t *testing.T) {
+	t.Run("defaults to workspace recursive pattern at root", func(t *testing.T) {
+		patterns, err := ParsePatternsOrMatchCurrentPackageAndSubpackages("", []string{})
+		if err != nil {
+			t.Fatalf("ParsePatternsOrMatchCurrentPackageAndSubpackages returned error: %v", err)
+		}
+
+		if len(patterns) != 1 {
+			t.Fatalf("expected exactly one default pattern, got %d", len(patterns))
+		}
+
+		if got, want := patterns[0].String(), "//..."; got != want {
+			t.Fatalf("unexpected default root pattern. got %q, want %q", got, want)
+		}
+	})
+
+	t.Run("defaults to current package recursive pattern", func(t *testing.T) {
+		patterns, err := ParsePatternsOrMatchCurrentPackageAndSubpackages("foo/bar", []string{})
+		if err != nil {
+			t.Fatalf("ParsePatternsOrMatchCurrentPackageAndSubpackages returned error: %v", err)
+		}
+
+		if len(patterns) != 1 {
+			t.Fatalf("expected exactly one default pattern, got %d", len(patterns))
+		}
+
+		if got, want := patterns[0].String(), "//foo/bar/..."; got != want {
+			t.Fatalf("unexpected default current package pattern. got %q, want %q", got, want)
+		}
+	})
+
+	t.Run("parses explicit patterns unchanged", func(t *testing.T) {
+		patterns, err := ParsePatternsOrMatchCurrentPackageAndSubpackages("foo/bar", []string{":baz"})
+		if err != nil {
+			t.Fatalf("ParsePatternsOrMatchCurrentPackageAndSubpackages returned error: %v", err)
+		}
+
+		if len(patterns) != 1 {
+			t.Fatalf("expected exactly one pattern, got %d", len(patterns))
+		}
+
+		if got, want := patterns[0].String(), "//foo/bar:baz"; got != want {
+			t.Fatalf("unexpected explicit pattern parsing. got %q, want %q", got, want)
+		}
+	})
+}

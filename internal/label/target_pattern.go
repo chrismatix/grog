@@ -75,6 +75,14 @@ func ParseTargetPattern(currentPackage string, pattern string) (TargetPattern, e
 type TargetPatternSet = []TargetPattern
 
 func ParsePatternsOrMatchAll(currentPackage string, patterns []string) ([]TargetPattern, error) {
+	if len(patterns) == 0 {
+		return []TargetPattern{GetMatchAllTargetPattern()}, nil
+	}
+
+	return ParsePatterns(currentPackage, patterns)
+}
+
+func ParsePatterns(currentPackage string, patterns []string) ([]TargetPattern, error) {
 	var result []TargetPattern
 	for _, pattern := range patterns {
 		p, err := ParseTargetPattern(currentPackage, pattern)
@@ -83,11 +91,29 @@ func ParsePatternsOrMatchAll(currentPackage string, patterns []string) ([]Target
 		}
 		result = append(result, p)
 	}
-	if len(result) == 0 {
-		return []TargetPattern{GetMatchAllTargetPattern()}, nil
-	}
 
 	return result, nil
+}
+
+// ParsePatternsOrMatchCurrentPackageAndSubpackages parses provided patterns or,
+// when none are provided, defaults to all targets in the current package and
+// all of its subpackages.
+func ParsePatternsOrMatchCurrentPackageAndSubpackages(currentPackage string, patterns []string) ([]TargetPattern, error) {
+	if len(patterns) == 0 {
+		currentPackageRecursivePattern := "//..."
+		if currentPackage != "" {
+			currentPackageRecursivePattern = "//" + currentPackage + "/..."
+		}
+
+		parsedPattern, err := ParseTargetPattern(currentPackage, currentPackageRecursivePattern)
+		if err != nil {
+			return nil, err
+		}
+
+		return []TargetPattern{parsedPattern}, nil
+	}
+
+	return ParsePatterns(currentPackage, patterns)
 }
 
 func PatternSetToString(patterns []TargetPattern) string {

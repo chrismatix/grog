@@ -1,8 +1,18 @@
 name: run commands from package
 repo: simple_pkl/foo
 cases:
+  # No-arg build in a package should default to the package and subpackages.
+  - name: pkl_build_defaults_to_current_package_and_subpackages
+    grog_args:
+      - build
+
+  # No-arg test in a package should default to the package and subpackages.
+  - name: pkl_test_defaults_to_current_package_and_subpackages
+    grog_args:
+      - test
+
   # This should only build foo
-  - name: pkl_build_only_foo
+  - name: pkl_build_only_foo_relative
     grog_args:
       - build
       - :foo
