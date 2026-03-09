@@ -31,7 +31,7 @@ var BuildCmd = &cobra.Command{
 	Use:   "build",
 	Short: "Loads the user configuration and executes build targets.",
 	Long:  `Loads the user configuration, checks which targets need to be rebuilt based on file hashes, builds the dependency graph, and executes targets.`,
-	Example: `  grog build                      # Build all targets in the current package
+	Example: `  grog build                      # Build all targets in the current package and subpackages
   grog build //path/to/package:target  # Build a specific target
   grog build //path/to/package/...     # Build all targets in a package and subpackages`,
 	Args:              cobra.ArbitraryArgs, // Optional argument for target pattern
@@ -44,7 +44,7 @@ var BuildCmd = &cobra.Command{
 			logger.Fatalf("could not get current package: %v", err)
 		}
 
-		targetPatterns, err := label.ParsePatternsOrMatchAll(currentPackagePath, args)
+		targetPatterns, err := label.ParsePatternsOrMatchCurrentPackageAndSubpackages(currentPackagePath, args)
 		if err != nil {
 			logger.Fatalf("could not parse target pattern: %v", err)
 		}
