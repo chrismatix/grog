@@ -75,6 +75,14 @@ func ParseTargetPattern(currentPackage string, pattern string) (TargetPattern, e
 type TargetPatternSet = []TargetPattern
 
 func ParsePatternsOrMatchAll(currentPackage string, patterns []string) ([]TargetPattern, error) {
+	if len(patterns) == 0 {
+		return []TargetPattern{GetMatchAllTargetPattern()}, nil
+	}
+
+	return ParsePatterns(currentPackage, patterns)
+}
+
+func ParsePatterns(currentPackage string, patterns []string) ([]TargetPattern, error) {
 	var result []TargetPattern
 	for _, pattern := range patterns {
 		p, err := ParseTargetPattern(currentPackage, pattern)
@@ -82,9 +90,6 @@ func ParsePatternsOrMatchAll(currentPackage string, patterns []string) ([]Target
 			return nil, err
 		}
 		result = append(result, p)
-	}
-	if len(result) == 0 {
-		return []TargetPattern{GetMatchAllTargetPattern()}, nil
 	}
 
 	return result, nil
@@ -108,7 +113,7 @@ func ParsePatternsOrMatchCurrentPackageAndSubpackages(currentPackage string, pat
 		return []TargetPattern{parsedPattern}, nil
 	}
 
-	return ParsePatternsOrMatchAll(currentPackage, patterns)
+	return ParsePatterns(currentPackage, patterns)
 }
 
 func PatternSetToString(patterns []TargetPattern) string {
