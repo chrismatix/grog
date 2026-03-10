@@ -214,3 +214,30 @@ func TestS3Cache_MethodCalls(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 1, mockClient.objectExistsCalls, "Exists should call ObjectExists once")
 }
+
+func TestS3Cache_SharedCache(t *testing.T) {
+	ctx := context.Background()
+	mockClient := newMockS3Client()
+
+	t.Run("shared cache enabled", func(t *testing.T) {
+		cache, err := NewS3CacheWithClient(ctx, config.S3CacheConfig{
+			Bucket:      "test-bucket",
+			Prefix:      "prefix",
+			SharedCache: true,
+		}, mockClient)
+		assert.NoError(t, err)
+		assert.Equal(t, "", cache.workspacePrefix)
+		assert.Equal(t, "prefix/path/key", cache.buildPath("path", "key"))
+	})
+
+	t.Run("shared cache disabled", func(t *testing.T) {
+		cache, err := NewS3CacheWithClient(ctx, config.S3CacheConfig{
+			Bucket:      "test-bucket",
+			Prefix:      "prefix",
+			SharedCache: false,
+		}, mockClient)
+		assert.NoError(t, err)
+		assert.NotEqual(t, "", cache.workspacePrefix)
+		assert.Contains(t, cache.buildPath("path", "key"), cache.workspacePrefix)
+	})
+}

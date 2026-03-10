@@ -209,6 +209,7 @@ type S3CacheConfig struct {
 	Bucket          string `mapstructure:"bucket"`
 	Prefix          string `mapstructure:"prefix"`
 	CredentialsFile string `mapstructure:"credentials_file"`
+	SharedCache     bool   `mapstructure:"shared_cache"`
 }
 
 const (

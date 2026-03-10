@@ -1,13 +1,13 @@
 package backends
 
 import (
-	"cloud.google.com/go/storage"
 	"context"
 	"errors"
 	"fmt"
 	"io"
-	"path/filepath"
 	"strings"
+
+	"cloud.google.com/go/storage"
 
 	"grog/internal/config"
 	"grog/internal/console"
@@ -50,8 +50,8 @@ func NewGCSCache(
 	var workspacePrefix string
 
 	if cacheConfig.SharedCache {
-		// If shared cache is enabled, use only the directory name
-		workspacePrefix = filepath.Base(workspaceDir)
+		// If shared cache is enabled treat prefix as the workspace root
+		workspacePrefix = ""
 	} else {
 		// If shared cache is disabled, use the full path hash
 		workspacePrefix = strings.Trim(config.GetWorkspaceCachePrefix(workspaceDir), "/")
@@ -74,6 +74,9 @@ func NewGCSCache(
 func (gcs *GCSCache) fullPrefix() string {
 	if gcs.prefix == "" {
 		return gcs.workspacePrefix
+	}
+	if gcs.workspacePrefix == "" {
+		return gcs.prefix
 	}
 	return gcs.prefix + "/" + gcs.workspacePrefix
 }
