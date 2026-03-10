@@ -166,7 +166,15 @@ func NewS3CacheWithClient(
 	}
 
 	workspaceDir := grogconfig.Global.WorkspaceRoot
-	workspacePrefix := strings.Trim(grogconfig.GetWorkspaceCachePrefix(workspaceDir), "/")
+	var workspacePrefix string
+
+	if cacheConfig.SharedCache {
+		// If shared cache is enabled treat prefix as the workspace root
+		workspacePrefix = ""
+	} else {
+		// If shared cache is disabled, use the full path hash
+		workspacePrefix = strings.Trim(grogconfig.GetWorkspaceCachePrefix(workspaceDir), "/")
+	}
 
 	logger := console.GetLogger(ctx)
 	logger.Tracef("Instantiated s3 cache at bucket %s with prefix %s and workspace dir %s",
@@ -185,6 +193,9 @@ func NewS3CacheWithClient(
 func (s *S3Cache) fullPrefix() string {
 	if s.prefix == "" {
 		return s.workspacePrefix
+	}
+	if s.workspacePrefix == "" {
+		return s.prefix
 	}
 	return s.prefix + "/" + s.workspacePrefix
 }

@@ -37,6 +37,9 @@ func hashTargetDefinition(target model.Target, dependencyHashes []string) (strin
 	_, err = hasher.WriteString(sorted(target.OutputDefinitions()))
 	_, err = hasher.WriteString(sorted(dependencyHashes))
 	_, err = hasher.WriteString(sortedKeyValue(target.Fingerprint))
+
+	// By default, target hashes are separate between platforms unless
+	// the target has a multiplatform-cache tag
 	if !target.IsMultiplatformCache() {
 		_, err = hasher.WriteString(config.Global.GetPlatform())
 	}
