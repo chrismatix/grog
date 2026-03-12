@@ -32,8 +32,8 @@ func (handler *mockRegistryHandler) Write(
 	target model.Target,
 	output model.Output,
 	tracker *worker.ProgressTracker,
-) (*gen.Output, error) {
-	return nil, nil
+) (*handlers.WriteResult, error) {
+	return &handlers.WriteResult{}, nil
 }
 
 func (handler *mockRegistryHandler) Hash(

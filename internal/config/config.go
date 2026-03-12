@@ -36,6 +36,10 @@ type WorkspaceConfig struct {
 	// processes operate on the same workspace, otherwise cache corruption may
 	// occur.
 	SkipWorkspaceLock bool `mapstructure:"skip_workspace_lock"`
+	// RemoteAsyncUploads defers remote cache uploads to a post-build phase,
+	// freeing worker pool slots sooner. Only affects builds with a remote cache
+	// backend (GCS, S3). Local cache writes still happen synchronously.
+	RemoteAsyncUploads bool `mapstructure:"remote_async_uploads"`
 
 	// Logging
 	LogLevel      string `mapstructure:"log_level"`

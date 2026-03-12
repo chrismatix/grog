@@ -46,7 +46,7 @@ func (f *FileOutputHandler) Write(
 	target model.Target,
 	output model.Output,
 	tracker *worker.ProgressTracker,
-) (*gen.Output, error) {
+) (*WriteResult, error) {
 	relativePath := output.Identifier
 	absOutputPath := target.GetAbsOutputPath(output)
 
@@ -76,16 +76,23 @@ func (f *FileOutputHandler) Write(
 		reader = progress.WrapReader(file)
 	}
 
+	hasRemote := f.cas.HasRemoteBackend()
 	console.GetLogger(ctx).Debugf("writing file output %s with digest %s", absOutputPath, fileHash)
-	if err := f.cas.Write(ctx, fileHash, reader); err != nil {
-		return nil, err
+	if hasRemote {
+		if err := f.cas.WriteLocal(ctx, fileHash, reader); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := f.cas.Write(ctx, fileHash, reader); err != nil {
+			return nil, err
+		}
 	}
 
 	if progress != nil {
 		progress.Complete()
 	}
 
-	return &gen.Output{
+	genOutput := &gen.Output{
 		Kind: &gen.Output_File{
 			File: &gen.FileOutput{
 				Path: relativePath,
@@ -95,6 +102,19 @@ func (f *FileOutputHandler) Write(
 				},
 			},
 		},
+	}
+
+	var deferredUpload func(ctx context.Context) error
+	if hasRemote {
+		capturedHash := fileHash
+		deferredUpload = func(ctx context.Context) error {
+			return f.cas.UploadRemote(ctx, capturedHash)
+		}
+	}
+
+	return &WriteResult{
+		Output:         genOutput,
+		DeferredUpload: deferredUpload,
 	}, nil
 }
 

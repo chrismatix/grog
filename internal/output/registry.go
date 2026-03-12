@@ -107,11 +107,18 @@ func (r *Registry) mustGetHandler(outputType string) handlers.Handler {
 	return handler
 }
 
+// WriteOutputsResult contains the target result and any deferred upload closures
+// that should be executed asynchronously after builds complete.
+type WriteOutputsResult struct {
+	TargetResult    *gen.TargetResult
+	DeferredUploads []func(ctx context.Context) error
+}
+
 func (r *Registry) WriteOutputs(
 	ctx context.Context,
 	target *model.Target,
 	progress *worker.ProgressTracker,
-) (*gen.TargetResult, error) {
+) (*WriteOutputsResult, error) {
 	r.targetMutexMap.Lock(target.Label.String())
 	defer r.targetMutexMap.Unlock(target.Label.String())
 
@@ -121,18 +128,18 @@ func (r *Registry) WriteOutputs(
 	logger.Debugf("%s: writing outputs", target.Label)
 
 	var tasks []pond.Task
-	var targetOutputs []*gen.Output
+	var writeResults []*handlers.WriteResult
 	var outputsMutex sync.Mutex
 
 	for _, outputRef := range outputs {
 		localOutputRef := outputRef
 		task := r.pool.SubmitErr(func() error {
-			output, err := r.mustGetHandler(localOutputRef.Type).Write(ctx, *target, localOutputRef, progress)
+			result, err := r.mustGetHandler(localOutputRef.Type).Write(ctx, *target, localOutputRef, progress)
 			if err != nil {
 				return err
 			}
 			outputsMutex.Lock()
-			targetOutputs = append(targetOutputs, output)
+			writeResults = append(writeResults, result)
 			outputsMutex.Unlock()
 			logger.Debugf("%s: output %s written", target.Label, localOutputRef.Type)
 			return nil
@@ -146,6 +153,16 @@ func (r *Registry) WriteOutputs(
 		}
 	}
 
+	// Extract outputs and deferred uploads from write results
+	targetOutputs := make([]*gen.Output, 0, len(writeResults))
+	var deferredUploads []func(ctx context.Context) error
+	for _, wr := range writeResults {
+		targetOutputs = append(targetOutputs, wr.Output)
+		if wr.DeferredUpload != nil {
+			deferredUploads = append(deferredUploads, wr.DeferredUpload)
+		}
+	}
+
 	outputHash, err := getOutputHash(targetOutputs)
 	if err != nil {
 		return nil, err
@@ -153,11 +170,14 @@ func (r *Registry) WriteOutputs(
 
 	logger.Debugf("%s: outputs written", target.Label)
 
-	return &gen.TargetResult{
-		ChangeHash:              target.ChangeHash,
-		OutputHash:              outputHash,
-		Outputs:                 targetOutputs,
-		ExecutionDurationMillis: target.ExecutionTime.Milliseconds(),
+	return &WriteOutputsResult{
+		TargetResult: &gen.TargetResult{
+			ChangeHash:              target.ChangeHash,
+			OutputHash:              outputHash,
+			Outputs:                 targetOutputs,
+			ExecutionDurationMillis: target.ExecutionTime.Milliseconds(),
+		},
+		DeferredUploads: deferredUploads,
 	}, nil
 }
 

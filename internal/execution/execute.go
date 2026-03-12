@@ -44,6 +44,7 @@ type Executor struct {
 	loadOutputsMode  config.LoadOutputsMode
 	targetHasher     *hashing.TargetHasher
 	streamLogsToggle *console.StreamLogsToggle
+	asyncManager     *output.AsyncUploadManager
 }
 
 func NewExecutor(
@@ -55,6 +56,7 @@ func NewExecutor(
 	streamLogs bool,
 	enableCache bool,
 	loadOutputsMode config.LoadOutputsMode,
+	asyncManager *output.AsyncUploadManager,
 ) *Executor {
 	return &Executor{
 		targetCache:      targetCache,
@@ -66,6 +68,7 @@ func NewExecutor(
 		loadOutputsMode:  loadOutputsMode,
 		targetHasher:     hashing.NewTargetHasher(graph),
 		streamLogsToggle: console.NewStreamLogsToggle(streamLogs),
+		asyncManager:     asyncManager,
 	}
 }
 
@@ -397,6 +400,7 @@ func (e *Executor) executeTarget(
 func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, update worker.StatusFunc) error {
 	logger := console.GetLogger(ctx)
 	var targetResult *gen.TargetResult
+	var deferredUploads []func(ctx context.Context) error
 	var err error
 	if target.SkipsCache() || !e.enableCache {
 		logger.Debugf("%s: skipping cache write", target.Label)
@@ -422,8 +426,13 @@ func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, u
 			update,
 		)
 		cacheStart := time.Now()
-		targetResult, err = e.registry.WriteOutputs(ctx, target, progress)
+		writeResult, writeErr := e.registry.WriteOutputs(ctx, target, progress)
 		target.CacheTime += time.Since(cacheStart)
+		if writeErr != nil {
+			return writeErr
+		}
+		targetResult = writeResult.TargetResult
+		deferredUploads = writeResult.DeferredUploads
 	}
 	if err != nil {
 		return err
@@ -433,11 +442,34 @@ func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, u
 	target.OutputHash = targetResult.OutputHash
 
 	cacheStart := time.Now()
-	defer func() {
-		target.CacheTime += time.Since(cacheStart)
-	}()
 
-	return e.targetCache.Write(ctx, targetResult)
+	if config.Global.RemoteAsyncUploads && len(deferredUploads) > 0 {
+		// Write target cache locally (fast), defer remote upload
+		writeErr := e.targetCache.WriteLocal(ctx, targetResult)
+		target.CacheTime += time.Since(cacheStart)
+		if writeErr != nil {
+			return writeErr
+		}
+
+		// Collect deferred uploads: output uploads + target cache upload
+		if remoteFn := e.targetCache.MakeUploadRemoteFunc(targetResult.ChangeHash); remoteFn != nil {
+			deferredUploads = append(deferredUploads, remoteFn)
+		}
+
+		// Submit all deferred uploads to async manager
+		for _, fn := range deferredUploads {
+			e.asyncManager.Submit(fn)
+		}
+	} else {
+		// Synchronous path: write to both local and remote inline
+		writeErr := e.targetCache.Write(ctx, targetResult)
+		target.CacheTime += time.Since(cacheStart)
+		if writeErr != nil {
+			return writeErr
+		}
+	}
+
+	return nil
 }
 
 // LoadDependencyOutputs is used to load the outputs of the targets that a target depends on.

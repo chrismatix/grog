@@ -180,6 +180,7 @@ func loadDependencyOutputsIfNeeded(ctx context.Context, logger *console.Logger, 
 		config.Global.StreamLogs,
 		config.Global.EnableCache,
 		config.Global.GetLoadOutputsMode(),
+		output.NewAsyncUploadManager(),
 	)
 	logger.Infof("Loading outputs of direct dependencies due to load_outputs=minimal")
 	if err := executor.LoadDependencyOutputs(ctx, runTarget, func(_ worker.StatusUpdate) {}); err != nil {

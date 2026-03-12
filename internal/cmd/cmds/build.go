@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -122,6 +123,7 @@ func RunBuild(
 	}
 	targetCache := caching.NewTargetResultCache(cache)
 	cas := caching.NewCas(cache)
+	cas.SetAsyncRemote(config.Global.RemoteAsyncUploads)
 	taintCache := caching.NewTaintCache(cache)
 	registry := output.NewRegistry(ctx, cas)
 
@@ -140,6 +142,8 @@ func RunBuild(
 		}()
 	}
 
+	asyncManager := output.NewAsyncUploadManager()
+
 	executor := execution.NewExecutor(
 		targetCache,
 		taintCache,
@@ -149,8 +153,20 @@ func RunBuild(
 		streamLogs,
 		config.Global.EnableCache,
 		loadOutputsMode,
+		asyncManager,
 	)
 	completionMap, executionErr := executor.Execute(ctx)
+
+	// Post-build: wait for async remote uploads
+	if asyncManager.Submitted() > 0 {
+		uploadCtx, uploadProgram, uploadSendMsg := console.StartTaskUI(ctx)
+		uploadErrs := asyncManager.Wait(uploadCtx, runtime.NumCPU(), uploadSendMsg)
+		uploadProgram.Quit()
+		_ = uploadProgram.ReleaseTerminal()
+		for _, err := range uploadErrs {
+			logger.Warnf("Remote cache upload error (non-fatal): %v", err)
+		}
+	}
 
 	elapsedTime := time.Since(startTime).Seconds()
 	// Mostly used to keep our test fixtures deterministic

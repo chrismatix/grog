@@ -92,7 +92,7 @@ func TestDirectoryOutputHandler_WriteAndLoad(t *testing.T) {
 		t.Fatalf("Write failed: %v", err)
 	}
 
-	if err := handler.Load(ctx, target, dirOutput, nil); err != nil {
+	if err := handler.Load(ctx, target, dirOutput.Output, nil); err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
 

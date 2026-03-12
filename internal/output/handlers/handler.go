@@ -7,13 +7,22 @@ import (
 	"grog/internal/worker"
 )
 
+// WriteResult contains the output proto and an optional deferred upload closure.
+// The output is needed synchronously for hash computation, while the deferred
+// upload can be executed asynchronously after builds complete.
+type WriteResult struct {
+	Output         *gen.Output
+	DeferredUpload func(ctx context.Context) error // nil = no async work
+}
+
 // Handler defines how to handle a specific type of build output
 type Handler interface {
 	// Type returns the identifier for this output type (e.g., "dir", "docker")
 	Type() HandlerType
 
-	// Write writes the output to the output handler and returns its digest
-	Write(ctx context.Context, target model.Target, output model.Output, tracker *worker.ProgressTracker) (*gen.Output, error)
+	// Write writes the output to the output handler and returns its result.
+	// The WriteResult contains the output proto and an optional deferred upload closure.
+	Write(ctx context.Context, target model.Target, output model.Output, tracker *worker.ProgressTracker) (*WriteResult, error)
 
 	// Hash only hashes the given output without writing it
 	// Useful for checking the current local state of the output resource

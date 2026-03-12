@@ -97,7 +97,7 @@ func (d *DirectoryOutputHandler) Write(
 	target model.Target,
 	output model.Output,
 	tracker *worker.ProgressTracker,
-) (*gen.Output, error) {
+) (*WriteResult, error) {
 	logger := console.GetLogger(ctx)
 
 	directoryPath := target.GetAbsOutputPath(output)
@@ -135,13 +135,19 @@ func (d *DirectoryOutputHandler) Write(
 		)
 	}
 
-	sizeBytes, err := d.uploadFiles(ctx, fileUploads, progress)
+	hasRemote := d.cas.HasRemoteBackend()
+
+	sizeBytes, err := d.uploadFiles(ctx, fileUploads, progress, hasRemote)
 	if err != nil {
 		return nil, fmt.Errorf("failed to upload directory files to cache: %w", err)
 	}
 
 	logger.Debugf("writing directory tree digest %s for %s", treeDigest, directoryPath)
-	err = d.cas.Write(ctx, treeDigest, bytes.NewReader(marshalledTree))
+	if hasRemote {
+		err = d.cas.WriteLocal(ctx, treeDigest, bytes.NewReader(marshalledTree))
+	} else {
+		err = d.cas.Write(ctx, treeDigest, bytes.NewReader(marshalledTree))
+	}
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to write tree to cache: %w", err)
@@ -151,7 +157,7 @@ func (d *DirectoryOutputHandler) Write(
 		progress.Complete()
 	}
 
-	return &gen.Output{
+	genOutput := &gen.Output{
 		Kind: &gen.Output_Directory{
 			Directory: &gen.DirectoryOutput{
 				Path: output.Identifier,
@@ -161,12 +167,36 @@ func (d *DirectoryOutputHandler) Write(
 				},
 			},
 		},
+	}
+
+	var deferredUpload func(ctx context.Context) error
+	if hasRemote {
+		// Collect all digests that need remote upload: file digests + tree digest
+		var digests []string
+		for _, upload := range fileUploads {
+			digests = append(digests, upload.digest)
+		}
+		digests = append(digests, treeDigest)
+
+		deferredUpload = func(ctx context.Context) error {
+			for _, digest := range digests {
+				if err := d.cas.UploadRemote(ctx, digest); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}
+
+	return &WriteResult{
+		Output:         genOutput,
+		DeferredUpload: deferredUpload,
 	}, nil
 }
 
-// uploadFiles uploads all files in parallel to the CAS
-// the CAS will implement its own concurrency and rate-limiting
-func (d *DirectoryOutputHandler) uploadFiles(ctx context.Context, fileUploads []fileUpload, progress *worker.ProgressTracker) (int64, error) {
+// uploadFiles uploads all files in parallel to the CAS.
+// If localOnly is true, writes only to local CAS (for deferred remote upload).
+func (d *DirectoryOutputHandler) uploadFiles(ctx context.Context, fileUploads []fileUpload, progress *worker.ProgressTracker, localOnly bool) (int64, error) {
 	logger := console.GetLogger(ctx)
 	var sizeBytes atomic.Int64
 
@@ -182,6 +212,7 @@ func (d *DirectoryOutputHandler) uploadFiles(ctx context.Context, fileUploads []
 			file, err := os.Open(localUploadAction.absolutePath)
 			if err != nil {
 				errChan <- err
+				return
 			}
 			defer file.Close()
 
@@ -190,9 +221,14 @@ func (d *DirectoryOutputHandler) uploadFiles(ctx context.Context, fileUploads []
 				reader = progress.WrapReader(file)
 			}
 
-			err = d.cas.Write(ctx, localUploadAction.digest, reader)
+			if localOnly {
+				err = d.cas.WriteLocal(ctx, localUploadAction.digest, reader)
+			} else {
+				err = d.cas.Write(ctx, localUploadAction.digest, reader)
+			}
 			if err != nil {
 				errChan <- err
+				return
 			}
 			sizeBytes.Add(localUploadAction.sizeBytes)
 		}()

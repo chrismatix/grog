@@ -33,6 +33,10 @@ func (rw *RemoteWrapper) GetFS() *FileSystemCache {
 	return rw.fs
 }
 
+func (rw *RemoteWrapper) GetRemote() CacheBackend {
+	return rw.remote
+}
+
 func (rw *RemoteWrapper) TypeName() string {
 	return rw.remote.TypeName()
 }
