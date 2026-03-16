@@ -63,7 +63,7 @@ func formatProgressBar(p Progress, width int) string {
 	cp := termenv.ColorProfile()
 
 	var b strings.Builder
-	for i := 0; i < width; i++ {
+	for i := range width {
 		if i < filled {
 			ratio := 0.0
 			if width > 1 {

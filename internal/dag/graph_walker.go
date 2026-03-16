@@ -34,9 +34,9 @@ type nodeInfo struct {
 	// node routine sends this when it's done
 	done chan Completion
 	// node routine receives this when it's ready
-	ready chan interface{}
+	ready chan any
 	// node routine receives this when it is supposed to stop
-	cancel chan interface{}
+	cancel chan any
 
 	cancelOnce sync.Once
 }
@@ -114,8 +114,8 @@ func (w *Walker) Walk(
 		}
 
 		doneCh := make(chan Completion, 1)
-		readyCh := make(chan interface{}, 1)
-		cancelCh := make(chan interface{}, 1)
+		readyCh := make(chan any, 1)
+		cancelCh := make(chan any, 1)
 
 		w.nodeInfoMap[node.GetLabel()] = &nodeInfo{
 			done:   doneCh,

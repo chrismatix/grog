@@ -3,8 +3,10 @@ package console
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -157,9 +159,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case TaskStateMsg:
 		m.tasksMutex.Lock()
 		m.tasks = make(map[int]TaskState, len(castMsg.State))
-		for k, v := range castMsg.State {
-			m.tasks[k] = v
-		}
+		maps.Copy(m.tasks, castMsg.State)
 		m.tasksMutex.Unlock()
 	case TickMsg:
 		m.tick++
@@ -172,15 +172,15 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *model) View() string {
 	m.tasksMutex.RLock()
 	defer m.tasksMutex.RUnlock()
-	s := ""
+	var s strings.Builder
 
 	label := m.streamLogsCommandLabel()
 
 	// Render header
 	if label == "" {
-		s += m.header + "\n"
+		s.WriteString(m.header + "\n")
 	} else {
-		s += m.header + ": " + label + "\n"
+		s.WriteString(m.header + ": " + label + "\n")
 	}
 
 	// Render tasks in order:
@@ -194,14 +194,14 @@ func (m *model) View() string {
 	for _, i := range keys {
 		if status, ok := m.tasks[i]; ok {
 			timePassed := int(time.Since(time.Unix(status.StartedAtSec, 0)).Seconds())
-			s += fmt.Sprintf("    %s %ds\n", status.Status, timePassed)
+			s.WriteString(fmt.Sprintf("    %s %ds\n", status.Status, timePassed))
 			if status.Progress != nil && status.Progress.shouldRender() {
-				s += fmt.Sprintf("     ╰─%s\n", formatProgressBar(*status.Progress, 24))
+				s.WriteString(fmt.Sprintf("     ╰─%s\n", formatProgressBar(*status.Progress, 24)))
 			}
 		}
 	}
 
-	return s
+	return s.String()
 }
 
 func (m *model) streamLogsCommandLabel() string {

@@ -66,7 +66,7 @@ func detectOutputConflicts(graph *dag.DirectedTargetGraph) error {
 	}
 
 	for tag, records := range dockerOutputs {
-		for i := 0; i < len(records); i++ {
+		for i := range records {
 			for j := i + 1; j < len(records); j++ {
 				if targetsAreOrdered(graph, records[i].target, records[j].target, ancestorCache) {
 					continue
@@ -82,7 +82,7 @@ func detectOutputConflicts(graph *dag.DirectedTargetGraph) error {
 	}
 
 	for path, records := range fileMap {
-		for i := 0; i < len(records); i++ {
+		for i := range records {
 			for j := i + 1; j < len(records); j++ {
 				if targetsAreOrdered(graph, records[i].target, records[j].target, ancestorCache) {
 					continue

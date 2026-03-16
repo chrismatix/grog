@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 
 	"grog/internal/console"
@@ -143,11 +144,12 @@ func (rw *RemoteWrapper) Set(ctx context.Context, path, key string, content io.R
 		}
 
 		// Otherwise, combine all errors into one
-		errMsg := "multiple cache write errors occurred:"
+		var errMsg strings.Builder
+		errMsg.WriteString("multiple cache write errors occurred:")
 		for i, err := range errs {
-			errMsg += fmt.Sprintf(" (%d) %v;", i+1, err)
+			errMsg.WriteString(fmt.Sprintf(" (%d) %v;", i+1, err))
 		}
-		return errors.New(errMsg)
+		return errors.New(errMsg.String())
 	}
 
 	return nil
