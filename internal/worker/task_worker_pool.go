@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"maps"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -167,9 +168,7 @@ func (twp *TaskWorkerPool[T]) flushStateLocked() {
 
 	// copy
 	mapCopy := make(console.TaskStateMap, len(twp.taskState))
-	for k, v := range twp.taskState {
-		mapCopy[k] = v
-	}
+	maps.Copy(mapCopy, twp.taskState)
 
 	twp.sendMsg(console.TaskStateMsg{State: mapCopy})
 

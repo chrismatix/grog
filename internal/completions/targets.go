@@ -293,8 +293,8 @@ func collectSiblingDirectories(packages []*model.Package, searchDirectory string
 			}
 			continue
 		}
-		if strings.HasPrefix(packagePath, searchDirectory+"/") {
-			rest := strings.TrimPrefix(packagePath, searchDirectory+"/")
+		if after, ok := strings.CutPrefix(packagePath, searchDirectory+"/"); ok {
+			rest := after
 			segment := strings.Split(rest, "/")[0]
 			if directoryPrefix == "" || strings.HasPrefix(segment, directoryPrefix) {
 				if skipExactPrefixDirectory && segment == directoryPrefix {

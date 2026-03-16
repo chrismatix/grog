@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"grog/internal/config"
@@ -145,10 +146,8 @@ func (p *scriptParser) handleTarget(
 }
 
 func prependUnique(values []string, element string) []string {
-	for _, existing := range values {
-		if existing == element {
-			return append([]string{}, values...)
-		}
+	if slices.Contains(values, element) {
+		return append([]string{}, values...)
 	}
 	return append([]string{element}, values...)
 }

@@ -1,6 +1,8 @@
 package cmds
 
 import (
+	"slices"
+
 	"github.com/spf13/cobra"
 	"grog/internal/config"
 	"grog/internal/console"
@@ -35,12 +37,7 @@ This is useful for finding which targets will be affected by changes to specific
 		}
 
 		inputFileMatches := func(absInputPath string) bool {
-			for _, arg := range args {
-				if absInputPath == arg {
-					return true
-				}
-			}
-			return false
+			return slices.Contains(args, absInputPath)
 		}
 
 		// Find nodes that have any of the specified files in their inputs

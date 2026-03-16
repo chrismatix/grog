@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	semver "github.com/blang/semver/v4"
@@ -134,10 +135,8 @@ func (w WorkspaceConfig) Validate() error {
 
 	// assert that tags and exclude tags do not overlap
 	for _, tag := range w.Tags {
-		for _, excludeTag := range w.ExcludeTags {
-			if tag == excludeTag {
-				return fmt.Errorf("tag %s cannot both be selected and excluded", tag)
-			}
+		if slices.Contains(w.ExcludeTags, tag) {
+			return fmt.Errorf("tag %s cannot both be selected and excluded", tag)
 		}
 	}
 

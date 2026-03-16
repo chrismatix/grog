@@ -14,8 +14,7 @@ import (
 )
 
 func TestSimpleTasks(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	testLogger := console.NewFromSugared(zaptest.NewLogger(t).Sugar(), zapcore.DebugLevel)
 	pool := NewTaskWorkerPool[int](testLogger, 2, func(_ tea.Msg) {}, 0)
@@ -23,7 +22,7 @@ func TestSimpleTasks(t *testing.T) {
 
 	total := 10
 	sum := int32(0)
-	for i := 0; i < total; i++ {
+	for i := range total {
 		i := i
 		go func() {
 			res, err := pool.Run(func(update StatusFunc) (int, error) {
@@ -83,7 +82,7 @@ func TestShutdownBeforeRun(t *testing.T) {
 
 func TestPanicOnJobChannel(t *testing.T) {
 	// rapidly start, shutdown, cancel, then Run
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		ctx, cancel := context.WithCancel(context.Background())
 		testLogger := console.NewFromSugared(zaptest.NewLogger(t).Sugar(), zapcore.DebugLevel)
 		p := NewTaskWorkerPool[int](testLogger, 2, func(_ tea.Msg) {}, 0)
@@ -103,7 +102,7 @@ func TestPanicOnJobChannel(t *testing.T) {
 }
 
 func TestRunWithConcurrentShutdown(t *testing.T) {
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		ctx, cancel := context.WithCancel(context.Background())
 		testLogger := console.NewFromSugared(zaptest.NewLogger(t).Sugar(), zapcore.DebugLevel)
 		p := NewTaskWorkerPool[int](testLogger, 1, func(_ tea.Msg) {}, 0)
@@ -131,8 +130,7 @@ func TestRunWithConcurrentShutdown(t *testing.T) {
 }
 
 func TestTaskError(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	testLogger := console.NewFromSugared(zaptest.NewLogger(t).Sugar(), zapcore.DebugLevel)
 	pool := NewTaskWorkerPool[string](testLogger, 1, func(_ tea.Msg) {}, 0)

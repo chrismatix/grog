@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"grog/internal/model"
 	"grog/internal/output/handlers"
+	"slices"
 	"strings"
 )
 
@@ -35,13 +36,7 @@ func ParseOutput(outputStr string) (model.Output, error) {
 	outputType := handlers.HandlerType(parts[0])
 	identifier := parts[1]
 
-	isKnownType := false
-	for _, handlerType := range handlers.KnownHandlerTypes {
-		if outputType == handlerType {
-			isKnownType = true
-			break
-		}
-	}
+	isKnownType := slices.Contains(handlers.KnownHandlerTypes, outputType)
 
 	if !isKnownType {
 		return model.Output{}, fmt.Errorf("unknown output type: %s", outputType)

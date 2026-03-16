@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"grog/internal/config"
 	"grog/internal/console"
+	"maps"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -73,9 +74,7 @@ func withEnv(envVars map[string]string) func(*pkl.EvaluatorOptions) {
 		if opts.Env == nil {
 			opts.Env = make(map[string]string, len(envVars))
 		}
-		for k, v := range envVars {
-			opts.Env[k] = v
-		}
+		maps.Copy(opts.Env, envVars)
 	}
 }
 

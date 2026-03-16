@@ -40,9 +40,9 @@ func ParseTargetLabel(packagePath, label string) (TargetLabel, error) {
 		return TargetLabel{}, fmt.Errorf("invalid label %q: must start with \"//\" or \":\"", label)
 	}
 	body := label[2:]
-	colonIndex := strings.Index(body, ":")
+	before, after, ok := strings.Cut(body, ":")
 	var pkg, name string
-	if colonIndex == -1 {
+	if !ok {
 		// Shorthand: infer target name from the last element of the package path.
 		pkg = body
 		if pkg == "" {
@@ -51,8 +51,8 @@ func ParseTargetLabel(packagePath, label string) (TargetLabel, error) {
 		parts := strings.Split(pkg, "/")
 		name = parts[len(parts)-1]
 	} else {
-		pkg = body[:colonIndex]
-		name = body[colonIndex+1:]
+		pkg = before
+		name = after
 		if name == "" {
 			return TargetLabel{}, fmt.Errorf("invalid label %q: target name is empty", label)
 		}
