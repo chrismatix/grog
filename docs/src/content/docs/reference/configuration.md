@@ -31,7 +31,7 @@ environment_variables = { FOO = "bar" }
 
 # Cache Settings
 enable_cache = true # default
-remote_async_uploads = false # default
+async_cache_writes = false # default
 
 [cache]
 backend = "gcs"  # Options: "" (local), "gcs", "s3"
@@ -62,7 +62,7 @@ For instance, to set or override the `fail_fast` option set `GROG_FAIL_FAST=fals
   - `minimal`: Only load outputs of a target if a **direct dependant** needs to be re-built. This setting is useful to save bandwidth and disk space in CI settings.
 - **hash_algorithm**: Selects the hash function used for cache keys and change detection. [`xxh3`](https://xxhash.com/) (default) offers extremely fast, 128-bit hashes with a negligible collision probability for typical builds, while `sha256` is slower but cryptographically strong—use it if you are hashing untrusted inputs or want a vanishingly small risk of collisions despite the performance cost.
 - **all_platforms**: When set to `true` skips the platform selection step and builds all targets for all platforms ([read more](/topics/querying)).
-- **remote_async_uploads**: When `true`, defers remote cache uploads (GCS, S3) to a post-build phase instead of performing them inline during the build. Local cache writes still happen synchronously so downstream targets get correct cache hits. After all targets complete, queued remote uploads run in parallel with a progress UI. Upload failures are non-fatal warnings — the build result is unaffected. Only has an effect when a remote cache backend is configured. Defaults to `false`.
+- **async_cache_writes**: When `true`, cache writes are deferred to background goroutines during the build, freeing worker pool slots sooner. Output hashes are still computed synchronously so downstream targets get correct cache hits. After all targets complete, pending writes are awaited with a progress UI. Write failures are non-fatal warnings — the build result is unaffected. Defaults to `false`.
 - **skip_workspace_lock**: When `true`, Grog does not acquire a workspace-level lock before executing. **Warning:** Running multiple grog instances without locking can corrupt the workspace or cache.
 
 ## Profiles

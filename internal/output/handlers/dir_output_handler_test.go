@@ -62,7 +62,7 @@ func TestDirectoryOutputHandler_WriteAndLoad(t *testing.T) {
 		t.Fatalf("failed to create cache backend: %v", err)
 	}
 	cas := caching.NewCas(cacheBackend)
-	handler := handlers.NewDirectoryOutputHandler(cas)
+	handler := handlers.NewDirectoryOutputHandler(cas, false)
 
 	target := model.Target{Label: label.TL("pkg", "target"), ChangeHash: "hash"}
 	output := model.NewOutput("dir", "out")
@@ -151,7 +151,7 @@ func TestDirectoryOutputHandler_Write_FailsOnCacheWrite(t *testing.T) {
 	// Mock cache that fails on Set
 	failing := &mockCacheBackend{setErr: errors.New("backend set failed")}
 	cas := caching.NewCas(failing)
-	handler := handlers.NewDirectoryOutputHandler(cas)
+	handler := handlers.NewDirectoryOutputHandler(cas, false)
 
 	target := model.Target{Label: label.TL("pkg", "target"), ChangeHash: "hash"}
 	output := model.NewOutput("dir", "out")
@@ -172,7 +172,7 @@ func TestDirectoryOutputHandler_Load_FailsOnCacheLoad(t *testing.T) {
 	// Mock cache that fails on Get
 	failing := &mockCacheBackend{getErr: errors.New("backend get failed")}
 	cas := caching.NewCas(failing)
-	handler := handlers.NewDirectoryOutputHandler(cas)
+	handler := handlers.NewDirectoryOutputHandler(cas, false)
 
 	target := model.Target{Label: label.TL("pkg", "target"), ChangeHash: "hash"}
 

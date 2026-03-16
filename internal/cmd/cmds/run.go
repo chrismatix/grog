@@ -169,7 +169,7 @@ func loadDependencyOutputsIfNeeded(ctx context.Context, logger *console.Logger, 
 	targetCache := caching.NewTargetResultCache(cache)
 	cas := caching.NewCas(cache)
 	taintCache := caching.NewTaintCache(cache)
-	registry := output.NewRegistry(ctx, cas)
+	registry := output.NewRegistry(ctx, cas, false)
 
 	executor := execution.NewExecutor(
 		targetCache,
@@ -180,7 +180,6 @@ func loadDependencyOutputsIfNeeded(ctx context.Context, logger *console.Logger, 
 		config.Global.StreamLogs,
 		config.Global.EnableCache,
 		config.Global.GetLoadOutputsMode(),
-		output.NewAsyncUploadManager(),
 	)
 	logger.Infof("Loading outputs of direct dependencies due to load_outputs=minimal")
 	if err := executor.LoadDependencyOutputs(ctx, runTarget, func(_ worker.StatusUpdate) {}); err != nil {

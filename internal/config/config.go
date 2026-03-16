@@ -36,10 +36,11 @@ type WorkspaceConfig struct {
 	// processes operate on the same workspace, otherwise cache corruption may
 	// occur.
 	SkipWorkspaceLock bool `mapstructure:"skip_workspace_lock"`
-	// RemoteAsyncUploads defers remote cache uploads to a post-build phase,
-	// freeing worker pool slots sooner. Only affects builds with a remote cache
-	// backend (GCS, S3). Local cache writes still happen synchronously.
-	RemoteAsyncUploads bool `mapstructure:"remote_async_uploads"`
+	// AsyncCacheWrites defers cache writes to background goroutines,
+	// freeing worker pool slots sooner. The output registry returns
+	// immediately after computing output hashes and pending writes
+	// are awaited at the end of the build with a progress UI.
+	AsyncCacheWrites bool `mapstructure:"async_cache_writes"`
 
 	// Logging
 	LogLevel      string `mapstructure:"log_level"`

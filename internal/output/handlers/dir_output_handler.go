@@ -26,13 +26,15 @@ import (
 // DirectoryOutputHandler handles directory outputs by turning them into a merkle tree
 // whose definition and file contents are stored in the CAS.
 type DirectoryOutputHandler struct {
-	cas *caching.Cas
+	cas         *caching.Cas
+	asyncWrites bool
 }
 
 // NewDirectoryOutputHandler creates a new DirectoryOutputHandler
-func NewDirectoryOutputHandler(cas *caching.Cas) *DirectoryOutputHandler {
+func NewDirectoryOutputHandler(cas *caching.Cas, asyncWrites bool) *DirectoryOutputHandler {
 	return &DirectoryOutputHandler{
-		cas: cas,
+		cas:         cas,
+		asyncWrites: asyncWrites,
 	}
 }
 
@@ -135,21 +137,55 @@ func (d *DirectoryOutputHandler) Write(
 		)
 	}
 
-	hasRemote := d.cas.HasRemoteBackend()
+	genOutput := &gen.Output{
+		Kind: &gen.Output_Directory{
+			Directory: &gen.DirectoryOutput{
+				Path: output.Identifier,
+				TreeDigest: &gen.Digest{
+					Hash:      treeDigest,
+					SizeBytes: 0, // filled after upload
+				},
+			},
+		},
+	}
 
-	sizeBytes, err := d.uploadFiles(ctx, fileUploads, progress, hasRemote)
+	if d.asyncWrites {
+		// Defer the entire CAS write to a background goroutine
+		capturedTree := marshalledTree
+		capturedTreeDigest := treeDigest
+		capturedUploads := fileUploads
+		cas := d.cas
+		deferredUpload := func(ctx context.Context) error {
+			sizeBytes, err := d.uploadFiles(ctx, capturedUploads, progress)
+			if err != nil {
+				return fmt.Errorf("failed to upload directory files to cache: %w", err)
+			}
+			_ = sizeBytes
+
+			if err := cas.Write(ctx, capturedTreeDigest, bytes.NewReader(capturedTree)); err != nil {
+				return fmt.Errorf("failed to write tree to cache: %w", err)
+			}
+
+			if progress != nil {
+				progress.Complete()
+			}
+			return nil
+		}
+
+		return &WriteResult{
+			Output:         genOutput,
+			DeferredUpload: deferredUpload,
+		}, nil
+	}
+
+	// Synchronous path
+	sizeBytes, err := d.uploadFiles(ctx, fileUploads, progress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to upload directory files to cache: %w", err)
 	}
 
 	logger.Debugf("writing directory tree digest %s for %s", treeDigest, directoryPath)
-	if hasRemote {
-		err = d.cas.WriteLocal(ctx, treeDigest, bytes.NewReader(marshalledTree))
-	} else {
-		err = d.cas.Write(ctx, treeDigest, bytes.NewReader(marshalledTree))
-	}
-
-	if err != nil {
+	if err := d.cas.Write(ctx, treeDigest, bytes.NewReader(marshalledTree)); err != nil {
 		return nil, fmt.Errorf("failed to write tree to cache: %w", err)
 	}
 
@@ -157,46 +193,16 @@ func (d *DirectoryOutputHandler) Write(
 		progress.Complete()
 	}
 
-	genOutput := &gen.Output{
-		Kind: &gen.Output_Directory{
-			Directory: &gen.DirectoryOutput{
-				Path: output.Identifier,
-				TreeDigest: &gen.Digest{
-					Hash:      treeDigest,
-					SizeBytes: sizeBytes,
-				},
-			},
-		},
-	}
-
-	var deferredUpload func(ctx context.Context) error
-	if hasRemote {
-		// Collect all digests that need remote upload: file digests + tree digest
-		var digests []string
-		for _, upload := range fileUploads {
-			digests = append(digests, upload.digest)
-		}
-		digests = append(digests, treeDigest)
-
-		deferredUpload = func(ctx context.Context) error {
-			for _, digest := range digests {
-				if err := d.cas.UploadRemote(ctx, digest); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-	}
+	genOutput.GetDirectory().TreeDigest.SizeBytes = sizeBytes
 
 	return &WriteResult{
 		Output:         genOutput,
-		DeferredUpload: deferredUpload,
+		DeferredUpload: nil,
 	}, nil
 }
 
 // uploadFiles uploads all files in parallel to the CAS.
-// If localOnly is true, writes only to local CAS (for deferred remote upload).
-func (d *DirectoryOutputHandler) uploadFiles(ctx context.Context, fileUploads []fileUpload, progress *worker.ProgressTracker, localOnly bool) (int64, error) {
+func (d *DirectoryOutputHandler) uploadFiles(ctx context.Context, fileUploads []fileUpload, progress *worker.ProgressTracker) (int64, error) {
 	logger := console.GetLogger(ctx)
 	var sizeBytes atomic.Int64
 
@@ -221,12 +227,7 @@ func (d *DirectoryOutputHandler) uploadFiles(ctx context.Context, fileUploads []
 				reader = progress.WrapReader(file)
 			}
 
-			if localOnly {
-				err = d.cas.WriteLocal(ctx, localUploadAction.digest, reader)
-			} else {
-				err = d.cas.Write(ctx, localUploadAction.digest, reader)
-			}
-			if err != nil {
+			if err := d.cas.Write(ctx, localUploadAction.digest, reader); err != nil {
 				errChan <- err
 				return
 			}

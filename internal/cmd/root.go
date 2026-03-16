@@ -147,10 +147,10 @@ func init() {
 	err = viper.BindPFlag("profile", RootCmd.PersistentFlags().Lookup("profile"))
 	viper.SetDefault("profile", "")
 
-	// remote_async_uploads
-	RootCmd.PersistentFlags().Bool("remote-async-uploads", false, "Defer remote cache uploads to a post-build phase")
-	err = viper.BindPFlag("remote_async_uploads", RootCmd.PersistentFlags().Lookup("remote-async-uploads"))
-	viper.SetDefault("remote_async_uploads", false)
+	// async_cache_writes
+	RootCmd.PersistentFlags().Bool("async-cache-writes", false, "Defer cache writes to background goroutines during the build")
+	err = viper.BindPFlag("async_cache_writes", RootCmd.PersistentFlags().Lookup("async-cache-writes"))
+	viper.SetDefault("async_cache_writes", false)
 
 	// disable_tea
 	RootCmd.PersistentFlags().Bool("disable-tea", false, "Disable interactive TUI (Bubble Tea)")

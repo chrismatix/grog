@@ -19,12 +19,14 @@ import (
 // FileOutputHandler is the default output handler that writes files to the file system.
 // mostly passes directly through to the target cache which handles files
 type FileOutputHandler struct {
-	cas *caching.Cas
+	cas         *caching.Cas
+	asyncWrites bool
 }
 
-func NewFileOutputHandler(cas *caching.Cas) *FileOutputHandler {
+func NewFileOutputHandler(cas *caching.Cas, asyncWrites bool) *FileOutputHandler {
 	return &FileOutputHandler{
-		cas: cas,
+		cas:         cas,
+		asyncWrites: asyncWrites,
 	}
 }
 
@@ -66,32 +68,6 @@ func (f *FileOutputHandler) Write(
 		return nil, fmt.Errorf("failed to get file sizeBytes %s: %w", absOutputPath, err)
 	}
 
-	progress := tracker
-	if progress != nil {
-		progress = progress.SubTracker(fmt.Sprintf("%s: writing %s", target.Label, relativePath), fileInfo.Size())
-	}
-
-	reader := io.Reader(file)
-	if progress != nil {
-		reader = progress.WrapReader(file)
-	}
-
-	hasRemote := f.cas.HasRemoteBackend()
-	console.GetLogger(ctx).Debugf("writing file output %s with digest %s", absOutputPath, fileHash)
-	if hasRemote {
-		if err := f.cas.WriteLocal(ctx, fileHash, reader); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := f.cas.Write(ctx, fileHash, reader); err != nil {
-			return nil, err
-		}
-	}
-
-	if progress != nil {
-		progress.Complete()
-	}
-
 	genOutput := &gen.Output{
 		Kind: &gen.Output_File{
 			File: &gen.FileOutput{
@@ -104,17 +80,71 @@ func (f *FileOutputHandler) Write(
 		},
 	}
 
-	var deferredUpload func(ctx context.Context) error
-	if hasRemote {
+	if f.asyncWrites {
+		// Defer the entire CAS write to a background goroutine
 		capturedHash := fileHash
-		deferredUpload = func(ctx context.Context) error {
-			return f.cas.UploadRemote(ctx, capturedHash)
+		capturedPath := absOutputPath
+		capturedSize := fileInfo.Size()
+		capturedLabel := target.Label.String()
+		capturedRelPath := relativePath
+		cas := f.cas
+		deferredUpload := func(ctx context.Context) error {
+			file, err := os.Open(capturedPath)
+			if err != nil {
+				return fmt.Errorf("failed to re-open %s for async cache write: %w", capturedPath, err)
+			}
+			defer file.Close()
+
+			progress := tracker
+			if progress != nil {
+				progress = progress.SubTracker(fmt.Sprintf("%s: writing %s", capturedLabel, capturedRelPath), capturedSize)
+			}
+
+			reader := io.Reader(file)
+			if progress != nil {
+				reader = progress.WrapReader(file)
+			}
+
+			console.GetLogger(ctx).Debugf("async writing file output %s with digest %s", capturedPath, capturedHash)
+			if err := cas.Write(ctx, capturedHash, reader); err != nil {
+				return err
+			}
+
+			if progress != nil {
+				progress.Complete()
+			}
+			return nil
 		}
+
+		return &WriteResult{
+			Output:         genOutput,
+			DeferredUpload: deferredUpload,
+		}, nil
+	}
+
+	// Synchronous path
+	progress := tracker
+	if progress != nil {
+		progress = progress.SubTracker(fmt.Sprintf("%s: writing %s", target.Label, relativePath), fileInfo.Size())
+	}
+
+	reader := io.Reader(file)
+	if progress != nil {
+		reader = progress.WrapReader(file)
+	}
+
+	console.GetLogger(ctx).Debugf("writing file output %s with digest %s", absOutputPath, fileHash)
+	if err := f.cas.Write(ctx, fileHash, reader); err != nil {
+		return nil, err
+	}
+
+	if progress != nil {
+		progress.Complete()
 	}
 
 	return &WriteResult{
 		Output:         genOutput,
-		DeferredUpload: deferredUpload,
+		DeferredUpload: nil,
 	}, nil
 }
 

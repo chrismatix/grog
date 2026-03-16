@@ -123,9 +123,8 @@ func RunBuild(
 	}
 	targetCache := caching.NewTargetResultCache(cache)
 	cas := caching.NewCas(cache)
-	cas.SetAsyncRemote(config.Global.RemoteAsyncUploads)
 	taintCache := caching.NewTaintCache(cache)
-	registry := output.NewRegistry(ctx, cas)
+	registry := output.NewRegistry(ctx, cas, config.Global.AsyncCacheWrites)
 
 	// Only lock the workspace once necessary, i.e., before we start building
 	if config.Global.SkipWorkspaceLock {
@@ -142,8 +141,6 @@ func RunBuild(
 		}()
 	}
 
-	asyncManager := output.NewAsyncUploadManager()
-
 	executor := execution.NewExecutor(
 		targetCache,
 		taintCache,
@@ -153,18 +150,18 @@ func RunBuild(
 		streamLogs,
 		config.Global.EnableCache,
 		loadOutputsMode,
-		asyncManager,
 	)
 	completionMap, executionErr := executor.Execute(ctx)
 
-	// Post-build: wait for async remote uploads
+	// Post-build: wait for async cache writes
+	asyncManager := registry.AsyncManager()
 	if asyncManager.Submitted() > 0 {
 		uploadCtx, uploadProgram, uploadSendMsg := console.StartTaskUI(ctx)
 		uploadErrs := asyncManager.Wait(uploadCtx, runtime.NumCPU(), uploadSendMsg)
 		uploadProgram.Quit()
 		_ = uploadProgram.ReleaseTerminal()
 		for _, err := range uploadErrs {
-			logger.Warnf("Remote cache upload error (non-fatal): %v", err)
+			logger.Warnf("Cache write error (non-fatal): %v", err)
 		}
 	}
 

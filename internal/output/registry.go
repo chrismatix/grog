@@ -34,34 +34,40 @@ type Registry struct {
 	hashCache       map[string]string
 	outputHashMutex sync.RWMutex
 	outputHashCache map[string]map[model.Output]string
+
+	asyncCacheWrites bool
+	asyncManager     *AsyncUploadManager
 }
 
 // NewRegistry creates a new registry with default handlers
 func NewRegistry(
 	ctx context.Context,
 	cas *caching.Cas,
+	asyncCacheWrites bool,
 ) *Registry {
 	r := &Registry{
-		handlers:        make(map[string]handlers.Handler),
-		targetMutexMap:  maps.NewMutexMap(),
-		hashCache:       make(map[string]string),
-		outputHashCache: make(map[string]map[model.Output]string),
+		handlers:         make(map[string]handlers.Handler),
+		targetMutexMap:   maps.NewMutexMap(),
+		hashCache:        make(map[string]string),
+		outputHashCache:  make(map[string]map[model.Output]string),
+		asyncCacheWrites: asyncCacheWrites,
+		asyncManager:     NewAsyncUploadManager(),
 		pool: pond.NewPool(
 			runtime.NumCPU() * 2,
 		),
 	}
 
 	// Register built-in handlers
-	r.Register(handlers.NewFileOutputHandler(cas))
-	r.Register(handlers.NewDirectoryOutputHandler(cas))
+	r.Register(handlers.NewFileOutputHandler(cas, asyncCacheWrites))
+	r.Register(handlers.NewDirectoryOutputHandler(cas, asyncCacheWrites))
 
 	dockerBackend := config.Global.Docker.Backend
 	if dockerBackend == "registry" {
-		r.Register(handlers.NewDockerRegistryOutputHandler(cas, config.Global.Docker))
+		r.Register(handlers.NewDockerRegistryOutputHandler(cas, config.Global.Docker, asyncCacheWrites))
 	} else {
 		// The backend setting is validated in the config package
 		// so we can assume it's either "docker" or "fs-tarball"
-		r.Register(handlers.NewDockerOutputHandler(ctx, cas))
+		r.Register(handlers.NewDockerOutputHandler(ctx, cas, asyncCacheWrites))
 	}
 	return r
 }
@@ -107,18 +113,11 @@ func (r *Registry) mustGetHandler(outputType string) handlers.Handler {
 	return handler
 }
 
-// WriteOutputsResult contains the target result and any deferred upload closures
-// that should be executed asynchronously after builds complete.
-type WriteOutputsResult struct {
-	TargetResult    *gen.TargetResult
-	DeferredUploads []func(ctx context.Context) error
-}
-
 func (r *Registry) WriteOutputs(
 	ctx context.Context,
 	target *model.Target,
 	progress *worker.ProgressTracker,
-) (*WriteOutputsResult, error) {
+) (*gen.TargetResult, error) {
 	r.targetMutexMap.Lock(target.Label.String())
 	defer r.targetMutexMap.Unlock(target.Label.String())
 
@@ -153,13 +152,12 @@ func (r *Registry) WriteOutputs(
 		}
 	}
 
-	// Extract outputs and deferred uploads from write results
+	// Extract outputs and submit deferred uploads to async manager
 	targetOutputs := make([]*gen.Output, 0, len(writeResults))
-	var deferredUploads []func(ctx context.Context) error
 	for _, wr := range writeResults {
 		targetOutputs = append(targetOutputs, wr.Output)
 		if wr.DeferredUpload != nil {
-			deferredUploads = append(deferredUploads, wr.DeferredUpload)
+			r.asyncManager.Submit(wr.DeferredUpload)
 		}
 	}
 
@@ -170,15 +168,17 @@ func (r *Registry) WriteOutputs(
 
 	logger.Debugf("%s: outputs written", target.Label)
 
-	return &WriteOutputsResult{
-		TargetResult: &gen.TargetResult{
-			ChangeHash:              target.ChangeHash,
-			OutputHash:              outputHash,
-			Outputs:                 targetOutputs,
-			ExecutionDurationMillis: target.ExecutionTime.Milliseconds(),
-		},
-		DeferredUploads: deferredUploads,
+	return &gen.TargetResult{
+		ChangeHash:              target.ChangeHash,
+		OutputHash:              outputHash,
+		Outputs:                 targetOutputs,
+		ExecutionDurationMillis: target.ExecutionTime.Milliseconds(),
 	}, nil
+}
+
+// AsyncManager returns the async upload manager for awaiting pending writes
+func (r *Registry) AsyncManager() *AsyncUploadManager {
+	return r.asyncManager
 }
 
 // GetNoCacheOutputHash computes the output hash for a target when target caching is disabled

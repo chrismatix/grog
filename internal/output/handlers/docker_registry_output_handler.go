@@ -27,16 +27,19 @@ type DockerRegistryOutputHandler struct {
 	cas          *caching.Cas
 	config       config.DockerConfig
 	dockerClient *client.Client
+	asyncWrites  bool
 }
 
 // NewDockerRegistryOutputHandler creates a new DockerRegistryOutputHandler.
 func NewDockerRegistryOutputHandler(
 	cas *caching.Cas,
 	config config.DockerConfig,
+	asyncWrites bool,
 ) *DockerRegistryOutputHandler {
 	return &DockerRegistryOutputHandler{
-		cas:    cas,
-		config: config,
+		cas:         cas,
+		config:      config,
+		asyncWrites: asyncWrites,
 	}
 }
 
@@ -124,37 +127,66 @@ func (d *DockerRegistryOutputHandler) Write(
 		},
 	}
 
-	// Defer the push + cleanup to the async upload phase
-	capturedRemoteName := remoteCacheImageName
-	capturedLocalName := localImageName
-	capturedTargetLabel := target.Label.String()
-	deferredUpload := func(ctx context.Context) error {
-		defer cli.ImageRemove(ctx, capturedRemoteName, image.RemoveOptions{})
+	if d.asyncWrites {
+		// Defer the push + cleanup to the async upload phase
+		capturedRemoteName := remoteCacheImageName
+		capturedLocalName := localImageName
+		capturedTargetLabel := target.Label.String()
+		deferredUpload := func(ctx context.Context) error {
+			defer cli.ImageRemove(ctx, capturedRemoteName, image.RemoveOptions{})
 
-		auth, err := makeRegistryAuth(capturedRemoteName)
-		if err != nil {
-			return err
+			auth, err := makeRegistryAuth(capturedRemoteName)
+			if err != nil {
+				return err
+			}
+
+			pushReader, err := cli.ImagePush(ctx, capturedRemoteName, image.PushOptions{
+				RegistryAuth: auth,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to push image %q to registry: %w", capturedRemoteName, err)
+			}
+			defer pushReader.Close()
+
+			if err := consumeDockerProgress(pushReader, tracker, fmt.Sprintf("%s: pushing cache for %s", capturedTargetLabel, capturedLocalName)); err != nil {
+				return fmt.Errorf("error reading push response: %w", err)
+			}
+
+			logger.Debugf("successfully pushed Docker image %s to registry", capturedRemoteName)
+			return nil
 		}
 
-		pushReader, err := cli.ImagePush(ctx, capturedRemoteName, image.PushOptions{
-			RegistryAuth: auth,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to push image %q to registry: %w", capturedRemoteName, err)
-		}
-		defer pushReader.Close()
-
-		if err := consumeDockerProgress(pushReader, tracker, fmt.Sprintf("%s: pushing cache for %s", capturedTargetLabel, capturedLocalName)); err != nil {
-			return fmt.Errorf("error reading push response: %w", err)
-		}
-
-		logger.Debugf("successfully pushed Docker image %s to registry", capturedRemoteName)
-		return nil
+		return &WriteResult{
+			Output:         genOutput,
+			DeferredUpload: deferredUpload,
+		}, nil
 	}
+
+	// Synchronous path: push inline
+	defer cli.ImageRemove(ctx, remoteCacheImageName, image.RemoveOptions{})
+
+	auth, err := makeRegistryAuth(remoteCacheImageName)
+	if err != nil {
+		return nil, err
+	}
+
+	pushReader, err := cli.ImagePush(ctx, remoteCacheImageName, image.PushOptions{
+		RegistryAuth: auth,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to push image %q to registry: %w", remoteCacheImageName, err)
+	}
+	defer pushReader.Close()
+
+	if err := consumeDockerProgress(pushReader, tracker, fmt.Sprintf("%s: pushing cache for %s", target.Label.String(), localImageName)); err != nil {
+		return nil, fmt.Errorf("error reading push response: %w", err)
+	}
+
+	logger.Debugf("successfully pushed Docker image %s to registry", remoteCacheImageName)
 
 	return &WriteResult{
 		Output:         genOutput,
-		DeferredUpload: deferredUpload,
+		DeferredUpload: nil,
 	}, nil
 }
 
