@@ -138,3 +138,69 @@ shared_func("target_b")
 	// Both packages should have loaded successfully
 	// The shared module should have been cached (though we can't directly observe this without instrumentation)
 }
+
+func TestStarlarkLoader_StdlibModules(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	oldWorkspaceRoot := config.Global.WorkspaceRoot
+	config.Global.WorkspaceRoot = tmpDir
+	defer func() {
+		config.Global.WorkspaceRoot = oldWorkspaceRoot
+	}()
+
+	tests := []struct {
+		name    string
+		script  string
+		wantErr bool
+	}{
+		{
+			name: "json.encode produces valid JSON",
+			script: `result = json.encode({"key": "value", "list": [1, 2, 3]})
+target(name = "test", command = "echo " + result)
+`,
+		},
+		{
+			name: "json.decode round-trips with encode",
+			script: `encoded = json.encode({"hello": "world"})
+decoded = json.decode(encoded)
+target(name = "test", command = "echo " + decoded["hello"])
+`,
+		},
+		{
+			name: "json.encode handles special characters",
+			script: `result = json.encode({"dep": "foo >= 1.0, <2.0", "quotes": "say \"hello\""})
+target(name = "test", command = "echo " + result)
+`,
+		},
+		{
+			name: "math module is available",
+			script: `x = math.floor(3.7)
+target(name = "test", command = "echo " + str(x))
+`,
+		},
+		{
+			name: "time module is available",
+			script: `d = time.parse_duration("1h30m")
+target(name = "test", command = "echo " + str(d))
+`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buildFile := filepath.Join(tmpDir, tt.name, "BUILD.star")
+			if err := os.MkdirAll(filepath.Dir(buildFile), 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(buildFile, []byte(tt.script), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			loader := StarlarkLoader{}
+			_, _, err := loader.Load(context.Background(), buildFile)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Load() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
