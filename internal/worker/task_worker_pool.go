@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"maps"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -194,9 +195,7 @@ func (twp *TaskWorkerPool[T]) flushState() {
 	twp.mu.Lock()
 	// copy
 	mapCopy := make(console.TaskStateMap, len(twp.taskState))
-	for k, v := range twp.taskState {
-		mapCopy[k] = v
-	}
+	maps.Copy(mapCopy, twp.taskState)
 
 	total := twp.nextTaskId
 	if twp.totalTasks > 0 {

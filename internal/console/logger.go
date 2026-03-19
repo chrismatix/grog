@@ -34,7 +34,7 @@ func NewFromSugared(logger *zap.SugaredLogger, level zapcore.Level) *Logger {
 }
 
 // Tracef logs at the trace level when enabled.
-func (l *Logger) Tracef(template string, args ...interface{}) {
+func (l *Logger) Tracef(template string, args ...any) {
 	if l == nil || !l.traceEnabled {
 		return
 	}
@@ -52,7 +52,7 @@ func (l *Logger) DebugEnabled() bool {
 	return l.Desugar().Core().Enabled(zap.DebugLevel)
 }
 
-func (l *Logger) With(args ...interface{}) *Logger {
+func (l *Logger) With(args ...any) *Logger {
 	return &Logger{
 		SugaredLogger: l.SugaredLogger.With(args...),
 		traceEnabled:  l.traceEnabled,

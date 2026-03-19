@@ -211,10 +211,7 @@ func (pt *ProgressTracker) send(status string, current, total int64) {
 
 func computeStep(total int64) int64 {
 	const minStep = 32 * 1024
-	step := total / 100
-	if step < minStep {
-		step = minStep
-	}
+	step := max(total/100, minStep)
 	return step
 }
 

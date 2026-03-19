@@ -5,6 +5,7 @@ import (
 	"grog/internal/config"
 	"grog/internal/label"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 )
@@ -39,7 +40,7 @@ type Target struct {
 	// UnresolvedInputs are the inputs as specified by the user (no glob resolving)
 	UnresolvedInputs []string `json:"-"`
 	// BinOutput is always a path to a binary file
-	BinOutput Output `json:"bin_output,omitempty"`
+	BinOutput Output `json:"bin_output"`
 	// Whether this target is selected for execution.
 	IsSelected bool `json:"is_selected,omitempty"`
 	// Whether the outputs for this target were already loaded in the current execution
@@ -74,12 +75,7 @@ func (t *Target) HasBinOutput() bool {
 }
 
 func (t *Target) HasTag(tagName string) bool {
-	for _, tag := range t.Tags {
-		if tag == tagName {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(t.Tags, tagName)
 }
 
 func (t *Target) SkipsCache() bool {

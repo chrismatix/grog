@@ -5,6 +5,7 @@ import (
 	"grog/internal/console"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"grog/internal/config"
@@ -153,7 +154,7 @@ func getChangedFiles(gitRef string) ([]string, error) {
 
 	// Split the output into lines and filter out empty lines
 	var files []string
-	for _, file := range strings.Split(string(output), "\n") {
+	for file := range strings.SplitSeq(string(output), "\n") {
 		if file != "" {
 			// Get the absolute path of the file
 			absPath := filepath.Join(gitRoot, file)
@@ -166,12 +167,7 @@ func getChangedFiles(gitRef string) ([]string, error) {
 
 // containsFile checks if the list of files contains the given file
 func containsFile(files []string, file string) bool {
-	for _, f := range files {
-		if f == file {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(files, file)
 }
 
 func AddChangesCmd(rootCmd *cobra.Command) {

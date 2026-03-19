@@ -19,12 +19,12 @@ type TargetPattern struct {
 // ParseTargetPattern parses a Bazel target pattern.
 func ParseTargetPattern(currentPackage string, pattern string) (TargetPattern, error) {
 	if !strings.HasPrefix(pattern, "//") {
-		colonIdx := strings.Index(pattern, ":")
-		if colonIdx == -1 {
+		_, after, ok := strings.Cut(pattern, ":")
+		if !ok {
 			return TargetPattern{}, fmt.Errorf("invalid pattern %q: relative patterns must use ':'", pattern)
 		}
 
-		targetName := pattern[colonIdx+1:]
+		targetName := after
 		if targetName != "..." {
 			if err := validateName(targetName); err != nil {
 				return TargetPattern{}, err
@@ -37,11 +37,11 @@ func ParseTargetPattern(currentPackage string, pattern string) (TargetPattern, e
 	var prefix, targetPattern string
 	recursive := false
 
-	colonIndex := strings.Index(body, ":")
+	before, after, ok := strings.Cut(body, ":")
 	packagePart := body
-	if colonIndex != -1 {
-		packagePart = body[:colonIndex]
-		targetPattern = body[colonIndex+1:]
+	if ok {
+		packagePart = before
+		targetPattern = after
 		if targetPattern == "" {
 			return TargetPattern{}, fmt.Errorf("invalid pattern %q: target pattern is empty", pattern)
 		}
@@ -56,7 +56,7 @@ func ParseTargetPattern(currentPackage string, pattern string) (TargetPattern, e
 		prefix = packagePart[:ellipsisIndex]
 	} else {
 		prefix = packagePart
-		if colonIndex == -1 {
+		if !ok {
 			// Shorthand: "//foo" is equivalent to "//foo:foo"
 			targetPattern = packagePart[strings.LastIndex(packagePart, "/")+1:]
 			if targetPattern == "" {
@@ -170,9 +170,9 @@ func ParsePartialTargetPattern(currentPackage, pattern string) TargetPattern {
 		targetPattern = body[colonIndex+1:]
 	}
 
-	if ellipsisIndex := strings.Index(packagePart, "..."); ellipsisIndex != -1 {
+	if before, _, ok := strings.Cut(packagePart, "..."); ok {
 		recursive = true
-		prefix = packagePart[:ellipsisIndex]
+		prefix = before
 	} else {
 		prefix = packagePart
 	}

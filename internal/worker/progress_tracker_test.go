@@ -64,14 +64,12 @@ func TestProgressTrackerConcurrentChildren(t *testing.T) {
 
 	child := tracker.SubTracker("child", 256*1024)
 	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for j := 0; j < 4; j++ {
+	for range 8 {
+		wg.Go(func() {
+			for range 4 {
 				child.Add(8 * 1024)
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
