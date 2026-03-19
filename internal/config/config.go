@@ -36,10 +36,10 @@ type WorkspaceConfig struct {
 	// processes operate on the same workspace, otherwise cache corruption may
 	// occur.
 	SkipWorkspaceLock bool `mapstructure:"skip_workspace_lock"`
-	// AsyncCacheWrites defers cache writes to background goroutines,
-	// freeing worker pool slots sooner. The output registry returns
-	// immediately after computing output hashes and pending writes
-	// are awaited at the end of the build with a progress UI.
+	// AsyncCacheWrites defers cache writes to a dedicated I/O worker pool,
+	// freeing task workers to start downstream targets sooner. Output hashes
+	// are still computed synchronously so dependency chains stay correct.
+	// Pending I/O writes are drained before the build returns. Defaults to true.
 	AsyncCacheWrites bool `mapstructure:"async_cache_writes"`
 
 	// Logging

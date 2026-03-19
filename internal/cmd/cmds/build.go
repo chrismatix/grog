@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"runtime"
 	"strings"
 	"time"
 
@@ -124,7 +123,7 @@ func RunBuild(
 	targetCache := caching.NewTargetResultCache(cache)
 	cas := caching.NewCas(cache)
 	taintCache := caching.NewTaintCache(cache)
-	registry := output.NewRegistry(ctx, cas, config.Global.AsyncCacheWrites)
+	registry := output.NewRegistry(ctx, cas)
 
 	// Only lock the workspace once necessary, i.e., before we start building
 	if config.Global.SkipWorkspaceLock {
@@ -152,18 +151,6 @@ func RunBuild(
 		loadOutputsMode,
 	)
 	completionMap, executionErr := executor.Execute(ctx)
-
-	// Post-build: wait for async cache writes
-	asyncManager := registry.AsyncManager()
-	if asyncManager.Submitted() > 0 {
-		uploadCtx, uploadProgram, uploadSendMsg := console.StartTaskUI(ctx)
-		uploadErrs := asyncManager.Wait(uploadCtx, runtime.NumCPU(), uploadSendMsg)
-		uploadProgram.Quit()
-		_ = uploadProgram.ReleaseTerminal()
-		for _, err := range uploadErrs {
-			logger.Warnf("Cache write error (non-fatal): %v", err)
-		}
-	}
 
 	elapsedTime := time.Since(startTime).Seconds()
 	// Mostly used to keep our test fixtures deterministic

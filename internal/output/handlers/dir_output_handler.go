@@ -26,15 +26,13 @@ import (
 // DirectoryOutputHandler handles directory outputs by turning them into a merkle tree
 // whose definition and file contents are stored in the CAS.
 type DirectoryOutputHandler struct {
-	cas         *caching.Cas
-	asyncWrites bool
+	cas *caching.Cas
 }
 
 // NewDirectoryOutputHandler creates a new DirectoryOutputHandler
-func NewDirectoryOutputHandler(cas *caching.Cas, asyncWrites bool) *DirectoryOutputHandler {
+func NewDirectoryOutputHandler(cas *caching.Cas) *DirectoryOutputHandler {
 	return &DirectoryOutputHandler{
-		cas:         cas,
-		asyncWrites: asyncWrites,
+		cas: cas,
 	}
 }
 
@@ -149,55 +147,32 @@ func (d *DirectoryOutputHandler) Write(
 		},
 	}
 
-	if d.asyncWrites {
-		// Defer the entire CAS write to a background goroutine
-		capturedTree := marshalledTree
-		capturedTreeDigest := treeDigest
-		capturedUploads := fileUploads
-		cas := d.cas
-		deferredUpload := func(ctx context.Context) error {
-			sizeBytes, err := d.uploadFiles(ctx, capturedUploads, progress)
-			if err != nil {
-				return fmt.Errorf("failed to upload directory files to cache: %w", err)
-			}
-			_ = sizeBytes
+	// Always produce a deferred upload closure; the executor decides
+	// whether to run it inline (sync) or on the I/O pool (async).
+	capturedTree := marshalledTree
+	capturedTreeDigest := treeDigest
+	capturedUploads := fileUploads
+	cas := d.cas
+	deferredUpload := func(ctx context.Context) error {
+		sizeBytes, err := d.uploadFiles(ctx, capturedUploads, progress)
+		if err != nil {
+			return fmt.Errorf("failed to upload directory files to cache: %w", err)
+		}
+		_ = sizeBytes
 
-			if err := cas.Write(ctx, capturedTreeDigest, bytes.NewReader(capturedTree)); err != nil {
-				return fmt.Errorf("failed to write tree to cache: %w", err)
-			}
-
-			if progress != nil {
-				progress.Complete()
-			}
-			return nil
+		if err := cas.Write(ctx, capturedTreeDigest, bytes.NewReader(capturedTree)); err != nil {
+			return fmt.Errorf("failed to write tree to cache: %w", err)
 		}
 
-		return &WriteResult{
-			Output:         genOutput,
-			DeferredUpload: deferredUpload,
-		}, nil
+		if progress != nil {
+			progress.Complete()
+		}
+		return nil
 	}
-
-	// Synchronous path
-	sizeBytes, err := d.uploadFiles(ctx, fileUploads, progress)
-	if err != nil {
-		return nil, fmt.Errorf("failed to upload directory files to cache: %w", err)
-	}
-
-	logger.Debugf("writing directory tree digest %s for %s", treeDigest, directoryPath)
-	if err := d.cas.Write(ctx, treeDigest, bytes.NewReader(marshalledTree)); err != nil {
-		return nil, fmt.Errorf("failed to write tree to cache: %w", err)
-	}
-
-	if progress != nil {
-		progress.Complete()
-	}
-
-	genOutput.GetDirectory().TreeDigest.SizeBytes = sizeBytes
 
 	return &WriteResult{
 		Output:         genOutput,
-		DeferredUpload: nil,
+		DeferredUpload: deferredUpload,
 	}, nil
 }
 

@@ -148,9 +148,9 @@ func init() {
 	viper.SetDefault("profile", "")
 
 	// async_cache_writes
-	RootCmd.PersistentFlags().Bool("async-cache-writes", false, "Defer cache writes to background goroutines during the build")
+	RootCmd.PersistentFlags().Bool("async-cache-writes", true, "Defer cache writes to background I/O workers during the build")
 	err = viper.BindPFlag("async_cache_writes", RootCmd.PersistentFlags().Lookup("async-cache-writes"))
-	viper.SetDefault("async_cache_writes", false)
+	viper.SetDefault("async_cache_writes", true)
 
 	// disable_tea
 	RootCmd.PersistentFlags().Bool("disable-tea", false, "Disable interactive TUI (Bubble Tea)")

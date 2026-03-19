@@ -62,7 +62,7 @@ func TestDirectoryOutputHandler_WriteAndLoad(t *testing.T) {
 		t.Fatalf("failed to create cache backend: %v", err)
 	}
 	cas := caching.NewCas(cacheBackend)
-	handler := handlers.NewDirectoryOutputHandler(cas, false)
+	handler := handlers.NewDirectoryOutputHandler(cas)
 
 	target := model.Target{Label: label.TL("pkg", "target"), ChangeHash: "hash"}
 	output := model.NewOutput("dir", "out")
@@ -151,13 +151,21 @@ func TestDirectoryOutputHandler_Write_FailsOnCacheWrite(t *testing.T) {
 	// Mock cache that fails on Set
 	failing := &mockCacheBackend{setErr: errors.New("backend set failed")}
 	cas := caching.NewCas(failing)
-	handler := handlers.NewDirectoryOutputHandler(cas, false)
+	handler := handlers.NewDirectoryOutputHandler(cas)
 
 	target := model.Target{Label: label.TL("pkg", "target"), ChangeHash: "hash"}
 	output := model.NewOutput("dir", "out")
 
-	if _, err := handler.Write(ctx, target, output, nil); err == nil {
-		t.Fatal("expected Write to fail when cache Set fails, got nil error")
+	result, err := handler.Write(ctx, target, output, nil)
+	if err != nil {
+		// Write may still fail during hash computation (not cache write)
+		return
+	}
+	if result.DeferredUpload == nil {
+		t.Fatal("expected DeferredUpload to be non-nil")
+	}
+	if err := result.DeferredUpload(ctx); err == nil {
+		t.Fatal("expected DeferredUpload to fail when cache Set fails, got nil error")
 	}
 }
 
@@ -172,7 +180,7 @@ func TestDirectoryOutputHandler_Load_FailsOnCacheLoad(t *testing.T) {
 	// Mock cache that fails on Get
 	failing := &mockCacheBackend{getErr: errors.New("backend get failed")}
 	cas := caching.NewCas(failing)
-	handler := handlers.NewDirectoryOutputHandler(cas, false)
+	handler := handlers.NewDirectoryOutputHandler(cas)
 
 	target := model.Target{Label: label.TL("pkg", "target"), ChangeHash: "hash"}
 

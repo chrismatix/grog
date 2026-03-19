@@ -70,7 +70,6 @@ func newTestRegistryWithHandlers(registryHandlers ...handlers.Handler) *Registry
 		handlers:       handlersByType,
 		targetMutexMap: maps.NewMutexMap(),
 		pool:           pond.NewPool(4),
-		asyncManager:   NewAsyncUploadManager(),
 	}
 }
 
