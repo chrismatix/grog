@@ -5,11 +5,18 @@ import (
 	"grog/internal/config"
 	"grog/internal/label"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 )
 
 var _ BuildNode = &Target{}
+
+const (
+	TagNoCache            = "no-cache"
+	TagMultiplatformCache = "multiplatform-cache"
+	TagTestOnly           = "testonly"
+)
 
 // Target defines a build step that depends on Dependencies (other targets)
 // and Inputs (files) and produces Outputs.
@@ -18,7 +25,7 @@ type Target struct {
 	// The file in which this target was defined
 	SourceFilePath string `json:"-"`
 
-	Command              string              `json:"cmd"`
+	Command              string              `json:"command"`
 	Dependencies         []label.TargetLabel `json:"dependencies,omitempty"`
 	Inputs               []string            `json:"inputs,omitempty"`
 	ExcludeInputs        []string            `json:"exclude_inputs,omitempty"`
@@ -33,7 +40,7 @@ type Target struct {
 	// UnresolvedInputs are the inputs as specified by the user (no glob resolving)
 	UnresolvedInputs []string `json:"-"`
 	// BinOutput is always a path to a binary file
-	BinOutput Output `json:"bin_output,omitempty"`
+	BinOutput Output `json:"bin_output"`
 	// Whether this target is selected for execution.
 	IsSelected bool `json:"is_selected,omitempty"`
 	// Whether the outputs for this target were already loaded in the current execution
@@ -48,6 +55,7 @@ type Target struct {
 	HasCacheHit bool   `json:"has_cache_hit,omitempty"`
 
 	ExecutionTime time.Duration `json:"-"`
+	CacheTime     time.Duration `json:"-"`
 }
 
 type OutputCheck struct {
@@ -66,22 +74,20 @@ func (t *Target) HasBinOutput() bool {
 	return t.BinOutput.IsSet()
 }
 
+func (t *Target) HasTag(tagName string) bool {
+	return slices.Contains(t.Tags, tagName)
+}
+
 func (t *Target) SkipsCache() bool {
-	for _, tag := range t.Tags {
-		if tag == "no-cache" {
-			return true
-		}
-	}
-	return false
+	return t.HasTag(TagNoCache)
 }
 
 func (t *Target) IsMultiplatformCache() bool {
-	for _, tag := range t.Tags {
-		if tag == "multiplatform-cache" {
-			return true
-		}
-	}
-	return false
+	return t.HasTag(TagMultiplatformCache)
+}
+
+func (t *Target) IsTestOnly() bool {
+	return t.HasTag(TagTestOnly)
 }
 
 func (t *Target) CommandEllipsis() string {

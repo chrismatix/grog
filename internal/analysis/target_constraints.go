@@ -2,14 +2,15 @@ package analysis
 
 import (
 	"fmt"
-	"grog/internal/config"
-	"grog/internal/model"
 	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/fatih/color"
-	"go.uber.org/zap"
+	"grog/internal/config"
+	"grog/internal/console"
+	"grog/internal/label"
+	"grog/internal/model"
 )
 
 /*
@@ -17,14 +18,14 @@ We need to check the following four constraints for the paths defined by each ta
 1. all inputs must be relative to the package path
 2. all outputs point to files within the repository
 TODO 3. warn if a target's inputs intersect with another target's outputs without them explicitly depending on each other
-TODO 4. error if a target's inputs intersect with its own outputs
+TODO 4. error if a target's inputs intersect with its own outputs?
 
 TODO: We don't yet check that a parent package does not include inputs from children. Should we?
 */
 
 // CheckTargetConstraints checks that the paths defined by each target are valid
 // logs any warnings on the way
-func CheckTargetConstraints(logger *zap.SugaredLogger, nodeMap model.BuildNodeMap) (errs []error) {
+func CheckTargetConstraints(logger *console.Logger, nodeMap model.BuildNodeMap) (errs []error) {
 	// iterate over targets in alphabetical order for consistent logging
 	for _, node := range nodeMap.NodesAlphabetically() {
 		target, ok := node.(*model.Target)
@@ -47,7 +48,75 @@ func CheckTargetConstraints(logger *zap.SugaredLogger, nodeMap model.BuildNodeMa
 		}
 	}
 
+	dependencyConstraintErrors := checkDependencyConstraints(nodeMap)
+	errs = append(errs, dependencyConstraintErrors...)
+
 	return
+}
+
+func checkDependencyConstraints(nodeMap model.BuildNodeMap) (errs []error) {
+	for _, node := range nodeMap.NodesAlphabetically() {
+		target, isTarget := node.(*model.Target)
+		if !isTarget {
+			continue
+		}
+
+		for _, dependencyLabel := range target.Dependencies {
+			dependencyTarget := resolveDependencyTarget(nodeMap, dependencyLabel)
+			if dependencyTarget == nil {
+				continue
+			}
+
+			if dependencyTarget.IsTest() && !target.IsTest() {
+				errs = append(errs, fmt.Errorf("%s depends on %s which is a test target",
+					target.Label,
+					dependencyTarget.Label,
+				))
+				continue
+			}
+
+			if dependencyTarget.IsTestOnly() && !target.IsTestOnly() && !target.IsTest() {
+				errs = append(errs, fmt.Errorf("%s depends on %s which is tagged %q",
+					target.Label,
+					dependencyTarget.Label,
+					model.TagTestOnly,
+				))
+			}
+		}
+	}
+
+	return
+}
+
+func resolveDependencyTarget(
+	nodeMap model.BuildNodeMap,
+	dependencyLabel label.TargetLabel,
+) *model.Target {
+	currentDependencyLabel := dependencyLabel
+	visitedDependencyLabels := make(map[label.TargetLabel]struct{})
+	for {
+		if _, alreadyVisited := visitedDependencyLabels[currentDependencyLabel]; alreadyVisited {
+			return nil
+		}
+		visitedDependencyLabels[currentDependencyLabel] = struct{}{}
+
+		dependencyNode, hasDependencyNode := nodeMap[currentDependencyLabel]
+		if !hasDependencyNode {
+			return nil
+		}
+
+		dependencyTarget, isTarget := dependencyNode.(*model.Target)
+		if isTarget {
+			return dependencyTarget
+		}
+
+		dependencyAlias, isAlias := dependencyNode.(*model.Alias)
+		if !isAlias {
+			return nil
+		}
+
+		currentDependencyLabel = dependencyAlias.Actual
+	}
 }
 
 // checkInputPathsRelative checks that all inputs are relative to the package path

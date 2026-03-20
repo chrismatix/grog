@@ -6,24 +6,28 @@ import (
 	"fmt"
 	"grog/internal/config"
 	"grog/internal/console"
+	"maps"
 	"net/url"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/apple/pkl-go/pkl"
 )
 
 // PklLoader implements the Loader interface for pkl files.
 type PklLoader struct {
-	evaluator pkl.Evaluator
+	evaluator   pkl.Evaluator
+	evaluatorMu sync.Mutex
 }
 
-func (pl PklLoader) Matches(fileName string) bool {
+func (pl *PklLoader) Matches(fileName string) bool {
 	return "BUILD.pkl" == fileName
 }
 
-// getEvaluator lazily loads and caches the evaluator
-func (pl PklLoader) getEvaluator(ctx context.Context) (pkl.Evaluator, error) {
+// getEvaluator lazily loads and caches the evaluator.
+// Caller must hold evaluatorMu.
+func (pl *PklLoader) getEvaluator(ctx context.Context) (pkl.Evaluator, error) {
 	if pl.evaluator == nil {
 		var evaluator pkl.Evaluator
 		var err error
@@ -70,15 +74,16 @@ func withEnv(envVars map[string]string) func(*pkl.EvaluatorOptions) {
 		if opts.Env == nil {
 			opts.Env = make(map[string]string, len(envVars))
 		}
-		for k, v := range envVars {
-			opts.Env[k] = v
-		}
+		maps.Copy(opts.Env, envVars)
 	}
 }
 
 // Load reads the file at the specified filePath and unmarshals its content into a model.Package.
-func (pl PklLoader) Load(ctx context.Context, filePath string) (PackageDTO, bool, error) {
+func (pl *PklLoader) Load(ctx context.Context, filePath string) (PackageDTO, bool, error) {
 	var pkg PackageDTO
+
+	pl.evaluatorMu.Lock()
+	defer pl.evaluatorMu.Unlock()
 
 	evaluator, err := pl.getEvaluator(ctx)
 	if err != nil {

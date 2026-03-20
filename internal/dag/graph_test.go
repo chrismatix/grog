@@ -5,6 +5,7 @@ import (
 	"grog/internal/model"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestDirectedTargetGraph_AddNode(t *testing.T) {
@@ -197,6 +198,54 @@ func TestDirectedTargetGraph_FindCycle(t *testing.T) {
 		if cycle[i] != expected[i] {
 			t.Fatalf("unexpected cycle node at %d: got %s, want %s", i, cycle[i].GetLabel(), expected[i].GetLabel())
 		}
+	}
+}
+
+func TestDirectedTargetGraph_FindCriticalPath(t *testing.T) {
+	a := &model.Target{Label: label.TargetLabel{Name: "a"}, ExecutionTime: time.Second}
+	b := &model.Target{Label: label.TargetLabel{Name: "b"}, ExecutionTime: 3 * time.Second}
+	c := &model.Target{Label: label.TargetLabel{Name: "c"}, ExecutionTime: time.Second, CacheTime: 500 * time.Millisecond}
+	d := &model.Target{Label: label.TargetLabel{Name: "d"}, ExecutionTime: time.Second, CacheTime: 500 * time.Millisecond}
+
+	graph := NewDirectedGraphFromTargets(a, b, c, d)
+
+	for _, edge := range []struct {
+		from model.BuildNode
+		to   model.BuildNode
+	}{
+		{from: a, to: b},
+		{from: a, to: c},
+		{from: b, to: d},
+		{from: c, to: d},
+	} {
+		if err := graph.AddEdge(edge.from, edge.to); err != nil {
+			t.Fatalf("AddEdge(%s, %s) returned error: %v", edge.from.GetLabel(), edge.to.GetLabel(), err)
+		}
+	}
+
+	criticalPath, ok := graph.FindCriticalPath()
+	if !ok {
+		t.Fatalf("expected to find critical path")
+	}
+
+	expectedLabels := []label.TargetLabel{a.Label, b.Label, d.Label}
+	if len(criticalPath.Nodes) != len(expectedLabels) {
+		t.Fatalf("unexpected path length: got %d, want %d", len(criticalPath.Nodes), len(expectedLabels))
+	}
+
+	for i, node := range criticalPath.Nodes {
+		if node.GetLabel() != expectedLabels[i] {
+			t.Fatalf("unexpected node at position %d: got %s, want %s", i, node.GetLabel(), expectedLabels[i])
+		}
+	}
+
+	expectedExec := 5 * time.Second // a + b + d
+	expectedCache := 500 * time.Millisecond
+	if criticalPath.ExecutionDuration != expectedExec {
+		t.Fatalf("unexpected execution duration: got %v, want %v", criticalPath.ExecutionDuration, expectedExec)
+	}
+	if criticalPath.CacheDuration != expectedCache {
+		t.Fatalf("unexpected cache duration: got %v, want %v", criticalPath.CacheDuration, expectedCache)
 	}
 }
 

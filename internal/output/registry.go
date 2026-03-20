@@ -11,10 +11,10 @@ import (
 	"grog/internal/model"
 	"grog/internal/output/handlers"
 	"grog/internal/proto/gen"
+	"grog/internal/worker"
 	"runtime"
+	"slices"
 	"sync"
-	"sync/atomic"
-	"time"
 
 	"github.com/alitto/pond/v2"
 )
@@ -25,8 +25,6 @@ type Registry struct {
 	cas          *caching.Cas
 	pool         pond.Pool
 	handlerMutex sync.RWMutex
-	// Total time spent on registry operations
-	cacheDurationNs atomic.Int64
 
 	// Features like load_outputs=minimal may load outputs concurrently
 	// In this case we want to make sure that that only happens once per target
@@ -40,6 +38,7 @@ type Registry struct {
 
 // NewRegistry creates a new registry with default handlers
 func NewRegistry(
+	ctx context.Context,
 	cas *caching.Cas,
 ) *Registry {
 	r := &Registry{
@@ -62,7 +61,7 @@ func NewRegistry(
 	} else {
 		// The backend setting is validated in the config package
 		// so we can assume it's either "docker" or "fs-tarball"
-		r.Register(handlers.NewDockerOutputHandler(cas))
+		r.Register(handlers.NewDockerOutputHandler(ctx, cas))
 	}
 	return r
 }
@@ -108,14 +107,18 @@ func (r *Registry) mustGetHandler(outputType string) handlers.Handler {
 	return handler
 }
 
-func (r *Registry) WriteOutputs(ctx context.Context, target *model.Target) (*gen.TargetResult, error) {
+func (r *Registry) WriteOutputs(
+	ctx context.Context,
+	target *model.Target,
+	progress *worker.ProgressTracker,
+) (*gen.TargetResult, error) {
 	r.targetMutexMap.Lock(target.Label.String())
 	defer r.targetMutexMap.Unlock(target.Label.String())
 
 	logger := console.GetLogger(ctx)
-	logger.Debugf("%s: writing outputs", target.Label)
-
 	outputs := target.AllOutputs()
+
+	logger.Debugf("%s: writing outputs", target.Label)
 
 	var tasks []pond.Task
 	var targetOutputs []*gen.Output
@@ -124,13 +127,14 @@ func (r *Registry) WriteOutputs(ctx context.Context, target *model.Target) (*gen
 	for _, outputRef := range outputs {
 		localOutputRef := outputRef
 		task := r.pool.SubmitErr(func() error {
-			output, err := r.mustGetHandler(localOutputRef.Type).Write(ctx, *target, localOutputRef)
+			output, err := r.mustGetHandler(localOutputRef.Type).Write(ctx, *target, localOutputRef, progress)
 			if err != nil {
 				return err
 			}
 			outputsMutex.Lock()
 			targetOutputs = append(targetOutputs, output)
 			outputsMutex.Unlock()
+			logger.Debugf("%s: output %s written", target.Label, localOutputRef.Type)
 			return nil
 		})
 		tasks = append(tasks, task)
@@ -146,6 +150,8 @@ func (r *Registry) WriteOutputs(ctx context.Context, target *model.Target) (*gen
 	if err != nil {
 		return nil, err
 	}
+
+	logger.Debugf("%s: outputs written", target.Label)
 
 	return &gen.TargetResult{
 		ChangeHash:              target.ChangeHash,
@@ -197,16 +203,17 @@ func (r *Registry) LoadOutputs(
 	ctx context.Context,
 	target *model.Target,
 	targetResult *gen.TargetResult,
+	progress *worker.ProgressTracker,
 ) error {
-	start := time.Now()
-	defer func() {
-		r.addCacheDuration(time.Since(start))
-	}()
 	r.targetMutexMap.Lock(target.Label.String())
 	defer r.targetMutexMap.Unlock(target.Label.String())
 	if target.OutputsLoaded {
 		// Outputs are already loaded, nothing to do
 		return nil
+	}
+
+	if err := validateTargetResultOutputs(target, targetResult); err != nil {
+		return err
 	}
 
 	logger := console.GetLogger(ctx)
@@ -215,8 +222,9 @@ func (r *Registry) LoadOutputs(
 	var tasks []pond.Task
 	for _, outputRef := range targetResult.Outputs {
 		localOutputRef := outputRef
+		logger.Debugf("%s: loading output %s", target.Label, localOutputRef.GetKind())
 		task := r.pool.SubmitErr(func() error {
-			err := r.mustGetHandlerFromProto(localOutputRef).Load(ctx, *target, localOutputRef)
+			err := r.mustGetHandlerFromProto(localOutputRef).Load(ctx, *target, localOutputRef, progress)
 			if err != nil {
 				return err
 			}
@@ -231,19 +239,78 @@ func (r *Registry) LoadOutputs(
 		}
 	}
 
+	logger.Debugf("%s: outputs loaded", target.Label)
 	target.OutputsLoaded = true
 	target.OutputHash = targetResult.OutputHash
 	return nil
 }
 
-func (r *Registry) addCacheDuration(duration time.Duration) {
-	if duration <= 0 {
-		return
+func validateTargetResultOutputs(target *model.Target, targetResult *gen.TargetResult) error {
+	if targetResult == nil {
+		return fmt.Errorf("%s: cached target result is nil", target.Label)
 	}
-	r.cacheDurationNs.Add(duration.Nanoseconds())
+
+	expectedOutputDefinitions := target.OutputDefinitions()
+	loadedOutputDefinitions, err := getOutputDefinitionsFromProto(targetResult.Outputs)
+	if err != nil {
+		return fmt.Errorf("%s: invalid output entry in cached target result: %w", target.Label, err)
+	}
+
+	if len(expectedOutputDefinitions) != len(loadedOutputDefinitions) {
+		return fmt.Errorf(
+			"%s: cached outputs mismatch: expected %d outputs %v, got %d outputs %v",
+			target.Label,
+			len(expectedOutputDefinitions),
+			expectedOutputDefinitions,
+			len(loadedOutputDefinitions),
+			loadedOutputDefinitions,
+		)
+	}
+
+	sortedExpectedOutputDefinitions := slices.Clone(expectedOutputDefinitions)
+	sortedLoadedOutputDefinitions := slices.Clone(loadedOutputDefinitions)
+	slices.Sort(sortedExpectedOutputDefinitions)
+	slices.Sort(sortedLoadedOutputDefinitions)
+
+	for index := range sortedExpectedOutputDefinitions {
+		if sortedExpectedOutputDefinitions[index] != sortedLoadedOutputDefinitions[index] {
+			return fmt.Errorf(
+				"%s: cached outputs mismatch: expected outputs %v, got outputs %v",
+				target.Label,
+				expectedOutputDefinitions,
+				loadedOutputDefinitions,
+			)
+		}
+	}
+
+	return nil
 }
 
-// CacheDuration returns the total time spent on registry operations.
-func (r *Registry) CacheDuration() time.Duration {
-	return time.Duration(r.cacheDurationNs.Load())
+func getOutputDefinitionsFromProto(outputs []*gen.Output) ([]string, error) {
+	outputDefinitions := make([]string, 0, len(outputs))
+	for outputIndex, output := range outputs {
+		outputDefinition, err := getOutputDefinitionFromProto(output)
+		if err != nil {
+			return nil, fmt.Errorf("entry %d: %w", outputIndex, err)
+		}
+		outputDefinitions = append(outputDefinitions, outputDefinition)
+	}
+	return outputDefinitions, nil
+}
+
+func getOutputDefinitionFromProto(output *gen.Output) (string, error) {
+	if output == nil {
+		return "", fmt.Errorf("output is nil")
+	}
+
+	switch outputKind := output.Kind.(type) {
+	case *gen.Output_File:
+		return model.NewOutput(string(handlers.FileHandler), outputKind.File.GetPath()).String(), nil
+	case *gen.Output_Directory:
+		return model.NewOutput(string(handlers.DirHandler), outputKind.Directory.GetPath()).String(), nil
+	case *gen.Output_DockerImage:
+		return model.NewOutput(string(handlers.DockerHandler), outputKind.DockerImage.GetLocalTag()).String(), nil
+	default:
+		return "", fmt.Errorf("unknown output kind: %T", output.Kind)
+	}
 }

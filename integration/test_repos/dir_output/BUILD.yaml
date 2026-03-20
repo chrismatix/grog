@@ -5,7 +5,7 @@ targets:
     outputs:
       - dir::dist/ # Directory output containing generated files
     command: |
-      rm -r dist
+      rm -r dist || true
       mkdir -p dist/nested
       echo "Hello World" > dist/file1.txt
       echo "Lorem ipsum" > dist/file2.txt

@@ -17,11 +17,11 @@ import (
 	"grog/internal/worker"
 	"os"
 	"path/filepath"
-	"sync/atomic"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fatih/color"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type CommandError struct {
@@ -44,20 +44,6 @@ type Executor struct {
 	loadOutputsMode  config.LoadOutputsMode
 	targetHasher     *hashing.TargetHasher
 	streamLogsToggle *console.StreamLogsToggle
-	execDurationNs   atomic.Int64
-}
-
-// Stats capture aggregated executor metrics.
-type Stats struct {
-	ExecDuration  time.Duration
-	CacheDuration time.Duration
-}
-
-func (e *Executor) addExecDuration(duration time.Duration) {
-	if duration <= 0 {
-		return
-	}
-	e.execDurationNs.Add(duration.Nanoseconds())
 }
 
 func NewExecutor(
@@ -84,7 +70,7 @@ func NewExecutor(
 }
 
 // Execute executes the targets in the given graph and returns the completion map
-func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, Stats, error) {
+func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	numWorkers := config.Global.NumWorkers
 	stdLogger := console.GetLogger(ctx)
 
@@ -147,12 +133,7 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, Stats, error
 	}
 
 	walker := dag.NewWalker(e.graph, walkCallback, e.failFast)
-	completionMap, err := walker.Walk(ctx)
-	stats := Stats{
-		ExecDuration:  time.Duration(e.execDurationNs.Load()),
-		CacheDuration: e.registry.CacheDuration(),
-	}
-	return completionMap, stats, err
+	return walker.Walk(ctx)
 }
 
 // getBinToolPaths From all the direct dependencies of a target, get their bin_output if defined
@@ -207,16 +188,16 @@ func (e *Executor) getDependencyOutputIdentifiers(target *model.Target) OutputId
 
 func getTargetOutputIdentifiers(target *model.Target) []string {
 	var identifiers []string
-	for _, output := range target.AllOutputs() {
-		if !output.IsSet() {
+	for _, targetOutput := range target.AllOutputs() {
+		if !targetOutput.IsSet() {
 			continue
 		}
-		if output.Type == string(handlers.FileHandler) || output.Type == string(handlers.DirHandler) {
-			workspaceRelativePath := filepath.Join(target.Label.Package, output.Identifier)
+		if targetOutput.Type == string(handlers.FileHandler) || targetOutput.Type == string(handlers.DirHandler) {
+			workspaceRelativePath := filepath.Join(target.Label.Package, targetOutput.Identifier)
 			identifiers = append(identifiers, config.GetPathAbsoluteToWorkspaceRoot(workspaceRelativePath))
 			continue
 		}
-		identifiers = append(identifiers, output.Identifier)
+		identifiers = append(identifiers, targetOutput.Identifier)
 	}
 	return identifiers
 }
@@ -231,7 +212,7 @@ func (e *Executor) getTaskFunc(
 		startTime := time.Now()
 
 		logger := console.GetLogger(ctx)
-		update(fmt.Sprintf("%s: checking cache.", target.Label))
+		update(worker.Status(fmt.Sprintf("%s: checking cache.", target.Label)))
 
 		targetResult, err := e.targetCache.Load(ctx, target.ChangeHash)
 		if err != nil {
@@ -239,7 +220,9 @@ func (e *Executor) getTaskFunc(
 			// logger.Warnf("failed to check target %s cache: %v", target.Label, err)
 		}
 		target.HasCacheHit = targetResult != nil
-		logger.Debugf("%s: loaded target result %v", target.Label, targetResult)
+		if logger.DebugEnabled() {
+			logger.Debugf("%s: loaded target result %s", target.Label, formatTargetResultForDebug(targetResult))
+		}
 
 		outputCheckErr := runOutputChecks(ctx, target, binToolPaths, outputIdentifiers)
 		if outputCheckErr != nil {
@@ -265,13 +248,21 @@ func (e *Executor) getTaskFunc(
 			if e.loadOutputsMode == config.LoadOutputsMinimal {
 				// Important: Set the output hash so that descendants can compute their change hashes
 				target.OutputHash = targetResult.OutputHash
-				update(fmt.Sprintf("%s: cache hit. skipped loading %s because load_outputs=minimal.", target.Label, console.FCountOutputs(len(target.AllOutputs()))))
+				update(worker.Status(fmt.Sprintf("%s: cache hit. skipped loading %s because load_outputs=minimal.", target.Label, console.FCountOutputs(len(target.AllOutputs())))))
 				logger.Debugf("%s: cache hit. skipped loading %s because load_ outputs=minimal", target.Label, console.FCountOutputs(len(target.AllOutputs())))
 				return dag.CacheHit, nil
 			}
 
-			update(fmt.Sprintf("%s: cache hit. loading %s.", target.Label, console.FCountOutputs(len(target.AllOutputs()))))
-			loadingErr := e.registry.LoadOutputs(ctx, target, targetResult)
+			update(worker.Status(fmt.Sprintf("%s: cache hit. loading %s.", target.Label, console.FCountOutputs(len(target.AllOutputs())))))
+			progress := worker.NewProgressTracker(
+				fmt.Sprintf("%s: loading %s", target.Label, console.FCountOutputs(len(target.AllOutputs()))),
+				0,
+				update,
+			)
+
+			cacheStart := time.Now()
+			loadingErr := e.registry.LoadOutputs(ctx, target, targetResult, progress)
+			target.CacheTime += time.Since(cacheStart)
 			if loadingErr != nil {
 				// Don't return so that we instead break out and continue executing the target
 				logger.Errorf("%s re-running due to output loading failure: %v", target.Label, loadingErr)
@@ -297,7 +288,7 @@ func (e *Executor) getTaskFunc(
 		}
 
 		if e.loadOutputsMode == config.LoadOutputsMinimal {
-			update(fmt.Sprintf("%s: loading dependency outputs (load_outputs=minimal).", target.Label))
+			update(worker.Status(fmt.Sprintf("%s: loading dependency outputs (load_outputs=minimal).", target.Label)))
 			if loadDepsErr := e.LoadDependencyOutputs(ctx, target, update); loadDepsErr != nil {
 				return dag.CacheMiss, fmt.Errorf("failed to load dependency outputs for target %s: %w", target.Label, loadDepsErr)
 			}
@@ -305,6 +296,22 @@ func (e *Executor) getTaskFunc(
 
 		return e.executeTarget(ctx, target, binToolPaths, outputIdentifiers, update, isTainted)
 	}
+}
+
+func formatTargetResultForDebug(targetResult *gen.TargetResult) string {
+	if targetResult == nil {
+		return "<nil>"
+	}
+
+	marshalledResult, err := protojson.MarshalOptions{
+		EmitUnpopulated: true,
+		UseProtoNames:   true,
+	}.Marshal(targetResult)
+	if err != nil {
+		return fmt.Sprintf("%v", targetResult)
+	}
+
+	return string(marshalledResult)
 }
 
 func (e *Executor) executeTarget(
@@ -320,11 +327,9 @@ func (e *Executor) executeTarget(
 	startTime := time.Now()
 	var err error
 	if target.Command != "" {
-		update(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis()))
+		update(worker.Status(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis())))
 		logger.Debugf("running target %s: %s", target.Label, target.CommandEllipsis())
-		execStart := time.Now()
 		err = executeTarget(ctx, target, binToolPaths, outputIdentifiers, e.streamLogsToggle.Enabled())
-		e.addExecDuration(time.Since(execStart))
 	} else {
 		logger.Debugf("skipped target %s due to no command", target.Label)
 	}
@@ -365,8 +370,9 @@ func (e *Executor) executeTarget(
 	}
 
 	// Write outputs to the cache:
-	update(fmt.Sprintf("%s complete. writing outputs...", target.Label))
-	err = e.OnTargetComplete(ctx, target)
+	logger.Debugf("writing outputs for target %s", target.Label)
+	update(worker.Status(fmt.Sprintf("%s complete. writing outputs...", target.Label)))
+	err = e.OnTargetComplete(ctx, target, update)
 	if err != nil {
 		return dag.CacheMiss, fmt.Errorf("build completed but failed to write outputs to cache for target %s:\n%w", target.Label, err)
 	}
@@ -388,25 +394,36 @@ func (e *Executor) executeTarget(
 // - computes and sets the output hash
 // - writes the target result to the cache
 // For no-cache targets it will set the OutputHash to the hash of the outputs
-func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target) error {
+func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, update worker.StatusFunc) error {
+	logger := console.GetLogger(ctx)
 	var targetResult *gen.TargetResult
 	var err error
 	if target.SkipsCache() || !e.enableCache {
+		logger.Debugf("%s: skipping cache write", target.Label)
 		targetResult, err = e.registry.GetNoCacheOutputHash(ctx, target)
 		// TODO should we even store this in the cache given that the target
 		// is no-cache? Probably fine from a user perspective
 		// since it's the target cache and not the output cache
-	} else if len(target.Outputs) == 0 {
+	} else if len(target.AllOutputs()) == 0 {
+		logger.Debugf("%s: no outputs to write", target.Label)
 		// NOTE: This is a special and intentional design
 		// Targets that do not have any outputs expose their own change behavior as an output
 		// analogous to file_groups
 		targetResult = &gen.TargetResult{
-			ChangeHash: target.ChangeHash,
-			// TODO make this the input hash
-			OutputHash: target.ChangeHash,
+			ChangeHash:              target.ChangeHash,
+			OutputHash:              target.ChangeHash,
+			ExecutionDurationMillis: target.ExecutionTime.Milliseconds(),
 		}
 	} else {
-		targetResult, err = e.registry.WriteOutputs(ctx, target)
+		logger.Debugf("%s: writing %d outputs", target.Label, len(target.AllOutputs()))
+		progress := worker.NewProgressTracker(
+			fmt.Sprintf("%s: writing %s", target.Label, console.FCountOutputs(len(target.AllOutputs()))),
+			0,
+			update,
+		)
+		cacheStart := time.Now()
+		targetResult, err = e.registry.WriteOutputs(ctx, target, progress)
+		target.CacheTime += time.Since(cacheStart)
 	}
 	if err != nil {
 		return err
@@ -415,11 +432,16 @@ func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target) e
 	target.OutputsLoaded = true
 	target.OutputHash = targetResult.OutputHash
 
+	cacheStart := time.Now()
+	defer func() {
+		target.CacheTime += time.Since(cacheStart)
+	}()
+
 	return e.targetCache.Write(ctx, targetResult)
 }
 
-// LoadDependencyOutputs is used to load the outputs of the targets that a target depends on
-// Since there is a chance that the loading will fail it needs to be able to recursively re-run targets
+// LoadDependencyOutputs is used to load the outputs of the targets that a target depends on.
+// Since there is a chance that the loading will fail it needs to be able to recursively re-run targets.
 // Primarily used for the load_outputs=minimal mode which will avoid loading outputs until necessary.
 func (e *Executor) LoadDependencyOutputs(
 	ctx context.Context,
@@ -442,7 +464,7 @@ func (e *Executor) LoadDependencyOutputs(
 
 			outputIdentifiers := e.getDependencyOutputIdentifiers(localDep)
 
-			update(fmt.Sprintf("%s: re-running dependency %s (load_outputs_mode=minimal).", target.Label, localDep.Label))
+			update(worker.Status(fmt.Sprintf("%s: re-running dependency %s (load_outputs_mode=minimal).", target.Label, localDep.Label)))
 			_, executionErr := e.executeTarget(ctx, localDep, binTools, outputIdentifiers, update, false)
 			if executionErr != nil {
 				return executionErr
@@ -456,10 +478,21 @@ func (e *Executor) LoadDependencyOutputs(
 			return rerunDependency()
 		}
 
-		loadErr := e.registry.LoadOutputs(ctx, localDep, targetResult)
+		progress := worker.NewProgressTracker(
+			fmt.Sprintf("%s: loading %s", target.Label, console.FCountOutputs(len(target.AllOutputs()))),
+			0,
+			update,
+		)
+		loadErr := e.registry.LoadOutputs(ctx, localDep, targetResult, progress)
 
 		if loadErr != nil || localDep.SkipsCache() {
-			logger.Debugf("%s: failed to load output for dependency %s (re-rerunning): err=%v no-cache=%t", target.Label, localDep.Label, err, target.SkipsCache())
+			logger.Debugf(
+				"%s: failed to load output for dependency %s (re-rerunning): err=%v no-cache=%t",
+				target.Label,
+				localDep.Label,
+				err,
+				target.SkipsCache(),
+			)
 			// In this case we need to also recursively re-load the dependencies of the dependency
 			if recursiveLoadErr := e.LoadDependencyOutputs(ctx, localDep, update); recursiveLoadErr != nil {
 				return recursiveLoadErr

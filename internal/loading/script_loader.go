@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"grog/internal/config"
+	"grog/internal/console"
 	"grog/internal/model"
 
-	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
 
@@ -145,15 +146,13 @@ func (p *scriptParser) handleTarget(
 }
 
 func prependUnique(values []string, element string) []string {
-	for _, existing := range values {
-		if existing == element {
-			return append([]string{}, values...)
-		}
+	if slices.Contains(values, element) {
+		return append([]string{}, values...)
 	}
 	return append([]string{element}, values...)
 }
 
-func LoadScriptTarget(ctx context.Context, logger *zap.SugaredLogger, filePath string) (*model.Target, error) {
+func LoadScriptTarget(ctx context.Context, logger *console.Logger, filePath string) (*model.Target, error) {
 	packagePath, err := config.GetPackagePath(filePath)
 	if err != nil {
 		return nil, err

@@ -7,17 +7,16 @@ import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 
 ## Configuration Approaches
 
-As your monorepo grows and you adopt more advanced tooling, build configuration can become complex. One of the reasons Grog was created was to provide an alternative to the steep learning curve of tools like Bazel's Starlark configuration language.
+Grog takes a flexible approach to configuration that emphasizes **simplicity** and **extensibility**. It has minimal opinions about how you define builds, as long as each package can output a structured definition of its build targets.
 
-Grog takes a different approach to configuration that emphasizes **simplicity** and **extensibility**. It has minimal opinions about how you define builds, as long as each package can output a structured definition of its build targets.
-
-You can configure Grog builds in three different ways:
+You can configure Grog builds in four different ways:
 
 - **Static configuration:** Simple `BUILD.{json,yaml}` files that define build targets for each package. Great for getting started.
 - **Makefiles:** Add special comments to your existing `Makefile`s to run make goals while benefiting from Grog's execution model.
   Perfect for gradually adopting Grog when you already use Makefiles.
-- **Pkl (recommended):** Use the [Pkl](https://pkl-lang.org/) configuration language to create reusable configuration elements.
-  Ideal for scaling your build configuration and keeping things DRY.
+- **Starlark:** Use the [Starlark](https://github.com/bazelbuild/starlark) language (similar to Python) to define builds with functions and macros. Familiar to Bazel users.
+- **Pkl:** Use the [Pkl](https://pkl-lang.org/) configuration language to create reusable configuration elements.
+  Ideal for scaling your build configuration with strong typing.
 
 ## Static Configuration
 
@@ -126,7 +125,93 @@ generate_proto:
 
 This Makefile exposes the targets `build_app` and `generate_proto` to Grog, allowing you to run them with `grog build :build_app` or `grog build :generate_proto`.
 
-## Pkl Configuration (Recommended)
+## Starlark Configuration
+
+[Starlark](https://github.com/bazelbuild/starlark) is a Python-like configuration language originally created for [Bazel](https://bazel.build/). If you're familiar with Bazel or prefer a Python-like syntax, Starlark provides a powerful way to define your build targets using functions and macros.
+
+Here's the same build configuration as above, but using Starlark:
+
+```python
+# BUILD.star
+target(
+    name = "build_app",
+    command = "npm run build",
+    dependencies = [
+        ":generate_proto",
+        "//path/to/other/package:target_name",
+    ],
+    inputs = [
+        "src/**/*.js",
+        "package.json",
+    ],
+    outputs = ["dist/bundle.js"],
+)
+
+target(
+    name = "generate_proto",
+    command = "protoc --js_out=src/generated proto/*.proto",
+    inputs = ["proto/*.proto"],
+    outputs = ["dir::src/generated"],
+)
+```
+
+Save this as `BUILD.star` or `BUILD.bzl` in your project directory.
+
+### Creating Reusable Macros with Starlark
+
+One of Starlark's key features is the ability to create reusable macros using functions. For example, if you want a standard setup for TypeScript projects that includes build, test, and format targets:
+
+```python
+# rules.star
+def ts_package(name, srcs = [], deps = []):
+    """Creates a TypeScript package with build, test, and format targets."""
+
+    srcs = ["./src/**"] + srcs
+
+    target(
+        name = name,
+        command = "tsc",
+        inputs = srcs,
+        outputs = ["./dist/**"],
+        dependencies = deps,
+    )
+
+    target(
+        name = name + "_test",
+        command = "node --test ./tests",
+        inputs = srcs + ["./tests/**"],
+        dependencies = deps,
+    )
+
+    target(
+        name = name + "_format",
+        command = "prettier --write .",
+        inputs = srcs + ["./tests/**"],
+    )
+```
+
+You can then use this macro in your BUILD files:
+
+```python
+# packages/example/BUILD.star
+load("//rules.star", "ts_package")
+
+ts_package(
+    name = "example",
+    deps = ["//packages/common"],
+)
+```
+
+This will create three targets: `example`, `example_test`, and `example_format`.
+
+### Load Statement
+
+The `load()` statement allows you to import macros and functions from other Starlark files:
+
+- Use `//path/to/file.star` for absolute paths from the workspace root
+- Use relative paths like `./rules.star` or `../shared/rules.star` for relative imports
+
+## Pkl Configuration
 
 <Aside>
   **Requirement**: You need to install the Pkl CLI first. See the [official

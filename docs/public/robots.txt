@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://grog.build/sitemap-index.xml
+
+# Machine-readable documentation indexes
+# https://grog.build/llms.txt
+# https://grog.build/llms-full.txt

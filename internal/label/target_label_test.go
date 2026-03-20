@@ -51,6 +51,8 @@ func TestParseTargetLabel(t *testing.T) {
 		{"/foo:bar", ""}, // missing one "/"
 		{"//", ""},       // shorthand with empty package
 		{"//:", ""},      // explicit but empty target name
+		{"//foo:...", ""},
+		{":...", "foo"},
 	}
 	for _, inp := range invalid {
 		if _, err := ParseTargetLabel(inp.packagePath, inp.input); err == nil {
@@ -60,7 +62,7 @@ func TestParseTargetLabel(t *testing.T) {
 }
 
 func TestValidateTargetName(t *testing.T) {
-	failureCases := []string{"//foo:b ar", "//foo:bar$"}
+	failureCases := []string{"//foo:b ar", "//foo:bar$", "//foo:..."}
 	for _, c := range failureCases {
 		if _, err := ParseTargetLabel("", c); err == nil {
 			t.Errorf("ValidateTargetName(%q) should have failed, but got no error", c)

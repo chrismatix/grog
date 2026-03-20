@@ -4,6 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/fatih/color"
+	"github.com/spf13/cobra"
+
 	"grog/internal/analysis"
 	"grog/internal/caching"
 	"grog/internal/caching/backends"
@@ -18,20 +25,13 @@ import (
 	"grog/internal/model"
 	"grog/internal/output"
 	"grog/internal/selection"
-	"os"
-	"strings"
-	"time"
-
-	"github.com/fatih/color"
-	"github.com/spf13/cobra"
-	"go.uber.org/zap"
 )
 
 var BuildCmd = &cobra.Command{
 	Use:   "build",
 	Short: "Loads the user configuration and executes build targets.",
 	Long:  `Loads the user configuration, checks which targets need to be rebuilt based on file hashes, builds the dependency graph, and executes targets.`,
-	Example: `  grog build                      # Build all targets in the current package
+	Example: `  grog build                      # Build all targets in the current package and subpackages
   grog build //path/to/package:target  # Build a specific target
   grog build //path/to/package/...     # Build all targets in a package and subpackages`,
 	Args:              cobra.ArbitraryArgs, // Optional argument for target pattern
@@ -44,14 +44,14 @@ var BuildCmd = &cobra.Command{
 			logger.Fatalf("could not get current package: %v", err)
 		}
 
-		targetPatterns, err := label.ParsePatternsOrMatchAll(currentPackagePath, args)
+		targetPatterns, err := label.ParsePatternsOrMatchCurrentPackageAndSubpackages(currentPackagePath, args)
 		if err != nil {
 			logger.Fatalf("could not parse target pattern: %v", err)
 		}
 
 		graph := loading.MustLoadGraphForBuild(ctx, logger)
 
-		runBuild(
+		RunBuild(
 			ctx,
 			logger,
 			targetPatterns,
@@ -67,10 +67,10 @@ func AddBuildCmd(rootCmd *cobra.Command) {
 	rootCmd.AddCommand(BuildCmd)
 }
 
-// runBuild runs the build/test command for the given target pattern
-func runBuild(
+// RunBuild runs the build/test command for the given target pattern
+func RunBuild(
 	ctx context.Context,
-	logger *zap.SugaredLogger,
+	logger *console.Logger,
 	targetPatterns []label.TargetPattern,
 	graph *dag.DirectedTargetGraph,
 	testFilter selection.TargetTypeSelection,
@@ -123,7 +123,7 @@ func runBuild(
 	targetCache := caching.NewTargetResultCache(cache)
 	cas := caching.NewCas(cache)
 	taintCache := caching.NewTaintCache(cache)
-	registry := output.NewRegistry(cas)
+	registry := output.NewRegistry(ctx, cas)
 
 	// Only lock the workspace once necessary, i.e., before we start building
 	if config.Global.SkipWorkspaceLock {
@@ -150,17 +150,31 @@ func runBuild(
 		config.Global.EnableCache,
 		loadOutputsMode,
 	)
-	completionMap, execStats, executionErr := executor.Execute(ctx)
+	completionMap, executionErr := executor.Execute(ctx)
 
 	elapsedTime := time.Since(startTime).Seconds()
 	// Mostly used to keep our test fixtures deterministic
 	if !config.Global.DisableNonDeterministicLogging {
-		logger.Infof(
-			"Elapsed time: %.3fs (exec %.3fs, cache %.3fs)",
-			elapsedTime,
-			execStats.ExecDuration.Seconds(),
-			execStats.CacheDuration.Seconds(),
-		)
+
+		if criticalPath, ok := graph.GetSelectedSubgraph().FindCriticalPath(); ok && len(criticalPath.Nodes) > 0 {
+			var criticalPathLabels []string
+			for _, node := range criticalPath.Nodes {
+				criticalPathLabels = append(criticalPathLabels, node.GetLabel().String())
+			}
+
+			logger.Infof(
+				"Elapsed time: %.3fs (critical path: exec %.3fs, cache %.3fs)",
+				elapsedTime,
+				criticalPath.ExecutionDuration.Seconds(),
+				criticalPath.CacheDuration.Seconds(),
+			)
+			logger.Debugf("Critical path: %s", strings.Join(criticalPathLabels, " -> "))
+		} else {
+			logger.Infof(
+				"Elapsed time: %.3fs",
+				elapsedTime,
+			)
+		}
 	}
 
 	if executionErr != nil {

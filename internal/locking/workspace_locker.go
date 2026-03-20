@@ -16,6 +16,8 @@ import (
 	"time"
 )
 
+const lockFileFieldSeparator = "\t"
+
 // WorkspaceLocker ensures that only one grog build is running per host by
 // managing a lock file in the workspace root directory.
 type WorkspaceLocker struct {
@@ -32,14 +34,14 @@ func NewWorkspaceLocker() *WorkspaceLocker {
 // Lock blocks until the workspace lock can be acquired.
 func (wl *WorkspaceLocker) Lock(ctx context.Context) error {
 	logger := console.GetLogger(ctx)
-	pidStr := []byte(fmt.Sprintf("%d", os.Getpid()))
+	lockData := []byte(buildLockFileContents(os.Getpid(), os.Args))
 	waitPrinted := false
 
 	for {
 		logger.Debugf("Attempting to acquire workspace lock at %s", wl.lockFilePath)
 		file, err := os.OpenFile(wl.lockFilePath, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0644)
 		if err == nil || errors.Is(err, os.ErrNotExist) {
-			_, writeErr := file.Write(pidStr)
+			_, writeErr := file.Write(lockData)
 			file.Close()
 			if writeErr != nil {
 				os.Remove(wl.lockFilePath)
@@ -57,8 +59,8 @@ func (wl *WorkspaceLocker) Lock(ctx context.Context) error {
 			_ = os.Remove(wl.lockFilePath)
 			continue
 		}
-		otherPid, conversionError := strconv.Atoi(strings.TrimSpace(string(data)))
-		if conversionError != nil {
+		otherPid, otherCommand, parseError := parseLockFileContents(string(data))
+		if parseError != nil {
 			_ = os.Remove(wl.lockFilePath)
 			continue
 		}
@@ -69,7 +71,16 @@ func (wl *WorkspaceLocker) Lock(ctx context.Context) error {
 
 		if waitPrinted == false {
 			green := color.New(color.FgGreen).SprintFunc()
-			fmt.Printf("%s: Another grog build (PID %d) is running. Waiting..", green("INFO"), otherPid)
+			if otherCommand == "" {
+				fmt.Printf("%s: Another grog build (PID %d) is running. Waiting..", green("INFO"), otherPid)
+			} else {
+				fmt.Printf(
+					"%s: Another grog build (PID %d, command: %s) is running. Waiting..",
+					green("INFO"),
+					otherPid,
+					otherCommand,
+				)
+			}
 			waitPrinted = true
 			// Ensure that we add a newline when we printed anything
 			defer fmt.Println()
@@ -99,4 +110,30 @@ func processRunning(pid int) bool {
 	}
 	err = p.Signal(syscall.Signal(0))
 	return err == nil || errors.Is(err, syscall.EPERM)
+}
+
+func buildLockFileContents(processID int, commandArguments []string) string {
+	command := strings.TrimSpace(strings.Join(commandArguments, " "))
+	if command == "" {
+		return strconv.Itoa(processID)
+	}
+	return fmt.Sprintf("%d%s%s", processID, lockFileFieldSeparator, command)
+}
+
+func parseLockFileContents(lockFileContents string) (int, string, error) {
+	trimmedContents := strings.TrimSpace(lockFileContents)
+	if trimmedContents == "" {
+		return 0, "", errors.New("lockfile is empty")
+	}
+
+	parts := strings.SplitN(trimmedContents, lockFileFieldSeparator, 2)
+	processID, conversionError := strconv.Atoi(parts[0])
+	if conversionError != nil {
+		return 0, "", conversionError
+	}
+	if len(parts) < 2 {
+		return processID, "", nil
+	}
+
+	return processID, strings.TrimSpace(parts[1]), nil
 }

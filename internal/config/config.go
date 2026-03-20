@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	semver "github.com/blang/semver/v4"
@@ -23,6 +24,11 @@ type WorkspaceConfig struct {
 	StreamLogs  bool   `mapstructure:"stream_logs"`
 	NumWorkers  int    `mapstructure:"num_workers"`
 	LoadOutputs string `mapstructure:"load_outputs"`
+	// DisableProgressTracker suppresses progress bar updates in task status output
+	// while still allowing status strings to be emitted.
+	DisableProgressTracker bool `mapstructure:"disable_progress_tracker"`
+	// DisableDefaultShellFlags prevents Grog from prepending "set -eu" to user commands.
+	DisableDefaultShellFlags bool `mapstructure:"disable_default_shell_flags"`
 	// HashAlgorithm selects the hash function used for cache keys and target
 	// change detection. Supported values: "xxh3" (default) or "sha256".
 	HashAlgorithm string `mapstructure:"hash_algorithm"`
@@ -65,6 +71,8 @@ type WorkspaceConfig struct {
 
 	// Require that the running grog version matches this semver range
 	RequiredGrogVersion string `mapstructure:"requires_grog"`
+
+	DebugCompletion bool `mapstructure:"debug_completion"`
 }
 
 var Global WorkspaceConfig
@@ -78,6 +86,11 @@ func (w WorkspaceConfig) GetWorkspaceRootDir() string {
 
 func (w WorkspaceConfig) GetWorkspaceCacheDirectory() string {
 	return filepath.Join(w.GetWorkspaceRootDir(), "cache")
+}
+
+// GetCasDirectory returns the directory under $GROG_ROOT that hosts the shared CAS.
+func (w WorkspaceConfig) GetCasDirectory() string {
+	return filepath.Join(w.Root, "cas")
 }
 
 func (w WorkspaceConfig) IsDebug() bool {
@@ -122,10 +135,8 @@ func (w WorkspaceConfig) Validate() error {
 
 	// assert that tags and exclude tags do not overlap
 	for _, tag := range w.Tags {
-		for _, excludeTag := range w.ExcludeTags {
-			if tag == excludeTag {
-				return fmt.Errorf("tag %s cannot both be selected and excluded", tag)
-			}
+		if slices.Contains(w.ExcludeTags, tag) {
+			return fmt.Errorf("tag %s cannot both be selected and excluded", tag)
 		}
 	}
 
@@ -197,6 +208,7 @@ type S3CacheConfig struct {
 	Bucket          string `mapstructure:"bucket"`
 	Prefix          string `mapstructure:"prefix"`
 	CredentialsFile string `mapstructure:"credentials_file"`
+	SharedCache     bool   `mapstructure:"shared_cache"`
 }
 
 const (

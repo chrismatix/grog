@@ -19,11 +19,6 @@ func BuildGraph(nodes model.BuildNodeMap) (*dag.DirectedTargetGraph, error) {
 				return &dag.DirectedTargetGraph{}, fmt.Errorf("dependency %s of node %s not found", depLabel, node.GetLabel())
 			}
 
-			// Only test targets can depend on other test targets
-			if model.IsTestTargetNode(dep) && !model.IsTestTargetNode(node) {
-				return &dag.DirectedTargetGraph{}, fmt.Errorf("test target %s cannot depend on non-test target %s", depLabel, node.GetLabel())
-			}
-
 			err := graph.AddEdge(dep, node)
 			if err != nil {
 				return &dag.DirectedTargetGraph{}, err
@@ -37,6 +32,10 @@ func BuildGraph(nodes model.BuildNodeMap) (*dag.DirectedTargetGraph, error) {
 			chain = append(chain, node.GetLabel().String())
 		}
 		return &dag.DirectedTargetGraph{}, fmt.Errorf("cycle detected: %s", strings.Join(chain, " -> "))
+	}
+
+	if err := detectOutputConflicts(graph); err != nil {
+		return &dag.DirectedTargetGraph{}, err
 	}
 
 	return graph, nil

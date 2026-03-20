@@ -2,14 +2,13 @@ package console
 
 import (
 	"context"
-	"go.uber.org/zap"
 	"os"
 	"os/signal"
 	"syscall"
 )
 
 // SetupCommand universal helper for setting up the context and logger for each command
-func SetupCommand() (context.Context, *zap.SugaredLogger) {
+func SetupCommand() (context.Context, *Logger) {
 	ctx, cancel := context.WithCancel(context.Background())
 	// Listen for SIGTERM or SIGINT to cancel the context
 	signalChan := make(chan os.Signal, 1)

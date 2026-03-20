@@ -4,6 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sync"
+
+	"github.com/spf13/cobra"
+
 	"grog/internal/caching"
 	"grog/internal/caching/backends"
 	"grog/internal/completions"
@@ -16,13 +23,7 @@ import (
 	"grog/internal/model"
 	"grog/internal/output"
 	"grog/internal/selection"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"sync"
-
-	"github.com/spf13/cobra"
-	"go.uber.org/zap"
+	"grog/internal/worker"
 )
 
 var runOptions struct {
@@ -82,7 +83,7 @@ func AddRunCmd(cmd *cobra.Command) {
 	cmd.AddCommand(RunCmd)
 }
 
-func runScriptFile(ctx context.Context, logger *zap.SugaredLogger, scriptArg string, userCommandArgs []string) error {
+func runScriptFile(ctx context.Context, logger *console.Logger, scriptArg string, userCommandArgs []string) error {
 	scriptPath, err := filepath.Abs(scriptArg)
 	if err != nil {
 		return fmt.Errorf("could not resolve script path %s: %w", scriptArg, err)
@@ -122,7 +123,7 @@ func runScriptFile(ctx context.Context, logger *zap.SugaredLogger, scriptArg str
 	return nil
 }
 
-func buildAndRunTargets(ctx context.Context, logger *zap.SugaredLogger, graph *dag.DirectedTargetGraph, runTargets []*model.Target, userCommandArgs []string) {
+func buildAndRunTargets(ctx context.Context, logger *console.Logger, graph *dag.DirectedTargetGraph, runTargets []*model.Target, userCommandArgs []string) {
 	if len(runTargets) == 0 {
 		return
 	}
@@ -137,7 +138,7 @@ func buildAndRunTargets(ctx context.Context, logger *zap.SugaredLogger, graph *d
 		targetPatterns = append(targetPatterns, pattern)
 	}
 
-	runBuild(
+	RunBuild(
 		ctx,
 		logger,
 		targetPatterns,
@@ -156,7 +157,7 @@ func buildAndRunTargets(ctx context.Context, logger *zap.SugaredLogger, graph *d
 	}
 }
 
-func loadDependencyOutputsIfNeeded(ctx context.Context, logger *zap.SugaredLogger, graph *dag.DirectedTargetGraph, runTarget *model.Target) {
+func loadDependencyOutputsIfNeeded(ctx context.Context, logger *console.Logger, graph *dag.DirectedTargetGraph, runTarget *model.Target) {
 	if config.Global.GetLoadOutputsMode() != config.LoadOutputsMinimal {
 		return
 	}
@@ -168,7 +169,7 @@ func loadDependencyOutputsIfNeeded(ctx context.Context, logger *zap.SugaredLogge
 	targetCache := caching.NewTargetResultCache(cache)
 	cas := caching.NewCas(cache)
 	taintCache := caching.NewTaintCache(cache)
-	registry := output.NewRegistry(cas)
+	registry := output.NewRegistry(ctx, cas)
 
 	executor := execution.NewExecutor(
 		targetCache,
@@ -181,7 +182,7 @@ func loadDependencyOutputsIfNeeded(ctx context.Context, logger *zap.SugaredLogge
 		config.Global.GetLoadOutputsMode(),
 	)
 	logger.Infof("Loading outputs of direct dependencies due to load_outputs=minimal")
-	if err := executor.LoadDependencyOutputs(ctx, runTarget, func(_ string) {}); err != nil {
+	if err := executor.LoadDependencyOutputs(ctx, runTarget, func(_ worker.StatusUpdate) {}); err != nil {
 		logger.Fatalf("could not load dependencies: %v", err)
 	}
 }
@@ -197,7 +198,7 @@ func splitRunArgs(args []string, argsLenAtDash int) ([]string, []string, error) 
 	return args, nil, nil
 }
 
-func parseMultipleTargetLabels(logger *zap.SugaredLogger, currentPackagePath string, targetArgs []string) []label.TargetLabel {
+func parseMultipleTargetLabels(logger *console.Logger, currentPackagePath string, targetArgs []string) []label.TargetLabel {
 	labels := make([]label.TargetLabel, 0, len(targetArgs))
 	seen := make(map[label.TargetLabel]struct{})
 	for _, targetArg := range targetArgs {
@@ -214,7 +215,7 @@ func parseMultipleTargetLabels(logger *zap.SugaredLogger, currentPackagePath str
 	return labels
 }
 
-func runTargetsByLabels(ctx context.Context, logger *zap.SugaredLogger, targetLabels []label.TargetLabel, userCommandArgs []string) {
+func runTargetsByLabels(ctx context.Context, logger *console.Logger, targetLabels []label.TargetLabel, userCommandArgs []string) {
 	graph := loading.MustLoadGraphForBuild(ctx, logger)
 	runTargets := make([]*model.Target, 0, len(targetLabels))
 	seen := make(map[label.TargetLabel]struct{})
@@ -230,7 +231,7 @@ func runTargetsByLabels(ctx context.Context, logger *zap.SugaredLogger, targetLa
 	buildAndRunTargets(ctx, logger, graph, runTargets, userCommandArgs)
 }
 
-func resolveRunTarget(logger *zap.SugaredLogger, graph *dag.DirectedTargetGraph, targetLabel label.TargetLabel) *model.Target {
+func resolveRunTarget(logger *console.Logger, graph *dag.DirectedTargetGraph, targetLabel label.TargetLabel) *model.Target {
 	node, hasNode := graph.GetNodes()[targetLabel]
 	if !hasNode {
 		logger.Fatalf("could not find target %s", targetLabel)
@@ -258,7 +259,7 @@ func resolveRunTarget(logger *zap.SugaredLogger, graph *dag.DirectedTargetGraph,
 	return nil
 }
 
-func runTargetBinaries(ctx context.Context, logger *zap.SugaredLogger, runTargets []*model.Target, userCommandArgs []string) error {
+func runTargetBinaries(ctx context.Context, logger *console.Logger, runTargets []*model.Target, userCommandArgs []string) error {
 	if len(runTargets) == 0 {
 		return nil
 	}

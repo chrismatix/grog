@@ -40,6 +40,10 @@ var RootCmd = &cobra.Command{
 			return err
 		}
 
+		if !console.UseTea() {
+			config.Global.DisableProgressTracker = true
+		}
+
 		if err := config.Global.ValidateGrogVersion(Version); err != nil {
 			console.InitLogger().Fatalf("Invalid grog version: %v", err)
 		}
@@ -112,6 +116,16 @@ func init() {
 	RootCmd.PersistentFlags().Bool("stream-logs", false, "Forward all target build/test logs to stdout/-err")
 	err = viper.BindPFlag("stream_logs", RootCmd.PersistentFlags().Lookup("stream-logs"))
 
+	// disable_progress_tracker
+	RootCmd.PersistentFlags().Bool("disable-progress-tracker", false, "Disable progress tracking updates")
+	err = viper.BindPFlag("disable_progress_tracker", RootCmd.PersistentFlags().Lookup("disable-progress-tracker"))
+	viper.SetDefault("disable_progress_tracker", false)
+
+	// disable_default_shell_flags
+	RootCmd.PersistentFlags().Bool("disable-default-shell-flags", false, "Do not prepend \"set -eu\" to target commands")
+	err = viper.BindPFlag("disable_default_shell_flags", RootCmd.PersistentFlags().Lookup("disable-default-shell-flags"))
+	viper.SetDefault("disable_default_shell_flags", false)
+
 	// load_outputs
 	RootCmd.PersistentFlags().String("load-outputs", "all", "Level of output loading for cached targets. One of: all, minimal.")
 	err = viper.BindPFlag("load_outputs", RootCmd.PersistentFlags().Lookup("load-outputs"))
@@ -168,6 +182,7 @@ func initConfig(cmd *cobra.Command) error {
 	viper.SetDefault("os", runtime.GOOS)
 	viper.SetDefault("arch", runtime.GOARCH)
 	viper.SetDefault("cache.gcs.shared_cache", true)
+	viper.SetDefault("cache.s3.shared_cache", true)
 	viper.SetDefault("hash_algorithm", config.HashAlgorithmXXH3)
 	viper.SetDefault("environment_variables", make(map[string]string))
 
@@ -178,6 +193,8 @@ func initConfig(cmd *cobra.Command) error {
 	if viper.GetString("profile") != "" {
 		names = append([]string{"grog." + viper.GetString("profile")}, names...)
 	}
+
+	logger := console.InitLogger()
 
 	var found bool
 	for _, name := range names {
@@ -190,6 +207,7 @@ func initConfig(cmd *cobra.Command) error {
 			return err
 		}
 		found = true
+		logger.Debugf("Loaded config file: %s", viper.ConfigFileUsed())
 		break
 	}
 	if !found {
@@ -225,7 +243,6 @@ func initConfig(cmd *cobra.Command) error {
 
 	config.Global.HashAlgorithm = strings.ToLower(config.Global.HashAlgorithm)
 
-	logger := console.InitLogger()
 	logger.Debugf("Using config file: %s", viper.ConfigFileUsed())
 	logger.Debugf("Running on %s", config.Global.GetPlatform())
 

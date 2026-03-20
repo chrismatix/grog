@@ -7,7 +7,9 @@ import (
 	"testing"
 
 	"grog/internal/config"
+	"grog/internal/console"
 
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
 )
 
@@ -115,7 +117,7 @@ echo ok
 		config.Global.WorkspaceRoot = originalRoot
 	})
 
-	logger := zaptest.NewLogger(t).Sugar()
+	logger := console.NewFromSugared(zaptest.NewLogger(t).Sugar(), zapcore.DebugLevel)
 	target, err := LoadScriptTarget(context.Background(), logger, script)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)

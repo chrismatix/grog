@@ -1,13 +1,15 @@
 package loading
 
 import (
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
+	"grog/internal/console"
 	"grog/internal/label"
 	"testing"
 )
 
 func TestGetEnrichedPackage_DefaultPlatforms(t *testing.T) {
-	logger := zaptest.NewLogger(t).Sugar()
+	logger := console.NewFromSugared(zaptest.NewLogger(t).Sugar(), zapcore.DebugLevel)
 	packagePath := "test/package"
 
 	// Create a package DTO with a default platform selector
@@ -62,7 +64,7 @@ func TestGetEnrichedPackage_DefaultPlatforms(t *testing.T) {
 }
 
 func TestGetEnrichedPackage_FingerprintCopied(t *testing.T) {
-	logger := zaptest.NewLogger(t).Sugar()
+	logger := console.NewFromSugared(zaptest.NewLogger(t).Sugar(), zapcore.DebugLevel)
 	packagePath := "pkg"
 
 	fingerprint := map[string]string{"commit": "abc123", "arch": "arm64"}

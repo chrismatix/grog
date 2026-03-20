@@ -59,15 +59,15 @@ func (s *Selector) selectAllAncestorsForBuild(
 	node model.BuildNode,
 ) error {
 	for _, ancestor := range graph.GetDependencies(node) {
-		depChain = append(depChain, ancestor.GetLabel().String())
+		nextChain := append(append([]string{}, depChain...), ancestor.GetLabel().String())
 		if !nodeMatchesPlatform(ancestor) {
-			depChainStr := strings.Join(depChain[1:], " -> ")
+			depChainStr := strings.Join(nextChain[1:], " -> ")
 			return fmt.Errorf("could not select node %s because it depends on %s, which does not match the platform %s",
 				depChain[0], depChainStr, config.Global.GetPlatform())
 		}
 
 		ancestor.Select()
-		if err := s.selectAllAncestorsForBuild(graph, depChain, ancestor); err != nil {
+		if err := s.selectAllAncestorsForBuild(graph, nextChain, ancestor); err != nil {
 			return err
 		}
 	}

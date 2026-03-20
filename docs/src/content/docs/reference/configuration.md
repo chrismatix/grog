@@ -16,6 +16,8 @@ fail_fast = true # Exit immediately when encountering an issue
 num_workers = 4
 load_outputs = "minimal"
 hash_algorithm = "xxh3" # default
+# Disable injecting "set -eu" before running target commands
+# disable_default_shell_flags = true
 
 # Target Selection
 all_platforms = false
@@ -51,6 +53,7 @@ For instance, to set or override the `fail_fast` option set `GROG_FAIL_FAST=fals
 - **num_workers**: Number of concurrent workers for parallel task execution. Defaults to the number of CPUs.
 - **log_level**: Determines verbosity of logging (e.g., "debug", "info"). Defaults to `info`.
 - **stream_logs**: When `true`, Grog will stream build and test logs to stdout. Defaults to `false`.
+- **disable_default_shell_flags**: When `false` (default), Grog prepends `set -eu` to target commands before execution to fail fast on unset variables and errors. Set to `true` to opt out.
 - **environment_variables**: Key-value pairs that will be set for all target executions and passed to the Pkl loader.
 - **enable_cache**: Controls whether caching is enabled. Defaults to `true`.
 - **load_outputs**: Determines what outputs are loaded from the cache. Available options are:

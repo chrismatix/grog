@@ -3,12 +3,15 @@ package analysis
 import (
 	"github.com/stretchr/testify/assert"
 	"grog/internal/config"
+	"grog/internal/console"
 	"grog/internal/output"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 	"grog/internal/label"
 	"grog/internal/model"
@@ -155,9 +158,9 @@ func TestCheckPathConstraints(t *testing.T) {
 			// Given
 			observedZapCore, observedLogs := observer.New(zap.WarnLevel)
 			observedLogger := zap.New(observedZapCore).Sugar()
-
+			logger := console.NewFromSugared(observedLogger, zapcore.WarnLevel)
 			// Execute the function under test
-			errs := CheckTargetConstraints(observedLogger, tt.targetMap)
+			errs := CheckTargetConstraints(logger, tt.targetMap)
 
 			// Check logged warnings count
 			if observedLogs.Len() != tt.expectWarningCount {
@@ -293,6 +296,129 @@ func TestIsWithinWorkspace(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, tt.expectWithin, within)
+			}
+		})
+	}
+}
+
+func TestCheckTargetConstraintsDependencyRules(t *testing.T) {
+	tests := []struct {
+		name                    string
+		targetMap               model.BuildNodeMap
+		expectedErrorSubstrings []string
+	}{
+		{
+			name: "non-test target cannot depend on test target",
+			targetMap: model.BuildNodeMap{
+				label.TL("app", "server"): &model.Target{
+					Label:        label.TL("app", "server"),
+					Dependencies: []label.TargetLabel{label.TL("tests", "server_test")},
+				},
+				label.TL("tests", "server_test"): &model.Target{
+					Label:   label.TL("tests", "server_test"),
+					Command: "echo test",
+				},
+			},
+			expectedErrorSubstrings: []string{"//app:server depends on //tests:server_test which is a test target"},
+		},
+		{
+			name: "non-test target cannot depend on test target via alias",
+			targetMap: model.BuildNodeMap{
+				label.TL("app", "server"): &model.Target{
+					Label:        label.TL("app", "server"),
+					Dependencies: []label.TargetLabel{label.TL("tests", "server_test_alias")},
+				},
+				label.TL("tests", "server_test_alias"): &model.Alias{
+					Label:  label.TL("tests", "server_test_alias"),
+					Actual: label.TL("tests", "server_test"),
+				},
+				label.TL("tests", "server_test"): &model.Target{
+					Label:   label.TL("tests", "server_test"),
+					Command: "echo test",
+				},
+			},
+			expectedErrorSubstrings: []string{"//app:server depends on //tests:server_test which is a test target"},
+		},
+		{
+			name: "non-test and non-testonly target cannot depend on testonly target",
+			targetMap: model.BuildNodeMap{
+				label.TL("app", "server"): &model.Target{
+					Label:        label.TL("app", "server"),
+					Dependencies: []label.TargetLabel{label.TL("test-utils", "fake_db")},
+				},
+				label.TL("test-utils", "fake_db"): &model.Target{
+					Label: label.TL("test-utils", "fake_db"),
+					Tags:  []string{model.TagTestOnly},
+				},
+			},
+			expectedErrorSubstrings: []string{"//app:server depends on //test-utils:fake_db which is tagged \"testonly\""},
+		},
+		{
+			name: "non-test and non-testonly target cannot depend on testonly target via alias",
+			targetMap: model.BuildNodeMap{
+				label.TL("app", "server"): &model.Target{
+					Label:        label.TL("app", "server"),
+					Dependencies: []label.TargetLabel{label.TL("test-utils", "fake_db_alias")},
+				},
+				label.TL("test-utils", "fake_db_alias"): &model.Alias{
+					Label:  label.TL("test-utils", "fake_db_alias"),
+					Actual: label.TL("test-utils", "fake_db"),
+				},
+				label.TL("test-utils", "fake_db"): &model.Target{
+					Label: label.TL("test-utils", "fake_db"),
+					Tags:  []string{model.TagTestOnly},
+				},
+			},
+			expectedErrorSubstrings: []string{"//app:server depends on //test-utils:fake_db which is tagged \"testonly\""},
+		},
+		{
+			name: "test target can depend on testonly target",
+			targetMap: model.BuildNodeMap{
+				label.TL("app", "server_test"): &model.Target{
+					Label:        label.TL("app", "server_test"),
+					Command:      "echo test",
+					Dependencies: []label.TargetLabel{label.TL("test-utils", "fake_db")},
+				},
+				label.TL("test-utils", "fake_db"): &model.Target{
+					Label: label.TL("test-utils", "fake_db"),
+					Tags:  []string{model.TagTestOnly},
+				},
+			},
+		},
+		{
+			name: "testonly target can depend on testonly target",
+			targetMap: model.BuildNodeMap{
+				label.TL("test-utils", "fixtures"): &model.Target{
+					Label:        label.TL("test-utils", "fixtures"),
+					Dependencies: []label.TargetLabel{label.TL("test-utils", "fake_db")},
+					Tags:         []string{model.TagTestOnly},
+				},
+				label.TL("test-utils", "fake_db"): &model.Target{
+					Label: label.TL("test-utils", "fake_db"),
+					Tags:  []string{model.TagTestOnly},
+				},
+			},
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			observedZapCore, _ := observer.New(zap.WarnLevel)
+			observedLogger := zap.New(observedZapCore).Sugar()
+			logger := console.NewFromSugared(observedLogger, zapcore.WarnLevel)
+
+			errs := CheckTargetConstraints(logger, testCase.targetMap)
+			assert.Len(t, errs, len(testCase.expectedErrorSubstrings))
+
+			for _, expectedErrorSubstring := range testCase.expectedErrorSubstrings {
+				hasExpectedError := false
+				for _, checkError := range errs {
+					if strings.Contains(checkError.Error(), expectedErrorSubstring) {
+						hasExpectedError = true
+						break
+					}
+				}
+				assert.True(t, hasExpectedError, "expected error containing %q", expectedErrorSubstring)
 			}
 		})
 	}

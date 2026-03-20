@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"maps"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -10,14 +11,26 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fatih/color"
-	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
 	"grog/internal/config"
 	"grog/internal/console"
 )
 
-type StatusFunc func(status string)
+type StatusFunc func(StatusUpdate)
+
+type StatusUpdate struct {
+	Status   string
+	Progress *console.Progress
+}
+
+func Status(status string) StatusUpdate {
+	return StatusUpdate{Status: status}
+}
+
+func StatusWithProgress(status string, progress *console.Progress) StatusUpdate {
+	return StatusUpdate{Status: status, Progress: progress}
+}
 
 type TaskResult[T any] struct {
 	Return T
@@ -33,7 +46,7 @@ type job[T any] struct {
 }
 
 type TaskWorkerPool[T any] struct {
-	logger     *zap.SugaredLogger
+	logger     *console.Logger
 	maxWorkers int
 	totalTasks int
 
@@ -52,7 +65,7 @@ type TaskWorkerPool[T any] struct {
 }
 
 func NewTaskWorkerPool[T any](
-	logger *zap.SugaredLogger,
+	logger *console.Logger,
 	maxWorkers int,
 	sendMsg func(msg tea.Msg),
 	totalTasks int,
@@ -99,13 +112,13 @@ func (twp *TaskWorkerPool[T]) worker(ctx context.Context, workerId int) {
 				return
 			}
 
-			twp.setTaskState(workerId, fmt.Sprintf("Starting task %d on worker %d", j.id+1, workerId), zapcore.DebugLevel)
-			res, err := j.task(func(status string) {
-				taskStatus := status
+			twp.setTaskState(workerId, Status(fmt.Sprintf("Starting task %d on worker %d", j.id+1, workerId)), zapcore.DebugLevel)
+			res, err := j.task(func(status StatusUpdate) {
+				taskStatus := status.Status
 				if isDebug {
-					taskStatus = fmt.Sprintf("%s (worker %d)", status, workerId)
+					taskStatus = fmt.Sprintf("%s (worker %d)", status.Status, workerId)
 				}
-				twp.setTaskState(workerId, taskStatus, zapcore.InfoLevel)
+				twp.setTaskState(workerId, StatusUpdate{Status: taskStatus, Progress: status.Progress}, zapcore.InfoLevel)
 			})
 
 			if j.result != nil {
@@ -118,20 +131,21 @@ func (twp *TaskWorkerPool[T]) worker(ctx context.Context, workerId int) {
 	}
 }
 
-func (twp *TaskWorkerPool[T]) setTaskState(workerId int, status string, lvl zapcore.Level) {
+func (twp *TaskWorkerPool[T]) setTaskState(workerId int, status StatusUpdate, lvl zapcore.Level) {
 	twp.mu.Lock()
 	defer twp.mu.Unlock()
 
 	if logToStdout() {
-		twp.logger.Logf(lvl, status)
+		twp.logger.Logf(lvl, status.Status)
 		return
 	}
 
 	state, exists := twp.taskState[workerId]
 	if !exists {
-		twp.taskState[workerId] = console.TaskState{Status: status, StartedAtSec: time.Now().Unix()}
+		twp.taskState[workerId] = console.TaskState{Status: status.Status, Progress: status.Progress, StartedAtSec: time.Now().Unix()}
 	} else {
-		state.Status = status
+		state.Status = status.Status
+		state.Progress = status.Progress
 		twp.taskState[workerId] = state
 	}
 
@@ -154,9 +168,7 @@ func (twp *TaskWorkerPool[T]) flushStateLocked() {
 
 	// copy
 	mapCopy := make(console.TaskStateMap, len(twp.taskState))
-	for k, v := range twp.taskState {
-		mapCopy[k] = v
-	}
+	maps.Copy(mapCopy, twp.taskState)
 
 	twp.sendMsg(console.TaskStateMsg{State: mapCopy})
 

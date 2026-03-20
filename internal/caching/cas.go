@@ -3,20 +3,27 @@ package caching
 import (
 	"bytes"
 	"context"
-	"grog/internal/caching/backends"
 	"io"
+	"sync"
+
+	"grog/internal/caching/backends"
 )
 
 // Cas is a content-addressable store.
 // That is: Every record is identified by its digest
 type Cas struct {
 	backend backends.CacheBackend
+	// Cache for exists queries since we assume that during the runtime of a build
+	// the cache backend cannot lose a digest (grog does not delete during a build)
+	keyExistsCache sync.Map
 }
 
 func NewCas(
 	cache backends.CacheBackend,
 ) *Cas {
-	return &Cas{backend: cache}
+	return &Cas{
+		backend: cache,
+	}
 }
 
 func (c *Cas) GetBackend() backends.CacheBackend {
@@ -25,7 +32,17 @@ func (c *Cas) GetBackend() backends.CacheBackend {
 
 // Write writes a digest for a given reader
 func (c *Cas) Write(ctx context.Context, digest string, reader io.Reader) error {
-	return c.backend.Set(ctx, "cas", digest, reader)
+	if exists, err := c.Exists(ctx, digest); exists && err == nil {
+		// If the digest already exists, we don't need to write it again
+		return nil
+	}
+
+	err := c.backend.Set(ctx, "cas", digest, reader)
+	if err == nil {
+		// Mark the digest as existing in case later targets create the same digest
+		c.keyExistsCache.Store(digest, true)
+	}
+	return err
 }
 
 // WriteBytes writes a digest for a given reader
@@ -49,5 +66,18 @@ func (c *Cas) LoadBytes(ctx context.Context, digest string) ([]byte, error) {
 }
 
 func (c *Cas) Exists(ctx context.Context, digest string) (bool, error) {
-	return c.backend.Exists(ctx, "cas", digest)
+	if cached, ok := c.keyExistsCache.Load(digest); ok && cached.(bool) {
+		return cached.(bool), nil
+	}
+
+	exists, err := c.backend.Exists(ctx, "cas", digest)
+	if err != nil {
+		return false, err
+	}
+
+	if exists {
+		// Only cache if the key exists
+		c.keyExistsCache.Store(digest, exists)
+	}
+	return exists, nil
 }

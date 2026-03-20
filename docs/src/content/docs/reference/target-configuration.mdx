@@ -28,7 +28,7 @@ Grog uses this information to ensure incremental, cached, and parallel builds.
 | `outputs`               | `string[]`               | Files or directories produced by the target                            |
 | `dependencies`          | `label[]`                | Labels of other targets that must be built before this one             |
 | `platforms`             | `string[]`               | Specific platform identifiers where this target can run (e.g. `linux/amd64`) |
-| `tags`                  | `string[]`               | Metadata tags that affect target behavior (e.g., "no-cache")           |
+| `tags`                  | `string[]`               | Metadata tags that affect target behavior (e.g., "no-cache", "testonly") |
 | `fingerprint`           | `Record<string, string>` | Extra identity inputs used to invalidate the target's cache entry      |
 | `bin_output`            | `Output`                 | Specifically identifies a binary output from the target                |
 | `timeout`               | `string`                 | Maximum time allowed for the target command to run                    |
@@ -130,6 +130,7 @@ There are a few reserved tags that alter the way grog treats a target:
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | no-cache            | Outputs will neither be stored in nor loaded from the cache backend.                                                                                  |
 | multiplatform-cache | By default grog separates target caches by the host platform. Adding this tag causes grog to store the outputs at the same cache key across platforms |
+| testonly            | Marks a target as test-only. Non-test, non-`testonly` targets may not depend on `testonly` targets (test targets may); `grog check`/`grog build`/`grog test` fail if this is violated. |
 
 ### fingerprint
 

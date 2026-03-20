@@ -12,6 +12,7 @@ import (
 // FileSystemCache implements the CacheBackend interface using the file system for storage
 type FileSystemCache struct {
 	workspaceCacheDir string
+	sharedCasDir      string
 }
 
 func (fsc *FileSystemCache) TypeName() string {
@@ -21,34 +22,46 @@ func (fsc *FileSystemCache) TypeName() string {
 // NewFileSystemCache creates a new cache using the configured cache directory
 func NewFileSystemCache(ctx context.Context) (*FileSystemCache, error) {
 	workspaceCacheDir := config.Global.GetWorkspaceCacheDirectory()
+	sharedCasDir := config.Global.GetCasDirectory()
 
 	// Ensure the root directory exists
 	if err := os.MkdirAll(workspaceCacheDir, 0755); err != nil {
 		return nil, err
 	}
+	if err := os.MkdirAll(sharedCasDir, 0755); err != nil {
+		return nil, err
+	}
 
-	console.GetLogger(ctx).Debugf("Instantiated fs cache at: %s", workspaceCacheDir)
+	console.GetLogger(ctx).Tracef("Instantiated fs cache at: %s", workspaceCacheDir)
 	return &FileSystemCache{
 		workspaceCacheDir: workspaceCacheDir,
+		sharedCasDir:      sharedCasDir,
 	}, nil
 }
 
 // buildFilePath constructs the full file path for a cached item
 func (fsc *FileSystemCache) buildFilePath(path, key string) string {
-	dir := filepath.Join(fsc.workspaceCacheDir, path)
+	dir := fsc.getDir(path)
 	return filepath.Join(dir, key)
+}
+
+func (fsc *FileSystemCache) getDir(path string) string {
+	if path == "cas" {
+		return fsc.sharedCasDir
+	}
+	return filepath.Join(fsc.workspaceCacheDir, path)
 }
 
 // Get retrieves a cached file by its key
 func (fsc *FileSystemCache) Get(ctx context.Context, path, key string) (io.ReadCloser, error) {
 	logger := console.GetLogger(ctx)
-	logger.Debugf("Getting file from cache for path: %s, key: %s", path, key)
+	logger.Tracef("Getting file from cache for path: %s, key: %s", path, key)
 
 	filePath := fsc.buildFilePath(path, key)
 
 	file, err := os.Open(filePath)
 	if err != nil {
-		logger.Debugf("Failed to get file for path: %s, key: %s", path, key)
+		logger.Tracef("Failed to get file for path: %s, key: %s", path, key)
 		return nil, err
 	}
 
@@ -58,16 +71,18 @@ func (fsc *FileSystemCache) Get(ctx context.Context, path, key string) (io.ReadC
 // Set stores a file in the cache with the given key and content
 func (fsc *FileSystemCache) Set(ctx context.Context, path, key string, content io.Reader) error {
 	logger := console.GetLogger(ctx)
-	logger.Debugf("Setting file in cache for path: %s, key: %s", path, key)
+	logger.Tracef("Setting file in cache for path: %s, key: %s", path, key)
 
-	// Make sure the directory exists
-	dir := filepath.Join(fsc.workspaceCacheDir, path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	filePath := fsc.buildFilePath(path, key)
+	destinationDirectory := filepath.Dir(filePath)
+
+	// Make sure the destination directory exists. Keys can include path separators.
+	if err := os.MkdirAll(destinationDirectory, 0755); err != nil {
 		return err
 	}
 
 	// Write to a temp file first to ensure atomicity
-	tmpFile, err := os.CreateTemp(dir, "tmp-*")
+	tmpFile, err := os.CreateTemp(destinationDirectory, "tmp-*")
 	if err != nil {
 		return err
 	}
@@ -84,20 +99,19 @@ func (fsc *FileSystemCache) Set(ctx context.Context, path, key string, content i
 		return err
 	}
 
-	filePath := fsc.buildFilePath(path, key)
 	return os.Rename(tmpFile.Name(), filePath)
 }
 
 // Delete removes a cached file by its key
 func (fsc *FileSystemCache) Delete(ctx context.Context, path, key string) error {
 	logger := console.GetLogger(ctx)
-	logger.Debugf("Deleting file from cache for path: %s, key: %s", path, key)
+	logger.Tracef("Deleting file from cache for path: %s, key: %s", path, key)
 
 	filePath := fsc.buildFilePath(path, key)
 
 	// Check if file exists before attempting to remove
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		logger.Debugf("File not found for deletion for path: %s, key: %s", path, key)
+		logger.Tracef("File not found for deletion for path: %s, key: %s", path, key)
 		return nil
 	}
 
@@ -113,13 +127,13 @@ func (fsc *FileSystemCache) Exists(ctx context.Context, path, key string) (bool,
 	_, err := os.Stat(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			logger.Debugf("Cache-miss for path: %s, key: %s", path, key)
+			logger.Tracef("Cache-miss for path: %s, key: %s", path, key)
 			return false, nil
 		}
-		logger.Debugf("Cache failed for path: %s, key: %s %v", path, key, err)
+		logger.Tracef("Cache failed for path: %s, key: %s %v", path, key, err)
 		return false, err
 	}
-	logger.Debugf("Cache-hit for path: %s, key: %s", path, key)
+	logger.Tracef("Cache-hit for path: %s, key: %s", path, key)
 	return true, nil
 }
 

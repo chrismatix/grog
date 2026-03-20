@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -98,9 +99,30 @@ func TestWorkspaceLockerStaleFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed reading lockfile: %v", err)
 	}
-	pidStr := string(data)
-	if pidStr != strconv.Itoa(os.Getpid()) {
-		t.Fatalf("unexpected pid in lockfile: %s", pidStr)
+	processID, command, parseError := parseLockFileContents(string(data))
+	if parseError != nil {
+		t.Fatalf("failed parsing lockfile: %v", parseError)
+	}
+	if processID != os.Getpid() {
+		t.Fatalf("unexpected pid in lockfile: %d", processID)
+	}
+
+	expectedCommand := strings.TrimSpace(strings.Join(os.Args, " "))
+	if command != expectedCommand {
+		t.Fatalf("unexpected command in lockfile: %q", command)
+	}
+}
+
+func TestParseLockFileContentsLegacyFormat(t *testing.T) {
+	processID, command, parseError := parseLockFileContents(strconv.Itoa(os.Getpid()))
+	if parseError != nil {
+		t.Fatalf("failed parsing legacy lockfile: %v", parseError)
+	}
+	if processID != os.Getpid() {
+		t.Fatalf("unexpected pid: %d", processID)
+	}
+	if command != "" {
+		t.Fatalf("expected empty command, got %q", command)
 	}
 }
 

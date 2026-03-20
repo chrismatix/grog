@@ -1,4 +1,6 @@
 ## Custom ignores
+.idea/
+*.iml
 
 # Nix output
 result

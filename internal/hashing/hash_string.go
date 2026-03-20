@@ -6,9 +6,3 @@ func HashString(str string) string {
 	_, _ = hasher.WriteString(str)
 	return hasher.SumString()
 }
-
-func HashBytes(bytes []byte) string {
-	hasher := GetHasher()
-	_, _ = hasher.Write(bytes)
-	return hasher.SumString()
-}

@@ -8,22 +8,27 @@ import (
 // TargetPattern represents a Bazel target pattern, e.g. "//pkg/..." or "//pkg/...:target".
 // It supports recursive (hierarchical) matching using the "..." wildcard.
 type TargetPattern struct {
-       prefix        string // package prefix (without trailing slash)
-       targetPattern string // target name filter (if empty, matches any target)
-       recursive     bool   // true if "..." is used for recursive matching
+	prefix        string // package prefix (without trailing slash)
+	targetPattern string // target name filter (if empty, matches any target)
+	recursive     bool   // true if "..." is used for recursive matching
+
+	// Used for partial target patterns. true if the package path is incomplete
+	isPrefixPartial bool
 }
 
 // ParseTargetPattern parses a Bazel target pattern.
 func ParseTargetPattern(currentPackage string, pattern string) (TargetPattern, error) {
 	if !strings.HasPrefix(pattern, "//") {
-		colonIdx := strings.Index(pattern, ":")
-		if colonIdx == -1 {
+		_, after, ok := strings.Cut(pattern, ":")
+		if !ok {
 			return TargetPattern{}, fmt.Errorf("invalid pattern %q: relative patterns must use ':'", pattern)
 		}
 
-		targetName := pattern[colonIdx+1:]
-		if err := validateName(targetName); err != nil {
-			return TargetPattern{}, err
+		targetName := after
+		if targetName != "..." {
+			if err := validateName(targetName); err != nil {
+				return TargetPattern{}, err
+			}
 		}
 
 		return TargetPattern{prefix: currentPackage, targetPattern: targetName}, nil
@@ -32,35 +37,31 @@ func ParseTargetPattern(currentPackage string, pattern string) (TargetPattern, e
 	var prefix, targetPattern string
 	recursive := false
 
-	// Look for the "..." wildcard.
-	idx := strings.Index(body, "...")
-	if idx != -1 {
-		recursive = true
-		prefix = body[:idx]
-		// If there is a target filter after "..."
-		if len(body) > idx+3 && body[idx+3] == ':' {
-			targetPattern = body[idx+4:]
-			if targetPattern == "" {
-				return TargetPattern{}, fmt.Errorf("invalid pattern %q: target pattern after ':' is empty", pattern)
-			}
-		} else if len(body) > idx+3 {
-			// Unexpected characters after "..."
-			return TargetPattern{}, fmt.Errorf("invalid pattern %q: unexpected characters after '...'", pattern)
-		}
-	} else {
-		// No "..." present: expect an exact package with an optional colon.
-		colonIdx := strings.Index(body, ":")
-		if colonIdx == -1 {
-			// Shorthand: "//foo" is equivalent to "//foo:foo"
-			prefix = body
-			targetPattern = body[strings.LastIndex(body, "/")+1:]
-		} else {
-			prefix = body[:colonIdx]
-			targetPattern = body[colonIdx+1:]
-		}
-
+	before, after, ok := strings.Cut(body, ":")
+	packagePart := body
+	if ok {
+		packagePart = before
+		targetPattern = after
 		if targetPattern == "" {
 			return TargetPattern{}, fmt.Errorf("invalid pattern %q: target pattern is empty", pattern)
+		}
+	}
+
+	ellipsisIndex := strings.Index(packagePart, "...")
+	if ellipsisIndex != -1 {
+		if len(packagePart) > ellipsisIndex+3 {
+			return TargetPattern{}, fmt.Errorf("invalid pattern %q: unexpected characters after '...'", pattern)
+		}
+		recursive = true
+		prefix = packagePart[:ellipsisIndex]
+	} else {
+		prefix = packagePart
+		if !ok {
+			// Shorthand: "//foo" is equivalent to "//foo:foo"
+			targetPattern = packagePart[strings.LastIndex(packagePart, "/")+1:]
+			if targetPattern == "" {
+				return TargetPattern{}, fmt.Errorf("invalid pattern %q: target pattern is empty", pattern)
+			}
 		}
 	}
 
@@ -74,6 +75,14 @@ func ParseTargetPattern(currentPackage string, pattern string) (TargetPattern, e
 type TargetPatternSet = []TargetPattern
 
 func ParsePatternsOrMatchAll(currentPackage string, patterns []string) ([]TargetPattern, error) {
+	if len(patterns) == 0 {
+		return []TargetPattern{GetMatchAllTargetPattern()}, nil
+	}
+
+	return ParsePatterns(currentPackage, patterns)
+}
+
+func ParsePatterns(currentPackage string, patterns []string) ([]TargetPattern, error) {
 	var result []TargetPattern
 	for _, pattern := range patterns {
 		p, err := ParseTargetPattern(currentPackage, pattern)
@@ -82,11 +91,29 @@ func ParsePatternsOrMatchAll(currentPackage string, patterns []string) ([]Target
 		}
 		result = append(result, p)
 	}
-	if len(result) == 0 {
-		return []TargetPattern{GetMatchAllTargetPattern()}, nil
-	}
 
 	return result, nil
+}
+
+// ParsePatternsOrMatchCurrentPackageAndSubpackages parses provided patterns or,
+// when none are provided, defaults to all targets in the current package and
+// all of its subpackages.
+func ParsePatternsOrMatchCurrentPackageAndSubpackages(currentPackage string, patterns []string) ([]TargetPattern, error) {
+	if len(patterns) == 0 {
+		currentPackageRecursivePattern := "//..."
+		if currentPackage != "" {
+			currentPackageRecursivePattern = "//" + currentPackage + "/..."
+		}
+
+		parsedPattern, err := ParseTargetPattern(currentPackage, currentPackageRecursivePattern)
+		if err != nil {
+			return nil, err
+		}
+
+		return []TargetPattern{parsedPattern}, nil
+	}
+
+	return ParsePatterns(currentPackage, patterns)
 }
 
 func PatternSetToString(patterns []TargetPattern) string {
@@ -117,14 +144,15 @@ func ParsePartialTargetPattern(currentPackage, pattern string) TargetPattern {
 		return TargetPattern{prefix: currentPackage, targetPattern: pattern[1:]}
 	}
 
+	var colonIndex int
 	if !strings.HasPrefix(pattern, "//") {
 		// Relative pattern without explicit ":" or shorthand.
-		colonIdx := strings.Index(pattern, ":")
+		colonIndex = strings.Index(pattern, ":")
 		var targetName string
-		if colonIdx == -1 {
+		if colonIndex == -1 {
 			targetName = pattern
 		} else {
-			targetName = pattern[colonIdx+1:]
+			targetName = pattern[colonIndex+1:]
 		}
 		return TargetPattern{prefix: currentPackage, targetPattern: targetName}
 	}
@@ -133,23 +161,32 @@ func ParsePartialTargetPattern(currentPackage, pattern string) TargetPattern {
 	prefix := body
 	targetPattern := ""
 	recursive := false
+	isPrefixPartial := false
 
-	if idx := strings.Index(body, "..."); idx != -1 {
+	colonIndex = strings.Index(body, ":")
+	packagePart := body
+	if colonIndex != -1 {
+		packagePart = body[:colonIndex]
+		targetPattern = body[colonIndex+1:]
+	}
+
+	if before, _, ok := strings.Cut(packagePart, "..."); ok {
 		recursive = true
-		prefix = body[:idx]
-		if len(body) > idx+3 && body[idx+3] == ':' {
-			targetPattern = body[idx+4:]
+		prefix = before
+	} else {
+		prefix = packagePart
+	}
+
+	if len(prefix) > 0 {
+		if prefix[len(prefix)-1] == '/' {
+			prefix = prefix[:len(prefix)-1]
+		} else if colonIndex <= 0 && !recursive {
+			// We are dealing with a partial package path, e.g. //foo
+			isPrefixPartial = true
 		}
-	} else if colonIdx := strings.Index(body, ":"); colonIdx != -1 {
-		prefix = body[:colonIdx]
-		targetPattern = body[colonIdx+1:]
 	}
 
-	if len(prefix) > 0 && prefix[len(prefix)-1] == '/' {
-		prefix = prefix[:len(prefix)-1]
-	}
-
-	return TargetPattern{prefix: prefix, targetPattern: targetPattern, recursive: recursive}
+	return TargetPattern{prefix: prefix, targetPattern: targetPattern, recursive: recursive, isPrefixPartial: isPrefixPartial}
 }
 
 // Matches returns true if the given TargetLabel matches the pattern.
@@ -174,7 +211,7 @@ func (p TargetPattern) Matches(t TargetLabel) bool {
 		return true
 	}
 	// Allow "all" to match any target.
-	if p.targetPattern == "all" {
+	if p.targetPattern == "all" || p.targetPattern == "..." {
 		return true
 	}
 	return t.Name == p.targetPattern
@@ -205,3 +242,6 @@ func (p TargetPattern) Target() string { return p.targetPattern }
 
 // Recursive reports whether the pattern matches recursively.
 func (p TargetPattern) Recursive() bool { return p.recursive }
+
+// IsPrefixPartial reports whether the package prefix was incomplete for partial patterns.
+func (p TargetPattern) IsPrefixPartial() bool { return p.isPrefixPartial }
