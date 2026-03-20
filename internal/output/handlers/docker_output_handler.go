@@ -33,6 +33,107 @@ type DockerOutputHandler struct {
 	inFlightBytes    *semaphore.Weighted
 }
 
+type dockerImageWritePlan struct {
+	handler        *DockerOutputHandler
+	configBytes    []byte
+	configDigest   string
+	manifestBytes  []byte
+	manifestDigest string
+	layers         []v1.Layer
+	manifest       *v1.Manifest
+	imageName      string
+	totalBytes     int64
+	targetLabel    string
+}
+
+func (d *dockerImageWritePlan) Upload(ctx context.Context, tracker *worker.ProgressTracker) error {
+	logger := console.GetLogger(ctx)
+
+	progress := tracker
+	if progress != nil {
+		progress = progress.SubTracker(
+			fmt.Sprintf("%s: writing docker image %s", d.targetLabel, d.imageName),
+			d.totalBytes,
+		)
+	}
+
+	var configReader io.Reader = bytes.NewReader(d.configBytes)
+	if progress != nil {
+		configReader = progress.WrapReader(configReader)
+	}
+	logger.Debugf("writing Docker config %s for image %s to CAS", d.configDigest, d.imageName)
+	if err := d.handler.cas.Write(ctx, d.configDigest, configReader); err != nil {
+		return fmt.Errorf("failed to write config blob for image %s: %w", d.imageName, err)
+	}
+
+	var waitGroup sync.WaitGroup
+	errChan := make(chan error, len(d.layers))
+	for index, layer := range d.layers {
+		waitGroup.Add(1)
+		go func(index int, layer v1.Layer) {
+			defer waitGroup.Done()
+			descriptor := d.manifest.Layers[index]
+
+			cost := descriptor.Size
+			if cost <= 0 {
+				cost = 1 << 20
+			}
+			if cost > d.handler.maxInFlightBytes {
+				cost = d.handler.maxInFlightBytes
+			}
+			if err := d.handler.inFlightBytes.Acquire(ctx, cost); err != nil {
+				errChan <- fmt.Errorf("failed to acquire in-flight budget for layer %d (%s): %w", index, descriptor.Digest, err)
+				return
+			}
+			defer d.handler.inFlightBytes.Release(cost)
+
+			layerReader, err := layer.Compressed()
+			if err != nil {
+				errChan <- fmt.Errorf("failed to open layer %d for image %s: %w", index, d.imageName, err)
+				return
+			}
+			defer layerReader.Close()
+
+			reader := io.Reader(layerReader)
+			if progress != nil {
+				reader = progress.WrapReadCloser(layerReader)
+			}
+
+			logger.Debugf("writing Docker layer %s for image %s to CAS", descriptor.Digest, d.imageName)
+			if err := d.handler.cas.Write(ctx, descriptor.Digest.String(), reader); err != nil {
+				errChan <- fmt.Errorf("failed to write layer %s to cache: %w", descriptor.Digest, err)
+				return
+			}
+		}(index, layer)
+	}
+	waitGroup.Wait()
+	close(errChan)
+	for err := range errChan {
+		if err != nil {
+			return err
+		}
+	}
+
+	var manifestReader io.Reader = bytes.NewReader(d.manifestBytes)
+	if progress != nil {
+		manifestReader = progress.WrapReader(manifestReader)
+	}
+	logger.Debugf("writing Docker manifest %s for image %s to CAS", d.manifestDigest, d.imageName)
+	if err := d.handler.cas.Write(ctx, d.manifestDigest, manifestReader); err != nil {
+		return fmt.Errorf("failed to write manifest for image %s: %w", d.imageName, err)
+	}
+
+	if progress != nil {
+		progress.Complete()
+	}
+	logger.Debugf("successfully saved Docker image %s to cache", d.imageName)
+	return nil
+}
+
+func (d *dockerImageWritePlan) Cleanup(context.Context) error {
+	return nil
+}
+
 // NewDockerOutputHandler creates a new DockerOutputHandler
 func NewDockerOutputHandler(ctx context.Context, cas *caching.Cas) *DockerOutputHandler {
 	logger := console.GetLogger(ctx)
@@ -104,8 +205,8 @@ func (d *DockerOutputHandler) Write(
 	ctx context.Context,
 	target model.Target,
 	output model.Output,
-	tracker *worker.ProgressTracker,
-) (*WriteResult, error) {
+	_ *worker.ProgressTracker,
+) (*PreparedOutput, error) {
 	logger := console.GetLogger(ctx)
 	imageName := output.Identifier
 
@@ -160,14 +261,6 @@ func (d *DockerOutputHandler) Write(
 		totalBytes += layer.Size
 	}
 
-	progress := tracker
-	if progress != nil {
-		progress = progress.SubTracker(
-			fmt.Sprintf("%s: writing docker image %s", target.Label, imageName),
-			totalBytes,
-		)
-	}
-
 	genOutput := &gen.Output{
 		Kind: &gen.Output_DockerImage{
 			DockerImage: &gen.DockerImageOutput{
@@ -180,83 +273,22 @@ func (d *DockerOutputHandler) Write(
 		},
 	}
 
-	// Always produce a deferred upload closure; the executor decides
-	// whether to run it inline (sync) or on the I/O pool (async).
-	capturedConfigBytes := configBytes
-	capturedConfigDigest := configDigest
-	capturedManifestBytes := manifestBytes
-	capturedManifestDigest := manifestDigest
-	capturedLayers := layers
-	capturedManifest := manifest
-	capturedImageName := imageName
-	cas := d.cas
-
-	deferredUpload := func(ctx context.Context) error {
-		logger := console.GetLogger(ctx)
-
-		// Write config blob
-		logger.Debugf("writing Docker config %s for image %s to CAS", capturedConfigDigest, capturedImageName)
-		if err := cas.Write(ctx, capturedConfigDigest, bytes.NewReader(capturedConfigBytes)); err != nil {
-			return fmt.Errorf("failed to write config blob for image %s: %w", capturedImageName, err)
-		}
-
-		// Write layers
-		var wg sync.WaitGroup
-		errCh := make(chan error, len(capturedLayers))
-		for idx, layer := range capturedLayers {
-			wg.Add(1)
-			go func(idx int, layer v1.Layer) {
-				defer wg.Done()
-				descriptor := capturedManifest.Layers[idx]
-
-				cost := descriptor.Size
-				if cost <= 0 {
-					cost = 1 << 20
-				}
-				if cost > d.maxInFlightBytes {
-					cost = d.maxInFlightBytes
-				}
-				if err := d.inFlightBytes.Acquire(ctx, cost); err != nil {
-					errCh <- fmt.Errorf("failed to acquire in-flight budget for layer %d (%s): %w", idx, descriptor.Digest, err)
-					return
-				}
-				defer d.inFlightBytes.Release(cost)
-
-				layerReader, err := layer.Compressed()
-				if err != nil {
-					errCh <- fmt.Errorf("failed to open layer %d for image %s: %w", idx, capturedImageName, err)
-					return
-				}
-				defer layerReader.Close()
-
-				logger.Debugf("writing Docker layer %s for image %s to CAS", descriptor.Digest, capturedImageName)
-				if err := cas.Write(ctx, descriptor.Digest.String(), layerReader); err != nil {
-					errCh <- fmt.Errorf("failed to write layer %s to cache: %w", descriptor.Digest, err)
-					return
-				}
-			}(idx, layer)
-		}
-		wg.Wait()
-		close(errCh)
-		for err := range errCh {
-			if err != nil {
-				return err
-			}
-		}
-
-		// Write manifest blob
-		logger.Debugf("writing Docker manifest %s for image %s to CAS", capturedManifestDigest, capturedImageName)
-		if err := cas.Write(ctx, capturedManifestDigest, bytes.NewReader(capturedManifestBytes)); err != nil {
-			return fmt.Errorf("failed to write manifest for image %s: %w", capturedImageName, err)
-		}
-
-		logger.Debugf("successfully saved Docker image %s to cache", capturedImageName)
-		return nil
+	writePlan := &dockerImageWritePlan{
+		handler:        d,
+		configBytes:    configBytes,
+		configDigest:   configDigest,
+		manifestBytes:  manifestBytes,
+		manifestDigest: manifestDigest,
+		layers:         layers,
+		manifest:       manifest,
+		imageName:      imageName,
+		totalBytes:     totalBytes,
+		targetLabel:    target.Label.String(),
 	}
 
-	return &WriteResult{
-		Output:         genOutput,
-		DeferredUpload: deferredUpload,
+	return &PreparedOutput{
+		Output:    genOutput,
+		WritePlan: writePlan,
 	}, nil
 }
 

@@ -99,9 +99,13 @@ func (pc *PoolCoordinator) IOPool() *worker.TaskWorkerPool[struct{}] {
 	return pc.ioPool
 }
 
-// StartWorkers starts both pools.
-func (pc *PoolCoordinator) StartWorkers(ctx context.Context) {
+// StartTaskWorkers starts the task worker pool.
+func (pc *PoolCoordinator) StartTaskWorkers(ctx context.Context) {
 	pc.taskPool.StartWorkers(ctx)
+}
+
+// StartIOWorkers starts the I/O worker pool.
+func (pc *PoolCoordinator) StartIOWorkers(ctx context.Context) {
 	pc.ioPool.StartWorkers(ctx)
 }
 

@@ -96,6 +96,10 @@ func TestDirectoryOutputHandler_WriteAndLoad(t *testing.T) {
 		t.Fatalf("Load failed: %v", err)
 	}
 
+	if got := dirOutput.Output.GetDirectory().GetTreeDigest().GetSizeBytes(); got <= 0 {
+		t.Fatalf("expected tree digest sizeBytes to be populated, got %d", got)
+	}
+
 	loaded, err := os.ReadFile(filepath.Join(dirPath, "file.txt"))
 	if err != nil {
 		t.Fatalf("failed to read restored file: %v", err)
@@ -161,11 +165,14 @@ func TestDirectoryOutputHandler_Write_FailsOnCacheWrite(t *testing.T) {
 		// Write may still fail during hash computation (not cache write)
 		return
 	}
-	if result.DeferredUpload == nil {
-		t.Fatal("expected DeferredUpload to be non-nil")
+	if result.WritePlan == nil {
+		t.Fatal("expected WritePlan to be non-nil")
 	}
-	if err := result.DeferredUpload(ctx); err == nil {
-		t.Fatal("expected DeferredUpload to fail when cache Set fails, got nil error")
+	if err := result.WritePlan.Upload(ctx, nil); err == nil {
+		t.Fatal("expected WritePlan.Upload to fail when cache Set fails, got nil error")
+	}
+	if err := result.WritePlan.Cleanup(ctx); err != nil {
+		t.Fatalf("cleanup failed: %v", err)
 	}
 }
 

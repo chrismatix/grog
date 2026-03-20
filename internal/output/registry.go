@@ -19,10 +19,10 @@ import (
 	"github.com/alitto/pond/v2"
 )
 
-// WriteOutputsResult contains the target result and any deferred upload closures.
-type WriteOutputsResult struct {
-	TargetResult    *gen.TargetResult
-	DeferredUploads []func(ctx context.Context) error
+// PreparedTargetResult contains the target result and any prepared write plans.
+type PreparedTargetResult struct {
+	TargetResult *gen.TargetResult
+	WritePlans   []handlers.OutputWritePlan
 }
 
 // Registry manages the available output handlers
@@ -113,11 +113,11 @@ func (r *Registry) mustGetHandler(outputType string) handlers.Handler {
 	return handler
 }
 
-func (r *Registry) WriteOutputs(
+func (r *Registry) PrepareOutputs(
 	ctx context.Context,
 	target *model.Target,
 	progress *worker.ProgressTracker,
-) (*WriteOutputsResult, error) {
+) (*PreparedTargetResult, error) {
 	r.targetMutexMap.Lock(target.Label.String())
 	defer r.targetMutexMap.Unlock(target.Label.String())
 
@@ -127,7 +127,7 @@ func (r *Registry) WriteOutputs(
 	logger.Debugf("%s: writing outputs", target.Label)
 
 	var tasks []pond.Task
-	var writeResults []*handlers.WriteResult
+	var preparedOutputs []*handlers.PreparedOutput
 	var outputsMutex sync.Mutex
 
 	for _, outputRef := range outputs {
@@ -138,7 +138,7 @@ func (r *Registry) WriteOutputs(
 				return err
 			}
 			outputsMutex.Lock()
-			writeResults = append(writeResults, result)
+			preparedOutputs = append(preparedOutputs, result)
 			outputsMutex.Unlock()
 			logger.Debugf("%s: output %s written", target.Label, localOutputRef.Type)
 			return nil
@@ -152,13 +152,13 @@ func (r *Registry) WriteOutputs(
 		}
 	}
 
-	// Extract outputs and collect deferred uploads
-	targetOutputs := make([]*gen.Output, 0, len(writeResults))
-	var deferredUploads []func(ctx context.Context) error
-	for _, wr := range writeResults {
-		targetOutputs = append(targetOutputs, wr.Output)
-		if wr.DeferredUpload != nil {
-			deferredUploads = append(deferredUploads, wr.DeferredUpload)
+	// Extract outputs and collect write plans.
+	targetOutputs := make([]*gen.Output, 0, len(preparedOutputs))
+	var writePlans []handlers.OutputWritePlan
+	for _, preparedOutput := range preparedOutputs {
+		targetOutputs = append(targetOutputs, preparedOutput.Output)
+		if preparedOutput.WritePlan != nil {
+			writePlans = append(writePlans, preparedOutput.WritePlan)
 		}
 	}
 
@@ -169,14 +169,14 @@ func (r *Registry) WriteOutputs(
 
 	logger.Debugf("%s: outputs written", target.Label)
 
-	return &WriteOutputsResult{
+	return &PreparedTargetResult{
 		TargetResult: &gen.TargetResult{
 			ChangeHash:              target.ChangeHash,
 			OutputHash:              outputHash,
 			Outputs:                 targetOutputs,
 			ExecutionDurationMillis: target.ExecutionTime.Milliseconds(),
 		},
-		DeferredUploads: deferredUploads,
+		WritePlans: writePlans,
 	}, nil
 }
 

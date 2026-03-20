@@ -29,6 +29,44 @@ type DirectoryOutputHandler struct {
 	cas *caching.Cas
 }
 
+type directoryWritePlan struct {
+	cas         *caching.Cas
+	stagingRoot string
+	treeBytes   []byte
+	treeDigest  string
+	fileUploads []fileUpload
+	targetLabel string
+	outputPath  string
+	totalBytes  int64
+}
+
+func (d *directoryWritePlan) Upload(ctx context.Context, tracker *worker.ProgressTracker) error {
+	progress := tracker
+	if progress != nil {
+		progress = progress.SubTracker(
+			fmt.Sprintf("%s: writing directory %s", d.targetLabel, d.outputPath),
+			d.totalBytes,
+		)
+	}
+
+	if _, err := uploadFilesToCas(ctx, d.cas, d.fileUploads, progress); err != nil {
+		return fmt.Errorf("failed to upload directory files to cache: %w", err)
+	}
+
+	if err := d.cas.Write(ctx, d.treeDigest, bytes.NewReader(d.treeBytes)); err != nil {
+		return fmt.Errorf("failed to write tree to cache: %w", err)
+	}
+
+	if progress != nil {
+		progress.Complete()
+	}
+	return nil
+}
+
+func (d *directoryWritePlan) Cleanup(_ context.Context) error {
+	return os.RemoveAll(d.stagingRoot)
+}
+
 // NewDirectoryOutputHandler creates a new DirectoryOutputHandler
 func NewDirectoryOutputHandler(cas *caching.Cas) *DirectoryOutputHandler {
 	return &DirectoryOutputHandler{
@@ -52,7 +90,7 @@ func (d *DirectoryOutputHandler) getDirectoryHash(ctx context.Context, target mo
 	logger.Debugf("hashing directory %s (target %s)", directoryPath, target.Label)
 
 	childrenMap := make(map[string]*gen.Directory)
-	rootDirectory, _, err := d.writeDirectoryRecursive(ctx, directoryPath, childrenMap)
+	rootDirectory, _, err := d.writeDirectoryRecursive(ctx, directoryPath, directoryPath, "", childrenMap)
 	if err != nil {
 		return "", fmt.Errorf("failed to build hash tree for %s for target %s: %w", directoryPath, target.Label, err)
 	}
@@ -96,15 +134,26 @@ func (d *DirectoryOutputHandler) Write(
 	ctx context.Context,
 	target model.Target,
 	output model.Output,
-	tracker *worker.ProgressTracker,
-) (*WriteResult, error) {
+	_ *worker.ProgressTracker,
+) (*PreparedOutput, error) {
 	logger := console.GetLogger(ctx)
 
 	directoryPath := target.GetAbsOutputPath(output)
 	logger.Debugf("compressing %s (target %s → %s)", directoryPath, target.Label, output)
 
+	stagingRoot, err := os.MkdirTemp("", "grog-cache-dir-*")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create staging directory for %s: %w", directoryPath, err)
+	}
+	cleanupStagingRoot := true
+	defer func() {
+		if cleanupStagingRoot {
+			_ = os.RemoveAll(stagingRoot)
+		}
+	}()
+
 	childrenMap := make(map[string]*gen.Directory)
-	rootDirectory, fileUploads, err := d.writeDirectoryRecursive(ctx, directoryPath, childrenMap)
+	rootDirectory, fileUploads, err := d.writeDirectoryRecursive(ctx, directoryPath, directoryPath, stagingRoot, childrenMap)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build hash tree for %s for target %s: %w", directoryPath, target.Label, err)
 	}
@@ -127,57 +176,38 @@ func (d *DirectoryOutputHandler) Write(
 		totalBytes += upload.sizeBytes
 	}
 
-	progress := tracker
-	if progress != nil {
-		progress = progress.SubTracker(
-			fmt.Sprintf("%s: writing directory %s", target.Label, output.Identifier),
-			totalBytes,
-		)
-	}
-
 	genOutput := &gen.Output{
 		Kind: &gen.Output_Directory{
 			Directory: &gen.DirectoryOutput{
 				Path: output.Identifier,
 				TreeDigest: &gen.Digest{
 					Hash:      treeDigest,
-					SizeBytes: 0, // filled after upload
+					SizeBytes: totalBytes,
 				},
 			},
 		},
 	}
 
-	// Always produce a deferred upload closure; the executor decides
-	// whether to run it inline (sync) or on the I/O pool (async).
-	capturedTree := marshalledTree
-	capturedTreeDigest := treeDigest
-	capturedUploads := fileUploads
-	cas := d.cas
-	deferredUpload := func(ctx context.Context) error {
-		sizeBytes, err := d.uploadFiles(ctx, capturedUploads, progress)
-		if err != nil {
-			return fmt.Errorf("failed to upload directory files to cache: %w", err)
-		}
-		_ = sizeBytes
-
-		if err := cas.Write(ctx, capturedTreeDigest, bytes.NewReader(capturedTree)); err != nil {
-			return fmt.Errorf("failed to write tree to cache: %w", err)
-		}
-
-		if progress != nil {
-			progress.Complete()
-		}
-		return nil
+	writePlan := &directoryWritePlan{
+		cas:         d.cas,
+		stagingRoot: stagingRoot,
+		treeBytes:   marshalledTree,
+		treeDigest:  treeDigest,
+		fileUploads: fileUploads,
+		targetLabel: target.Label.String(),
+		outputPath:  output.Identifier,
+		totalBytes:  totalBytes,
 	}
+	cleanupStagingRoot = false
 
-	return &WriteResult{
-		Output:         genOutput,
-		DeferredUpload: deferredUpload,
+	return &PreparedOutput{
+		Output:    genOutput,
+		WritePlan: writePlan,
 	}, nil
 }
 
-// uploadFiles uploads all files in parallel to the CAS.
-func (d *DirectoryOutputHandler) uploadFiles(ctx context.Context, fileUploads []fileUpload, progress *worker.ProgressTracker) (int64, error) {
+// uploadFilesToCas uploads all files in parallel to the CAS.
+func uploadFilesToCas(ctx context.Context, cas *caching.Cas, fileUploads []fileUpload, progress *worker.ProgressTracker) (int64, error) {
 	logger := console.GetLogger(ctx)
 	var sizeBytes atomic.Int64
 
@@ -202,7 +232,7 @@ func (d *DirectoryOutputHandler) uploadFiles(ctx context.Context, fileUploads []
 				reader = progress.WrapReader(file)
 			}
 
-			if err := d.cas.Write(ctx, localUploadAction.digest, reader); err != nil {
+			if err := cas.Write(ctx, localUploadAction.digest, reader); err != nil {
 				errChan <- err
 				return
 			}
@@ -236,7 +266,9 @@ type fileUpload struct {
 // and writes everything it encounters to the cas
 func (d *DirectoryOutputHandler) writeDirectoryRecursive(
 	ctx context.Context,
+	rootPath string,
 	path string,
+	stagingRoot string,
 	childrenMap map[string]*gen.Directory,
 ) (*gen.Directory, []fileUpload, error) {
 	entries, err := os.ReadDir(path)
@@ -278,7 +310,7 @@ func (d *DirectoryOutputHandler) writeDirectoryRecursive(
 
 		case entry.IsDir():
 			// Handle subdirectory
-			subDir, recursiveFileUploads, err := d.writeDirectoryRecursive(ctx, entryPath, childrenMap)
+			subDir, recursiveFileUploads, err := d.writeDirectoryRecursive(ctx, rootPath, entryPath, stagingRoot, childrenMap)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -304,12 +336,25 @@ func (d *DirectoryOutputHandler) writeDirectoryRecursive(
 
 		default:
 			// Handle regular file
-			digest, err := computeFileDigest(entryPath)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to compute digest for file %s: %w", entryPath, err)
+			var digest *gen.Digest
+			uploadPath := entryPath
+			if stagingRoot == "" {
+				digest, err = computeFileDigest(entryPath)
+				if err != nil {
+					return nil, nil, fmt.Errorf("failed to compute digest for file %s: %w", entryPath, err)
+				}
+			} else {
+				relativePath, err := filepath.Rel(rootPath, entryPath)
+				if err != nil {
+					return nil, nil, fmt.Errorf("failed to compute relative path for %s: %w", entryPath, err)
+				}
+				uploadPath, digest, err = stageFileSnapshot(entryPath, stagingRoot, relativePath)
+				if err != nil {
+					return nil, nil, fmt.Errorf("failed to stage file %s: %w", entryPath, err)
+				}
 			}
 
-			fileUploads = append(fileUploads, fileUpload{digest.Hash, entryPath, digest.GetSizeBytes()})
+			fileUploads = append(fileUploads, fileUpload{digest.Hash, uploadPath, digest.GetSizeBytes()})
 
 			dir.Files = append(dir.Files, &gen.FileNode{
 				Name:         entry.Name(),
@@ -353,6 +398,39 @@ func computeFileDigest(path string) (*gen.Digest, error) {
 	return &gen.Digest{
 		Hash:      hasher.SumString(),
 		SizeBytes: size,
+	}, nil
+}
+
+func stageFileSnapshot(sourcePath string, stagingRoot string, relativePath string) (string, *gen.Digest, error) {
+	stagedPath := filepath.Join(stagingRoot, relativePath)
+	if err := os.MkdirAll(filepath.Dir(stagedPath), 0755); err != nil {
+		return "", nil, fmt.Errorf("failed to create staging directory for %s: %w", stagedPath, err)
+	}
+
+	sourceFile, err := os.Open(sourcePath)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to open file %s: %w", sourcePath, err)
+	}
+	defer sourceFile.Close()
+
+	stagedFile, err := os.Create(stagedPath)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to create staged file %s: %w", stagedPath, err)
+	}
+
+	hasher := hashing.GetHasher()
+	sizeBytes, copyErr := io.Copy(io.MultiWriter(stagedFile, hasher), sourceFile)
+	closeErr := stagedFile.Close()
+	if copyErr != nil {
+		return "", nil, fmt.Errorf("failed to stage file %s: %w", sourcePath, copyErr)
+	}
+	if closeErr != nil {
+		return "", nil, fmt.Errorf("failed to close staged file %s: %w", stagedPath, closeErr)
+	}
+
+	return stagedPath, &gen.Digest{
+		Hash:      hasher.SumString(),
+		SizeBytes: sizeBytes,
 	}, nil
 }
 

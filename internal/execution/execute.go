@@ -45,7 +45,7 @@ type Executor struct {
 	targetHasher     *hashing.TargetHasher
 	streamLogsToggle *console.StreamLogsToggle
 	coordinator      *PoolCoordinator
-	asyncWrites      bool
+	cacheWriter      *CacheWriter
 }
 
 func NewExecutor(
@@ -109,10 +109,13 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	ctx = context.WithValue(ctx, console.TestLoggerKey{}, testLogger)
 
 	coordinator := NewPoolCoordinator(stdLogger, numWorkers, numIOWorkers, sendMsg, selectedNodeCount)
-	coordinator.StartWorkers(ctx)
+	coordinator.StartTaskWorkers(ctx)
 	defer coordinator.Shutdown()
 	e.coordinator = coordinator
-	e.asyncWrites = config.Global.AsyncCacheWrites
+
+	ioContext := context.WithoutCancel(ctx)
+	coordinator.StartIOWorkers(ioContext)
+	e.cacheWriter = NewCacheWriter(e.targetCache, coordinator.IOPool(), config.Global.AsyncCacheWrites, ioContext)
 
 	// walkCallback will be called at max parallelism by the graph walker
 	walkCallback := func(ctx context.Context, node model.BuildNode) (dag.CacheResult, error) {
@@ -144,7 +147,7 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	completionMap, err := walker.Walk(ctx)
 
 	// Wait for I/O pool to drain before returning
-	coordinator.IOPool().WaitForCompletion()
+	e.cacheWriter.Wait()
 
 	return completionMap, err
 }
@@ -410,12 +413,17 @@ func (e *Executor) executeTarget(
 func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, update worker.StatusFunc) error {
 	logger := console.GetLogger(ctx)
 	var targetResult *gen.TargetResult
-	var deferredUploads []func(context.Context) error
+	var preparedTarget *output.PreparedTargetResult
 	var err error
 
 	if target.SkipsCache() || !e.enableCache {
 		logger.Debugf("%s: skipping cache write", target.Label)
 		targetResult, err = e.registry.GetNoCacheOutputHash(ctx, target)
+		if err == nil {
+			preparedTarget = &output.PreparedTargetResult{
+				TargetResult: targetResult,
+			}
+		}
 		// TODO should we even store this in the cache given that the target
 		// is no-cache? Probably fine from a user perspective
 		// since it's the target cache and not the output cache
@@ -424,74 +432,45 @@ func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, u
 		// Targets that do not have any outputs expose their own change behavior as an output
 		// analogous to file_groups
 		logger.Debugf("%s: no outputs to write", target.Label)
-		targetResult = &gen.TargetResult{
-			ChangeHash:              target.ChangeHash,
-			OutputHash:              target.ChangeHash,
-			ExecutionDurationMillis: target.ExecutionTime.Milliseconds(),
+		preparedTarget = &output.PreparedTargetResult{
+			TargetResult: &gen.TargetResult{
+				ChangeHash:              target.ChangeHash,
+				OutputHash:              target.ChangeHash,
+				ExecutionDurationMillis: target.ExecutionTime.Milliseconds(),
+			},
 		}
 	} else {
 		logger.Debugf("%s: writing %d outputs", target.Label, len(target.AllOutputs()))
-		// When async writes are enabled, pass nil progress so that handler closures
-		// don't capture the task worker's update func (which would create ghost UI entries
-		// when the deferred uploads run on the I/O pool).
-		var progress *worker.ProgressTracker
-		if !e.asyncWrites {
-			progress = worker.NewProgressTracker(
-				fmt.Sprintf("%s: writing %s", target.Label, console.FCountOutputs(len(target.AllOutputs()))),
-				0,
-				update,
-			)
-		}
+		progress := worker.NewProgressTracker(
+			fmt.Sprintf("%s: writing %s", target.Label, console.FCountOutputs(len(target.AllOutputs()))),
+			0,
+			update,
+		)
 		cacheStart := time.Now()
-		writeResult, writeErr := e.registry.WriteOutputs(ctx, target, progress)
+		writeResult, writeErr := e.registry.PrepareOutputs(ctx, target, progress)
 		target.CacheTime += time.Since(cacheStart)
 		if writeErr != nil {
 			return writeErr
 		}
-		targetResult = writeResult.TargetResult
-		deferredUploads = writeResult.DeferredUploads
+		preparedTarget = writeResult
 	}
 	if err != nil {
 		return err
 	}
+	if preparedTarget == nil {
+		return fmt.Errorf("prepared target result for %s is nil", target.Label)
+	}
+	targetResult = preparedTarget.TargetResult
 
 	target.OutputsLoaded = true
 	target.OutputHash = targetResult.OutputHash
-
-	// Phase 2: persist to cache
-	if e.asyncWrites && len(deferredUploads) > 0 {
-		// Submit cache writes to I/O pool — task worker is freed immediately
-		capturedTarget := targetResult
-		capturedUploads := deferredUploads
-		capturedLabel := target.Label.String()
-		e.coordinator.IOPool().RunFireAndForget(func(ioUpdate worker.StatusFunc) (struct{}, error) {
-			ioUpdate(worker.Status(fmt.Sprintf("%s: writing cache", capturedLabel)))
-			for _, fn := range capturedUploads {
-				if uploadErr := fn(ctx); uploadErr != nil {
-					logger.Warnf("async cache write error for %s (non-fatal): %v", capturedLabel, uploadErr)
-				}
-			}
-			if cacheErr := e.targetCache.Write(ctx, capturedTarget); cacheErr != nil {
-				logger.Warnf("async target cache write error for %s (non-fatal): %v", capturedLabel, cacheErr)
-			}
-			return struct{}{}, nil
-		})
-		return nil
-	}
-
-	// Sync path: run deferred uploads + cache write inline
-	for _, fn := range deferredUploads {
-		if uploadErr := fn(ctx); uploadErr != nil {
-			return uploadErr
-		}
-	}
 
 	cacheStart := time.Now()
 	defer func() {
 		target.CacheTime += time.Since(cacheStart)
 	}()
 
-	return e.targetCache.Write(ctx, targetResult)
+	return e.cacheWriter.PersistPreparedTarget(ctx, target.Label.String(), preparedTarget, update)
 }
 
 // LoadDependencyOutputs is used to load the outputs of the targets that a target depends on.
