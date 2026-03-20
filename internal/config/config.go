@@ -42,6 +42,9 @@ type WorkspaceConfig struct {
 	// are still computed synchronously so dependency chains stay correct.
 	// Pending I/O writes are drained before the build returns. Defaults to true.
 	AsyncCacheWrites bool `mapstructure:"async_cache_writes"`
+	// NumIOWorkers sets the number of I/O workers used for async cache writes.
+	// Only relevant when AsyncCacheWrites is true. Defaults to 3 * num_workers.
+	NumIOWorkers int `mapstructure:"num_io_workers"`
 
 	// Logging
 	LogLevel      string `mapstructure:"log_level"`

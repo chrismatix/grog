@@ -19,7 +19,6 @@ import (
 	"path/filepath"
 	"time"
 
-
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fatih/color"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -75,7 +74,10 @@ func NewExecutor(
 // Execute executes the targets in the given graph and returns the completion map
 func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	numWorkers := config.Global.NumWorkers
-	numIOWorkers := numWorkers * 3
+	numIOWorkers := config.Global.NumIOWorkers
+	if numIOWorkers < 1 {
+		numIOWorkers = numWorkers * 3
+	}
 	stdLogger := console.GetLogger(ctx)
 
 	ctx = console.WithStreamLogsToggle(ctx, e.streamLogsToggle)
@@ -414,7 +416,13 @@ func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, u
 	if target.SkipsCache() || !e.enableCache {
 		logger.Debugf("%s: skipping cache write", target.Label)
 		targetResult, err = e.registry.GetNoCacheOutputHash(ctx, target)
+		// TODO should we even store this in the cache given that the target
+		// is no-cache? Probably fine from a user perspective
+		// since it's the target cache and not the output cache
 	} else if len(target.AllOutputs()) == 0 {
+		// NOTE: This is a special and intentional design
+		// Targets that do not have any outputs expose their own change behavior as an output
+		// analogous to file_groups
 		logger.Debugf("%s: no outputs to write", target.Label)
 		targetResult = &gen.TargetResult{
 			ChangeHash:              target.ChangeHash,
