@@ -8,6 +8,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"go.starlark.net/lib/json"
+	"go.starlark.net/lib/math"
+	"go.starlark.net/lib/time"
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
 )
@@ -51,12 +54,15 @@ func (sl StarlarkLoader) Load(ctx context.Context, filePath string) (PackageDTO,
 
 	// Create predeclared functions and values
 	predeclared := starlark.StringDict{
-		"target":      starlark.NewBuiltin("target", collector.targetBuiltin),
-		"alias":       starlark.NewBuiltin("alias", collector.aliasBuiltin),
-		"environment": starlark.NewBuiltin("environment", collector.environmentBuiltin),
-		"GROG_OS":     starlark.String(config.Global.OS),
-		"GROG_ARCH":   starlark.String(config.Global.Arch),
+		"target":        starlark.NewBuiltin("target", collector.targetBuiltin),
+		"alias":         starlark.NewBuiltin("alias", collector.aliasBuiltin),
+		"environment":   starlark.NewBuiltin("environment", collector.environmentBuiltin),
+		"GROG_OS":       starlark.String(config.Global.OS),
+		"GROG_ARCH":     starlark.String(config.Global.Arch),
 		"GROG_PLATFORM": starlark.String(config.Global.GetPlatform()),
+		"json":          json.Module,
+		"math":          math.Module,
+		"time":          time.Module,
 	}
 
 	// Add environment variables to predeclared
@@ -130,12 +136,15 @@ func (sl StarlarkLoader) loadModule(thread *starlark.Thread, module string, curr
 
 	// Create predeclared functions for the loaded module
 	predeclared := starlark.StringDict{
-		"target":      starlark.NewBuiltin("target", collector.targetBuiltin),
-		"alias":       starlark.NewBuiltin("alias", collector.aliasBuiltin),
-		"environment": starlark.NewBuiltin("environment", collector.environmentBuiltin),
-		"GROG_OS":     starlark.String(config.Global.OS),
-		"GROG_ARCH":   starlark.String(config.Global.Arch),
+		"target":        starlark.NewBuiltin("target", collector.targetBuiltin),
+		"alias":         starlark.NewBuiltin("alias", collector.aliasBuiltin),
+		"environment":   starlark.NewBuiltin("environment", collector.environmentBuiltin),
+		"GROG_OS":       starlark.String(config.Global.OS),
+		"GROG_ARCH":     starlark.String(config.Global.Arch),
 		"GROG_PLATFORM": starlark.String(config.Global.GetPlatform()),
+		"json":          json.Module,
+		"math":          math.Module,
+		"time":          time.Module,
 	}
 
 	// Add environment variables
