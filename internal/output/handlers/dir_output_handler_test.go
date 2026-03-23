@@ -168,7 +168,7 @@ func TestDirectoryOutputHandler_Write_FailsOnCacheWrite(t *testing.T) {
 	if result.WritePlan == nil {
 		t.Fatal("expected WritePlan to be non-nil")
 	}
-	if err := result.WritePlan.Upload(ctx, nil); err == nil {
+	if err := result.WritePlan.Execute(ctx, nil); err == nil {
 		t.Fatal("expected WritePlan.Upload to fail when cache Set fails, got nil error")
 	}
 	if err := result.WritePlan.Cleanup(ctx); err != nil {

@@ -33,6 +33,9 @@ type DockerOutputHandler struct {
 	inFlightBytes    *semaphore.Weighted
 }
 
+// dockerImageWritePlan writes a Docker image's config, layers, and manifest to the CAS.
+// Layer data is read from the local Docker daemon via go-containerregistry and uploaded
+// concurrently, throttled by a shared memory-based semaphore to avoid OOM on large images.
 type dockerImageWritePlan struct {
 	handler        *DockerOutputHandler
 	configBytes    []byte
@@ -46,7 +49,7 @@ type dockerImageWritePlan struct {
 	targetLabel    string
 }
 
-func (d *dockerImageWritePlan) Upload(ctx context.Context, tracker *worker.ProgressTracker) error {
+func (d *dockerImageWritePlan) Execute(ctx context.Context, tracker *worker.ProgressTracker) error {
 	logger := console.GetLogger(ctx)
 
 	progress := tracker

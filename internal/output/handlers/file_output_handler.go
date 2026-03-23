@@ -16,6 +16,9 @@ import (
 	"grog/internal/worker"
 )
 
+// fileWritePlan uploads a single staged file to the CAS.
+// The original output file is copied to a temp path during Write() so the upload
+// reads from an immutable snapshot, not the live workspace file.
 type fileWritePlan struct {
 	cas          *caching.Cas
 	stagedPath   string
@@ -25,7 +28,7 @@ type fileWritePlan struct {
 	relativePath string
 }
 
-func (f *fileWritePlan) Upload(ctx context.Context, tracker *worker.ProgressTracker) error {
+func (f *fileWritePlan) Execute(ctx context.Context, tracker *worker.ProgressTracker) error {
 	file, err := os.Open(f.stagedPath)
 	if err != nil {
 		return fmt.Errorf("failed to open staged file %s for cache write: %w", f.stagedPath, err)

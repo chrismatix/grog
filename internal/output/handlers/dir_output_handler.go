@@ -29,6 +29,9 @@ type DirectoryOutputHandler struct {
 	cas *caching.Cas
 }
 
+// directoryWritePlan uploads all files in a staged directory snapshot plus the
+// merkle tree definition to the CAS. Files are staged to a temp root during Write()
+// so that subsequent target commands cannot mutate them before the upload completes.
 type directoryWritePlan struct {
 	cas         *caching.Cas
 	stagingRoot string
@@ -40,7 +43,7 @@ type directoryWritePlan struct {
 	totalBytes  int64
 }
 
-func (d *directoryWritePlan) Upload(ctx context.Context, tracker *worker.ProgressTracker) error {
+func (d *directoryWritePlan) Execute(ctx context.Context, tracker *worker.ProgressTracker) error {
 	progress := tracker
 	if progress != nil {
 		progress = progress.SubTracker(

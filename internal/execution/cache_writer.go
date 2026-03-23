@@ -11,7 +11,30 @@ import (
 	"grog/internal/worker"
 )
 
-// CacheWriter owns persistence policy for prepared target results.
+// CacheWriter bridges the gap between output preparation (which must be synchronous) and
+// cache persistence (which can be deferred).
+//
+// When a target finishes executing, its output handler's Write() method runs on the task
+// worker to compute output hashes and stage immutable snapshots of the output data. This
+// produces a PreparedTargetResult containing the output hash (needed immediately by the
+// DAG walker to unblock downstream targets) and a set of OutputWritePlans that capture
+// the actual I/O work — uploading staged files to the CAS, pushing Docker images, etc.
+//
+// CacheWriter decides where that I/O work runs:
+//
+//   - Sync mode (asyncWrites=false): write plans execute inline on the task worker.
+//     The worker blocks until all uploads and the target cache entry are written.
+//     Failures are fatal and propagated to the build.
+//
+//   - Async mode (asyncWrites=true): write plans are submitted to a dedicated I/O worker
+//     pool via RunFireAndForget. The task worker returns immediately after hash computation,
+//     freeing it for the next target. I/O workers run with a non-cancellable context so
+//     cache writes can finish even if the build is interrupted. Failures are logged as
+//     warnings — a failed cache write only means the next build won't get a cache hit.
+//
+// After all write plans in a batch succeed, CacheWriter writes the TargetResult proto
+// to the target cache (the metadata index that maps input hashes to output hashes).
+// Cleanup() is called on every write plan regardless of outcome to remove staged temp files.
 type CacheWriter struct {
 	targetCache *caching.TargetResultCache
 	ioPool      *worker.TaskWorkerPool[struct{}]
@@ -82,7 +105,7 @@ func (c *CacheWriter) commit(
 	failureIsFatal bool,
 ) error {
 	for _, writePlan := range preparedTarget.WritePlans {
-		if err := writePlan.Upload(ctx, progress); err != nil {
+		if err := writePlan.Execute(ctx, progress); err != nil {
 			c.cleanupPlans(ctx, preparedTarget.WritePlans)
 			if failureIsFatal {
 				return err

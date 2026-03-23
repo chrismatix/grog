@@ -7,10 +7,12 @@ import (
 	"grog/internal/worker"
 )
 
-// OutputWritePlan persists a prepared output to the cache using immutable inputs.
-// Cleanup is always called by the owner after Upload finishes or if scheduling fails.
+// OutputWritePlan captures everything needed to persist a single output artifact to the cache.
+// Handlers produce write plans during Write() by staging immutable snapshots of the output data.
+// The executor later calls Execute() — either inline on the task worker (sync mode) or on a
+// dedicated I/O worker (async mode). Cleanup is always called afterward to remove staged data.
 type OutputWritePlan interface {
-	Upload(ctx context.Context, tracker *worker.ProgressTracker) error
+	Execute(ctx context.Context, tracker *worker.ProgressTracker) error
 	Cleanup(ctx context.Context) error
 }
 

@@ -60,7 +60,7 @@ type mockWritePlan struct {
 	cleanupErr error
 }
 
-func (m *mockWritePlan) Upload(context.Context, *worker.ProgressTracker) error {
+func (m *mockWritePlan) Execute(context.Context, *worker.ProgressTracker) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.calls = append(m.calls, "upload")

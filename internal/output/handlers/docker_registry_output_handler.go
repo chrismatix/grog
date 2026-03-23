@@ -29,6 +29,9 @@ type DockerRegistryOutputHandler struct {
 	dockerClient *client.Client
 }
 
+// dockerRegistryWritePlan pushes a pre-tagged Docker image to the configured remote
+// registry. The image is tagged with a cache-specific name during Write(); this plan
+// pushes that tag and Cleanup removes it from the local daemon to avoid polluting it.
 type dockerRegistryWritePlan struct {
 	dockerClient    *client.Client
 	remoteImageName string
@@ -36,7 +39,7 @@ type dockerRegistryWritePlan struct {
 	targetLabel     string
 }
 
-func (d *dockerRegistryWritePlan) Upload(ctx context.Context, tracker *worker.ProgressTracker) error {
+func (d *dockerRegistryWritePlan) Execute(ctx context.Context, tracker *worker.ProgressTracker) error {
 	auth, err := makeRegistryAuth(d.remoteImageName)
 	if err != nil {
 		return err

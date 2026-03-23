@@ -8,7 +8,7 @@ import (
 
 type nopWritePlan struct{}
 
-func (nopWritePlan) Upload(context.Context, *worker.ProgressTracker) error {
+func (nopWritePlan) Execute(context.Context, *worker.ProgressTracker) error {
 	return nil
 }
 
