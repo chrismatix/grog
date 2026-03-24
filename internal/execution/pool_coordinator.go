@@ -79,9 +79,9 @@ func (pc *PoolCoordinator) flushState() {
 	header := green(fmt.Sprintf("[%d/%d]", taskCompleted, total))
 
 	if ioRunning > 0 {
-		header += fmt.Sprintf(" %s, %s writing cache",
+		header += fmt.Sprintf(" %s, %s",
 			console.FCount(taskRunning, "action"),
-			console.FCount(ioRunning, "upload"))
+			console.FCount(ioRunning, "cache write"))
 	} else {
 		header += fmt.Sprintf(" %s running", console.FCount(taskRunning, "action"))
 	}

@@ -129,7 +129,7 @@ func (twp *TaskWorkerPool[T]) worker(ctx context.Context, workerId int) {
 				return
 			}
 
-			twp.setTaskState(workerId, Status(fmt.Sprintf("Starting task %d on worker %d", j.id+1, workerId)), zapcore.DebugLevel)
+			twp.logger.Debugf("Starting task %d on worker %d", j.id+1, workerId)
 			res, err := j.task(func(status StatusUpdate) {
 				taskStatus := status.Status
 				if isDebug {
