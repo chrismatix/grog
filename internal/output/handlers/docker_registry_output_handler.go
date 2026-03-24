@@ -29,6 +29,46 @@ type DockerRegistryOutputHandler struct {
 	dockerClient *client.Client
 }
 
+// dockerRegistryWritePlan pushes a pre-tagged Docker image to the configured remote
+// registry. The image is tagged with a cache-specific name during Write(); this plan
+// pushes that tag and Cleanup removes it from the local daemon to avoid polluting it.
+type dockerRegistryWritePlan struct {
+	dockerClient    *client.Client
+	remoteImageName string
+	localImageName  string
+	targetLabel     string
+}
+
+func (d *dockerRegistryWritePlan) Execute(ctx context.Context, tracker *worker.ProgressTracker) error {
+	auth, err := makeRegistryAuth(d.remoteImageName)
+	if err != nil {
+		return err
+	}
+
+	pushReader, err := d.dockerClient.ImagePush(ctx, d.remoteImageName, image.PushOptions{
+		RegistryAuth: auth,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to push image %q to registry: %w", d.remoteImageName, err)
+	}
+	defer pushReader.Close()
+
+	if err := consumeDockerProgress(pushReader, tracker, fmt.Sprintf("%s: pushing cache for %s", d.targetLabel, d.localImageName)); err != nil {
+		return fmt.Errorf("error reading push response: %w", err)
+	}
+
+	console.GetLogger(ctx).Debugf("successfully pushed Docker image %s to registry", d.remoteImageName)
+	return nil
+}
+
+func (d *dockerRegistryWritePlan) Cleanup(ctx context.Context) error {
+	_, err := d.dockerClient.ImageRemove(ctx, d.remoteImageName, image.RemoveOptions{})
+	if err != nil {
+		console.GetLogger(ctx).Warnf("failed to remove image %q from local Docker daemon: %v", d.remoteImageName, err)
+	}
+	return nil
+}
+
 // NewDockerRegistryOutputHandler creates a new DockerRegistryOutputHandler.
 func NewDockerRegistryOutputHandler(
 	cas *caching.Cas,
@@ -85,13 +125,13 @@ func (d *DockerRegistryOutputHandler) cacheImageName(digest string) string {
 		workspacePrefix, digest)
 }
 
-// Write pushes the Docker image from the local Docker daemon to the remote registry.
+// Write inspects and tags the Docker image synchronously, deferring the push to the registry.
 func (d *DockerRegistryOutputHandler) Write(
 	ctx context.Context,
 	target model.Target,
 	output model.Output,
-	tracker *worker.ProgressTracker,
-) (*gen.Output, error) {
+	_ *worker.ProgressTracker,
+) (*PreparedOutput, error) {
 	logger := console.GetLogger(ctx)
 	localImageName := output.Identifier
 
@@ -107,38 +147,13 @@ func (d *DockerRegistryOutputHandler) Write(
 
 	remoteCacheImageName := d.cacheImageName(inspect.ID)
 
-	logger.Debugf("pushing Docker image %s to cache registry as %s", localImageName, remoteCacheImageName)
+	logger.Debugf("tagging Docker image %s as %s for deferred push", localImageName, remoteCacheImageName)
 
 	if err := cli.ImageTag(ctx, localImageName, remoteCacheImageName); err != nil {
 		return nil, fmt.Errorf("failed to tag image %q as %q: %w", localImageName, remoteCacheImageName, err)
 	}
-	// Clean up the image tag so that it does not pollute the user's docker machine
-	defer cli.ImageRemove(ctx, remoteCacheImageName, image.RemoveOptions{})
 
-	// Build the RegistryAuth header from ~/.docker/config.json / helpers
-	auth, err := makeRegistryAuth(remoteCacheImageName)
-	if err != nil {
-		return nil, err
-	}
-
-	// Push via Docker daemon using that auth
-	pushReader, err := cli.ImagePush(ctx, remoteCacheImageName, image.PushOptions{
-		RegistryAuth: auth,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to push image %q to registry: %w", remoteCacheImageName, err)
-	}
-	defer pushReader.Close()
-
-	// Intercept Docker CLI JSON progress stream and bridge to our progress tracker
-	// Note: the top-level tracker is created by the registry and passed to this handler
-	// as the 4th argument. We create child trackers per-layer when totals are known.
-	if err := consumeDockerProgress(pushReader, tracker, fmt.Sprintf("%s: pushing cache for %s", target.Label, localImageName)); err != nil {
-		return nil, fmt.Errorf("error reading push response: %w", err)
-	}
-
-	logger.Debugf("successfully pushed Docker image %s to registry", remoteCacheImageName)
-	return &gen.Output{
+	genOutput := &gen.Output{
 		Kind: &gen.Output_DockerImage{
 			DockerImage: &gen.DockerImageOutput{
 				LocalTag:  localImageName,
@@ -147,6 +162,18 @@ func (d *DockerRegistryOutputHandler) Write(
 				Mode:      gen.ImageMode_REGISTRY,
 			},
 		},
+	}
+
+	writePlan := &dockerRegistryWritePlan{
+		dockerClient:    cli,
+		remoteImageName: remoteCacheImageName,
+		localImageName:  localImageName,
+		targetLabel:     target.Label.String(),
+	}
+
+	return &PreparedOutput{
+		Output:    genOutput,
+		WritePlan: writePlan,
 	}, nil
 }
 

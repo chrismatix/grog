@@ -6,6 +6,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"grog/internal/config"
+
 	"github.com/fatih/color"
 )
 
@@ -83,17 +85,29 @@ func (tl *TestLogger) formatLabel(label string) string {
 // LogTestPassed logs a test target as passed.
 func (tl *TestLogger) LogTestPassed(logger *Logger, label string, executionTime float64) {
 	formattedLabel := tl.formatLabel(label)
+	if config.Global.DisableNonDeterministicLogging {
+		logger.Infof("%s %s", formattedLabel, color.New(color.FgGreen).Sprintf("PASSED"))
+		return
+	}
 	logger.Infof("%s %s in %.1fs", formattedLabel, color.New(color.FgGreen).Sprintf("PASSED"), executionTime)
 }
 
 // LogTestPassedCached logs a test target as passed (cached).
 func (tl *TestLogger) LogTestPassedCached(logger *Logger, label string, executionTimeSeconds float64) {
 	formattedLabel := tl.formatLabel(label)
+	if config.Global.DisableNonDeterministicLogging {
+		logger.Infof("%s %s (cached)", formattedLabel, color.New(color.FgGreen).Sprintf("PASSED"))
+		return
+	}
 	logger.Infof("%s %s (cached) in %.1fs", formattedLabel, color.New(color.FgGreen).Sprintf("PASSED"), executionTimeSeconds)
 }
 
 // LogTestFailed logs a test target as failed.
 func (tl *TestLogger) LogTestFailed(logger *Logger, label string, executionTime time.Duration) {
 	formattedLabel := tl.formatLabel(label)
+	if config.Global.DisableNonDeterministicLogging {
+		logger.Infof("%s %s", formattedLabel, color.New(color.FgRed).Sprintf("FAILED"))
+		return
+	}
 	logger.Infof("%s %s in %.1fs", formattedLabel, color.New(color.FgRed).Sprintf("FAILED"), executionTime.Seconds())
 }

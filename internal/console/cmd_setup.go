@@ -19,7 +19,12 @@ func SetupCommand() (context.Context, *Logger) {
 			GetLogger(ctx).Infof("Received signal %v, exiting...", sig)
 			cancel()
 		case <-ctx.Done():
+			return
 		}
+		// After the first signal triggered a graceful shutdown, a second
+		// signal means the user wants to force-exit immediately.
+		<-signalChan
+		os.Exit(1)
 	}()
 
 	logger := GetLogger(ctx)

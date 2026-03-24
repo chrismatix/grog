@@ -44,6 +44,9 @@ type Executor struct {
 	loadOutputsMode  config.LoadOutputsMode
 	targetHasher     *hashing.TargetHasher
 	streamLogsToggle *console.StreamLogsToggle
+	coordinator      *PoolCoordinator
+	cacheWriter      *CacheWriter
+	asyncWaitTime    time.Duration
 }
 
 func NewExecutor(
@@ -72,6 +75,10 @@ func NewExecutor(
 // Execute executes the targets in the given graph and returns the completion map
 func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	numWorkers := config.Global.NumWorkers
+	numIOWorkers := config.Global.NumIOWorkers
+	if numIOWorkers < 1 {
+		numIOWorkers = numWorkers * 3
+	}
 	stdLogger := console.GetLogger(ctx)
 
 	ctx = console.WithStreamLogsToggle(ctx, e.streamLogsToggle)
@@ -102,9 +109,14 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	// Add the TestLogger to the context
 	ctx = context.WithValue(ctx, console.TestLoggerKey{}, testLogger)
 
-	workerPool := worker.NewTaskWorkerPool[dag.CacheResult](stdLogger, numWorkers, sendMsg, selectedNodeCount)
-	workerPool.StartWorkers(ctx)
-	defer workerPool.Shutdown()
+	coordinator := NewPoolCoordinator(stdLogger, numWorkers, numIOWorkers, sendMsg, selectedNodeCount)
+	coordinator.StartTaskWorkers(ctx)
+	defer coordinator.Shutdown()
+	e.coordinator = coordinator
+
+	ioContext := context.WithoutCancel(ctx)
+	coordinator.StartIOWorkers(ioContext)
+	e.cacheWriter = NewCacheWriter(e.targetCache, coordinator.IOPool(), config.Global.AsyncCacheWrites, ioContext)
 
 	// walkCallback will be called at max parallelism by the graph walker
 	walkCallback := func(ctx context.Context, node model.BuildNode) (dag.CacheResult, error) {
@@ -129,11 +141,30 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 
 		// taskFunc will be run in the worker pool
 		taskFunc := e.getTaskFunc(ctx, target, binTools, outputIdentifiers)
-		return workerPool.Run(taskFunc)
+		return coordinator.TaskPool().Run(taskFunc)
 	}
 
 	walker := dag.NewWalker(e.graph, walkCallback, e.failFast)
-	return walker.Walk(ctx)
+	completionMap, err := walker.Walk(ctx)
+
+	// Wait for I/O pool to drain before returning, but only if the build
+	// was not interrupted.  Async cache writes use a non-cancellable context
+	// so they can outlive the build, but we must not block an interrupted
+	// shutdown waiting for slow remote uploads to finish.
+	if ctx.Err() == nil {
+		waitStart := time.Now()
+		e.cacheWriter.Wait()
+		e.asyncWaitTime = time.Since(waitStart)
+	}
+
+	return completionMap, err
+}
+
+// AsyncWaitTime returns the wall-clock time spent waiting for the async I/O
+// pool to drain after the DAG walk completed. Zero when async writes are
+// disabled or the build was interrupted.
+func (e *Executor) AsyncWaitTime() time.Duration {
+	return e.asyncWaitTime
 }
 
 // getBinToolPaths From all the direct dependencies of a target, get their bin_output if defined
@@ -397,22 +428,31 @@ func (e *Executor) executeTarget(
 func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, update worker.StatusFunc) error {
 	logger := console.GetLogger(ctx)
 	var targetResult *gen.TargetResult
+	var preparedTarget *output.PreparedTargetResult
 	var err error
+
 	if target.SkipsCache() || !e.enableCache {
 		logger.Debugf("%s: skipping cache write", target.Label)
 		targetResult, err = e.registry.GetNoCacheOutputHash(ctx, target)
+		if err == nil {
+			preparedTarget = &output.PreparedTargetResult{
+				TargetResult: targetResult,
+			}
+		}
 		// TODO should we even store this in the cache given that the target
 		// is no-cache? Probably fine from a user perspective
 		// since it's the target cache and not the output cache
 	} else if len(target.AllOutputs()) == 0 {
-		logger.Debugf("%s: no outputs to write", target.Label)
 		// NOTE: This is a special and intentional design
 		// Targets that do not have any outputs expose their own change behavior as an output
 		// analogous to file_groups
-		targetResult = &gen.TargetResult{
-			ChangeHash:              target.ChangeHash,
-			OutputHash:              target.ChangeHash,
-			ExecutionDurationMillis: target.ExecutionTime.Milliseconds(),
+		logger.Debugf("%s: no outputs to write", target.Label)
+		preparedTarget = &output.PreparedTargetResult{
+			TargetResult: &gen.TargetResult{
+				ChangeHash:              target.ChangeHash,
+				OutputHash:              target.ChangeHash,
+				ExecutionDurationMillis: target.ExecutionTime.Milliseconds(),
+			},
 		}
 	} else {
 		logger.Debugf("%s: writing %d outputs", target.Label, len(target.AllOutputs()))
@@ -422,12 +462,20 @@ func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, u
 			update,
 		)
 		cacheStart := time.Now()
-		targetResult, err = e.registry.WriteOutputs(ctx, target, progress)
+		writeResult, writeErr := e.registry.PrepareOutputs(ctx, target, progress)
 		target.CacheTime += time.Since(cacheStart)
+		if writeErr != nil {
+			return writeErr
+		}
+		preparedTarget = writeResult
 	}
 	if err != nil {
 		return err
 	}
+	if preparedTarget == nil {
+		return fmt.Errorf("prepared target result for %s is nil", target.Label)
+	}
+	targetResult = preparedTarget.TargetResult
 
 	target.OutputsLoaded = true
 	target.OutputHash = targetResult.OutputHash
@@ -437,7 +485,7 @@ func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, u
 		target.CacheTime += time.Since(cacheStart)
 	}()
 
-	return e.targetCache.Write(ctx, targetResult)
+	return e.cacheWriter.PersistPreparedTarget(ctx, target.Label.String(), preparedTarget, update)
 }
 
 // LoadDependencyOutputs is used to load the outputs of the targets that a target depends on.

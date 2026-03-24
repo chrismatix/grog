@@ -58,6 +58,11 @@ type TaskWorkerPool[T any] struct {
 	nextTaskId     int
 	completedTasks int
 
+	workerIdOffset int   // offset applied to worker IDs in taskState keys
+	onStateChange  func() // if set, called instead of sending messages directly
+
+	activeJobs sync.WaitGroup
+
 	closed       atomic.Bool
 	shutdownOnce sync.Once
 	watcherOnce  sync.Once
@@ -82,6 +87,18 @@ func NewTaskWorkerPool[T any](
 		sendMsg:    sendMsg,
 		taskState:  make(console.TaskStateMap),
 	}
+}
+
+// SetWorkerIdOffset sets an offset applied to worker IDs in taskState keys.
+// Must be called before StartWorkers.
+func (twp *TaskWorkerPool[T]) SetWorkerIdOffset(offset int) {
+	twp.workerIdOffset = offset
+}
+
+// SetOnStateChange sets a callback to be invoked instead of sending messages directly.
+// Must be called before StartWorkers.
+func (twp *TaskWorkerPool[T]) SetOnStateChange(fn func()) {
+	twp.onStateChange = fn
 }
 
 func (twp *TaskWorkerPool[T]) StartWorkers(ctx context.Context) {
@@ -112,7 +129,7 @@ func (twp *TaskWorkerPool[T]) worker(ctx context.Context, workerId int) {
 				return
 			}
 
-			twp.setTaskState(workerId, Status(fmt.Sprintf("Starting task %d on worker %d", j.id+1, workerId)), zapcore.DebugLevel)
+			twp.logger.Debugf("Starting task %d on worker %d", j.id+1, workerId)
 			res, err := j.task(func(status StatusUpdate) {
 				taskStatus := status.Status
 				if isDebug {
@@ -127,60 +144,72 @@ func (twp *TaskWorkerPool[T]) worker(ctx context.Context, workerId int) {
 			}
 
 			twp.completeTask(workerId)
+			twp.activeJobs.Done()
 		}
 	}
 }
 
 func (twp *TaskWorkerPool[T]) setTaskState(workerId int, status StatusUpdate, lvl zapcore.Level) {
 	twp.mu.Lock()
-	defer twp.mu.Unlock()
 
 	if logToStdout() {
 		twp.logger.Logf(lvl, status.Status)
+		twp.mu.Unlock()
 		return
 	}
 
-	state, exists := twp.taskState[workerId]
+	key := workerId + twp.workerIdOffset
+	state, exists := twp.taskState[key]
 	if !exists {
-		twp.taskState[workerId] = console.TaskState{Status: status.Status, Progress: status.Progress, StartedAtSec: time.Now().Unix()}
+		twp.taskState[key] = console.TaskState{Status: status.Status, Progress: status.Progress, StartedAtSec: time.Now().Unix()}
 	} else {
 		state.Status = status.Status
 		state.Progress = status.Progress
-		twp.taskState[workerId] = state
+		twp.taskState[key] = state
 	}
 
-	twp.flushStateLocked()
+	twp.mu.Unlock()
+	twp.flushState()
 }
 
 func (twp *TaskWorkerPool[T]) completeTask(workerId int) {
 	twp.mu.Lock()
-	defer twp.mu.Unlock()
-
-	delete(twp.taskState, workerId)
+	delete(twp.taskState, workerId+twp.workerIdOffset)
 	twp.completedTasks++
-	twp.flushStateLocked()
+	twp.mu.Unlock()
+	twp.flushState()
 }
 
-func (twp *TaskWorkerPool[T]) flushStateLocked() {
+// flushState sends the current state to the UI. Must be called WITHOUT twp.mu held
+// to avoid deadlock when onStateChange calls back into GetTaskState.
+func (twp *TaskWorkerPool[T]) flushState() {
 	if twp.closed.Load() {
 		return
 	}
 
+	if twp.onStateChange != nil {
+		twp.onStateChange()
+		return
+	}
+
+	twp.mu.Lock()
 	// copy
 	mapCopy := make(console.TaskStateMap, len(twp.taskState))
 	maps.Copy(mapCopy, twp.taskState)
-
-	twp.sendMsg(console.TaskStateMsg{State: mapCopy})
 
 	total := twp.nextTaskId
 	if twp.totalTasks > 0 {
 		total = twp.totalTasks
 	}
 	running := len(twp.taskState)
+	completed := twp.completedTasks
+	twp.mu.Unlock()
+
+	twp.sendMsg(console.TaskStateMsg{State: mapCopy})
 
 	green := color.New(color.FgGreen).SprintFunc()
 	twp.sendMsg(console.HeaderMsg(
-		green(fmt.Sprintf("[%d/%d]", twp.completedTasks, total)) +
+		green(fmt.Sprintf("[%d/%d]", completed, total)) +
 			fmt.Sprintf(" %s running", console.FCount(running, "action")),
 	))
 }
@@ -223,8 +252,11 @@ func (twp *TaskWorkerPool[T]) Shutdown() {
 }
 
 func (twp *TaskWorkerPool[T]) enqueue(job job[T]) (err error) {
+	twp.activeJobs.Add(1)
+
 	defer func() {
 		if r := recover(); r != nil {
+			twp.activeJobs.Done() // undo the Add if enqueue fails
 			if twp.closed.Load() {
 				err = fmt.Errorf("worker pool is closed")
 				return
@@ -238,10 +270,56 @@ func (twp *TaskWorkerPool[T]) enqueue(job job[T]) (err error) {
 	case twp.jobCh <- job:
 	case <-time.After(time.Second): // backstop so we don't hang if closed
 		if twp.closed.Load() {
+			twp.activeJobs.Done()
 			return fmt.Errorf("worker pool is closed")
 		}
 		twp.jobCh <- job
 	}
 
 	return nil
+}
+
+// WaitForCompletion blocks until all enqueued jobs have finished.
+func (twp *TaskWorkerPool[T]) WaitForCompletion() {
+	twp.activeJobs.Wait()
+}
+
+// GetTaskState returns a copy of the current task state map.
+func (twp *TaskWorkerPool[T]) GetTaskState() console.TaskStateMap {
+	twp.mu.Lock()
+	defer twp.mu.Unlock()
+	mapCopy := make(console.TaskStateMap, len(twp.taskState))
+	for k, v := range twp.taskState {
+		mapCopy[k] = v
+	}
+	return mapCopy
+}
+
+// GetCompletedTasks returns the number of completed tasks.
+func (twp *TaskWorkerPool[T]) GetCompletedTasks() int {
+	twp.mu.Lock()
+	defer twp.mu.Unlock()
+	return twp.completedTasks
+}
+
+// GetRunningCount returns the number of currently running tasks.
+func (twp *TaskWorkerPool[T]) GetRunningCount() int {
+	twp.mu.Lock()
+	defer twp.mu.Unlock()
+	return len(twp.taskState)
+}
+
+// RunFireAndForget enqueues a task without waiting for its result.
+func (twp *TaskWorkerPool[T]) RunFireAndForget(task TaskFunc[T]) error {
+	if twp.closed.Load() {
+		return fmt.Errorf("worker pool is closed")
+	}
+
+	twp.mu.Lock()
+	id := twp.nextTaskId
+	twp.nextTaskId++
+	twp.mu.Unlock()
+
+	job := job[T]{id: id, task: task, result: nil}
+	return twp.enqueue(job)
 }
