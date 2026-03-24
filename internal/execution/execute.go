@@ -146,8 +146,13 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	walker := dag.NewWalker(e.graph, walkCallback, e.failFast)
 	completionMap, err := walker.Walk(ctx)
 
-	// Wait for I/O pool to drain before returning
-	e.cacheWriter.Wait()
+	// Wait for I/O pool to drain before returning, but only if the build
+	// was not interrupted.  Async cache writes use a non-cancellable context
+	// so they can outlive the build, but we must not block an interrupted
+	// shutdown waiting for slow remote uploads to finish.
+	if ctx.Err() == nil {
+		e.cacheWriter.Wait()
+	}
 
 	return completionMap, err
 }
