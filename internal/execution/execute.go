@@ -46,6 +46,7 @@ type Executor struct {
 	streamLogsToggle *console.StreamLogsToggle
 	coordinator      *PoolCoordinator
 	cacheWriter      *CacheWriter
+	asyncWaitTime    time.Duration
 }
 
 func NewExecutor(
@@ -151,10 +152,19 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	// so they can outlive the build, but we must not block an interrupted
 	// shutdown waiting for slow remote uploads to finish.
 	if ctx.Err() == nil {
+		waitStart := time.Now()
 		e.cacheWriter.Wait()
+		e.asyncWaitTime = time.Since(waitStart)
 	}
 
 	return completionMap, err
+}
+
+// AsyncWaitTime returns the wall-clock time spent waiting for the async I/O
+// pool to drain after the DAG walk completed. Zero when async writes are
+// disabled or the build was interrupted.
+func (e *Executor) AsyncWaitTime() time.Duration {
+	return e.asyncWaitTime
 }
 
 // getBinToolPaths From all the direct dependencies of a target, get their bin_output if defined

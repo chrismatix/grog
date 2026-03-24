@@ -162,12 +162,23 @@ func RunBuild(
 				criticalPathLabels = append(criticalPathLabels, node.GetLabel().String())
 			}
 
-			logger.Infof(
-				"Elapsed time: %.3fs (critical path: exec %.3fs, cache %.3fs)",
-				elapsedTime,
-				criticalPath.ExecutionDuration.Seconds(),
-				criticalPath.CacheDuration.Seconds(),
-			)
+			asyncWait := executor.AsyncWaitTime().Seconds()
+			if asyncWait > 0 {
+				logger.Infof(
+					"Elapsed time: %.3fs (critical path: exec %.3fs, cache %.3fs, async cache %.3fs)",
+					elapsedTime,
+					criticalPath.ExecutionDuration.Seconds(),
+					criticalPath.CacheDuration.Seconds(),
+					asyncWait,
+				)
+			} else {
+				logger.Infof(
+					"Elapsed time: %.3fs (critical path: exec %.3fs, cache %.3fs)",
+					elapsedTime,
+					criticalPath.ExecutionDuration.Seconds(),
+					criticalPath.CacheDuration.Seconds(),
+				)
+			}
 			logger.Debugf("Critical path: %s", strings.Join(criticalPathLabels, " -> "))
 		} else {
 			logger.Infof(
