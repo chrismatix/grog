@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"reflect"
@@ -118,9 +119,22 @@ func TestCliScenarios(t *testing.T) {
 				t.Parallel()
 			}
 
+			// Create a per-test coverage directory to avoid race conditions
+			// when parallel tests write coverage metadata files.
+			baseCoverDir, err := getCoverDir()
+			if err != nil {
+				t.Fatalf("could not get cover dir: %v", err)
+			}
+			sanitized := strings.ReplaceAll(tt.Name, "/", "_")
+			sanitized = strings.ReplaceAll(sanitized, " ", "_")
+			coverDir := filepath.Join(baseCoverDir, sanitized)
+			if err := os.MkdirAll(coverDir, 0755); err != nil {
+				t.Fatalf("could not create cover dir: %v", err)
+			}
+
 			// Clear repository cache
 			if !tt.SkipClean {
-				output, err := runBinary([]string{"clean"}, tt.Repo, []string{})
+				output, err := runBinary([]string{"clean"}, tt.Repo, []string{}, coverDir)
 				if err != nil {
 					t.Fatalf(
 						"could not run `grog clean` on repo %s: %v\nCommand output:\n%s",
@@ -158,7 +172,7 @@ func TestCliScenarios(t *testing.T) {
 
 				t.Run(tc.Name, func(t *testing.T) {
 
-					output, err := runBinary(tc.GrogArgs, tt.Repo, tc.EnvVars)
+					output, err := runBinary(tc.GrogArgs, tt.Repo, tc.EnvVars, coverDir)
 
 					if err != nil && !tc.ExpectFail {
 						fmt.Printf("Command ouput: %s\n", output)
@@ -212,7 +226,7 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func runBinary(args []string, repoPath string, extraEnvVars []string) ([]byte, error) {
+func runBinary(args []string, repoPath string, extraEnvVars []string, coverDir string) ([]byte, error) {
 	repoPath = filepath.Join("./integration/test_repos", repoPath)
 
 	// Debug print the command invocation
@@ -222,10 +236,6 @@ func runBinary(args []string, repoPath string, extraEnvVars []string) ([]byte, e
 
 	// Set the environment variable for the coverage directory
 	// so that the coverage report is written to the correct location
-	coverDir, err := getCoverDir()
-	if err != nil {
-		return nil, err
-	}
 	cmd.Env = append(os.Environ(), "GOCOVERDIR="+coverDir)
 	cmd.Env = append(cmd.Env, "GROG_DISABLE_NON_DETERMINISTIC_LOGGING=true")
 	for _, envVar := range extraEnvVars {
