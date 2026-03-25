@@ -521,25 +521,28 @@ func (e *Executor) LoadDependencyOutputs(
 		}
 
 		targetResult, err := e.targetCache.Load(ctx, localDep.ChangeHash)
-		if err != nil {
-			// We cannot even get the target cache: re-run immediately
-			return rerunDependency()
-		}
 
-		progress := worker.NewProgressTracker(
-			fmt.Sprintf("%s: loading %s", target.Label, console.FCountOutputs(len(target.AllOutputs()))),
-			0,
-			update,
-		)
-		loadErr := e.registry.LoadOutputs(ctx, localDep, targetResult, progress)
+		var loadErr error
+		if err == nil {
+			progress := worker.NewProgressTracker(
+				fmt.Sprintf("%s: loading %s", target.Label, console.FCountOutputs(len(target.AllOutputs()))),
+				0,
+				update,
+			)
+			loadErr = e.registry.LoadOutputs(ctx, localDep, targetResult, progress)
+		} else {
+			// Target cache not available (e.g. async cache write not yet complete).
+			// Treat as a load failure so the dependency is re-built below.
+			loadErr = err
+		}
 
 		if loadErr != nil || localDep.SkipsCache() {
 			logger.Debugf(
-				"%s: failed to load output for dependency %s (re-rerunning): err=%v no-cache=%t",
+				"%s: failed to load output for dependency %s (re-running): loadErr=%v no-cache=%t",
 				target.Label,
 				localDep.Label,
-				err,
-				target.SkipsCache(),
+				loadErr,
+				localDep.SkipsCache(),
 			)
 			// In this case we need to also recursively re-load the dependencies of the dependency
 			if recursiveLoadErr := e.LoadDependencyOutputs(ctx, localDep, update); recursiveLoadErr != nil {
