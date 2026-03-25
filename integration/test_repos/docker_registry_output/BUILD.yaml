@@ -2,10 +2,10 @@ targets:
   - name: docker_output
     command: |
       # Force the platform so that we get th same sha
-      docker buildx build --platform=linux/amd64 -t grog-hello-world .
-      docker tag grog-hello-world us-central1-docker.pkg.dev/grog-457510/grog-cache/grog-hello-world
+      docker buildx build --platform=linux/amd64 -t grog-hello-world-registry .
+      docker tag grog-hello-world-registry us-central1-docker.pkg.dev/grog-457510/grog-cache/grog-hello-world-registry
     inputs:
       - script.sh
     outputs:
-      - docker::grog-hello-world
-      - docker::us-central1-docker.pkg.dev/grog-457510/grog-cache/grog-hello-world
+      - docker::grog-hello-world-registry
+      - docker::us-central1-docker.pkg.dev/grog-457510/grog-cache/grog-hello-world-registry

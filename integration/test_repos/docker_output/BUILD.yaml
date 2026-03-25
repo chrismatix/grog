@@ -2,8 +2,8 @@ targets:
   - name: docker_output
     command: |
       echo "running docker build"
-      docker build -t grog-hello-world .
+      docker build -t grog-hello-world-tar .
     inputs:
       - script.sh
     outputs:
-      - docker::grog-hello-world
+      - docker::grog-hello-world-tar
