@@ -31,8 +31,8 @@ test: build-with-coverage
 	@echo ""
 	@echo "Running integration tests."
 	@gotestsum --format testname -- -timeout 360s ./integration/... $(UPDATE_FLAG) $(UPDATE_ALL_FLAG)
-	@go tool covdata percent -i=coverdata/integration,coverdata/unit
-	@go tool covdata textfmt -i=coverdata/integration,coverdata/unit -o coverdata/coverage.out
+	@go tool covdata percent -i=$$(find coverdata -type d -mindepth 1 | paste -sd, -)
+	@go tool covdata textfmt -i=$$(find coverdata -type d -mindepth 1 | paste -sd, -) -o coverdata/coverage.out
 	@go tool cover -func=coverdata/coverage.out -o=coverdata/coverage_overview.out
 
 	@echo ""
@@ -41,7 +41,7 @@ test: build-with-coverage
 
 
 check-coverage: test
-	@go tool covdata textfmt -i=coverdata/integration,coverdata/unit -o coverdata/profile.txt
+	@go tool covdata textfmt -i=$$(find coverdata -type d -mindepth 1 | paste -sd, -) -o coverdata/profile.txt
 	@go tool cover -html=profile.txt
 
 

@@ -18,7 +18,7 @@ cases:
       - multiplatform-cache
 
   - name: remove_local_docker_image
-    setup_command: docker rmi grog-hello-world
+    setup_command: docker rmi grog-hello-world-registry
 
   - name: loads_remote_docker_registry_output
     grog_args:

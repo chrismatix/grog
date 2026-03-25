@@ -11,7 +11,7 @@ cases:
       - build
 
   - name: remove_docker_image
-    setup_command: "docker rmi grog-hello-world"
+    setup_command: "docker rmi grog-hello-world-tar"
 
   - name: loads_docker_tar_output
     grog_args:
