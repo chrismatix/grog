@@ -29,6 +29,7 @@ grog check [flags]
 
 ```
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
+      --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
       --debug                         Enable debug logging
       --disable-default-shell-flags   Do not prepend "set -eu" to target commands

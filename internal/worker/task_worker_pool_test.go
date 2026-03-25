@@ -129,6 +129,55 @@ func TestRunWithConcurrentShutdown(t *testing.T) {
 	}
 }
 
+// TestFireAndForgetCompletionAfterCancel verifies that WaitForCompletion
+// does not hang when the context used by the pool is cancelled and there are
+// still fire-and-forget jobs in flight.  This mirrors the real shutdown path:
+// the I/O pool uses context.WithoutCancel so workers keep running, but
+// Execute must not block on WaitForCompletion when the build is interrupted.
+func TestFireAndForgetCompletionAfterCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	testLogger := console.NewFromSugared(zaptest.NewLogger(t).Sugar(), zapcore.DebugLevel)
+
+	// Use a non-cancellable context for the pool (like the IO pool does).
+	ioCtx := context.WithoutCancel(ctx)
+	pool := NewTaskWorkerPool[struct{}](testLogger, 2, func(_ tea.Msg) {}, 0)
+	pool.StartWorkers(ioCtx)
+
+	jobStarted := make(chan struct{})
+	// Submit a slow fire-and-forget job.
+	err := pool.RunFireAndForget(func(_ StatusFunc) (struct{}, error) {
+		close(jobStarted)
+		time.Sleep(500 * time.Millisecond)
+		return struct{}{}, nil
+	})
+	if err != nil {
+		t.Fatalf("RunFireAndForget: %v", err)
+	}
+
+	<-jobStarted
+
+	// Cancel the parent context (simulating Ctrl-C).
+	cancel()
+
+	// The real fix: Execute skips Wait when ctx is cancelled.
+	// But even if someone calls Wait, the IO pool workers are alive
+	// (non-cancellable context) so they will eventually drain.
+	done := make(chan struct{})
+	go func() {
+		pool.WaitForCompletion()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Pool drained — good.
+	case <-time.After(2 * time.Second):
+		t.Fatal("WaitForCompletion hung after context cancellation")
+	}
+
+	pool.Shutdown()
+}
+
 func TestTaskError(t *testing.T) {
 	ctx := t.Context()
 

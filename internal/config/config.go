@@ -37,6 +37,14 @@ type WorkspaceConfig struct {
 	// processes operate on the same workspace, otherwise cache corruption may
 	// occur.
 	SkipWorkspaceLock bool `mapstructure:"skip_workspace_lock"`
+	// AsyncCacheWrites defers cache writes to a dedicated I/O worker pool,
+	// freeing task workers to start downstream targets sooner. Output hashes
+	// are still computed synchronously so dependency chains stay correct.
+	// Pending I/O writes are drained before the build returns. Defaults to true.
+	AsyncCacheWrites bool `mapstructure:"async_cache_writes"`
+	// NumIOWorkers sets the number of I/O workers used for async cache writes.
+	// Only relevant when AsyncCacheWrites is true. Defaults to 3 * num_workers.
+	NumIOWorkers int `mapstructure:"num_io_workers"`
 
 	// Logging
 	LogLevel      string `mapstructure:"log_level"`

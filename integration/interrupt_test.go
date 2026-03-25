@@ -80,6 +80,136 @@ func TestInterruptHandling(t *testing.T) {
 	t.Logf("Command was interrupted successfully in %v", interruptTime)
 }
 
+// TestDoubleInterruptForceExit verifies that a second SIGINT force-exits the
+// process even if the first signal's graceful shutdown would otherwise block.
+func TestDoubleInterruptForceExit(t *testing.T) {
+	repoPath := filepath.Join("./test_repos", "sleep")
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatalf("problems recovering caller information")
+	}
+	integrationDir := filepath.Dir(filename)
+	absRepoPath, err := filepath.Abs(filepath.Join(integrationDir, repoPath))
+	if err != nil {
+		t.Fatalf("could not get absolute path for repo: %v", err)
+	}
+
+	cleanCmd := exec.Command(binaryPath, "clean")
+	if output, err := cleanCmd.CombinedOutput(); err != nil {
+		t.Fatalf("could not clean repository: %v\n%s", err, output)
+	}
+
+	cmd := exec.Command(binaryPath, "build")
+	cmd.Dir = absRepoPath
+
+	coverDir, err := getCoverDir()
+	if err != nil {
+		t.Fatalf("could not get coverage directory: %v", err)
+	}
+	cmd.Env = append(os.Environ(), "GOCOVERDIR="+coverDir)
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("could not start command: %v", err)
+	}
+
+	time.Sleep(500 * time.Millisecond)
+
+	// First SIGINT: graceful shutdown
+	if err := cmd.Process.Signal(syscall.SIGINT); err != nil {
+		t.Fatalf("could not send first interrupt: %v", err)
+	}
+
+	// Brief pause then second SIGINT: force-exit
+	time.Sleep(100 * time.Millisecond)
+	startTime := time.Now()
+	if err := cmd.Process.Signal(syscall.SIGINT); err != nil {
+		t.Fatalf("could not send second interrupt: %v", err)
+	}
+
+	err = cmd.Wait()
+	interruptTime := time.Since(startTime)
+
+	if interruptTime > 2*time.Second {
+		t.Fatalf("double interrupt took too long: %v", interruptTime)
+	}
+	if err == nil {
+		t.Fatalf("expected command to fail with interrupt error, but it succeeded")
+	}
+	t.Logf("Double interrupt exited in %v", interruptTime)
+}
+
+// TestDoubleInterruptForceExitWithTTY is the TTY variant of TestDoubleInterruptForceExit.
+// After BubbleTea handles the first Ctrl-C (as a keystroke) and quits, the
+// terminal is restored, so the second Ctrl-C generates a real SIGINT.  The
+// signal handler should catch it and cancel the root context.
+func TestDoubleInterruptForceExitWithTTY(t *testing.T) {
+	console, err := expect.NewConsole()
+	if err != nil {
+		t.Fatalf("could not create console: %v", err)
+	}
+	defer console.Close()
+
+	repoPath := filepath.Join("./test_repos", "sleep")
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatalf("problems recovering caller information")
+	}
+	integrationDir := filepath.Dir(filename)
+	absRepoPath, err := filepath.Abs(filepath.Join(integrationDir, repoPath))
+	if err != nil {
+		t.Fatalf("could not get absolute path for repo: %v", err)
+	}
+
+	cleanCmd := exec.Command(binaryPath, "clean")
+	if output, err := cleanCmd.CombinedOutput(); err != nil {
+		t.Fatalf("could not clean repository: %v\n%s", err, output)
+	}
+
+	cmd := exec.Command(binaryPath, "build")
+	cmd.Dir = absRepoPath
+
+	coverDir, err := getCoverDir()
+	if err != nil {
+		t.Fatalf("could not get coverage directory: %v", err)
+	}
+	cmd.Env = append(os.Environ(), "GOCOVERDIR="+coverDir)
+
+	cmd.Stdin = console.Tty()
+	cmd.Stdout = console.Tty()
+	cmd.Stderr = console.Tty()
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("could not start command: %v", err)
+	}
+
+	time.Sleep(500 * time.Millisecond)
+
+	// First signal — BubbleTea catches this as a keystroke in raw mode
+	if err := cmd.Process.Signal(os.Interrupt); err != nil {
+		t.Fatalf("could not send first interrupt: %v", err)
+	}
+
+	// Wait for BubbleTea to quit and restore the terminal
+	time.Sleep(200 * time.Millisecond)
+
+	startTime := time.Now()
+	// Second signal — terminal is cooked again, so this is a real SIGINT
+	if err := cmd.Process.Signal(os.Interrupt); err != nil {
+		t.Fatalf("could not send second interrupt: %v", err)
+	}
+
+	err = cmd.Wait()
+	interruptTime := time.Since(startTime)
+
+	if interruptTime > 2*time.Second {
+		t.Fatalf("double interrupt over TTY took too long: %v", interruptTime)
+	}
+	if err == nil {
+		t.Fatalf("expected command to fail with interrupt, but it succeeded")
+	}
+	t.Logf("Double interrupt over TTY exited in %v", interruptTime)
+}
+
 func TestInterruptHandlingWithTTY(t *testing.T) {
 	// Create a virtual TTY console
 	console, err := expect.NewConsole()

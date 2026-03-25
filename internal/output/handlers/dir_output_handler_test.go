@@ -92,8 +92,12 @@ func TestDirectoryOutputHandler_WriteAndLoad(t *testing.T) {
 		t.Fatalf("Write failed: %v", err)
 	}
 
-	if err := handler.Load(ctx, target, dirOutput, nil); err != nil {
+	if err := handler.Load(ctx, target, dirOutput.Output, nil); err != nil {
 		t.Fatalf("Load failed: %v", err)
+	}
+
+	if got := dirOutput.Output.GetDirectory().GetTreeDigest().GetSizeBytes(); got <= 0 {
+		t.Fatalf("expected tree digest sizeBytes to be populated, got %d", got)
 	}
 
 	loaded, err := os.ReadFile(filepath.Join(dirPath, "file.txt"))
@@ -156,8 +160,19 @@ func TestDirectoryOutputHandler_Write_FailsOnCacheWrite(t *testing.T) {
 	target := model.Target{Label: label.TL("pkg", "target"), ChangeHash: "hash"}
 	output := model.NewOutput("dir", "out")
 
-	if _, err := handler.Write(ctx, target, output, nil); err == nil {
-		t.Fatal("expected Write to fail when cache Set fails, got nil error")
+	result, err := handler.Write(ctx, target, output, nil)
+	if err != nil {
+		// Write may still fail during hash computation (not cache write)
+		return
+	}
+	if result.WritePlan == nil {
+		t.Fatal("expected WritePlan to be non-nil")
+	}
+	if err := result.WritePlan.Execute(ctx, nil); err == nil {
+		t.Fatal("expected WritePlan.Upload to fail when cache Set fails, got nil error")
+	}
+	if err := result.WritePlan.Cleanup(ctx); err != nil {
+		t.Fatalf("cleanup failed: %v", err)
 	}
 }
 

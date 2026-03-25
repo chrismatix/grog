@@ -16,6 +16,50 @@ import (
 	"grog/internal/worker"
 )
 
+// fileWritePlan uploads a single staged file to the CAS.
+// The original output file is copied to a temp path during Write() so the upload
+// reads from an immutable snapshot, not the live workspace file.
+type fileWritePlan struct {
+	cas          *caching.Cas
+	stagedPath   string
+	digest       string
+	sizeBytes    int64
+	targetLabel  string
+	relativePath string
+}
+
+func (f *fileWritePlan) Execute(ctx context.Context, tracker *worker.ProgressTracker) error {
+	file, err := os.Open(f.stagedPath)
+	if err != nil {
+		return fmt.Errorf("failed to open staged file %s for cache write: %w", f.stagedPath, err)
+	}
+	defer file.Close()
+
+	progress := tracker
+	if progress != nil {
+		progress = progress.SubTracker(fmt.Sprintf("%s: writing %s", f.targetLabel, f.relativePath), f.sizeBytes)
+	}
+
+	reader := io.Reader(file)
+	if progress != nil {
+		reader = progress.WrapReader(file)
+	}
+
+	console.GetLogger(ctx).Debugf("writing staged file output %s with digest %s", f.stagedPath, f.digest)
+	if err := f.cas.Write(ctx, f.digest, reader); err != nil {
+		return err
+	}
+
+	if progress != nil {
+		progress.Complete()
+	}
+	return nil
+}
+
+func (f *fileWritePlan) Cleanup(_ context.Context) error {
+	return os.Remove(f.stagedPath)
+}
+
 // FileOutputHandler is the default output handler that writes files to the file system.
 // mostly passes directly through to the target cache which handles files
 type FileOutputHandler struct {
@@ -45,8 +89,8 @@ func (f *FileOutputHandler) Write(
 	ctx context.Context,
 	target model.Target,
 	output model.Output,
-	tracker *worker.ProgressTracker,
-) (*gen.Output, error) {
+	_ *worker.ProgressTracker,
+) (*PreparedOutput, error) {
 	relativePath := output.Identifier
 	absOutputPath := target.GetAbsOutputPath(output)
 
@@ -56,45 +100,54 @@ func (f *FileOutputHandler) Write(
 	}
 	defer file.Close()
 
-	fileHash, err := hashing.HashFile(absOutputPath)
+	stagedFile, err := os.CreateTemp("", "grog-cache-file-*")
 	if err != nil {
-		return nil, fmt.Errorf("failed to hash file %s: %w", absOutputPath, err)
+		return nil, fmt.Errorf("failed to create staged file for %s: %w", absOutputPath, err)
 	}
+	stagedPath := stagedFile.Name()
+	cleanupStagedFile := true
+	defer func() {
+		if cleanupStagedFile {
+			_ = os.Remove(stagedPath)
+		}
+	}()
 
-	fileInfo, err := file.Stat()
+	hasher := hashing.GetHasher()
+	sizeBytes, err := io.Copy(io.MultiWriter(stagedFile, hasher), file)
+	if closeErr := stagedFile.Close(); closeErr != nil && err == nil {
+		err = closeErr
+	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to get file sizeBytes %s: %w", absOutputPath, err)
+		return nil, fmt.Errorf("failed to stage file %s for cache write: %w", absOutputPath, err)
 	}
 
-	progress := tracker
-	if progress != nil {
-		progress = progress.SubTracker(fmt.Sprintf("%s: writing %s", target.Label, relativePath), fileInfo.Size())
-	}
+	fileHash := hasher.SumString()
 
-	reader := io.Reader(file)
-	if progress != nil {
-		reader = progress.WrapReader(file)
-	}
-
-	console.GetLogger(ctx).Debugf("writing file output %s with digest %s", absOutputPath, fileHash)
-	if err := f.cas.Write(ctx, fileHash, reader); err != nil {
-		return nil, err
-	}
-
-	if progress != nil {
-		progress.Complete()
-	}
-
-	return &gen.Output{
+	genOutput := &gen.Output{
 		Kind: &gen.Output_File{
 			File: &gen.FileOutput{
 				Path: relativePath,
 				Digest: &gen.Digest{
 					Hash:      fileHash,
-					SizeBytes: fileInfo.Size(),
+					SizeBytes: sizeBytes,
 				},
 			},
 		},
+	}
+
+	writePlan := &fileWritePlan{
+		cas:          f.cas,
+		stagedPath:   stagedPath,
+		digest:       fileHash,
+		sizeBytes:    sizeBytes,
+		targetLabel:  target.Label.String(),
+		relativePath: relativePath,
+	}
+	cleanupStagedFile = false
+
+	return &PreparedOutput{
+		Output:    genOutput,
+		WritePlan: writePlan,
 	}, nil
 }
 

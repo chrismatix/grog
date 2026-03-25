@@ -4,4 +4,6 @@ set -euo pipefail
 
 make build
 
-install -m 755 dist/grog /usr/local/bin/grog
+install -m 755 dist/grog /usr/local/bin/grog-dev
+
+echo "Installed to /usr/local/bin/grog-dev"
