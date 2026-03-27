@@ -11,6 +11,9 @@ cases:
       - build
       - //unknown_target
     expect_fail: true
+  - name: check_all
+    grog_args:
+      - check
 
   - name: version_command_works
     grog_args:

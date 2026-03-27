@@ -201,6 +201,8 @@ func RunBuild(
 	goal := "Build"
 	if testFilter == selection.TestOnly {
 		goal = "Test"
+	} else if testFilter == selection.AllTargets {
+		goal = "Check"
 	}
 
 	executionErrors := completionMap.GetErrors()

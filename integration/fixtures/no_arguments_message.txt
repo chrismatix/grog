@@ -4,7 +4,7 @@ Usage:
 Available Commands:
   build       Loads the user configuration and executes build targets.
   changes     Lists targets whose inputs have been modified since a given commit.
-  check       Loads the build graph and runs basic consistency checks.
+  check       Loads the user configuration and executes build and test targets.
   clean       Removes all cached artifacts.
   completion  Generate the autocompletion script for the specified shell
   deps        Lists (transitive) dependencies of a target.
@@ -40,6 +40,5 @@ Flags:
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
   -v, --verbose count                 Set verbosity level (-v, -vv)
-      --version                       version for grog
 
 Use "grog [command] --help" for more information about a command.
