@@ -12,9 +12,10 @@ import (
 )
 
 var BuildAndTestCmd = &cobra.Command{
-	Use:   "build-and-test",
-	Short: "Loads the user configuration and executes build and test targets.",
-	Long:  `Loads the user configuration, checks which targets need to be rebuilt based on file hashes, builds the dependency graph, and executes both build and test targets.`,
+	Use:     "build-and-test",
+	Aliases: []string{"bat"},
+	Short:   "Loads the user configuration and executes build and test targets.",
+	Long:    `Loads the user configuration, checks which targets need to be rebuilt based on file hashes, builds the dependency graph, and executes both build and test targets.`,
 	Example: `  grog build-and-test                      # Build all targets and run all tests in the current package and subpackages
   grog build-and-test //path/to/package:target  # Build or test a specific target
   grog build-and-test //path/to/package/...     # Build all targets and run all tests in a package and subpackages`,
