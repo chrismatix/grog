@@ -1,1 +1,1 @@
-INFO: Workspace cache cleaned successfully.
+[32mINFO:[0m Workspace cache cleaned successfully.

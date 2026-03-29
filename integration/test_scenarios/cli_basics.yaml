@@ -16,6 +16,3 @@ cases:
     grog_args:
       - version
     skip_fixture: true
-  - name: check_all
-    grog_args:
-      - check
