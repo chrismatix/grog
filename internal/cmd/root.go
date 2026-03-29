@@ -166,6 +166,7 @@ func init() {
 	cmds.AddRunCmd(RootCmd)
 	cmds.AddGraphCmd(RootCmd)
 	cmds.AddCleanCmd(RootCmd)
+	cmds.AddBuildAndTestCmd(RootCmd)
 	cmds.AddTestCmd(RootCmd)
 	cmds.AddBuildCmd(RootCmd)
 	cmds.AddDepsCmd(RootCmd)

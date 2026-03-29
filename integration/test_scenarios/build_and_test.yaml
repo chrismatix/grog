@@ -1,0 +1,6 @@
+name: build and test command
+repo: simple_json
+cases:
+  - name: build_and_test_all
+    grog_args:
+      - build-and-test

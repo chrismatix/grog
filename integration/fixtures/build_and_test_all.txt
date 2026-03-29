@@ -1,0 +1,5 @@
+INFO: 2 packages loaded, 4 targets configured.
+INFO: Selected 4 targets.
+INFO: //foo:foo_test PASSED
+INFO: //bar:bar_test PASSED
+INFO: Build and test completed successfully. 4 targets completed (0 cache hits).
