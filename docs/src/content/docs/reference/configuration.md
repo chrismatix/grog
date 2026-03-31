@@ -40,6 +40,15 @@ backend = "gcs"  # Options: "" (local), "gcs", "s3"
 [cache.gcs]
 bucket = "my-gcs-bucket"
 prefix = "grog-cache/"
+
+# Trace Settings
+[traces]
+enabled = true
+retention_days = 30
+# Optionally use a separate backend for traces:
+# backend = "s3"
+# [traces.s3]
+#   bucket = "my-traces-bucket"
 ```
 
 All value in this file can be overridden at runtime by passing an environment variable of the same name prefixed with `GROG_`.
@@ -66,6 +75,16 @@ For instance, to set or override the `fail_fast` option set `GROG_FAIL_FAST=fals
 - **async_cache_writes**: When `true` (default), cache writes are offloaded to a dedicated I/O worker pool, freeing task workers to start downstream targets sooner. Output hashes are still computed synchronously so dependency chains and cache keys stay correct. The I/O pool is drained before the build returns, and its progress is shown alongside running targets in the build UI. Write failures are non-fatal warnings — the build result is unaffected. Set to `false` to run cache writes inline on task workers (the pre-0.18 behaviour).
 - **num_io_workers**: Number of I/O workers for async cache writes. Only relevant when `async_cache_writes` is `true`. Defaults to `3 * num_workers`.
 - **skip_workspace_lock**: When `true`, Grog does not acquire a workspace-level lock before executing. **Warning:** Running multiple grog instances without locking can corrupt the workspace or cache.
+
+### Trace Settings
+
+- **traces.enabled**: When `true`, Grog records an execution trace for every build, test, and run invocation. Traces capture per-target phase-level timing data for performance analysis. Defaults to `false`.
+- **traces.retention_days**: Number of days to retain stored traces. Set to `0` for unlimited retention. Defaults to `30`.
+- **traces.backend**: Override the storage backend for traces. When not set, traces use the same backend as the build cache. Supports `"gcs"` and `"s3"`.
+- **traces.gcs.bucket** / **traces.s3.bucket**: Bucket name for trace storage when using a separate backend.
+- **traces.gcs.prefix** / **traces.s3.prefix**: Optional prefix within the bucket. Defaults to `/`.
+
+See [Execution Traces](/topics/execution-traces/) for usage details and dashboard integration.
 
 ## Profiles
 
