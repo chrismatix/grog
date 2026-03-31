@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,7 +13,6 @@ import (
 	"grog/internal/dag"
 	"grog/internal/label"
 	"grog/internal/model"
-	gen "grog/internal/proto/gen"
 )
 
 // TraceCollector gathers build metadata and produces a BuildTrace after execution.
@@ -53,7 +53,7 @@ func (c *TraceCollector) Finalize(
 	completionMap dag.CompletionMap,
 	graph *dag.DirectedTargetGraph,
 	asyncWaitTime time.Duration,
-) *gen.BuildTrace {
+) *BuildTrace {
 	totalDuration := time.Since(c.startTime)
 
 	gitCommit, _ := config.GetGitHash()
@@ -68,25 +68,27 @@ func (c *TraceCollector) Finalize(
 		patterns = append(patterns, p.String())
 	}
 
-	trace := &gen.BuildTrace{
-		TraceId:             c.traceID,
-		Workspace:           workspace,
-		GitCommit:           gitCommit,
-		GitBranch:           gitBranch,
-		GrogVersion:         c.grogVersion,
-		Platform:            platform,
-		Command:             c.command,
-		StartTimeUnixMillis: c.startTime.UnixMilli(),
-		TotalDurationMillis: totalDuration.Milliseconds(),
-		RequestedPatterns:   patterns,
-		IsCi:                isCI,
-		AsyncCacheWaitMillis: asyncWaitTime.Milliseconds(),
+	trace := &BuildTrace{
+		Build: BuildRow{
+			TraceID:              c.traceID,
+			Workspace:            workspace,
+			GitCommit:            gitCommit,
+			GitBranch:            gitBranch,
+			GrogVersion:          c.grogVersion,
+			Platform:             platform,
+			Command:              c.command,
+			StartTimeUnixMillis:  c.startTime.UnixMilli(),
+			TotalDurationMillis:  totalDuration.Milliseconds(),
+			RequestedPatterns:    strings.Join(patterns, ","),
+			IsCI:                 isCI,
+			AsyncCacheWaitMillis: asyncWaitTime.Milliseconds(),
+		},
 	}
 
 	// Compute critical path if available
 	if criticalPath, ok := graph.GetSelectedSubgraph().FindCriticalPath(); ok && len(criticalPath.Nodes) > 0 {
-		trace.CriticalPathExecMillis = criticalPath.ExecutionDuration.Milliseconds()
-		trace.CriticalPathCacheMillis = criticalPath.CacheDuration.Milliseconds()
+		trace.Build.CriticalPathExecMillis = criticalPath.ExecutionDuration.Milliseconds()
+		trace.Build.CriticalPathCacheMillis = criticalPath.CacheDuration.Milliseconds()
 	}
 
 	// Build spans from completion map
@@ -108,54 +110,57 @@ func (c *TraceCollector) Finalize(
 		span := c.buildSpan(target, &completion)
 		trace.Spans = append(trace.Spans, span)
 
-		trace.TotalTargets++
+		trace.Build.TotalTargets++
 		if completion.IsSuccess {
-			trace.SuccessCount++
+			trace.Build.SuccessCount++
 			if completion.CacheResult == dag.CacheHit {
-				trace.CacheHitCount++
+				trace.Build.CacheHitCount++
 			}
 		} else {
-			trace.FailureCount++
+			trace.Build.FailureCount++
 		}
 	}
 
 	return trace
 }
 
-func (c *TraceCollector) buildSpan(target *model.Target, completion *dag.Completion) *gen.TargetSpan {
-	span := &gen.TargetSpan{
-		Label:     target.Label.String(),
-		Package:   target.Label.Package,
+func (c *TraceCollector) buildSpan(target *model.Target, completion *dag.Completion) SpanRow {
+	span := SpanRow{
+		TraceID:    c.traceID,
+		Label:      target.Label.String(),
+		Package:    target.Label.Package,
 		ChangeHash: target.ChangeHash,
 		OutputHash: target.OutputHash,
-		Command:   truncateCommand(target.Command),
-		IsTest:    target.IsTest(),
-		Tags:      target.Tags,
+		Command:    truncateCommand(target.Command),
+		IsTest:     target.IsTest(),
+		Tags:       strings.Join(target.Tags, ","),
 	}
 
 	// Status
 	if completion.IsSuccess {
-		span.Status = gen.TargetSpan_SUCCESS
+		span.Status = "SUCCESS"
 	} else if completion.Err != nil {
-		span.Status = gen.TargetSpan_FAILURE
+		span.Status = "FAILURE"
 	} else {
-		span.Status = gen.TargetSpan_CANCELLED
+		span.Status = "CANCELLED"
 	}
 
 	// Cache result
 	switch completion.CacheResult {
 	case dag.CacheHit:
-		span.CacheResult = gen.TargetSpan_CACHE_HIT
+		span.CacheResult = "CACHE_HIT"
 	case dag.CacheSkip:
-		span.CacheResult = gen.TargetSpan_CACHE_SKIP
+		span.CacheResult = "CACHE_SKIP"
 	default:
-		span.CacheResult = gen.TargetSpan_CACHE_MISS
+		span.CacheResult = "CACHE_MISS"
 	}
 
 	// Dependencies
+	var deps []string
 	for _, dep := range target.Dependencies {
-		span.Dependencies = append(span.Dependencies, dep.String())
+		deps = append(deps, dep.String())
 	}
+	span.Dependencies = strings.Join(deps, ",")
 
 	// Timing
 	if !target.StartTime.IsZero() {

@@ -8,7 +8,6 @@ import (
 	"grog/internal/dag"
 	"grog/internal/label"
 	"grog/internal/model"
-	gen "grog/internal/proto/gen"
 )
 
 func TestTraceCollector_Finalize(t *testing.T) {
@@ -68,44 +67,41 @@ func TestTraceCollector_Finalize(t *testing.T) {
 
 	trace := collector.Finalize(completionMap, graph, 200*time.Millisecond)
 
-	if trace.TraceId == "" {
+	if trace.Build.TraceID == "" {
 		t.Error("expected non-empty trace ID")
 	}
-	if trace.Command != "build" {
-		t.Errorf("expected command 'build', got %s", trace.Command)
+	if trace.Build.Command != "build" {
+		t.Errorf("expected command 'build', got %s", trace.Build.Command)
 	}
-	if trace.GrogVersion != "0.1.0" {
-		t.Errorf("expected version '0.1.0', got %s", trace.GrogVersion)
+	if trace.Build.GrogVersion != "0.1.0" {
+		t.Errorf("expected version '0.1.0', got %s", trace.Build.GrogVersion)
 	}
-	if trace.AsyncCacheWaitMillis != 200 {
-		t.Errorf("expected 200ms async wait, got %d", trace.AsyncCacheWaitMillis)
+	if trace.Build.AsyncCacheWaitMillis != 200 {
+		t.Errorf("expected 200ms async wait, got %d", trace.Build.AsyncCacheWaitMillis)
 	}
-	if trace.TotalTargets != 2 {
-		t.Errorf("expected 2 total targets, got %d", trace.TotalTargets)
+	if trace.Build.TotalTargets != 2 {
+		t.Errorf("expected 2 total targets, got %d", trace.Build.TotalTargets)
 	}
-	if trace.SuccessCount != 2 {
-		t.Errorf("expected 2 successes, got %d", trace.SuccessCount)
+	if trace.Build.SuccessCount != 2 {
+		t.Errorf("expected 2 successes, got %d", trace.Build.SuccessCount)
 	}
-	if trace.CacheHitCount != 1 {
-		t.Errorf("expected 1 cache hit, got %d", trace.CacheHitCount)
+	if trace.Build.CacheHitCount != 1 {
+		t.Errorf("expected 1 cache hit, got %d", trace.Build.CacheHitCount)
 	}
 	if len(trace.Spans) != 2 {
 		t.Fatalf("expected 2 spans, got %d", len(trace.Spans))
 	}
 
-	spanByLabel := make(map[string]*gen.TargetSpan)
+	spanByLabel := make(map[string]SpanRow)
 	for _, s := range trace.Spans {
 		spanByLabel[s.Label] = s
 	}
 
 	spanA := spanByLabel["//pkg:a"]
 	spanB := spanByLabel["//pkg:b"]
-	if spanA == nil || spanB == nil {
-		t.Fatal("expected to find both spans")
-	}
 
 	// Span A: cache miss
-	if spanA.CacheResult != gen.TargetSpan_CACHE_MISS {
+	if spanA.CacheResult != "CACHE_MISS" {
 		t.Errorf("expected CACHE_MISS for A, got %s", spanA.CacheResult)
 	}
 	if spanA.CommandDurationMillis != 2000 {
@@ -122,7 +118,7 @@ func TestTraceCollector_Finalize(t *testing.T) {
 	}
 
 	// Span B: cache hit
-	if spanB.CacheResult != gen.TargetSpan_CACHE_HIT {
+	if spanB.CacheResult != "CACHE_HIT" {
 		t.Errorf("expected CACHE_HIT for B, got %s", spanB.CacheResult)
 	}
 	if spanB.OutputLoadMillis != 50 {
@@ -138,10 +134,10 @@ func TestTraceCollector_FailedTarget(t *testing.T) {
 	collector.startTime = time.Now().Add(-2 * time.Second)
 
 	target := &model.Target{
-		Label:      label.TargetLabel{Package: "pkg", Name: "failing_test"},
-		Command:    "exit 1",
-		IsSelected: true,
-		StartTime:  collector.startTime.Add(50 * time.Millisecond),
+		Label:         label.TargetLabel{Package: "pkg", Name: "failing_test"},
+		Command:       "exit 1",
+		IsSelected:    true,
+		StartTime:     collector.startTime.Add(50 * time.Millisecond),
 		ExecutionTime: 500 * time.Millisecond,
 	}
 
@@ -158,16 +154,16 @@ func TestTraceCollector_FailedTarget(t *testing.T) {
 
 	trace := collector.Finalize(completionMap, graph, 0)
 
-	if trace.FailureCount != 1 {
-		t.Errorf("expected 1 failure, got %d", trace.FailureCount)
+	if trace.Build.FailureCount != 1 {
+		t.Errorf("expected 1 failure, got %d", trace.Build.FailureCount)
 	}
-	if trace.SuccessCount != 0 {
-		t.Errorf("expected 0 successes, got %d", trace.SuccessCount)
+	if trace.Build.SuccessCount != 0 {
+		t.Errorf("expected 0 successes, got %d", trace.Build.SuccessCount)
 	}
 	if len(trace.Spans) != 1 {
 		t.Fatalf("expected 1 span, got %d", len(trace.Spans))
 	}
-	if trace.Spans[0].Status != gen.TargetSpan_FAILURE {
+	if trace.Spans[0].Status != "FAILURE" {
 		t.Errorf("expected FAILURE status, got %s", trace.Spans[0].Status)
 	}
 }

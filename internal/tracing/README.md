@@ -1,30 +1,38 @@
 # tracing
 
-The `tracing` package implements persistent execution trace storage for Grog builds. It captures per-target phase-level timing data and stores traces via the existing `CacheBackend` interface, making them available for terminal analytics and dashboard export.
+The `tracing` package implements persistent execution trace storage for Grog builds. It captures per-target phase-level timing data, stores traces as Parquet files via the existing `CacheBackend` interface, and queries them using DuckDB (via the Go driver) for terminal analytics and dashboard export.
 
 ## Architecture
 
 ```
-                                  +-----------------+
-  build.go  ──►  TraceCollector  ──►  TraceStore  ──►  CacheBackend (FS/S3/GCS)
-                  (assembles)        (persists)
+Write path (pure Go, no DuckDB):
+  build.go  ──►  TraceCollector  ──►  TraceWriter  ──►  CacheBackend (FS/S3/GCS)
+                  (assembles)          (parquet-go)
+
+Query path (DuckDB Go driver):
+  CLI command  ──►  TraceStore  ──►  database/sql + go-duckdb
+                                     ──►  read_parquet(glob)
 ```
 
 ### Key types
 
-- **`TraceCollector`** (`collector.go`) — Created at the start of a build, records metadata (git info, version, platform, command type, patterns). After execution completes, `Finalize()` iterates the `CompletionMap` and target graph to assemble a `BuildTrace` proto with per-target `TargetSpan` entries.
+- **`TraceCollector`** (`collector.go`) — Created at the start of a build, records metadata (git info, version, platform, command type, patterns). After execution completes, `Finalize()` iterates the `CompletionMap` and target graph to assemble a `*BuildTrace` with `BuildRow` + `[]SpanRow`.
 
-- **`TraceStore`** (`store.go`) — Reads and writes traces via `CacheBackend`. Manages a date-partitioned storage layout and a lightweight protobuf index for fast listing.
+- **`TraceWriter`** (`store.go`) — Write-only. Serializes traces as Parquet files using `parquet-go` and persists via `CacheBackend`. Used from the async build goroutine. Does not require DuckDB.
+
+- **`TraceStore`** (`store.go`) — Full read+write. Wraps `TraceWriter` and adds query methods (`List`, `FindAndLoad`, `Stats`, `DetailedStats`, `Prune`) that run SQL via the DuckDB Go driver (`database/sql` + `go-duckdb`).
+
+- **`PathResolver`** (`path_resolver.go`) — Constructs DuckDB-readable glob paths from config (local FS paths, `s3://`, or `gcs://` URLs).
 
 - **Export functions** (`export.go`) — `ExportJSONL` writes traces as newline-delimited JSON (for Grafana Loki, Athena, BigQuery). `ExportOTLP` maps traces to OpenTelemetry-compatible JSON (for Grafana Tempo, Jaeger, Datadog) without requiring the OTEL SDK.
 
-### Proto schema
+### Data model
 
-Defined in `internal/proto/schema/trace.proto`:
+Defined as Go structs in `schema.go` with `parquet` struct tags:
 
-- **`BuildTrace`** — One per `grog build/test/run` invocation. Contains build metadata, aggregate counts, critical path info, and a list of `TargetSpan` entries.
-- **`TargetSpan`** — One per selected target. Includes status, cache result, and 8 phase-level timing fields for bottleneck analysis.
-- **`TraceIndex`** / **`TraceIndexEntry`** — Lightweight index for listing traces without deserializing full trace data.
+- **`BuildRow`** — One row per `grog build/test/run` invocation. Contains build metadata, aggregate counts, and critical path info.
+- **`SpanRow`** — One row per selected target. Includes status, cache result, and 8 phase-level timing fields for bottleneck analysis.
+- **`BuildTrace`** — In-memory container holding `BuildRow` + `[]SpanRow`.
 
 ### Phase timing
 
@@ -45,23 +53,29 @@ These timings are recorded by instrumentation in `internal/execution/execute.go`
 
 ### Storage layout
 
-Traces are stored under a `traces/` prefix in the cache backend:
+Traces are stored as Parquet files under a `traces/` prefix in the cache backend — two tables, date-partitioned, one file per trace:
 
 ```
 traces/
-  index                      # TraceIndex proto
-  data/
+  builds/
     2026-03-30/
-      <trace-id>             # BuildTrace proto
+      <trace-id>.parquet     # 1 row (BuildRow)
     2026-03-31/
-      <trace-id>
+      <trace-id>.parquet
+  spans/
+    2026-03-30/
+      <trace-id>.parquet     # N rows (SpanRow, one per target)
 ```
 
-The date partition enables efficient retention pruning via `TraceStore.Prune()`.
+No index file. DuckDB scans Parquet files directly via `read_parquet('traces/builds/**/*.parquet')`.
 
 ### Write path
 
-Trace writing is **async and fire-and-forget** — it never blocks or slows down builds. After `executor.Execute()` returns in `build.go`, the trace is assembled and written in a background goroutine using `context.WithoutCancel`.
+Trace writing is **async and fire-and-forget** — it never blocks or slows down builds. After `executor.Execute()` returns in `build.go`, the trace is assembled and written in a background goroutine using `context.WithoutCancel`. The write path uses `parquet-go` (pure Go) and does not require DuckDB.
+
+### Query path
+
+All query operations (`list`, `show`, `stats`, `prune`) use the DuckDB Go driver (`github.com/marcboeker/go-duckdb`) via `database/sql`. DuckDB reads Parquet files directly from the filesystem, S3, or GCS. The `PathResolver` constructs the appropriate glob paths based on the configured storage backend.
 
 ### Configuration
 

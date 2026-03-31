@@ -3,200 +3,412 @@ package tracing
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"fmt"
-	"io"
-	"sort"
 	"strings"
 	"time"
 
 	"grog/internal/caching/backends"
-	gen "grog/internal/proto/gen"
 
-	"google.golang.org/protobuf/proto"
+	_ "github.com/marcboeker/go-duckdb"
+	"github.com/parquet-go/parquet-go"
 )
 
 const (
-	tracesIndexPath = "traces"
-	tracesIndexKey  = "index"
-	tracesDataPath  = "traces/data"
+	tracesBuildsPath = "traces/builds"
+	tracesSpansPath  = "traces/spans"
 )
 
-// TraceStore reads and writes build traces via a CacheBackend.
-type TraceStore struct {
+// TraceWriter writes traces as Parquet files via CacheBackend.
+// It does not require DuckDB and is safe to use from the async build goroutine.
+type TraceWriter struct {
 	backend backends.CacheBackend
 }
 
-func NewTraceStore(backend backends.CacheBackend) *TraceStore {
-	return &TraceStore{backend: backend}
+func NewTraceWriter(backend backends.CacheBackend) *TraceWriter {
+	return &TraceWriter{backend: backend}
 }
 
-func datePath(t time.Time) string {
-	return fmt.Sprintf("%s/%s", tracesDataPath, t.UTC().Format("2006-01-02"))
+func dateStr(t time.Time) string {
+	return t.UTC().Format("2006-01-02")
 }
 
-// Write persists a BuildTrace and updates the index.
-func (s *TraceStore) Write(ctx context.Context, trace *gen.BuildTrace) error {
-	data, err := proto.MarshalOptions{Deterministic: true}.Marshal(trace)
+// Write persists a BuildTrace as two Parquet files (builds + spans).
+func (w *TraceWriter) Write(ctx context.Context, trace *BuildTrace) error {
+	traceDate := time.UnixMilli(trace.Build.StartTimeUnixMillis)
+	date := dateStr(traceDate)
+	key := trace.Build.TraceID + ".parquet"
+
+	// Write builds Parquet
+	buildsPath := fmt.Sprintf("%s/%s", tracesBuildsPath, date)
+	buildsBuf, err := writeParquet([]BuildRow{trace.Build})
 	if err != nil {
-		return fmt.Errorf("marshal trace: %w", err)
+		return fmt.Errorf("write builds parquet: %w", err)
+	}
+	if err := w.backend.Set(ctx, buildsPath, key, bytes.NewReader(buildsBuf)); err != nil {
+		return fmt.Errorf("store builds parquet: %w", err)
 	}
 
-	traceDate := time.UnixMilli(trace.StartTimeUnixMillis).UTC()
-	path := datePath(traceDate)
-
-	if err := s.backend.Set(ctx, path, trace.TraceId, bytes.NewReader(data)); err != nil {
-		return fmt.Errorf("write trace: %w", err)
-	}
-
-	// Update index (best-effort — trace data is already persisted)
-	if err := s.appendToIndex(ctx, trace); err != nil {
-		return fmt.Errorf("update index: %w", err)
+	// Write spans Parquet
+	if len(trace.Spans) > 0 {
+		spansPath := fmt.Sprintf("%s/%s", tracesSpansPath, date)
+		spansBuf, err := writeParquet(trace.Spans)
+		if err != nil {
+			return fmt.Errorf("write spans parquet: %w", err)
+		}
+		if err := w.backend.Set(ctx, spansPath, key, bytes.NewReader(spansBuf)); err != nil {
+			return fmt.Errorf("store spans parquet: %w", err)
+		}
 	}
 
 	return nil
 }
 
-func (s *TraceStore) appendToIndex(ctx context.Context, trace *gen.BuildTrace) error {
-	index, _ := s.loadIndex(ctx) // ignore error — start fresh if missing
-	if index == nil {
-		index = &gen.TraceIndex{}
+func writeParquet[T any](rows []T) ([]byte, error) {
+	var buf bytes.Buffer
+	writer := parquet.NewGenericWriter[T](&buf)
+	if _, err := writer.Write(rows); err != nil {
+		return nil, err
 	}
-
-	index.Entries = append(index.Entries, &gen.TraceIndexEntry{
-		TraceId:              trace.TraceId,
-		StartTimeUnixMillis:  trace.StartTimeUnixMillis,
-		Command:              trace.Command,
-		TotalTargets:         trace.TotalTargets,
-		FailureCount:         trace.FailureCount,
-		CacheHitCount:        trace.CacheHitCount,
-		TotalDurationMillis:  trace.TotalDurationMillis,
-		GitCommit:            trace.GitCommit,
-		IsCi:                 trace.IsCi,
-	})
-
-	data, err := proto.MarshalOptions{Deterministic: true}.Marshal(index)
-	if err != nil {
-		return err
+	if err := writer.Close(); err != nil {
+		return nil, err
 	}
-
-	return s.backend.Set(ctx, tracesIndexPath, tracesIndexKey, bytes.NewReader(data))
+	return buf.Bytes(), nil
 }
 
-func (s *TraceStore) loadIndex(ctx context.Context) (*gen.TraceIndex, error) {
-	reader, err := s.backend.Get(ctx, tracesIndexPath, tracesIndexKey)
-	if err != nil {
-		return nil, err
-	}
-	defer reader.Close()
-
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, err
-	}
-
-	var index gen.TraceIndex
-	if err := proto.Unmarshal(data, &index); err != nil {
-		return nil, err
-	}
-
-	return &index, nil
+// TraceStore provides both write and query capabilities for traces.
+// Query methods use DuckDB via database/sql.
+type TraceStore struct {
+	writer   *TraceWriter
+	resolver *PathResolver
+	db       *sql.DB
 }
 
-// List returns index entries sorted by start time (newest first).
-func (s *TraceStore) List(ctx context.Context) ([]*gen.TraceIndexEntry, error) {
-	index, err := s.loadIndex(ctx)
+// NewTraceStore creates a full store with write + query support.
+func NewTraceStore(backend backends.CacheBackend, resolver *PathResolver) (*TraceStore, error) {
+	db, err := sql.Open("duckdb", "")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open duckdb: %w", err)
 	}
 
-	entries := index.Entries
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].StartTimeUnixMillis > entries[j].StartTimeUnixMillis
-	})
-
-	return entries, nil
+	return &TraceStore{
+		writer:   NewTraceWriter(backend),
+		resolver: resolver,
+		db:       db,
+	}, nil
 }
 
-// Load retrieves a full BuildTrace by its ID.
-// The date string is used to locate the trace in the date-partitioned layout.
-func (s *TraceStore) Load(ctx context.Context, traceID string, date string) (*gen.BuildTrace, error) {
-	path := fmt.Sprintf("%s/%s", tracesDataPath, date)
-	reader, err := s.backend.Get(ctx, path, traceID)
-	if err != nil {
-		return nil, fmt.Errorf("load trace %s: %w", traceID, err)
-	}
-	defer reader.Close()
-
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, err
-	}
-
-	var trace gen.BuildTrace
-	if err := proto.Unmarshal(data, &trace); err != nil {
-		return nil, err
-	}
-
-	return &trace, nil
+// Close releases the DuckDB connection.
+func (s *TraceStore) Close() error {
+	return s.db.Close()
 }
 
-// FindAndLoad searches the index for a trace ID (prefix match) and loads it.
-func (s *TraceStore) FindAndLoad(ctx context.Context, traceIDPrefix string) (*gen.BuildTrace, error) {
-	entries, err := s.List(ctx)
-	if err != nil {
-		return nil, err
+// Write delegates to the TraceWriter.
+func (s *TraceStore) Write(ctx context.Context, trace *BuildTrace) error {
+	return s.writer.Write(ctx, trace)
+}
+
+// List returns recent builds matching optional filters.
+func (s *TraceStore) List(ctx context.Context, opts ListOptions) ([]BuildRow, error) {
+	var conditions []string
+	if opts.Since != nil {
+		conditions = append(conditions, fmt.Sprintf("start_time_unix_millis >= %d", opts.Since.UnixMilli()))
+	}
+	if opts.Command != "" {
+		conditions = append(conditions, fmt.Sprintf("command = '%s'", sanitize(opts.Command)))
+	}
+	if opts.FailuresOnly {
+		conditions = append(conditions, "failure_count > 0")
 	}
 
-	var match *gen.TraceIndexEntry
-	for _, entry := range entries {
-		if strings.HasPrefix(entry.TraceId, traceIDPrefix) {
-			if match != nil {
-				return nil, fmt.Errorf("ambiguous trace ID prefix %q: matches %s and %s", traceIDPrefix, match.TraceId, entry.TraceId)
-			}
-			match = entry
+	where := ""
+	if len(conditions) > 0 {
+		where = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	limit := opts.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+
+	query := fmt.Sprintf(`SELECT trace_id, workspace, git_commit, git_branch, grog_version, platform,
+		command, start_time_unix_millis, total_duration_millis, total_targets,
+		success_count, failure_count, cache_hit_count,
+		critical_path_exec_millis, critical_path_cache_millis, async_cache_wait_millis,
+		is_ci, requested_patterns
+		FROM read_parquet('%s', union_by_name=true)
+		%s ORDER BY start_time_unix_millis DESC LIMIT %d`,
+		s.resolver.BuildsGlob(), where, limit)
+
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		if isNoFilesError(err) {
+			return nil, nil
 		}
+		return nil, fmt.Errorf("list traces: %w", err)
+	}
+	defer rows.Close()
+
+	return scanBuildRows(rows)
+}
+
+// ListOptions controls filtering for List.
+type ListOptions struct {
+	Limit        int
+	Since        *time.Time
+	Command      string
+	FailuresOnly bool
+}
+
+// LoadBuild retrieves a single build by trace ID prefix.
+func (s *TraceStore) LoadBuild(ctx context.Context, traceIDPrefix string) (*BuildRow, error) {
+	query := fmt.Sprintf(`SELECT trace_id, workspace, git_commit, git_branch, grog_version, platform,
+		command, start_time_unix_millis, total_duration_millis, total_targets,
+		success_count, failure_count, cache_hit_count,
+		critical_path_exec_millis, critical_path_cache_millis, async_cache_wait_millis,
+		is_ci, requested_patterns
+		FROM read_parquet('%s', union_by_name=true)
+		WHERE starts_with(trace_id, '%s')`,
+		s.resolver.BuildsGlob(), sanitize(traceIDPrefix))
+
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		if isNoFilesError(err) {
+			return nil, fmt.Errorf("no trace found matching %q", traceIDPrefix)
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	builds, err := scanBuildRows(rows)
+	if err != nil {
+		return nil, err
 	}
 
-	if match == nil {
+	if len(builds) == 0 {
 		return nil, fmt.Errorf("no trace found matching %q", traceIDPrefix)
 	}
-
-	date := time.UnixMilli(match.StartTimeUnixMillis).UTC().Format("2006-01-02")
-	return s.Load(ctx, match.TraceId, date)
+	if len(builds) > 1 {
+		return nil, fmt.Errorf("ambiguous trace ID prefix %q: matches %s and %s",
+			traceIDPrefix, builds[0].TraceID, builds[1].TraceID)
+	}
+	return &builds[0], nil
 }
 
-// Prune deletes traces older than the given time and rebuilds the index.
-func (s *TraceStore) Prune(ctx context.Context, olderThan time.Time) (int, error) {
-	index, err := s.loadIndex(ctx)
+// LoadSpans retrieves all spans for a given trace ID.
+func (s *TraceStore) LoadSpans(ctx context.Context, traceID string) ([]SpanRow, error) {
+	query := fmt.Sprintf(`SELECT trace_id, label, package, change_hash, output_hash,
+		status, cache_result, command, exit_code, is_test,
+		start_time_unix_millis, end_time_unix_millis, total_duration_millis,
+		queue_wait_millis, hash_duration_millis, cache_check_millis,
+		command_duration_millis, output_write_millis, output_load_millis,
+		cache_write_millis, dep_load_millis, tags, dependencies
+		FROM read_parquet('%s', union_by_name=true)
+		WHERE trace_id = '%s'
+		ORDER BY total_duration_millis DESC`,
+		s.resolver.SpansGlob(), sanitize(traceID))
+
+	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
+		if isNoFilesError(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	return scanSpanRows(rows)
+}
+
+// FindAndLoad retrieves a full trace by ID prefix.
+func (s *TraceStore) FindAndLoad(ctx context.Context, traceIDPrefix string) (*BuildTrace, error) {
+	build, err := s.LoadBuild(ctx, traceIDPrefix)
+	if err != nil {
+		return nil, err
+	}
+
+	spans, err := s.LoadSpans(ctx, build.TraceID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &BuildTrace{Build: *build, Spans: spans}, nil
+}
+
+// Stats returns aggregate statistics over recent traces.
+type TraceStats struct {
+	TraceCount   int
+	AvgDuration  float64
+	CacheHitRate float64
+	TotalFails   int
+}
+
+func (s *TraceStore) Stats(ctx context.Context, limit int) (*TraceStats, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+
+	query := fmt.Sprintf(`SELECT
+		COUNT(*) as n,
+		AVG(total_duration_millis) as avg_ms,
+		SUM(cache_hit_count)::FLOAT / NULLIF(SUM(total_targets), 0) * 100 as hit_pct,
+		SUM(failure_count) as fails
+		FROM (SELECT * FROM read_parquet('%s', union_by_name=true)
+			ORDER BY start_time_unix_millis DESC LIMIT %d)`,
+		s.resolver.BuildsGlob(), limit)
+
+	row := s.db.QueryRowContext(ctx, query)
+	var stats TraceStats
+	var avgMs, hitPct sql.NullFloat64
+	if err := row.Scan(&stats.TraceCount, &avgMs, &hitPct, &stats.TotalFails); err != nil {
+		if isNoFilesError(err) {
+			return &TraceStats{}, nil
+		}
+		return nil, err
+	}
+	stats.AvgDuration = avgMs.Float64
+	stats.CacheHitRate = hitPct.Float64
+	return &stats, nil
+}
+
+// DetailedTargetStats holds per-target aggregated metrics.
+type DetailedTargetStats struct {
+	Label    string
+	AvgCmd   float64
+	AvgQueue float64
+	Count    int
+	Failures int
+}
+
+func (s *TraceStore) DetailedStats(ctx context.Context, limit int) ([]DetailedTargetStats, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+
+	query := fmt.Sprintf(`SELECT label,
+		AVG(command_duration_millis) as avg_cmd,
+		AVG(queue_wait_millis) as avg_queue,
+		COUNT(*) as n,
+		SUM(CASE WHEN status = 'FAILURE' THEN 1 ELSE 0 END) as fails
+		FROM read_parquet('%s', union_by_name=true)
+		WHERE trace_id IN (
+			SELECT trace_id FROM read_parquet('%s', union_by_name=true)
+			ORDER BY start_time_unix_millis DESC LIMIT %d
+		)
+		GROUP BY label ORDER BY avg_cmd DESC`,
+		s.resolver.SpansGlob(), s.resolver.BuildsGlob(), limit)
+
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		if isNoFilesError(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []DetailedTargetStats
+	for rows.Next() {
+		var s DetailedTargetStats
+		if err := rows.Scan(&s.Label, &s.AvgCmd, &s.AvgQueue, &s.Count, &s.Failures); err != nil {
+			return nil, err
+		}
+		results = append(results, s)
+	}
+	return results, rows.Err()
+}
+
+// Prune deletes traces older than the given time.
+func (s *TraceStore) Prune(ctx context.Context, olderThan time.Time) (int, error) {
+	cutoffMillis := olderThan.UnixMilli()
+
+	query := fmt.Sprintf(`SELECT trace_id, start_time_unix_millis
+		FROM read_parquet('%s', union_by_name=true)
+		WHERE start_time_unix_millis < %d`,
+		s.resolver.BuildsGlob(), cutoffMillis)
+
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		if isNoFilesError(err) {
+			return 0, nil
+		}
 		return 0, err
 	}
+	defer rows.Close()
 
-	var kept []*gen.TraceIndexEntry
 	pruned := 0
+	for rows.Next() {
+		var traceID string
+		var startMillis int64
+		if err := rows.Scan(&traceID, &startMillis); err != nil {
+			return pruned, err
+		}
 
-	for _, entry := range index.Entries {
-		entryTime := time.UnixMilli(entry.StartTimeUnixMillis)
-		if entryTime.Before(olderThan) {
-			date := entryTime.UTC().Format("2006-01-02")
-			path := fmt.Sprintf("%s/%s", tracesDataPath, date)
-			_ = s.backend.Delete(ctx, path, entry.TraceId) // best-effort
-			pruned++
-		} else {
-			kept = append(kept, entry)
+		date := dateStr(time.UnixMilli(startMillis))
+		key := traceID + ".parquet"
+		_ = s.writer.backend.Delete(ctx, fmt.Sprintf("%s/%s", tracesBuildsPath, date), key)
+		_ = s.writer.backend.Delete(ctx, fmt.Sprintf("%s/%s", tracesSpansPath, date), key)
+		pruned++
+	}
+
+	return pruned, rows.Err()
+}
+
+// helpers
+
+func scanBuildRows(rows *sql.Rows) ([]BuildRow, error) {
+	var result []BuildRow
+	for rows.Next() {
+		var b BuildRow
+		if err := rows.Scan(
+			&b.TraceID, &b.Workspace, &b.GitCommit, &b.GitBranch, &b.GrogVersion, &b.Platform,
+			&b.Command, &b.StartTimeUnixMillis, &b.TotalDurationMillis, &b.TotalTargets,
+			&b.SuccessCount, &b.FailureCount, &b.CacheHitCount,
+			&b.CriticalPathExecMillis, &b.CriticalPathCacheMillis, &b.AsyncCacheWaitMillis,
+			&b.IsCI, &b.RequestedPatterns,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, b)
+	}
+	return result, rows.Err()
+}
+
+func scanSpanRows(rows *sql.Rows) ([]SpanRow, error) {
+	var result []SpanRow
+	for rows.Next() {
+		var s SpanRow
+		if err := rows.Scan(
+			&s.TraceID, &s.Label, &s.Package, &s.ChangeHash, &s.OutputHash,
+			&s.Status, &s.CacheResult, &s.Command, &s.ExitCode, &s.IsTest,
+			&s.StartTimeUnixMillis, &s.EndTimeUnixMillis, &s.TotalDurationMillis,
+			&s.QueueWaitMillis, &s.HashDurationMillis, &s.CacheCheckMillis,
+			&s.CommandDurationMillis, &s.OutputWriteMillis, &s.OutputLoadMillis,
+			&s.CacheWriteMillis, &s.DepLoadMillis, &s.Tags, &s.Dependencies,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, s)
+	}
+	return result, rows.Err()
+}
+
+// sanitize prevents SQL injection for string values interpolated into queries.
+// Only allows alphanumeric, hyphens, underscores, and dots.
+func sanitize(s string) string {
+	var b strings.Builder
+	for _, c := range s {
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' {
+			b.WriteRune(c)
 		}
 	}
+	return b.String()
+}
 
-	// Rebuild index
-	newIndex := &gen.TraceIndex{Entries: kept}
-	data, err := proto.MarshalOptions{Deterministic: true}.Marshal(newIndex)
-	if err != nil {
-		return pruned, err
-	}
-
-	if err := s.backend.Set(ctx, tracesIndexPath, tracesIndexKey, bytes.NewReader(data)); err != nil {
-		return pruned, err
-	}
-
-	return pruned, nil
+// isNoFilesError checks if a DuckDB error is due to no matching Parquet files.
+func isNoFilesError(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "No files found") ||
+		strings.Contains(msg, "does not exist") ||
+		strings.Contains(msg, "Cannot open file")
 }

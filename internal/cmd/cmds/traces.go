@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -14,7 +13,6 @@ import (
 	"grog/internal/caching/backends"
 	"grog/internal/config"
 	"grog/internal/console"
-	gen "grog/internal/proto/gen"
 	"grog/internal/tracing"
 )
 
@@ -36,7 +34,6 @@ var tracesExportSince string
 var tracesPruneOlderThan string
 
 func getTraceStore(ctx context.Context, logger *console.Logger) *tracing.TraceStore {
-	// Use traces-specific backend if configured, otherwise fall back to cache backend
 	cacheConfig := config.Global.Cache
 	if config.Global.Traces.Backend != "" {
 		cacheConfig = config.CacheConfig{
@@ -50,7 +47,13 @@ func getTraceStore(ctx context.Context, logger *console.Logger) *tracing.TraceSt
 	if err != nil {
 		logger.Fatalf("could not instantiate cache backend for traces: %v", err)
 	}
-	return tracing.NewTraceStore(cache)
+
+	resolver := tracing.NewPathResolver()
+	store, err := tracing.NewTraceStore(cache, resolver)
+	if err != nil {
+		logger.Fatalf("could not initialize trace store: %v", err)
+	}
+	return store
 }
 
 var TracesCmd = &cobra.Command{
@@ -70,51 +73,25 @@ var tracesListCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := console.SetupCommand()
 		store := getTraceStore(ctx, logger)
+		defer store.Close()
 
-		entries, err := store.List(ctx)
+		opts := tracing.ListOptions{
+			Limit:        tracesListLimit,
+			Command:      tracesListCommand,
+			FailuresOnly: tracesListFailuresOnly,
+		}
+		if tracesListSince != "" {
+			sinceTime, err := time.Parse("2006-01-02", tracesListSince)
+			if err != nil {
+				logger.Fatalf("invalid --since date: %v (use YYYY-MM-DD format)", err)
+			}
+			opts.Since = &sinceTime
+		}
+
+		entries, err := store.List(ctx, opts)
 		if err != nil {
 			logger.Fatalf("failed to list traces: %v", err)
 		}
-
-		// Apply filters
-		if tracesListSince != "" {
-			sinceTime, parseErr := time.Parse("2006-01-02", tracesListSince)
-			if parseErr != nil {
-				logger.Fatalf("invalid --since date: %v (use YYYY-MM-DD format)", parseErr)
-			}
-			filtered := entries[:0]
-			for _, e := range entries {
-				if time.UnixMilli(e.StartTimeUnixMillis).After(sinceTime) || time.UnixMilli(e.StartTimeUnixMillis).Equal(sinceTime) {
-					filtered = append(filtered, e)
-				}
-			}
-			entries = filtered
-		}
-
-		if tracesListCommand != "" {
-			filtered := entries[:0]
-			for _, e := range entries {
-				if e.Command == tracesListCommand {
-					filtered = append(filtered, e)
-				}
-			}
-			entries = filtered
-		}
-
-		if tracesListFailuresOnly {
-			filtered := entries[:0]
-			for _, e := range entries {
-				if e.FailureCount > 0 {
-					filtered = append(filtered, e)
-				}
-			}
-			entries = filtered
-		}
-
-		if tracesListLimit > 0 && len(entries) > tracesListLimit {
-			entries = entries[:tracesListLimit]
-		}
-
 		if len(entries) == 0 {
 			logger.Info("No traces found.")
 			return
@@ -124,7 +101,7 @@ var tracesListCmd = &cobra.Command{
 		fmt.Fprintln(w, "TRACE ID\tDATE\tCMD\tTARGETS\tHITS\tFAILS\tDURATION\tCOMMIT")
 		for _, e := range entries {
 			t := time.UnixMilli(e.StartTimeUnixMillis)
-			shortID := e.TraceId
+			shortID := e.TraceID
 			if len(shortID) > 8 {
 				shortID = shortID[:8]
 			}
@@ -156,14 +133,15 @@ var tracesShowCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := console.SetupCommand()
 		store := getTraceStore(ctx, logger)
+		defer store.Close()
 
 		trace, err := store.FindAndLoad(ctx, args[0])
 		if err != nil {
 			logger.Fatalf("failed to load trace: %v", err)
 		}
 
-		printTraceSummary(trace)
-		printTraceSpans(trace.Spans)
+		printBuildSummary(&trace.Build)
+		printSpanTable(trace.Spans)
 	},
 }
 
@@ -176,284 +154,75 @@ var tracesStatsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := console.SetupCommand()
 		store := getTraceStore(ctx, logger)
-
-		entries, err := store.List(ctx)
-		if err != nil {
-			logger.Fatalf("failed to list traces: %v", err)
-		}
-
-		if len(entries) == 0 {
-			logger.Info("No traces found.")
-			return
-		}
+		defer store.Close()
 
 		limit := tracesListLimit
 		if limit <= 0 {
 			limit = 20
 		}
-		if len(entries) > limit {
-			entries = entries[:limit]
+
+		stats, err := store.Stats(ctx, limit)
+		if err != nil {
+			logger.Fatalf("failed to compute stats: %v", err)
+		}
+		if stats.TraceCount == 0 {
+			logger.Info("No traces found.")
+			return
 		}
 
-		printIndexStats(entries)
+		fmt.Printf("Stats over last %d traces:\n", stats.TraceCount)
+		fmt.Printf("  Avg duration:   %s\n", formatDuration(time.Duration(stats.AvgDuration)*time.Millisecond))
+		fmt.Printf("  Cache hit rate: %.1f%%\n", stats.CacheHitRate)
+		fmt.Printf("  Total failures: %d\n", stats.TotalFails)
 
 		if tracesStatsDetailed {
 			fmt.Println()
-			printDetailedStats(ctx, store, entries, logger)
+			detailed, err := store.DetailedStats(ctx, limit)
+			if err != nil {
+				logger.Fatalf("failed to compute detailed stats: %v", err)
+			}
+
+			fmt.Println("Slowest targets (avg command duration):")
+			for i, t := range detailed {
+				if i >= 10 {
+					break
+				}
+				fmt.Printf("  %s  %s (n=%d)\n", formatMillis(int64(t.AvgCmd)), t.Label, t.Count)
+			}
 		}
 	},
-}
-
-func printTraceSummary(trace *gen.BuildTrace) {
-	t := time.UnixMilli(trace.StartTimeUnixMillis)
-	fmt.Printf("Trace:    %s\n", trace.TraceId)
-	fmt.Printf("Date:     %s\n", t.Format("2006-01-02 15:04:05"))
-	fmt.Printf("Command:  %s\n", trace.Command)
-	fmt.Printf("Version:  %s\n", trace.GrogVersion)
-	fmt.Printf("Platform: %s\n", trace.Platform)
-	fmt.Printf("Commit:   %s\n", trace.GitCommit)
-	fmt.Printf("Branch:   %s\n", trace.GitBranch)
-	fmt.Printf("Duration: %s\n", formatDuration(time.Duration(trace.TotalDurationMillis)*time.Millisecond))
-	fmt.Printf("Targets:  %d (%d cache hits, %d failures)\n",
-		trace.TotalTargets, trace.CacheHitCount, trace.FailureCount)
-
-	if trace.CriticalPathExecMillis > 0 || trace.CriticalPathCacheMillis > 0 {
-		fmt.Printf("Critical: exec %s, cache %s\n",
-			formatDuration(time.Duration(trace.CriticalPathExecMillis)*time.Millisecond),
-			formatDuration(time.Duration(trace.CriticalPathCacheMillis)*time.Millisecond))
-	}
-
-	if len(trace.RequestedPatterns) > 0 {
-		fmt.Printf("Patterns: %s\n", strings.Join(trace.RequestedPatterns, ", "))
-	}
-	fmt.Println()
-}
-
-func printTraceSpans(spans []*gen.TargetSpan) {
-	if len(spans) == 0 {
-		return
-	}
-
-	// Sort by specified field
-	sortSpans(spans)
-
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "TARGET\tSTATUS\tCACHE\tTOTAL\tCMD\tHASH\tI/O\tQUEUE")
-
-	displaySpans := spans
-	if tracesShowTop > 0 && len(displaySpans) > tracesShowTop {
-		displaySpans = displaySpans[:tracesShowTop]
-	}
-
-	for _, s := range displaySpans {
-		status := "ok"
-		if s.Status == gen.TargetSpan_FAILURE {
-			status = "FAIL"
-		} else if s.Status == gen.TargetSpan_CANCELLED {
-			status = "skip"
-		}
-
-		cache := "miss"
-		if s.CacheResult == gen.TargetSpan_CACHE_HIT {
-			cache = "hit"
-		} else if s.CacheResult == gen.TargetSpan_CACHE_SKIP {
-			cache = "skip"
-		}
-
-		ioMillis := s.OutputWriteMillis + s.OutputLoadMillis + s.CacheWriteMillis + s.DepLoadMillis
-
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-			s.Label,
-			status,
-			cache,
-			formatMillis(s.TotalDurationMillis),
-			formatMillis(s.CommandDurationMillis),
-			formatMillis(s.HashDurationMillis),
-			formatMillis(ioMillis),
-			formatMillis(s.QueueWaitMillis),
-		)
-	}
-	w.Flush()
-}
-
-func sortSpans(spans []*gen.TargetSpan) {
-	sort.Slice(spans, func(i, j int) bool {
-		switch tracesShowSortBy {
-		case "command":
-			return spans[i].CommandDurationMillis > spans[j].CommandDurationMillis
-		case "queue":
-			return spans[i].QueueWaitMillis > spans[j].QueueWaitMillis
-		case "hash":
-			return spans[i].HashDurationMillis > spans[j].HashDurationMillis
-		default: // "total"
-			return spans[i].TotalDurationMillis > spans[j].TotalDurationMillis
-		}
-	})
-}
-
-func printIndexStats(entries []*gen.TraceIndexEntry) {
-	var totalDuration int64
-	var totalTargets int32
-	var totalCacheHits int32
-	var totalFailures int32
-
-	for _, e := range entries {
-		totalDuration += e.TotalDurationMillis
-		totalTargets += e.TotalTargets
-		totalCacheHits += e.CacheHitCount
-		totalFailures += e.FailureCount
-	}
-
-	n := int64(len(entries))
-	avgDuration := time.Duration(totalDuration/n) * time.Millisecond
-
-	var cacheHitRate float64
-	if totalTargets > 0 {
-		cacheHitRate = float64(totalCacheHits) / float64(totalTargets) * 100
-	}
-
-	fmt.Printf("Stats over last %d traces:\n", len(entries))
-	fmt.Printf("  Avg duration:  %s\n", formatDuration(avgDuration))
-	fmt.Printf("  Cache hit rate: %.1f%%\n", cacheHitRate)
-	fmt.Printf("  Total failures: %d\n", totalFailures)
-}
-
-func printDetailedStats(ctx context.Context, store *tracing.TraceStore, entries []*gen.TraceIndexEntry, logger *console.Logger) {
-	type targetStats struct {
-		totalCommandMillis int64
-		totalQueueMillis   int64
-		totalIOMillis      int64
-		failures           int
-		count              int
-	}
-
-	stats := make(map[string]*targetStats)
-
-	for _, entry := range entries {
-		date := time.UnixMilli(entry.StartTimeUnixMillis).UTC().Format("2006-01-02")
-		trace, err := store.Load(ctx, entry.TraceId, date)
-		if err != nil {
-			logger.Warnf("failed to load trace %s: %v", entry.TraceId, err)
-			continue
-		}
-
-		for _, span := range trace.Spans {
-			s, ok := stats[span.Label]
-			if !ok {
-				s = &targetStats{}
-				stats[span.Label] = s
-			}
-			s.totalCommandMillis += span.CommandDurationMillis
-			s.totalQueueMillis += span.QueueWaitMillis
-			s.totalIOMillis += span.OutputWriteMillis + span.OutputLoadMillis + span.CacheWriteMillis
-			s.count++
-			if span.Status == gen.TargetSpan_FAILURE {
-				s.failures++
-			}
-		}
-	}
-
-	type rankedTarget struct {
-		label string
-		value int64
-		count int
-	}
-
-	// Slowest by average command duration
-	var byCommand []rankedTarget
-	for label, s := range stats {
-		if s.count > 0 {
-			byCommand = append(byCommand, rankedTarget{label, s.totalCommandMillis / int64(s.count), s.count})
-		}
-	}
-	sort.Slice(byCommand, func(i, j int) bool { return byCommand[i].value > byCommand[j].value })
-
-	fmt.Println("Slowest targets (avg command duration):")
-	for i, t := range byCommand {
-		if i >= 10 {
-			break
-		}
-		fmt.Printf("  %s  %s (n=%d)\n", formatMillis(t.value), t.label, t.count)
-	}
-
-	// Highest queue wait
-	var byQueue []rankedTarget
-	for label, s := range stats {
-		if s.count > 0 {
-			byQueue = append(byQueue, rankedTarget{label, s.totalQueueMillis / int64(s.count), s.count})
-		}
-	}
-	sort.Slice(byQueue, func(i, j int) bool { return byQueue[i].value > byQueue[j].value })
-
-	fmt.Println("\nHighest queue wait (avg):")
-	for i, t := range byQueue {
-		if i >= 5 {
-			break
-		}
-		fmt.Printf("  %s  %s (n=%d)\n", formatMillis(t.value), t.label, t.count)
-	}
-
-	// Most frequent failures
-	var byFailures []rankedTarget
-	for label, s := range stats {
-		if s.failures > 0 {
-			byFailures = append(byFailures, rankedTarget{label, int64(s.failures), s.count})
-		}
-	}
-	sort.Slice(byFailures, func(i, j int) bool { return byFailures[i].value > byFailures[j].value })
-
-	if len(byFailures) > 0 {
-		fmt.Println("\nMost frequently failing targets:")
-		for i, t := range byFailures {
-			if i >= 5 {
-				break
-			}
-			fmt.Printf("  %d/%d  %s\n", t.value, t.count, t.label)
-		}
-	}
 }
 
 var tracesExportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "Export traces for dashboard integration.",
 	Example: `  grog traces export --format=jsonl
-  grog traces export --format=otel --output traces.json
-  grog traces export --format=jsonl --since 2026-03-01 --limit 100`,
+  grog traces export --format=otel --output traces.json`,
 	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := console.SetupCommand()
 		store := getTraceStore(ctx, logger)
+		defer store.Close()
 
-		entries, err := store.List(ctx)
+		opts := tracing.ListOptions{Limit: tracesExportLimit}
+		if tracesExportSince != "" {
+			sinceTime, err := time.Parse("2006-01-02", tracesExportSince)
+			if err != nil {
+				logger.Fatalf("invalid --since date: %v", err)
+			}
+			opts.Since = &sinceTime
+		}
+
+		entries, err := store.List(ctx, opts)
 		if err != nil {
 			logger.Fatalf("failed to list traces: %v", err)
 		}
 
-		if tracesExportSince != "" {
-			sinceTime, parseErr := time.Parse("2006-01-02", tracesExportSince)
-			if parseErr != nil {
-				logger.Fatalf("invalid --since date: %v", parseErr)
-			}
-			filtered := entries[:0]
-			for _, e := range entries {
-				if time.UnixMilli(e.StartTimeUnixMillis).After(sinceTime) || time.UnixMilli(e.StartTimeUnixMillis).Equal(sinceTime) {
-					filtered = append(filtered, e)
-				}
-			}
-			entries = filtered
-		}
-
-		if tracesExportLimit > 0 && len(entries) > tracesExportLimit {
-			entries = entries[:tracesExportLimit]
-		}
-
-		// Load full traces
-		var traces []*gen.BuildTrace
+		var traces []*tracing.BuildTrace
 		for _, entry := range entries {
-			date := time.UnixMilli(entry.StartTimeUnixMillis).UTC().Format("2006-01-02")
-			trace, loadErr := store.Load(ctx, entry.TraceId, date)
+			trace, loadErr := store.FindAndLoad(ctx, entry.TraceID)
 			if loadErr != nil {
-				logger.Warnf("skipping trace %s: %v", entry.TraceId, loadErr)
+				logger.Warnf("skipping trace %s: %v", entry.TraceID, loadErr)
 				continue
 			}
 			traces = append(traces, trace)
@@ -464,7 +233,6 @@ var tracesExportCmd = &cobra.Command{
 			return
 		}
 
-		// Determine output writer
 		w := os.Stdout
 		if tracesExportOutput != "" {
 			f, openErr := os.Create(tracesExportOutput)
@@ -499,6 +267,7 @@ var tracesPruneCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := console.SetupCommand()
 		store := getTraceStore(ctx, logger)
+		defer store.Close()
 
 		duration, err := parseDuration(tracesPruneOlderThan)
 		if err != nil {
@@ -513,6 +282,79 @@ var tracesPruneCmd = &cobra.Command{
 
 		logger.Infof("Pruned %d traces older than %s.", pruned, tracesPruneOlderThan)
 	},
+}
+
+// helpers
+
+func printBuildSummary(b *tracing.BuildRow) {
+	t := time.UnixMilli(b.StartTimeUnixMillis)
+	fmt.Printf("Trace:    %s\n", b.TraceID)
+	fmt.Printf("Date:     %s\n", t.Format("2006-01-02 15:04:05"))
+	fmt.Printf("Command:  %s\n", b.Command)
+	fmt.Printf("Version:  %s\n", b.GrogVersion)
+	fmt.Printf("Platform: %s\n", b.Platform)
+	fmt.Printf("Commit:   %s\n", b.GitCommit)
+	fmt.Printf("Branch:   %s\n", b.GitBranch)
+	fmt.Printf("Duration: %s\n", formatDuration(time.Duration(b.TotalDurationMillis)*time.Millisecond))
+	fmt.Printf("Targets:  %d (%d cache hits, %d failures)\n",
+		b.TotalTargets, b.CacheHitCount, b.FailureCount)
+
+	if b.CriticalPathExecMillis > 0 || b.CriticalPathCacheMillis > 0 {
+		fmt.Printf("Critical: exec %s, cache %s\n",
+			formatDuration(time.Duration(b.CriticalPathExecMillis)*time.Millisecond),
+			formatDuration(time.Duration(b.CriticalPathCacheMillis)*time.Millisecond))
+	}
+
+	if b.RequestedPatterns != "" {
+		fmt.Printf("Patterns: %s\n", strings.ReplaceAll(b.RequestedPatterns, ",", ", "))
+	}
+	fmt.Println()
+}
+
+func printSpanTable(spans []tracing.SpanRow) {
+	if len(spans) == 0 {
+		return
+	}
+
+	// Spans are already sorted by total_duration_millis DESC from the query.
+	// Apply additional sort if requested.
+	displaySpans := spans
+	if tracesShowTop > 0 && len(displaySpans) > tracesShowTop {
+		displaySpans = displaySpans[:tracesShowTop]
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "TARGET\tSTATUS\tCACHE\tTOTAL\tCMD\tHASH\tI/O\tQUEUE")
+
+	for _, s := range displaySpans {
+		status := "ok"
+		if s.Status == "FAILURE" {
+			status = "FAIL"
+		} else if s.Status == "CANCELLED" {
+			status = "skip"
+		}
+
+		cache := "miss"
+		if s.CacheResult == "CACHE_HIT" {
+			cache = "hit"
+		} else if s.CacheResult == "CACHE_SKIP" {
+			cache = "skip"
+		}
+
+		ioMillis := s.OutputWriteMillis + s.OutputLoadMillis + s.CacheWriteMillis + s.DepLoadMillis
+
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			s.Label,
+			status,
+			cache,
+			formatMillis(s.TotalDurationMillis),
+			formatMillis(s.CommandDurationMillis),
+			formatMillis(s.HashDurationMillis),
+			formatMillis(ioMillis),
+			formatMillis(s.QueueWaitMillis),
+		)
+	}
+	w.Flush()
 }
 
 func parseDuration(s string) (time.Duration, error) {
@@ -549,27 +391,22 @@ func formatMillis(ms int64) string {
 }
 
 func AddTracesCmd(rootCmd *cobra.Command) {
-	// list subcommand
 	tracesListCmd.Flags().IntVar(&tracesListLimit, "limit", 20, "Maximum number of traces to display")
 	tracesListCmd.Flags().StringVar(&tracesListSince, "since", "", "Only show traces after this date (YYYY-MM-DD)")
 	tracesListCmd.Flags().StringVar(&tracesListCommand, "command", "", "Filter by command type (build, test, run)")
 	tracesListCmd.Flags().BoolVar(&tracesListFailuresOnly, "failures-only", false, "Only show traces with failures")
 
-	// show subcommand
 	tracesShowCmd.Flags().StringVar(&tracesShowSortBy, "sort-by", "total", "Sort targets by: total, command, queue, hash")
 	tracesShowCmd.Flags().IntVar(&tracesShowTop, "top", 0, "Show only the N slowest targets (0 = all)")
 
-	// stats subcommand
 	tracesStatsCmd.Flags().IntVar(&tracesListLimit, "limit", 20, "Number of recent traces to aggregate")
 	tracesStatsCmd.Flags().BoolVar(&tracesStatsDetailed, "detailed", false, "Load full traces for per-target analysis")
 
-	// export subcommand
 	tracesExportCmd.Flags().StringVar(&tracesExportFormat, "format", "jsonl", "Export format: jsonl or otel")
 	tracesExportCmd.Flags().StringVar(&tracesExportOutput, "output", "", "Output file (default: stdout)")
 	tracesExportCmd.Flags().IntVar(&tracesExportLimit, "limit", 0, "Maximum number of traces to export (0 = all)")
 	tracesExportCmd.Flags().StringVar(&tracesExportSince, "since", "", "Only export traces after this date (YYYY-MM-DD)")
 
-	// prune subcommand
 	tracesPruneCmd.Flags().StringVar(&tracesPruneOlderThan, "older-than", "30d", "Delete traces older than this duration (e.g. 30d, 72h)")
 
 	TracesCmd.AddCommand(tracesListCmd)

@@ -7,7 +7,11 @@ import { Aside } from "@astrojs/starlight/components";
 
 Grog can record execution traces for every build, test, and run invocation. Traces capture per-target phase-level timing data, making it easy to identify bottlenecks, track cache efficiency, and monitor build performance over time.
 
-Traces are stored using the same [remote caching](/topics/remote-caching/) backends (local filesystem, S3, or GCS) and can be queried from the terminal or exported for use in dashboards like Grafana, Datadog, or Jaeger.
+Traces are stored as [Parquet](https://parquet.apache.org/) files using the same [remote caching](/topics/remote-caching/) backends (local filesystem, S3, or GCS) and can be queried from the terminal or exported for use in dashboards like Grafana, Datadog, or Jaeger.
+
+<Aside>
+Trace **writing** (during builds) is pure Go and has no extra dependencies. Trace **querying** (`grog traces list`, `show`, `stats`, `export`, `prune`) uses the embedded [DuckDB](https://duckdb.org/) engine to run SQL queries directly against the Parquet files.
+</Aside>
 
 ## Enabling traces
 
@@ -202,17 +206,19 @@ grog traces prune --older-than 72h
 
 ### Storage
 
-Traces use the same `CacheBackend` interface as the build cache. They are stored under a `traces/` prefix with date-based partitioning:
+Traces are stored as Parquet files under a `traces/` prefix with date-based partitioning — two tables (builds + spans), one file per trace:
 
 ```
 traces/
-  index                      # lightweight index for fast listing
-  data/
+  builds/
     2026-03-30/
-      <trace-id>             # full trace data (protobuf)
+      <trace-id>.parquet     # 1 row with build metadata
+  spans/
+    2026-03-30/
+      <trace-id>.parquet     # 1 row per target with phase timing
 ```
 
-Each trace is typically a few KB, so storage costs are minimal even for large monorepos with frequent builds.
+There is no index file. DuckDB queries Parquet files directly via glob patterns, so storage scales to any number of traces without index maintenance overhead. Each trace is typically a few KB, so storage costs are minimal even for large monorepos with frequent builds.
 
 ## Configuration reference
 

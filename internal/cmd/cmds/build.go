@@ -172,9 +172,9 @@ func RunBuild(
 	// Write trace asynchronously (fire-and-forget)
 	if traceCollector != nil && completionMap != nil {
 		buildTrace := traceCollector.Finalize(completionMap, graph, executor.AsyncWaitTime())
-		traceStore := tracing.NewTraceStore(cache)
+		traceWriter := tracing.NewTraceWriter(cache)
 		go func() {
-			if err := traceStore.Write(context.WithoutCancel(ctx), buildTrace); err != nil {
+			if err := traceWriter.Write(context.WithoutCancel(ctx), buildTrace); err != nil {
 				logger.Warnf("failed to write trace: %v", err)
 			}
 		}()
