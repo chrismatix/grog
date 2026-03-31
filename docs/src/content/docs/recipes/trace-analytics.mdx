@@ -411,7 +411,7 @@ This gives you both aggregated metrics in Grafana (via Loki) and detailed waterf
 
 ### Periodic cleanup
 
-If you don't use `retention_days` in your config, periodically prune old traces in CI:
+Periodically prune old traces in CI to manage storage:
 
 ```bash
 grog traces prune --older-than 90d

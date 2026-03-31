@@ -44,7 +44,6 @@ prefix = "grog-cache/"
 # Trace Settings
 [traces]
 enabled = true
-retention_days = 30
 # Optionally use a separate backend for traces:
 # backend = "s3"
 # [traces.s3]
@@ -79,7 +78,6 @@ For instance, to set or override the `fail_fast` option set `GROG_FAIL_FAST=fals
 ### Trace Settings
 
 - **traces.enabled**: When `true`, Grog records an execution trace for every build, test, and run invocation. Traces capture per-target phase-level timing data for performance analysis. Defaults to `false`.
-- **traces.retention_days**: Number of days to retain stored traces. Set to `0` for unlimited retention. Defaults to `30`.
 - **traces.backend**: Override the storage backend for traces. When not set, traces use the same backend as the build cache. Supports `"gcs"` and `"s3"`.
 - **traces.gcs.bucket** / **traces.s3.bucket**: Bucket name for trace storage when using a separate backend.
 - **traces.gcs.prefix** / **traces.s3.prefix**: Optional prefix within the bucket. Defaults to `/`.

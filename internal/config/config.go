@@ -223,11 +223,10 @@ type S3CacheConfig struct {
 }
 
 type TracesConfig struct {
-	Enabled       bool         `mapstructure:"enabled"`
-	RetentionDays int          `mapstructure:"retention_days"`
-	Backend       CacheBackend `mapstructure:"backend"`
-	GCS           GCSCacheConfig `mapstructure:"gcs"`
-	S3            S3CacheConfig  `mapstructure:"s3"`
+	Enabled bool         `mapstructure:"enabled"`
+	Backend CacheBackend `mapstructure:"backend"`
+	GCS     GCSCacheConfig `mapstructure:"gcs"`
+	S3      S3CacheConfig  `mapstructure:"s3"`
 }
 
 const (

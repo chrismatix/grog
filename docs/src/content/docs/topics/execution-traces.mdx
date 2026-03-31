@@ -16,7 +16,6 @@ Add the following to your `grog.toml`:
 ```toml
 [traces]
 enabled = true
-retention_days = 30 # optional, default: 30
 ```
 
 By default, traces are stored alongside your build cache. To use a separate storage backend (e.g. for different retention or access controls):
@@ -201,8 +200,6 @@ grog traces prune --older-than 30d
 grog traces prune --older-than 72h
 ```
 
-When `retention_days` is configured in `grog.toml`, traces older than that threshold are candidates for pruning.
-
 ### Storage
 
 Traces use the same `CacheBackend` interface as the build cache. They are stored under a `traces/` prefix with date-based partitioning:
@@ -222,7 +219,6 @@ Each trace is typically a few KB, so storage costs are minimal even for large mo
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `traces.enabled` | bool | `false` | Enable trace collection |
-| `traces.retention_days` | int | `30` | Number of days to retain traces (0 = unlimited) |
 | `traces.backend` | string | _(uses cache backend)_ | Override storage backend (`"s3"` or `"gcs"`) |
 | `traces.gcs.bucket` | string | | GCS bucket for trace storage |
 | `traces.gcs.prefix` | string | `/` | Prefix within the GCS bucket |

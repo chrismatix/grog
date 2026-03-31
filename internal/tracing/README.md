@@ -70,7 +70,6 @@ Opt-in via `grog.toml`:
 ```toml
 [traces]
 enabled = true
-retention_days = 30
 ```
 
 Optionally uses a separate storage backend from the build cache:
