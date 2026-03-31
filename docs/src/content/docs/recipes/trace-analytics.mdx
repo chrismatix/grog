@@ -1,0 +1,418 @@
+---
+title: Trace Analytics Integration
+description: Explore Grog execution traces with popular database, analytics, and observability backends.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+# Analyzing Traces with Analytics Backends
+
+Grog's [execution traces](/topics/execution-traces/) capture detailed, per-target phase-level timing for every build. While the built-in `grog traces` CLI is useful for quick lookups, exporting traces to an analytics backend unlocks richer capabilities: historical dashboards, anomaly detection, cross-build comparisons, and team-wide visibility.
+
+This guide walks through integrating Grog traces with popular analytics and observability tools.
+
+## Export formats
+
+Grog supports two export formats, each suited to different backends:
+
+| Format | Flag | Best for |
+|--------|------|----------|
+| **JSONL** | `--format=jsonl` | Data warehouses, log aggregation, ad-hoc analysis |
+| **OTLP JSON** | `--format=otel` | Distributed tracing backends, waterfall visualization |
+
+Both formats include all per-target phase timing data (queue wait, hashing, cache check, command execution, output write/load, cache write).
+
+## BigQuery
+
+BigQuery is a natural fit for historical build analytics across large teams. Load JSONL traces into a table and query across weeks or months of builds.
+
+### Setup
+
+1. Export traces to a JSONL file:
+
+```bash
+grog traces export --format=jsonl --output traces.jsonl
+```
+
+2. Create a BigQuery dataset and load the data:
+
+```bash
+bq mk --dataset my_project:grog_traces
+
+bq load \
+  --source_format=NEWLINE_DELIMITED_JSON \
+  --autodetect \
+  my_project:grog_traces.builds \
+  traces.jsonl
+```
+
+<Aside>
+BigQuery auto-detects the schema from the JSONL. For production use, define an explicit schema to handle the nested `spans` array correctly.
+</Aside>
+
+### Example queries
+
+**Average build duration over the last 30 days:**
+
+```sql
+SELECT
+  DATE(TIMESTAMP_MILLIS(start_time_unix_millis)) AS build_date,
+  command,
+  AVG(total_duration_millis) / 1000 AS avg_duration_sec,
+  COUNT(*) AS build_count
+FROM `my_project.grog_traces.builds`
+WHERE start_time_unix_millis > UNIX_MILLIS(TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY))
+GROUP BY build_date, command
+ORDER BY build_date DESC
+```
+
+**Slowest targets by average command duration:**
+
+```sql
+SELECT
+  span.label,
+  AVG(span.command_duration_millis) AS avg_cmd_ms,
+  AVG(span.queue_wait_millis) AS avg_queue_ms,
+  COUNT(*) AS executions
+FROM `my_project.grog_traces.builds`,
+  UNNEST(spans) AS span
+WHERE span.cache_result = 'CACHE_MISS'
+GROUP BY span.label
+HAVING executions > 5
+ORDER BY avg_cmd_ms DESC
+LIMIT 20
+```
+
+**Cache hit rate trend:**
+
+```sql
+SELECT
+  DATE(TIMESTAMP_MILLIS(start_time_unix_millis)) AS build_date,
+  SUM(cache_hit_count) AS hits,
+  SUM(total_targets) AS total,
+  SAFE_DIVIDE(SUM(cache_hit_count), SUM(total_targets)) * 100 AS hit_rate_pct
+FROM `my_project.grog_traces.builds`
+GROUP BY build_date
+ORDER BY build_date DESC
+```
+
+### Automating ingestion in CI
+
+Add a step to your CI pipeline that exports and loads traces after each build:
+
+```yaml
+- name: Export and upload traces
+  run: |
+    grog traces export --format=jsonl --limit 1 --output trace.jsonl
+    bq load --source_format=NEWLINE_DELIMITED_JSON \
+      my_project:grog_traces.builds trace.jsonl
+```
+
+## AWS Athena
+
+If you already use S3 for Grog's remote cache, Athena lets you query traces directly from S3 without any data loading step.
+
+### Setup
+
+1. Configure Grog to store traces on S3:
+
+```toml
+[traces]
+enabled = true
+backend = "s3"
+
+[traces.s3]
+bucket = "my-grog-data"
+prefix = "traces"
+```
+
+2. Export traces to a dedicated S3 path as JSONL:
+
+```bash
+grog traces export --format=jsonl --output /tmp/traces.jsonl
+aws s3 cp /tmp/traces.jsonl s3://my-grog-data/analytics/traces.jsonl
+```
+
+3. Create an Athena table:
+
+```sql
+CREATE EXTERNAL TABLE grog_traces (
+  trace_id STRING,
+  command STRING,
+  start_time_unix_millis BIGINT,
+  total_duration_millis BIGINT,
+  total_targets INT,
+  cache_hit_count INT,
+  failure_count INT,
+  git_commit STRING,
+  git_branch STRING,
+  is_ci BOOLEAN,
+  spans ARRAY<STRUCT<
+    label: STRING,
+    status: STRING,
+    cache_result: STRING,
+    command_duration_millis: BIGINT,
+    queue_wait_millis: BIGINT,
+    hash_duration_millis: BIGINT,
+    output_write_millis: BIGINT,
+    output_load_millis: BIGINT
+  >>
+)
+ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'
+LOCATION 's3://my-grog-data/analytics/';
+```
+
+4. Query as usual:
+
+```sql
+SELECT trace_id, command, total_duration_millis / 1000.0 AS duration_sec
+FROM grog_traces
+WHERE is_ci = true
+ORDER BY start_time_unix_millis DESC
+LIMIT 20;
+```
+
+## Grafana Loki
+
+Loki is designed for log aggregation, and JSONL traces slot in naturally. Combined with Grafana dashboards, this gives you real-time build observability.
+
+### Setup
+
+Ship JSONL traces to Loki using `promtail`, `Grafana Alloy`, or any Loki-compatible agent. The simplest approach appends traces to a log file that your agent tails:
+
+```bash
+# In your CI pipeline, after each build:
+grog traces export --format=jsonl --limit 1 >> /var/log/grog-traces.jsonl
+```
+
+Configure your Loki agent to tail this file with a `grog` label:
+
+```yaml
+# promtail config snippet
+scrape_configs:
+  - job_name: grog-traces
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: grog
+          __path__: /var/log/grog-traces.jsonl
+```
+
+### Grafana dashboard queries
+
+With traces in Loki, use LogQL in Grafana to build dashboards:
+
+**Build duration over time:**
+
+```
+{job="grog"} | json | line_format "{{.total_duration_millis}}"
+```
+
+**Filter to failed builds:**
+
+```
+{job="grog"} | json | failure_count > 0
+```
+
+**Extract cache hit rate:**
+
+```
+{job="grog"} | json | unwrap cache_hit_count | __error__=""
+```
+
+<Aside>
+For richer Grafana dashboards, consider sending traces to both Loki (for log-based queries) and Tempo (for waterfall visualization) from the same CI pipeline.
+</Aside>
+
+## Grafana Tempo
+
+Tempo is a distributed tracing backend that renders traces as interactive waterfall diagrams. This is especially powerful for Grog traces because it visualizes parallel target execution lanes and per-target phase breakdowns.
+
+### Setup
+
+Export traces in OTLP format and send them to Tempo's OTLP HTTP endpoint:
+
+```bash
+grog traces export --format=otel --limit 1 --output /tmp/trace-otel.json
+
+curl -X POST http://tempo:4318/v1/traces \
+  -H "Content-Type: application/json" \
+  -d @/tmp/trace-otel.json
+```
+
+<Aside>
+The OTLP export maps each build to a root span with child spans for every target. Span attributes include all phase timing fields (`grog.command_duration_ms`, `grog.queue_wait_ms`, etc.) so you can filter and search by them in the Tempo UI.
+</Aside>
+
+### What you get
+
+Once traces are in Tempo, you can:
+
+- **Waterfall view**: See all targets laid out on a timeline, showing which ran in parallel and where time was spent
+- **Search by attributes**: Find traces where `grog.cache_result = CACHE_MISS` or where `grog.command_duration_ms > 30000`
+- **Compare traces**: Side-by-side comparison of two builds to see what changed
+- **Link to Loki**: If you also ship logs to Loki, Grafana can correlate trace spans with build output logs
+
+## Jaeger
+
+Jaeger works similarly to Tempo for waterfall visualization. Send OTLP traces via the collector:
+
+```bash
+grog traces export --format=otel --limit 1 --output /tmp/trace-otel.json
+
+curl -X POST http://jaeger-collector:4318/v1/traces \
+  -H "Content-Type: application/json" \
+  -d @/tmp/trace-otel.json
+```
+
+In the Jaeger UI, search for service `grog` to find your build traces. Each build appears as a trace with one span per target, sorted by start time.
+
+## Datadog
+
+Datadog APM can ingest OTLP traces for build performance monitoring.
+
+### Setup
+
+Send OTLP traces to the Datadog Agent's OTLP endpoint:
+
+```bash
+grog traces export --format=otel --limit 1 --output /tmp/trace-otel.json
+
+curl -X POST http://localhost:4318/v1/traces \
+  -H "Content-Type: application/json" \
+  -d @/tmp/trace-otel.json
+```
+
+Ensure the Datadog Agent is configured to accept OTLP:
+
+```yaml
+# datadog.yaml
+otlp_config:
+  receiver:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+```
+
+In Datadog APM, traces appear under service `grog`. You can create monitors for build duration regressions, cache hit rate drops, or frequent target failures.
+
+## ClickHouse
+
+For teams running ClickHouse, JSONL traces can be loaded directly for fast analytical queries.
+
+### Setup
+
+Create a table:
+
+```sql
+CREATE TABLE grog_traces (
+  trace_id String,
+  command String,
+  start_time DateTime64(3) MATERIALIZED fromUnixTimestamp64Milli(start_time_unix_millis),
+  start_time_unix_millis Int64,
+  total_duration_millis Int64,
+  total_targets Int32,
+  cache_hit_count Int32,
+  failure_count Int32,
+  git_commit String,
+  git_branch String,
+  is_ci Bool
+) ENGINE = MergeTree()
+ORDER BY (start_time_unix_millis);
+```
+
+Load traces:
+
+```bash
+grog traces export --format=jsonl | clickhouse-client \
+  --query="INSERT INTO grog_traces FORMAT JSONEachRow"
+```
+
+For per-target analysis, create a separate spans table or use ClickHouse's JSON functions to extract nested span data.
+
+### Example query
+
+```sql
+SELECT
+  toDate(start_time) AS day,
+  avg(total_duration_millis) / 1000 AS avg_sec,
+  avg(cache_hit_count * 100.0 / total_targets) AS cache_hit_pct
+FROM grog_traces
+WHERE is_ci = true AND start_time > now() - INTERVAL 14 DAY
+GROUP BY day
+ORDER BY day
+```
+
+## jq (ad-hoc analysis)
+
+For quick, one-off analysis without any infrastructure, pipe JSONL through `jq`:
+
+```bash
+# Top 10 slowest builds
+grog traces export --format=jsonl | \
+  jq -r '[.total_duration_millis / 1000, .trace_id, .command] | @tsv' | \
+  sort -rn | head -10
+
+# Targets with worst cache hit rates
+grog traces export --format=jsonl | \
+  jq -r '.spans[] | select(.cache_result == "CACHE_MISS") | .label' | \
+  sort | uniq -c | sort -rn | head -10
+
+# Find targets with high queue wait (worker pool contention)
+grog traces export --format=jsonl | \
+  jq -r '.spans[] | select(.queue_wait_millis > 1000) | "\(.queue_wait_millis)ms \(.label)"' | \
+  sort -rn | head -10
+
+# Average command duration per target across all traces
+grog traces export --format=jsonl | \
+  jq -r '.spans[] | select(.command_duration_millis > 0) | "\(.label)\t\(.command_duration_millis)"' | \
+  awk -F'\t' '{sum[$1]+=$2; count[$1]++} END {for (t in sum) printf "%dms\t%s\n", sum[t]/count[t], t}' | \
+  sort -rn | head -20
+```
+
+## CI pipeline patterns
+
+### Export after every build
+
+The simplest integration adds a trace export step after each build:
+
+```yaml
+# GitHub Actions example
+- name: Build
+  run: grog build //...
+
+- name: Export trace
+  if: always()  # export even if the build failed
+  run: grog traces export --format=jsonl --limit 1 >> traces.jsonl
+
+- name: Upload to analytics
+  if: always()
+  run: |
+    # Pick your backend:
+    # BigQuery:
+    bq load --source_format=NEWLINE_DELIMITED_JSON my_project:grog.builds traces.jsonl
+    # Or S3 for Athena:
+    # aws s3 cp traces.jsonl s3://my-bucket/traces/$(date +%Y-%m-%d)/$(uuidgen).jsonl
+```
+
+### Dual export (logs + traces)
+
+For full observability, export to both a log backend and a tracing backend:
+
+```bash
+# After grog build //...
+grog traces export --format=jsonl --limit 1 >> /var/log/grog-traces.jsonl  # → Loki
+grog traces export --format=otel --limit 1 | \
+  curl -s -X POST http://tempo:4318/v1/traces \
+    -H "Content-Type: application/json" -d @-                              # → Tempo
+```
+
+This gives you both aggregated metrics in Grafana (via Loki) and detailed waterfall views (via Tempo) for the same builds.
+
+### Periodic cleanup
+
+If you don't use `retention_days` in your config, periodically prune old traces in CI:
+
+```bash
+grog traces prune --older-than 90d
+```
