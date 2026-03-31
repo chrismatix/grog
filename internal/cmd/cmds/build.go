@@ -25,7 +25,11 @@ import (
 	"grog/internal/model"
 	"grog/internal/output"
 	"grog/internal/selection"
+	"grog/internal/tracing"
 )
+
+// GrogVersion is set by the root command during initialization.
+var GrogVersion string
 
 var BuildCmd = &cobra.Command{
 	Use:   "build",
@@ -78,6 +82,19 @@ func RunBuild(
 	loadOutputsMode config.LoadOutputsMode,
 ) {
 	startTime := time.Now()
+
+	// Determine command name for tracing
+	commandName := "build"
+	if testFilter == selection.TestOnly {
+		commandName = "test"
+	} else if testFilter == selection.AllTargets {
+		commandName = "build_and_test"
+	}
+
+	var traceCollector *tracing.TraceCollector
+	if config.Global.Traces.Enabled {
+		traceCollector = tracing.NewTraceCollector(commandName, targetPatterns, GrogVersion)
+	}
 	errs := analysis.CheckTargetConstraints(logger, graph.GetNodes())
 	if len(errs) > 0 {
 		for _, err := range errs {
@@ -151,6 +168,17 @@ func RunBuild(
 		loadOutputsMode,
 	)
 	completionMap, executionErr := executor.Execute(ctx)
+
+	// Write trace asynchronously (fire-and-forget)
+	if traceCollector != nil && completionMap != nil {
+		buildTrace := traceCollector.Finalize(completionMap, graph, executor.AsyncWaitTime())
+		traceStore := tracing.NewTraceStore(cache)
+		go func() {
+			if err := traceStore.Write(context.WithoutCancel(ctx), buildTrace); err != nil {
+				logger.Warnf("failed to write trace: %v", err)
+			}
+		}()
+	}
 
 	elapsedTime := time.Since(startTime).Seconds()
 	// Mostly used to keep our test fixtures deterministic

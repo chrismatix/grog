@@ -55,6 +55,7 @@ var RootCmd = &cobra.Command{
 func Stamp(version string, commit string, buildDate string) {
 	RootCmd.Version = version
 	Version = version
+	cmds.GrogVersion = version
 
 	RootCmd.SetVersionTemplate(fmt.Sprintf(
 		"%s (%s) built on %s",
@@ -174,6 +175,7 @@ func init() {
 	cmds.AddOwnersCmd(RootCmd)
 	cmds.AddChangesCmd(RootCmd)
 	cmds.AddListCmd(RootCmd)
+	cmds.AddTracesCmd(RootCmd)
 
 	if err != nil {
 		panic(err)
@@ -191,6 +193,8 @@ func initConfig(cmd *cobra.Command) error {
 	viper.SetDefault("cache.s3.shared_cache", true)
 	viper.SetDefault("hash_algorithm", config.HashAlgorithmXXH3)
 	viper.SetDefault("environment_variables", make(map[string]string))
+	viper.SetDefault("traces.enabled", false)
+	viper.SetDefault("traces.retention_days", 30)
 
 	names := []string{"grog"}
 	if os.Getenv("CI") == "1" {

@@ -57,6 +57,9 @@ type WorkspaceConfig struct {
 	EnableCache bool        `mapstructure:"enable_cache"`
 	Cache       CacheConfig `mapstructure:"cache"`
 
+	// Tracing
+	Traces TracesConfig `mapstructure:"traces"`
+
 	// Docker
 	Docker DockerConfig `mapstructure:"docker"`
 
@@ -217,6 +220,14 @@ type S3CacheConfig struct {
 	Prefix          string `mapstructure:"prefix"`
 	CredentialsFile string `mapstructure:"credentials_file"`
 	SharedCache     bool   `mapstructure:"shared_cache"`
+}
+
+type TracesConfig struct {
+	Enabled       bool         `mapstructure:"enabled"`
+	RetentionDays int          `mapstructure:"retention_days"`
+	Backend       CacheBackend `mapstructure:"backend"`
+	GCS           GCSCacheConfig `mapstructure:"gcs"`
+	S3            S3CacheConfig  `mapstructure:"s3"`
 }
 
 const (
