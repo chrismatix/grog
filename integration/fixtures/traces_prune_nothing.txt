@@ -1,0 +1,1 @@
+INFO: Pruned 0 traces older than 1h.

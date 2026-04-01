@@ -169,15 +169,14 @@ func RunBuild(
 	)
 	completionMap, executionErr := executor.Execute(ctx)
 
-	// Write trace asynchronously (fire-and-forget)
+	// Write trace (synchronous — Parquet writes are fast for local FS,
+	// and we need to ensure the write completes before the process exits)
 	if traceCollector != nil && completionMap != nil {
 		buildTrace := traceCollector.Finalize(completionMap, graph, executor.AsyncWaitTime())
 		traceWriter := tracing.NewTraceWriter(cache)
-		go func() {
-			if err := traceWriter.Write(context.WithoutCancel(ctx), buildTrace); err != nil {
-				logger.Warnf("failed to write trace: %v", err)
-			}
-		}()
+		if err := traceWriter.Write(context.WithoutCancel(ctx), buildTrace); err != nil {
+			logger.Warnf("failed to write trace: %v", err)
+		}
 	}
 
 	elapsedTime := time.Since(startTime).Seconds()
