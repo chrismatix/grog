@@ -11,6 +11,10 @@ Grog's [execution traces](/topics/execution-traces/) capture detailed, per-targe
 
 This guide walks through integrating Grog traces with popular analytics and observability tools.
 
+<Aside>
+Traces are stored as standard [Parquet](https://parquet.apache.org/) files. Many tools (DuckDB, ClickHouse, Spark, pandas) can query them directly without any export or import step. See [Querying Parquet files directly](/topics/execution-traces/#querying-parquet-files-directly) for the simplest approach.
+</Aside>
+
 ## Export formats
 
 Grog supports two export formats, each suited to different backends:
@@ -330,7 +334,39 @@ grog traces export --format=jsonl | clickhouse-client \
 
 For per-target analysis, create a separate spans table or use ClickHouse's JSON functions to extract nested span data.
 
-### Example query
+### Querying Parquet directly
+
+Alternatively, skip the import entirely and query trace Parquet files directly with `clickhouse local`:
+
+```bash
+TRACES=~/.grog/*/cache/traces
+
+# Build duration trend
+clickhouse local --query "
+  SELECT toDate(fromUnixTimestamp64Milli(start_time_unix_millis)) AS day,
+         avg(total_duration_millis) / 1000 AS avg_sec,
+         count() AS builds
+  FROM file('$TRACES/builds/**/*.parquet', Parquet)
+  GROUP BY day ORDER BY day DESC LIMIT 14;
+"
+
+# Slowest targets
+clickhouse local --query "
+  SELECT label, avg(command_duration_millis) AS avg_cmd_ms, count() AS n
+  FROM file('$TRACES/spans/**/*.parquet', Parquet)
+  WHERE cache_result = 'CACHE_MISS'
+  GROUP BY label ORDER BY avg_cmd_ms DESC LIMIT 10;
+"
+```
+
+For traces on S3, use the `s3()` table function:
+
+```sql
+SELECT * FROM s3('s3://my-bucket/traces/builds/**/*.parquet', 'Parquet')
+ORDER BY start_time_unix_millis DESC LIMIT 10;
+```
+
+### Example query (imported data)
 
 ```sql
 SELECT
@@ -341,6 +377,71 @@ FROM grog_traces
 WHERE is_ci = true AND start_time > now() - INTERVAL 14 DAY
 GROUP BY day
 ORDER BY day
+```
+
+## DuckDB (ad-hoc analytics)
+
+[DuckDB](https://duckdb.org/) is the fastest way to explore trace data interactively. It reads Parquet files directly — no server, no import, no setup beyond `brew install duckdb`.
+
+```bash
+TRACES=~/.grog/*/cache/traces
+
+# Recent builds overview
+duckdb -c "
+  SELECT trace_id[:8] AS id, command, total_targets, cache_hit_count,
+         total_duration_millis / 1000.0 AS sec, git_commit[:7] AS commit
+  FROM read_parquet('$TRACES/builds/**/*.parquet')
+  ORDER BY start_time_unix_millis DESC LIMIT 20;
+"
+
+# Top 10 slowest targets (cache misses only)
+duckdb -c "
+  SELECT label,
+         AVG(command_duration_millis)::INT AS avg_cmd_ms,
+         AVG(queue_wait_millis)::INT AS avg_queue_ms,
+         COUNT(*) AS n
+  FROM read_parquet('$TRACES/spans/**/*.parquet')
+  WHERE cache_result = 'CACHE_MISS'
+  GROUP BY label HAVING n > 3
+  ORDER BY avg_cmd_ms DESC LIMIT 10;
+"
+
+# Cache hit rate trend (last 2 weeks)
+duckdb -c "
+  SELECT DATE_TRUNC('day', EPOCH_MS(start_time_unix_millis)) AS day,
+         SUM(cache_hit_count)::FLOAT / SUM(total_targets) * 100 AS hit_pct,
+         COUNT(*) AS builds
+  FROM read_parquet('$TRACES/builds/**/*.parquet')
+  GROUP BY day ORDER BY day DESC LIMIT 14;
+"
+
+# Targets where most time is spent in I/O (potential cache bottleneck)
+duckdb -c "
+  SELECT label,
+         AVG(output_write_millis + output_load_millis + cache_write_millis)::INT AS avg_io_ms,
+         AVG(command_duration_millis)::INT AS avg_cmd_ms,
+         COUNT(*) AS n
+  FROM read_parquet('$TRACES/spans/**/*.parquet')
+  GROUP BY label ORDER BY avg_io_ms DESC LIMIT 10;
+"
+```
+
+For traces on S3 or GCS:
+
+```bash
+# S3
+duckdb -c "
+  CREATE SECRET (TYPE S3, REGION 'us-east-1');
+  SELECT * FROM read_parquet('s3://my-bucket/traces/builds/**/*.parquet')
+  ORDER BY start_time_unix_millis DESC LIMIT 10;
+"
+
+# GCS
+duckdb -c "
+  CREATE SECRET (TYPE GCS, KEY_ID 'GOOG...', SECRET '...');
+  SELECT * FROM read_parquet('gcs://my-bucket/traces/builds/**/*.parquet')
+  ORDER BY start_time_unix_millis DESC LIMIT 10;
+"
 ```
 
 ## jq (ad-hoc analysis)
