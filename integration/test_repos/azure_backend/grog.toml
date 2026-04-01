@@ -1,0 +1,7 @@
+[cache]
+backend = "azure"
+
+[cache.azure]
+account_url = "https://grogtestaccount.blob.core.windows.net/"
+container = "grog-test-cache"
+prefix = "/codegen"
