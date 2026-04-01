@@ -50,6 +50,12 @@ func GetCacheBackend(
 			return nil, err
 		}
 		return NewRemoteWrapper(fs, s3Cache), nil
+	case config.AzureCacheBackend:
+		azureCache, err := NewAzureCache(ctx, cacheConfig.Azure)
+		if err != nil {
+			return nil, err
+		}
+		return NewRemoteWrapper(fs, azureCache), nil
 
 	default:
 		return fs, nil
