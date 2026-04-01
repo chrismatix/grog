@@ -35,11 +35,20 @@ async_cache_writes = true # default
 # num_io_workers = 12 # defaults to 3 * num_workers
 
 [cache]
-backend = "gcs"  # Options: "" (local), "gcs", "s3"
+backend = "gcs"  # Options: "" (local), "gcs", "s3", "azure"
 
 [cache.gcs]
 bucket = "my-gcs-bucket"
 prefix = "grog-cache/"
+
+# [cache.s3]
+# bucket = "my-s3-bucket"
+# prefix = "grog-cache/"
+
+# [cache.azure]
+# account_url = "https://myaccount.blob.core.windows.net/"
+# container = "my-azure-container"
+# prefix = "grog-cache/"
 
 # Trace Settings
 [traces]

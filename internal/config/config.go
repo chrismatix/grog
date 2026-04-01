@@ -198,14 +198,16 @@ func (w WorkspaceConfig) GetLoadOutputsMode() LoadOutputsMode {
 type CacheBackend string
 
 const (
-	GCSCacheBackend CacheBackend = "gcs"
-	S3CacheBackend  CacheBackend = "s3"
+	GCSCacheBackend   CacheBackend = "gcs"
+	S3CacheBackend    CacheBackend = "s3"
+	AzureCacheBackend CacheBackend = "azure"
 )
 
 type CacheConfig struct {
-	Backend CacheBackend   `mapstructure:"backend"`
-	GCS     GCSCacheConfig `mapstructure:"gcs"`
-	S3      S3CacheConfig  `mapstructure:"s3"`
+	Backend CacheBackend     `mapstructure:"backend"`
+	GCS     GCSCacheConfig   `mapstructure:"gcs"`
+	S3      S3CacheConfig    `mapstructure:"s3"`
+	Azure   AzureCacheConfig `mapstructure:"azure"`
 }
 
 type GCSCacheConfig struct {
@@ -222,13 +224,21 @@ type S3CacheConfig struct {
 	SharedCache     bool   `mapstructure:"shared_cache"`
 }
 
+// AzureCacheConfig holds the configuration for the Azure Blob Storage cache backend.
+type AzureCacheConfig struct {
+	AccountURL       string `mapstructure:"account_url"`
+	ConnectionString string `mapstructure:"connection_string"`
+	Container        string `mapstructure:"container"`
+	Prefix           string `mapstructure:"prefix"`
+	SharedCache      bool   `mapstructure:"shared_cache"`
+}
+
 type TracesConfig struct {
 	Enabled bool         `mapstructure:"enabled"`
 	Backend CacheBackend `mapstructure:"backend"`
 	GCS     GCSCacheConfig `mapstructure:"gcs"`
 	S3      S3CacheConfig  `mapstructure:"s3"`
 }
-
 const (
 	DockerBackendFSTarball = "tarball"
 	DockerBackendRegistry  = "registry"

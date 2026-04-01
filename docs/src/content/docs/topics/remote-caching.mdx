@@ -1,5 +1,5 @@
 ---
-title: Remote Caching (s3 and gcs)
+title: Remote Caching (s3, gcs, and azure)
 description: Store your build output cache on remote file systems for
 ---
 
@@ -8,6 +8,7 @@ For CI use-cases or when developing on larger repositories it can be beneficial 
 Grog supports the following providers for remote caching:
 
 - [AWS S3](#aws-s3)
+- [Azure Blob Storage](#azure-blob-storage)
 - [Google Cloud Storage](#google-cloud-storage-gcs)
 
 ## Behavior
@@ -52,4 +53,32 @@ backend = "s3"
 bucket = "<bucket-name>"
 prefix = "<prefix-for-cache-files>" # optional default: '/'
 shared_cache = true # optional default: true
+```
+
+## Azure Blob Storage
+
+To enable remote caching via Azure Blob Storage add the following to your config:
+
+```toml
+[cache]
+backend = "azure"
+
+[cache.azure]
+account_url = "https://<account-name>.blob.core.windows.net/"
+container = "<container-name>"
+prefix = "<prefix-for-cache-files>" # optional default: '/'
+shared_cache = true # optional default: true
+```
+
+The `shared_cache` option controls whether the cache is shared between different hosts. When enabled (default), the cache uses only the directory name of your workspace for cache isolation, allowing different machines with the same repository name to share cache entries. When disabled, the cache uses a hash of the full workspace path, which isolates caches between different machines even if they have the same repository name.
+
+Authentication can be configured in two ways:
+
+1. **Account URL with Azure credentials (recommended):** Set `account_url` and grog will authenticate using `DefaultAzureCredential`, which supports Azure AD, managed identities, and the Azure CLI.
+2. **Connection string:** Alternatively, use `connection_string` instead of `account_url` for account-key-based authentication:
+
+```toml
+[cache.azure]
+connection_string = "<azure-storage-connection-string>"
+container = "<container-name>"
 ```

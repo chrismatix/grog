@@ -191,6 +191,7 @@ func initConfig(cmd *cobra.Command) error {
 	viper.SetDefault("arch", runtime.GOARCH)
 	viper.SetDefault("cache.gcs.shared_cache", true)
 	viper.SetDefault("cache.s3.shared_cache", true)
+	viper.SetDefault("cache.azure.shared_cache", true)
 	viper.SetDefault("hash_algorithm", config.HashAlgorithmXXH3)
 	viper.SetDefault("environment_variables", make(map[string]string))
 	viper.SetDefault("traces.enabled", false)
