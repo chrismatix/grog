@@ -114,14 +114,9 @@ func (s *TraceStore) Write(ctx context.Context, trace *BuildTrace) error {
 // file, which causes the RemoteWrapper to fetch and cache it locally.
 // Returns the number of files synced.
 func (s *TraceStore) Pull(ctx context.Context) (int, error) {
-	listable, ok := s.writer.backend.(backends.ListableBackend)
-	if !ok {
-		return 0, fmt.Errorf("cache backend does not support listing (no remote backend configured)")
-	}
-
 	synced := 0
 	for _, table := range []string{tracesBuildsPath, tracesSpansPath} {
-		remoteKeys, err := listable.ListKeys(ctx, table, ".parquet")
+		remoteKeys, err := s.writer.backend.ListKeys(ctx, table, ".parquet")
 		if err != nil {
 			return synced, fmt.Errorf("list remote keys for %s: %w", table, err)
 		}

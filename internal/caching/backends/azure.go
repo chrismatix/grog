@@ -231,3 +231,35 @@ func (a *AzureCache) Exists(ctx context.Context, path string, key string) (bool,
 
 	return a.client.BlobExists(ctx, a.containerName, blobPath)
 }
+
+// ListKeys uses Azure Blob Storage list blobs to list keys under the given path.
+func (a *AzureCache) ListKeys(ctx context.Context, path string, suffix string) ([]string, error) {
+	adapter, ok := a.client.(*AzureBlobAdapter)
+	if !ok {
+		return nil, nil
+	}
+
+	fullPath := a.buildPath(path, "")
+	if !strings.HasSuffix(fullPath, "/") {
+		fullPath += "/"
+	}
+
+	var keys []string
+	pager := adapter.client.NewListBlobsFlatPager(a.containerName, &azblob.ListBlobsFlatOptions{
+		Prefix: &fullPath,
+	})
+	for pager.More() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, blob := range page.Segment.BlobItems {
+			name := *blob.Name
+			key := strings.TrimPrefix(name, fullPath)
+			if suffix == "" || strings.HasSuffix(key, suffix) {
+				keys = append(keys, key)
+			}
+		}
+	}
+	return keys, nil
+}

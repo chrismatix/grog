@@ -241,3 +241,36 @@ func (s *S3Cache) Exists(ctx context.Context, path string, key string) (bool, er
 
 	return s.client.ObjectExists(ctx, s.bucketName, s3Path)
 }
+
+// ListKeys uses S3 ListObjectsV2 to list keys under the given path.
+func (sc *S3Cache) ListKeys(ctx context.Context, path string, suffix string) ([]string, error) {
+	adapter, ok := sc.client.(*AWSS3Adapter)
+	if !ok {
+		return nil, nil
+	}
+
+	fullPath := sc.buildPath(path, "")
+	if !strings.HasSuffix(fullPath, "/") {
+		fullPath += "/"
+	}
+
+	var keys []string
+	paginator := s3.NewListObjectsV2Paginator(adapter.client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(sc.bucketName),
+		Prefix: aws.String(fullPath),
+	})
+
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, obj := range page.Contents {
+			key := strings.TrimPrefix(*obj.Key, fullPath)
+			if suffix == "" || strings.HasSuffix(key, suffix) {
+				keys = append(keys, key)
+			}
+		}
+	}
+	return keys, nil
+}

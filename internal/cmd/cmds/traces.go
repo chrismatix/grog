@@ -58,14 +58,14 @@ func getTraceStore(ctx context.Context, logger *console.Logger) *tracing.TraceSt
 	return store
 }
 
-// autoSync downloads remote traces to local cache if auto_sync is enabled.
-func autoSync(ctx context.Context, store *tracing.TraceStore, logger *console.Logger) {
-	if !config.Global.Traces.AutoSync {
+// autoPull downloads remote traces to local cache if auto_pull is enabled.
+func autoPull(ctx context.Context, store *tracing.TraceStore, logger *console.Logger) {
+	if !config.Global.Traces.AutoPull {
 		return
 	}
 	pulled, err := store.Pull(ctx)
 	if err != nil {
-		logger.Debugf("auto-sync: %v", err)
+		logger.Debugf("auto-pull: %v", err)
 		return
 	}
 	if pulled > 0 {
@@ -91,7 +91,7 @@ var tracesListCmd = &cobra.Command{
 		ctx, logger := console.SetupCommand()
 		store := getTraceStore(ctx, logger)
 		defer store.Close()
-		autoSync(ctx, store, logger)
+		autoPull(ctx, store, logger)
 
 		opts := tracing.ListOptions{
 			Limit:        tracesListLimit,
@@ -179,7 +179,7 @@ var tracesShowCmd = &cobra.Command{
 		ctx, logger := console.SetupCommand()
 		store := getTraceStore(ctx, logger)
 		defer store.Close()
-		autoSync(ctx, store, logger)
+		autoPull(ctx, store, logger)
 
 		trace, err := store.FindAndLoad(ctx, args[0])
 		if err != nil {
@@ -201,7 +201,7 @@ var tracesStatsCmd = &cobra.Command{
 		ctx, logger := console.SetupCommand()
 		store := getTraceStore(ctx, logger)
 		defer store.Close()
-		autoSync(ctx, store, logger)
+		autoPull(ctx, store, logger)
 
 		limit := tracesListLimit
 		if limit <= 0 {
@@ -257,7 +257,7 @@ var tracesExportCmd = &cobra.Command{
 		ctx, logger := console.SetupCommand()
 		store := getTraceStore(ctx, logger)
 		defer store.Close()
-		autoSync(ctx, store, logger)
+		autoPull(ctx, store, logger)
 
 		opts := tracing.ListOptions{Limit: tracesExportLimit}
 		if tracesExportSince != "" {

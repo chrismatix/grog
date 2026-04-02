@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"cloud.google.com/go/storage"
+	"google.golang.org/api/iterator"
 
 	"grog/internal/config"
 	"grog/internal/console"
@@ -151,4 +152,32 @@ func (gcs *GCSCache) Exists(ctx context.Context, path string, key string) (bool,
 	}
 
 	return true, nil
+}
+
+// ListKeys uses GCS Objects.List to list keys under the given path.
+func (gcs *GCSCache) ListKeys(ctx context.Context, path string, suffix string) ([]string, error) {
+	fullPath := gcs.buildPath(path, "")
+	if !strings.HasSuffix(fullPath, "/") {
+		fullPath += "/"
+	}
+
+	it := gcs.client.Bucket(gcs.bucketName).Objects(ctx, &storage.Query{
+		Prefix: fullPath,
+	})
+
+	var keys []string
+	for {
+		attrs, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		key := strings.TrimPrefix(attrs.Name, fullPath)
+		if suffix == "" || strings.HasSuffix(key, suffix) {
+			keys = append(keys, key)
+		}
+	}
+	return keys, nil
 }
