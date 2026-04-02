@@ -190,10 +190,7 @@ var tracesStatsCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Printf("Stats over last %d traces:\n", stats.TraceCount)
-		fmt.Printf("  Avg duration:   %s\n", formatDuration(time.Duration(stats.AvgDuration)*time.Millisecond))
-		fmt.Printf("  Cache hit rate: %.1f%%\n", stats.CacheHitRate)
-		fmt.Printf("  Total failures: %d\n", stats.TotalFails)
+		printStatsSummary(stats)
 
 		if tracesStatsDetailed {
 			report, err := store.Bottlenecks(ctx, limit)
@@ -473,6 +470,53 @@ func renderDim(text string) string {
 		return dimStyle.Render(text)
 	}
 	return text
+}
+
+var (
+	statsTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))
+	statsLabelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("248")).Width(16)
+	statsValueStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))
+	statsGoodStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("42"))  // green
+	statsWarnStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("214")) // orange
+	statsBadStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196")) // red
+)
+
+func printStatsSummary(stats *tracing.TraceStats) {
+	duration := formatDuration(time.Duration(stats.AvgDuration) * time.Millisecond)
+	hitRate := fmt.Sprintf("%.1f%%", stats.CacheHitRate)
+	failures := fmt.Sprintf("%d", stats.TotalFails)
+
+	if styled() {
+		title := statsTitleStyle.Render(fmt.Sprintf("Stats over last %d traces:", stats.TraceCount))
+
+		// Color-code cache hit rate
+		var hitRateStyled string
+		if stats.CacheHitRate >= 70 {
+			hitRateStyled = statsGoodStyle.Render(hitRate)
+		} else if stats.CacheHitRate >= 40 {
+			hitRateStyled = statsWarnStyle.Render(hitRate)
+		} else {
+			hitRateStyled = statsBadStyle.Render(hitRate)
+		}
+
+		// Color-code failures
+		var failuresStyled string
+		if stats.TotalFails == 0 {
+			failuresStyled = statsGoodStyle.Render(failures)
+		} else {
+			failuresStyled = statsBadStyle.Render(failures)
+		}
+
+		fmt.Println(title)
+		fmt.Printf("  %s %s\n", statsLabelStyle.Render("Avg duration:"), statsValueStyle.Render(duration))
+		fmt.Printf("  %s %s\n", statsLabelStyle.Render("Cache hit rate:"), hitRateStyled)
+		fmt.Printf("  %s %s\n", statsLabelStyle.Render("Total failures:"), failuresStyled)
+	} else {
+		fmt.Printf("Stats over last %d traces:\n", stats.TraceCount)
+		fmt.Printf("  Avg duration:   %s\n", duration)
+		fmt.Printf("  Cache hit rate: %s\n", hitRate)
+		fmt.Printf("  Total failures: %s\n", failures)
+	}
 }
 
 func printBottleneckReport(r *tracing.BottleneckReport) {
