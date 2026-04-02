@@ -115,8 +115,8 @@ var tracesListCmd = &cobra.Command{
 			return
 		}
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "TRACE ID\tDATE\tCMD\tTARGETS\tHITS\tFAILS\tDURATION\tCOMMIT")
+		headers := []string{"TRACE ID", "DATE", "CMD", "TARGETS", "HITS", "FAILS", "DURATION", "COMMIT"}
+		var rows [][]string
 		for _, e := range entries {
 			t := time.UnixMilli(e.StartTimeUnixMillis)
 			shortID := e.TraceID
@@ -127,18 +127,45 @@ var tracesListCmd = &cobra.Command{
 			if len(commit) > 7 {
 				commit = commit[:7]
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%d\t%d\t%s\t%s\n",
+
+			fails := fmt.Sprintf("%d", e.FailureCount)
+			if styled() && e.FailureCount > 0 {
+				fails = statsBadStyle.Render(fails)
+			}
+
+			rows = append(rows, []string{
 				shortID,
 				t.Format("2006-01-02"),
 				e.Command,
-				e.TotalTargets,
-				e.CacheHitCount,
-				e.FailureCount,
-				formatDuration(time.Duration(e.TotalDurationMillis)*time.Millisecond),
-				commit,
-			)
+				fmt.Sprintf("%d", e.TotalTargets),
+				fmt.Sprintf("%d", e.CacheHitCount),
+				fails,
+				formatDuration(time.Duration(e.TotalDurationMillis) * time.Millisecond),
+				renderDim(commit),
+			})
 		}
-		w.Flush()
+
+		if styled() {
+			t := table.New().
+				Headers(headers...).
+				Rows(rows...).
+				Border(lipgloss.NormalBorder()).
+				BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("238"))).
+				StyleFunc(func(row, col int) lipgloss.Style {
+					if row == table.HeaderRow {
+						return headerStyle
+					}
+					return lipgloss.NewStyle()
+				})
+			fmt.Println(t.Render())
+		} else {
+			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(w, strings.Join(headers, "\t"))
+			for _, row := range rows {
+				fmt.Fprintln(w, strings.Join(row, "\t"))
+			}
+			w.Flush()
+		}
 	},
 }
 
@@ -316,25 +343,64 @@ var tracesPruneCmd = &cobra.Command{
 
 func printBuildSummary(b *tracing.BuildRow) {
 	t := time.UnixMilli(b.StartTimeUnixMillis)
-	fmt.Printf("Trace:    %s\n", b.TraceID)
-	fmt.Printf("Date:     %s\n", t.Format("2006-01-02 15:04:05"))
-	fmt.Printf("Command:  %s\n", b.Command)
-	fmt.Printf("Version:  %s\n", b.GrogVersion)
-	fmt.Printf("Platform: %s\n", b.Platform)
-	fmt.Printf("Commit:   %s\n", b.GitCommit)
-	fmt.Printf("Branch:   %s\n", b.GitBranch)
-	fmt.Printf("Duration: %s\n", formatDuration(time.Duration(b.TotalDurationMillis)*time.Millisecond))
-	fmt.Printf("Targets:  %d (%d cache hits, %d failures)\n",
-		b.TotalTargets, b.CacheHitCount, b.FailureCount)
+	duration := formatDuration(time.Duration(b.TotalDurationMillis) * time.Millisecond)
+	failures := fmt.Sprintf("%d", b.FailureCount)
 
-	if b.CriticalPathExecMillis > 0 || b.CriticalPathCacheMillis > 0 {
-		fmt.Printf("Critical: exec %s, cache %s\n",
-			formatDuration(time.Duration(b.CriticalPathExecMillis)*time.Millisecond),
-			formatDuration(time.Duration(b.CriticalPathCacheMillis)*time.Millisecond))
-	}
+	if styled() {
+		label := statsLabelStyle.Copy().Width(12)
+		val := statsValueStyle
 
-	if b.RequestedPatterns != "" {
-		fmt.Printf("Patterns: %s\n", strings.ReplaceAll(b.RequestedPatterns, ",", ", "))
+		if b.FailureCount > 0 {
+			failures = statsBadStyle.Render(failures)
+		} else {
+			failures = statsGoodStyle.Render(failures)
+		}
+
+		fmt.Printf("%s %s\n", label.Render("Trace:"), renderDim(b.TraceID))
+		fmt.Printf("%s %s\n", label.Render("Date:"), val.Render(t.Format("2006-01-02 15:04:05")))
+		fmt.Printf("%s %s\n", label.Render("Command:"), val.Render(b.Command))
+		fmt.Printf("%s %s\n", label.Render("Version:"), renderDim(b.GrogVersion))
+		fmt.Printf("%s %s\n", label.Render("Platform:"), renderDim(b.Platform))
+		fmt.Printf("%s %s\n", label.Render("Commit:"), renderDim(b.GitCommit))
+		fmt.Printf("%s %s\n", label.Render("Branch:"), val.Render(b.GitBranch))
+		fmt.Printf("%s %s\n", label.Render("Duration:"), val.Render(duration))
+		fmt.Printf("%s %s (%s cache hits, %s failures)\n",
+			label.Render("Targets:"),
+			val.Render(fmt.Sprintf("%d", b.TotalTargets)),
+			statsGoodStyle.Render(fmt.Sprintf("%d", b.CacheHitCount)),
+			failures)
+
+		if b.CriticalPathExecMillis > 0 || b.CriticalPathCacheMillis > 0 {
+			fmt.Printf("%s exec %s, cache %s\n",
+				label.Render("Critical:"),
+				val.Render(formatDuration(time.Duration(b.CriticalPathExecMillis)*time.Millisecond)),
+				val.Render(formatDuration(time.Duration(b.CriticalPathCacheMillis)*time.Millisecond)))
+		}
+
+		if b.RequestedPatterns != "" {
+			fmt.Printf("%s %s\n", label.Render("Patterns:"), renderDim(strings.ReplaceAll(b.RequestedPatterns, ",", ", ")))
+		}
+	} else {
+		fmt.Printf("Trace:    %s\n", b.TraceID)
+		fmt.Printf("Date:     %s\n", t.Format("2006-01-02 15:04:05"))
+		fmt.Printf("Command:  %s\n", b.Command)
+		fmt.Printf("Version:  %s\n", b.GrogVersion)
+		fmt.Printf("Platform: %s\n", b.Platform)
+		fmt.Printf("Commit:   %s\n", b.GitCommit)
+		fmt.Printf("Branch:   %s\n", b.GitBranch)
+		fmt.Printf("Duration: %s\n", duration)
+		fmt.Printf("Targets:  %d (%d cache hits, %s failures)\n",
+			b.TotalTargets, b.CacheHitCount, failures)
+
+		if b.CriticalPathExecMillis > 0 || b.CriticalPathCacheMillis > 0 {
+			fmt.Printf("Critical: exec %s, cache %s\n",
+				formatDuration(time.Duration(b.CriticalPathExecMillis)*time.Millisecond),
+				formatDuration(time.Duration(b.CriticalPathCacheMillis)*time.Millisecond))
+		}
+
+		if b.RequestedPatterns != "" {
+			fmt.Printf("Patterns: %s\n", strings.ReplaceAll(b.RequestedPatterns, ",", ", "))
+		}
 	}
 	fmt.Println()
 }
