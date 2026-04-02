@@ -56,6 +56,21 @@ func getTraceStore(ctx context.Context, logger *console.Logger) *tracing.TraceSt
 	return store
 }
 
+// autoSync downloads remote traces to local cache if auto_sync is enabled.
+func autoSync(ctx context.Context, store *tracing.TraceStore, logger *console.Logger) {
+	if !config.Global.Traces.AutoSync {
+		return
+	}
+	synced, err := store.Sync(ctx)
+	if err != nil {
+		logger.Debugf("auto-sync: %v", err)
+		return
+	}
+	if synced > 0 {
+		logger.Infof("Synced %d remote trace files.", synced)
+	}
+}
+
 var TracesCmd = &cobra.Command{
 	Use:   "traces",
 	Short: "View and manage build execution traces.",
@@ -74,6 +89,7 @@ var tracesListCmd = &cobra.Command{
 		ctx, logger := console.SetupCommand()
 		store := getTraceStore(ctx, logger)
 		defer store.Close()
+		autoSync(ctx, store, logger)
 
 		opts := tracing.ListOptions{
 			Limit:        tracesListLimit,
@@ -134,6 +150,7 @@ var tracesShowCmd = &cobra.Command{
 		ctx, logger := console.SetupCommand()
 		store := getTraceStore(ctx, logger)
 		defer store.Close()
+		autoSync(ctx, store, logger)
 
 		trace, err := store.FindAndLoad(ctx, args[0])
 		if err != nil {
@@ -155,6 +172,7 @@ var tracesStatsCmd = &cobra.Command{
 		ctx, logger := console.SetupCommand()
 		store := getTraceStore(ctx, logger)
 		defer store.Close()
+		autoSync(ctx, store, logger)
 
 		limit := tracesListLimit
 		if limit <= 0 {
@@ -193,6 +211,24 @@ var tracesStatsCmd = &cobra.Command{
 	},
 }
 
+var tracesSyncCmd = &cobra.Command{
+	Use:   "sync",
+	Short: "Download remote traces to local cache for querying.",
+	Example: `  grog traces sync`,
+	Args: cobra.NoArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		ctx, logger := console.SetupCommand()
+		store := getTraceStore(ctx, logger)
+		defer store.Close()
+
+		synced, err := store.Sync(ctx)
+		if err != nil {
+			logger.Fatalf("sync failed: %v", err)
+		}
+		logger.Infof("Synced %d remote trace files.", synced)
+	},
+}
+
 var tracesExportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "Export traces for dashboard integration.",
@@ -203,6 +239,7 @@ var tracesExportCmd = &cobra.Command{
 		ctx, logger := console.SetupCommand()
 		store := getTraceStore(ctx, logger)
 		defer store.Close()
+		autoSync(ctx, store, logger)
 
 		opts := tracing.ListOptions{Limit: tracesExportLimit}
 		if tracesExportSince != "" {
@@ -414,5 +451,6 @@ func AddTracesCmd(rootCmd *cobra.Command) {
 	TracesCmd.AddCommand(tracesStatsCmd)
 	TracesCmd.AddCommand(tracesExportCmd)
 	TracesCmd.AddCommand(tracesPruneCmd)
+	TracesCmd.AddCommand(tracesSyncCmd)
 	rootCmd.AddCommand(TracesCmd)
 }

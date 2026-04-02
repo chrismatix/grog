@@ -234,10 +234,11 @@ type AzureCacheConfig struct {
 }
 
 type TracesConfig struct {
-	Enabled bool         `mapstructure:"enabled"`
-	Backend CacheBackend `mapstructure:"backend"`
-	GCS     GCSCacheConfig `mapstructure:"gcs"`
-	S3      S3CacheConfig  `mapstructure:"s3"`
+	Enabled  bool         `mapstructure:"enabled"`
+	AutoSync bool         `mapstructure:"auto_sync"`
+	Backend  CacheBackend `mapstructure:"backend"`
+	GCS      GCSCacheConfig `mapstructure:"gcs"`
+	S3       S3CacheConfig  `mapstructure:"s3"`
 }
 const (
 	DockerBackendFSTarball = "tarball"

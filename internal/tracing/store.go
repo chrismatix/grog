@@ -108,6 +108,52 @@ func (s *TraceStore) Write(ctx context.Context, trace *BuildTrace) error {
 	return s.writer.Write(ctx, trace)
 }
 
+// Sync downloads remote trace files that are not yet in the local cache.
+// It lists keys from the remote backend and triggers a Get() for each missing
+// file, which causes the RemoteWrapper to fetch and cache it locally.
+// Returns the number of files synced.
+func (s *TraceStore) Sync(ctx context.Context) (int, error) {
+	listable, ok := s.writer.backend.(backends.ListableBackend)
+	if !ok {
+		return 0, fmt.Errorf("cache backend does not support listing (no remote backend configured)")
+	}
+
+	synced := 0
+	for _, table := range []string{tracesBuildsPath, tracesSpansPath} {
+		remoteKeys, err := listable.ListKeys(ctx, table, ".parquet")
+		if err != nil {
+			return synced, fmt.Errorf("list remote keys for %s: %w", table, err)
+		}
+
+		for _, key := range remoteKeys {
+			// key is relative like "2026-03-30/trace-id.parquet"
+			// Split into path component (date dir) and filename
+			parts := strings.SplitN(key, "/", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			subPath := fmt.Sprintf("%s/%s", table, parts[0])
+			fileName := parts[1]
+
+			// Check if it already exists locally
+			exists, _ := s.writer.backend.Exists(ctx, subPath, fileName)
+			if exists {
+				continue
+			}
+
+			// Trigger a Get which will fetch from remote and cache locally
+			reader, err := s.writer.backend.Get(ctx, subPath, fileName)
+			if err != nil {
+				continue // best-effort — skip files that fail
+			}
+			reader.Close()
+			synced++
+		}
+	}
+
+	return synced, nil
+}
+
 // List returns recent builds matching optional filters.
 func (s *TraceStore) List(ctx context.Context, opts ListOptions) ([]BuildRow, error) {
 	var conditions []string

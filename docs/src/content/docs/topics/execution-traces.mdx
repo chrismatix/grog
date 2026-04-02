@@ -295,6 +295,24 @@ Both DuckDB and ClickHouse support querying Parquet files without any data loadi
 
 ## Managing traces
 
+### Syncing remote traces
+
+When using a remote cache backend (S3, GCS, Azure), traces written by other machines (e.g. CI) are stored remotely but not automatically available for local querying. Use `sync` to download them:
+
+```bash
+grog traces sync
+```
+
+To automatically sync remote traces before every query command (`list`, `show`, `stats`, `export`), enable `auto_sync`:
+
+```toml
+[traces]
+enabled = true
+auto_sync = true
+```
+
+With `auto_sync` enabled, running `grog traces list` will first download any new remote trace files, then query across all traces — both local and those from CI or other team members.
+
 ### Pruning old traces
 
 Traces accumulate over time. Use `prune` to delete traces older than a given duration:
@@ -325,6 +343,7 @@ There is no index file. DuckDB queries Parquet files directly via glob patterns,
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `traces.enabled` | bool | `false` | Enable trace collection |
+| `traces.auto_sync` | bool | `false` | Automatically download remote traces before query commands |
 | `traces.backend` | string | _(uses cache backend)_ | Override storage backend (`"s3"` or `"gcs"`) |
 | `traces.gcs.bucket` | string | | GCS bucket for trace storage |
 | `traces.gcs.prefix` | string | `/` | Prefix within the GCS bucket |

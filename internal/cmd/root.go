@@ -195,6 +195,7 @@ func initConfig(cmd *cobra.Command) error {
 	viper.SetDefault("hash_algorithm", config.HashAlgorithmXXH3)
 	viper.SetDefault("environment_variables", make(map[string]string))
 	viper.SetDefault("traces.enabled", false)
+	viper.SetDefault("traces.auto_sync", false)
 
 	names := []string{"grog"}
 	if os.Getenv("CI") == "1" {

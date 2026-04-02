@@ -87,6 +87,7 @@ For instance, to set or override the `fail_fast` option set `GROG_FAIL_FAST=fals
 ### Trace Settings
 
 - **traces.enabled**: When `true`, Grog records an execution trace for every build, test, and run invocation. Traces capture per-target phase-level timing data for performance analysis. Defaults to `false`.
+- **traces.auto_sync**: When `true`, query commands (`traces list`, `show`, `stats`, `export`) automatically download remote traces to the local cache before querying. This makes traces from CI and other machines visible locally. Defaults to `false`.
 - **traces.backend**: Override the storage backend for traces. When not set, traces use the same backend as the build cache. Supports `"gcs"` and `"s3"`.
 - **traces.gcs.bucket** / **traces.s3.bucket**: Bucket name for trace storage when using a separate backend.
 - **traces.gcs.prefix** / **traces.s3.prefix**: Optional prefix within the bucket. Defaults to `/`.
