@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -317,51 +318,146 @@ func (s *TraceStore) Stats(ctx context.Context, limit int) (*TraceStats, error) 
 	return &stats, nil
 }
 
-// DetailedTargetStats holds per-target aggregated metrics.
-type DetailedTargetStats struct {
-	Label    string
-	AvgCmd   float64
-	AvgQueue float64
-	Count    int
-	Failures int
+// TargetBottleneck holds per-target aggregated metrics for bottleneck analysis.
+type TargetBottleneck struct {
+	Label          string
+	Count          int
+	AvgCmd         float64
+	AvgQueue       float64
+	AvgIO          float64
+	AvgHash        float64
+	MissRate       float64
+	Failures       int
+	AvgOutputWrite float64
+	AvgOutputLoad  float64
+	AvgCacheWrite  float64
 }
 
-func (s *TraceStore) DetailedStats(ctx context.Context, limit int) ([]DetailedTargetStats, error) {
+// BottleneckReport categorizes targets by bottleneck type.
+type BottleneckReport struct {
+	SlowestTargets []TargetBottleneck
+	QueueSaturated []TargetBottleneck
+	IOBottlenecks  []TargetBottleneck
+	SlowHashing    []TargetBottleneck
+	FrequentMisses []TargetBottleneck
+	FlakyTargets   []TargetBottleneck
+
+	OverallCacheMissRate float64
+}
+
+// Bottleneck thresholds
+const (
+	queueSaturationThresholdMs = 500
+	ioBottleneckThresholdMs    = 1000
+	slowHashThresholdMs        = 200
+	missRateExcessPct          = 30 // miss rate must exceed overall avg by this many pp
+	maxBottlenecksPerCategory  = 10
+)
+
+func (s *TraceStore) Bottlenecks(ctx context.Context, limit int) (*BottleneckReport, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 
-	query := fmt.Sprintf(`SELECT label,
+	query := fmt.Sprintf(`SELECT
+		label,
+		COUNT(*) as n,
 		AVG(command_duration_millis) as avg_cmd,
 		AVG(queue_wait_millis) as avg_queue,
-		COUNT(*) as n,
-		SUM(CASE WHEN status = 'FAILURE' THEN 1 ELSE 0 END) as fails
+		AVG(output_write_millis + output_load_millis + cache_write_millis) as avg_io,
+		AVG(hash_duration_millis) as avg_hash,
+		SUM(CASE WHEN cache_result = 'CACHE_MISS' THEN 1 ELSE 0 END)::FLOAT / COUNT(*) * 100 as miss_rate,
+		SUM(CASE WHEN status = 'FAILURE' THEN 1 ELSE 0 END) as failures,
+		AVG(output_write_millis) as avg_output_write,
+		AVG(output_load_millis) as avg_output_load,
+		AVG(cache_write_millis) as avg_cache_write
 		FROM read_parquet('%s', union_by_name=true)
 		WHERE trace_id IN (
 			SELECT trace_id FROM read_parquet('%s', union_by_name=true)
 			ORDER BY start_time_unix_millis DESC LIMIT %d
 		)
-		GROUP BY label ORDER BY avg_cmd DESC`,
+		GROUP BY label
+		HAVING n > 1
+		ORDER BY avg_cmd DESC`,
 		s.resolver.SpansGlob(), s.resolver.BuildsGlob(), limit)
 
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
 		if isNoFilesError(err) {
-			return nil, nil
+			return &BottleneckReport{}, nil
 		}
 		return nil, err
 	}
 	defer rows.Close()
 
-	var results []DetailedTargetStats
+	var all []TargetBottleneck
+	var totalMissRate float64
 	for rows.Next() {
-		var s DetailedTargetStats
-		if err := rows.Scan(&s.Label, &s.AvgCmd, &s.AvgQueue, &s.Count, &s.Failures); err != nil {
+		var t TargetBottleneck
+		if err := rows.Scan(&t.Label, &t.Count, &t.AvgCmd, &t.AvgQueue,
+			&t.AvgIO, &t.AvgHash, &t.MissRate, &t.Failures,
+			&t.AvgOutputWrite, &t.AvgOutputLoad, &t.AvgCacheWrite); err != nil {
 			return nil, err
 		}
-		results = append(results, s)
+		all = append(all, t)
+		totalMissRate += t.MissRate
 	}
-	return results, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	report := &BottleneckReport{}
+	if len(all) > 0 {
+		report.OverallCacheMissRate = totalMissRate / float64(len(all))
+	}
+
+	missThreshold := report.OverallCacheMissRate + missRateExcessPct
+
+	for _, t := range all {
+		if len(report.SlowestTargets) < maxBottlenecksPerCategory {
+			report.SlowestTargets = append(report.SlowestTargets, t)
+		}
+		if t.AvgQueue > queueSaturationThresholdMs && len(report.QueueSaturated) < maxBottlenecksPerCategory {
+			report.QueueSaturated = append(report.QueueSaturated, t)
+		}
+		if t.AvgIO > ioBottleneckThresholdMs && len(report.IOBottlenecks) < maxBottlenecksPerCategory {
+			report.IOBottlenecks = append(report.IOBottlenecks, t)
+		}
+		if t.AvgHash > slowHashThresholdMs && len(report.SlowHashing) < maxBottlenecksPerCategory {
+			report.SlowHashing = append(report.SlowHashing, t)
+		}
+		if t.MissRate > missThreshold && len(report.FrequentMisses) < maxBottlenecksPerCategory {
+			report.FrequentMisses = append(report.FrequentMisses, t)
+		}
+		if t.Failures > 0 && len(report.FlakyTargets) < maxBottlenecksPerCategory {
+			report.FlakyTargets = append(report.FlakyTargets, t)
+		}
+	}
+
+	// Sort secondary categories by their primary metric (query already sorts by avg_cmd)
+	sortByQueue := func(a []TargetBottleneck) {
+		sort.Slice(a, func(i, j int) bool { return a[i].AvgQueue > a[j].AvgQueue })
+	}
+	sortByIO := func(a []TargetBottleneck) {
+		sort.Slice(a, func(i, j int) bool { return a[i].AvgIO > a[j].AvgIO })
+	}
+	sortByHash := func(a []TargetBottleneck) {
+		sort.Slice(a, func(i, j int) bool { return a[i].AvgHash > a[j].AvgHash })
+	}
+	sortByMissRate := func(a []TargetBottleneck) {
+		sort.Slice(a, func(i, j int) bool { return a[i].MissRate > a[j].MissRate })
+	}
+	sortByFailures := func(a []TargetBottleneck) {
+		sort.Slice(a, func(i, j int) bool { return a[i].Failures > a[j].Failures })
+	}
+
+	sortByQueue(report.QueueSaturated)
+	sortByIO(report.IOBottlenecks)
+	sortByHash(report.SlowHashing)
+	sortByMissRate(report.FrequentMisses)
+	sortByFailures(report.FlakyTargets)
+
+	return report, nil
 }
 
 // Prune deletes traces older than the given time.

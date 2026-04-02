@@ -194,19 +194,11 @@ var tracesStatsCmd = &cobra.Command{
 		fmt.Printf("  Total failures: %d\n", stats.TotalFails)
 
 		if tracesStatsDetailed {
-			fmt.Println()
-			detailed, err := store.DetailedStats(ctx, limit)
+			report, err := store.Bottlenecks(ctx, limit)
 			if err != nil {
-				logger.Fatalf("failed to compute detailed stats: %v", err)
+				logger.Fatalf("failed to compute bottleneck analysis: %v", err)
 			}
-
-			fmt.Println("Slowest targets (avg command duration):")
-			for i, t := range detailed {
-				if i >= 10 {
-					break
-				}
-				fmt.Printf("  %s  %s (n=%d)\n", formatMillis(int64(t.AvgCmd)), t.Label, t.Count)
-			}
+			printBottleneckReport(report)
 		}
 	},
 }
@@ -392,6 +384,58 @@ func printSpanTable(spans []tracing.SpanRow) {
 		)
 	}
 	w.Flush()
+}
+
+func printBottleneckReport(r *tracing.BottleneckReport) {
+	if len(r.SlowestTargets) > 0 {
+		fmt.Println("\nSlowest targets (avg command duration):")
+		for _, t := range r.SlowestTargets {
+			fmt.Printf("  %s  %s (n=%d)\n", formatMillis(int64(t.AvgCmd)), t.Label, t.Count)
+		}
+	}
+
+	if len(r.QueueSaturated) > 0 {
+		fmt.Println("\nWorker pool saturation (avg queue wait > 500ms):")
+		for _, t := range r.QueueSaturated {
+			fmt.Printf("  %s  %s (n=%d)\n", formatMillis(int64(t.AvgQueue)), t.Label, t.Count)
+		}
+		fmt.Println("  Hint: consider increasing num_workers")
+	}
+
+	if len(r.IOBottlenecks) > 0 {
+		fmt.Println("\nI/O bottlenecks (avg I/O time > 1s):")
+		for _, t := range r.IOBottlenecks {
+			fmt.Printf("  %s  %s (output_write: %s, output_load: %s, cache_write: %s, n=%d)\n",
+				formatMillis(int64(t.AvgIO)), t.Label,
+				formatMillis(int64(t.AvgOutputWrite)),
+				formatMillis(int64(t.AvgOutputLoad)),
+				formatMillis(int64(t.AvgCacheWrite)),
+				t.Count)
+		}
+	}
+
+	if len(r.SlowHashing) > 0 {
+		fmt.Println("\nSlow hashing (avg hash time > 200ms):")
+		for _, t := range r.SlowHashing {
+			fmt.Printf("  %s  %s (n=%d)\n", formatMillis(int64(t.AvgHash)), t.Label, t.Count)
+		}
+		fmt.Println("  Hint: reduce input glob scope or split into smaller targets")
+	}
+
+	if len(r.FrequentMisses) > 0 {
+		fmt.Printf("\nFrequent cache misses (>%.0f%% miss rate, overall avg: %.0f%%):\n",
+			r.OverallCacheMissRate+30, r.OverallCacheMissRate)
+		for _, t := range r.FrequentMisses {
+			fmt.Printf("  %.0f%%  %s (n=%d)\n", t.MissRate, t.Label, t.Count)
+		}
+	}
+
+	if len(r.FlakyTargets) > 0 {
+		fmt.Println("\nFrequently failing targets:")
+		for _, t := range r.FlakyTargets {
+			fmt.Printf("  %d/%d  %s\n", t.Failures, t.Count, t.Label)
+		}
+	}
 }
 
 func parseDuration(s string) (time.Duration, error) {
