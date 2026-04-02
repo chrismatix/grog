@@ -45,6 +45,10 @@ func (r *recordingCacheBackend) Exists(context.Context, string, string) (bool, e
 	return false, nil
 }
 
+func (r *recordingCacheBackend) ListKeys(context.Context, string, string) ([]string, error) {
+	return nil, nil
+}
+
 func (r *recordingCacheBackend) Calls() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()

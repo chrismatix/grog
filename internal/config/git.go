@@ -17,3 +17,15 @@ func GetGitHash() (string, error) {
 	}
 	return strings.TrimSpace(out.String()), nil
 }
+
+// GetGitBranch returns the current git branch name.
+func GetGitBranch() (string, error) {
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+
+	if err := cmd.Run(); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out.String()), nil
+}

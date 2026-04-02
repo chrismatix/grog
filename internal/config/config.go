@@ -57,6 +57,9 @@ type WorkspaceConfig struct {
 	EnableCache bool        `mapstructure:"enable_cache"`
 	Cache       CacheConfig `mapstructure:"cache"`
 
+	// Tracing
+	Traces TracesConfig `mapstructure:"traces"`
+
 	// Docker
 	Docker DockerConfig `mapstructure:"docker"`
 
@@ -230,6 +233,13 @@ type AzureCacheConfig struct {
 	SharedCache      bool   `mapstructure:"shared_cache"`
 }
 
+type TracesConfig struct {
+	Enabled  bool         `mapstructure:"enabled"`
+	AutoPull bool         `mapstructure:"auto_pull"`
+	Backend  CacheBackend `mapstructure:"backend"`
+	GCS      GCSCacheConfig `mapstructure:"gcs"`
+	S3       S3CacheConfig  `mapstructure:"s3"`
+}
 const (
 	DockerBackendFSTarball = "tarball"
 	DockerBackendRegistry  = "registry"

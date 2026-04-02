@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // FileSystemCache implements the CacheBackend interface using the file system for storage
@@ -135,6 +136,37 @@ func (fsc *FileSystemCache) Exists(ctx context.Context, path, key string) (bool,
 	}
 	logger.Tracef("Cache-hit for path: %s, key: %s", path, key)
 	return true, nil
+}
+
+// ListKeys walks the directory tree and returns keys matching the suffix.
+func (fsc *FileSystemCache) ListKeys(ctx context.Context, path string, suffix string) ([]string, error) {
+	dir := fsc.getDir(path)
+
+	var keys []string
+	err := filepath.Walk(dir, func(filePath string, info os.FileInfo, err error) error {
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		rel, relErr := filepath.Rel(dir, filePath)
+		if relErr != nil {
+			return relErr
+		}
+		if suffix == "" || strings.HasSuffix(rel, suffix) {
+			keys = append(keys, rel)
+		}
+		return nil
+	})
+
+	if err != nil && os.IsNotExist(err) {
+		return nil, nil
+	}
+	return keys, err
 }
 
 func (fsc *FileSystemCache) GetWorkspaceCacheSizeBytes() (int64, error) {

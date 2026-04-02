@@ -1,0 +1,56 @@
+---
+title: Grafana Loki
+description: Ship Grog execution traces to Grafana Loki for log-based build observability dashboards.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Loki is designed for log aggregation, and JSONL [execution traces](/tracing/) slot in naturally. Combined with Grafana dashboards, this gives you real-time build observability.
+
+## Setup
+
+Ship JSONL traces to Loki using `promtail`, `Grafana Alloy`, or any Loki-compatible agent. The simplest approach appends traces to a log file that your agent tails:
+
+```bash
+# In your CI pipeline, after each build:
+grog traces export --format=jsonl --limit 1 >> /var/log/grog-traces.jsonl
+```
+
+Configure your Loki agent to tail this file with a `grog` label:
+
+```yaml
+# promtail config snippet
+scrape_configs:
+  - job_name: grog-traces
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: grog
+          __path__: /var/log/grog-traces.jsonl
+```
+
+## Grafana dashboard queries
+
+With traces in Loki, use LogQL in Grafana to build dashboards:
+
+**Build duration over time:**
+
+```
+{job="grog"} | json | line_format "{{.total_duration_millis}}"
+```
+
+**Filter to failed builds:**
+
+```
+{job="grog"} | json | failure_count > 0
+```
+
+**Extract cache hit rate:**
+
+```
+{job="grog"} | json | unwrap cache_hit_count | __error__=""
+```
+
+<Aside>
+For richer Grafana dashboards, consider sending traces to both Loki (for log-based queries) and Tempo (for waterfall visualization) from the same CI pipeline.
+</Aside>

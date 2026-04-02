@@ -1,0 +1,33 @@
+---
+title: Grafana Tempo
+description: Send Grog execution traces to Grafana Tempo for interactive waterfall visualization of build execution.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Tempo is a distributed tracing backend that renders [execution traces](/tracing/) as interactive waterfall diagrams. This is especially powerful for Grog traces because it visualizes parallel target execution lanes and per-target phase breakdowns.
+
+## Setup
+
+Export traces in OTLP format and send them to Tempo's OTLP HTTP endpoint:
+
+```bash
+grog traces export --format=otel --limit 1 --output /tmp/trace-otel.json
+
+curl -X POST http://tempo:4318/v1/traces \
+  -H "Content-Type: application/json" \
+  -d @/tmp/trace-otel.json
+```
+
+<Aside>
+The OTLP export maps each build to a root span with child spans for every target. Span attributes include all phase timing fields (`grog.command_duration_ms`, `grog.queue_wait_ms`, etc.) so you can filter and search by them in the Tempo UI.
+</Aside>
+
+## What you get
+
+Once traces are in Tempo, you can:
+
+- **Waterfall view**: See all targets laid out on a timeline, showing which ran in parallel and where time was spent
+- **Search by attributes**: Find traces where `grog.cache_result = CACHE_MISS` or where `grog.command_duration_ms > 30000`
+- **Compare traces**: Side-by-side comparison of two builds to see what changed
+- **Link to Loki**: If you also ship logs to Loki, Grafana can correlate trace spans with build output logs

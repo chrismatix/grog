@@ -1,0 +1,31 @@
+---
+title: Datadog
+description: Ingest Grog execution traces into Datadog APM for build performance monitoring.
+---
+
+Datadog APM can ingest OTLP [execution traces](/tracing/) for build performance monitoring.
+
+## Setup
+
+Send OTLP traces to the Datadog Agent's OTLP endpoint:
+
+```bash
+grog traces export --format=otel --limit 1 --output /tmp/trace-otel.json
+
+curl -X POST http://localhost:4318/v1/traces \
+  -H "Content-Type: application/json" \
+  -d @/tmp/trace-otel.json
+```
+
+Ensure the Datadog Agent is configured to accept OTLP:
+
+```yaml
+# datadog.yaml
+otlp_config:
+  receiver:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+```
+
+In Datadog APM, traces appear under service `grog`. You can create monitors for build duration regressions, cache hit rate drops, or frequent target failures.

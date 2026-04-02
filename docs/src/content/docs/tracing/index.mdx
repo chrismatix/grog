@@ -1,0 +1,251 @@
+---
+title: Execution Traces
+description: Capture and analyze build execution traces for performance insights and dashboard integration.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Grog can record execution traces for every build, test, and run invocation. Traces capture per-target phase-level timing data, making it easy to identify bottlenecks, track cache efficiency, and monitor build performance over time.
+
+Traces are stored as [Parquet](https://parquet.apache.org/) files using the same [remote caching](/topics/remote-caching/) backends (local filesystem, S3, or GCS) and can be queried from the terminal or exported for use in dashboards like Grafana, Datadog, or Jaeger.
+
+<Aside>
+Trace **writing** (during builds) is pure Go and has no extra dependencies. Trace **querying** (`grog traces list`, `show`, `stats`, `export`, `prune`) uses the embedded [DuckDB](https://duckdb.org/) engine to run SQL queries directly against the Parquet files.
+</Aside>
+
+## Enabling traces
+
+Add the following to your `grog.toml`:
+
+```toml
+[traces]
+enabled = true
+```
+
+By default, traces are stored alongside your build cache. To use a separate storage backend (e.g. for different retention or access controls):
+
+```toml
+[traces]
+enabled = true
+backend = "s3"
+
+[traces.s3]
+bucket = "my-traces-bucket"
+prefix = "grog-traces"
+```
+
+<Aside>
+Trace writing is fully asynchronous and fire-and-forget. It will never slow down your builds. If a trace write fails, a warning is logged but the build result is unaffected.
+</Aside>
+
+## What traces capture
+
+Each trace records a complete picture of a single build invocation:
+
+**Build-level metadata:**
+- Trace ID, timestamp, and total duration
+- Git commit and branch
+- Grog version and platform
+- Target patterns requested
+- Aggregate counts (targets, cache hits, failures)
+- Critical path timing
+
+**Per-target span data:**
+- Label, status (success/failure/cancelled), and cache result (hit/miss/skip)
+- 8 phase-level timing breakdowns for bottleneck analysis
+
+### Phase timing
+
+Every target's execution is broken down into granular phases:
+
+```
+Cache miss: |-- queue --|-- hash --|-- cache_check --|-- command --|-- output_write --|-- cache_write --|
+Cache hit:  |-- queue --|-- hash --|-- cache_check --|-- output_load --|
+```
+
+| Phase | What it measures |
+|-------|-----------------|
+| **queue** | Time waiting in the worker pool before starting |
+| **hash** | Time computing the target's ChangeHash from inputs |
+| **cache_check** | Time checking target cache, output checks, and taint status |
+| **command** | Time running the actual shell command |
+| **output_write** | Time writing outputs and computing the OutputHash |
+| **output_load** | Time loading cached outputs (cache hit path) |
+| **cache_write** | Time persisting the TargetResult to cache |
+| **dep_load** | Time loading dependency outputs (`load_outputs=minimal` only) |
+
+This granularity lets you answer questions like:
+- Which targets are the slowest to build?
+- Is my worker pool saturated (high queue wait)?
+- Are cache operations a bottleneck (high output_load or cache_write)?
+- Do I have targets with many inputs causing slow hashing?
+
+## Querying traces from the terminal
+
+### Listing recent traces
+
+```bash
+grog traces list
+```
+
+```
+TRACE ID   DATE        CMD    TARGETS  HITS  FAILS  DURATION  COMMIT
+a1b2c3d4   2026-03-30  build  42       38    0      12.3s     abc1234
+e5f6g7h8   2026-03-30  test   18       12    2      45.1s     abc1234
+```
+
+Filter with `--limit`, `--since`, `--command`, or `--failures-only`:
+
+```bash
+grog traces list --since 2026-03-01 --command build --limit 50
+grog traces list --failures-only
+```
+
+### Viewing a trace
+
+```bash
+grog traces show a1b2c3d4
+```
+
+This displays the build summary and a per-target breakdown sorted by duration:
+
+```
+TARGET                    STATUS  CACHE  TOTAL   CMD    HASH   I/O    QUEUE
+//services/api:build      ok      miss   45.2s   42.1s  0.8s   2.1s   0.2s
+//libs/proto:codegen      ok      miss   12.4s   11.1s  0.2s   1.0s   0.1s
+//services/api:test       FAIL    miss    8.7s    8.5s  0.1s   0.0s   0.1s
+//libs/common:build       ok      hit     0.3s    0.0s  0.0s   0.3s   0.0s
+```
+
+Sort by different columns to surface specific bottlenecks:
+
+```bash
+grog traces show a1b2c3d4 --sort-by command  # slowest commands
+grog traces show a1b2c3d4 --sort-by queue    # most queue contention
+grog traces show a1b2c3d4 --top 10           # top 10 slowest only
+```
+
+### Aggregate statistics
+
+```bash
+grog traces stats
+```
+
+Shows average build duration, cache hit rate, and failure count over recent traces. Add `--detailed` to load full traces and show per-target breakdowns (slowest targets, highest queue wait, most frequent failures):
+
+```bash
+grog traces stats --detailed --limit 50
+```
+
+## Dashboard integration
+
+Traces can be exported in two formats for use with external analytics and observability tools.
+
+### JSONL export
+
+Each trace is serialized as a single JSON line, suitable for log aggregation tools and data warehouses:
+
+```bash
+grog traces export --format=jsonl > traces.jsonl
+grog traces export --format=jsonl --since 2026-03-01 --output traces.jsonl
+```
+
+JSONL files can be:
+- Uploaded to S3 and queried with AWS Athena
+- Loaded into BigQuery for analysis
+- Ingested by Grafana Loki
+- Piped to `jq` for ad-hoc queries
+
+```bash
+# Find the slowest target across all recent builds
+grog traces export --format=jsonl | jq -r '.spans[] | "\(.command_duration_millis)ms \(.label)"' | sort -rn | head -10
+```
+
+### OpenTelemetry export
+
+Traces can be exported as OTLP-compatible JSON for distributed tracing backends:
+
+```bash
+grog traces export --format=otel > traces-otel.json
+grog traces export --format=otel --output traces-otel.json
+```
+
+This maps each build to an OTLP trace with the build as the root span and each target as a child span, including all phase timing as span attributes. Compatible with:
+- **Grafana Tempo** — Waterfall visualization of parallel target execution
+- **Jaeger** — Trace search and comparison
+- **Datadog APM** — Build performance monitoring
+
+<Aside>
+The OTLP export produces structured JSON without requiring the OpenTelemetry SDK as a dependency, keeping the Grog binary lean.
+</Aside>
+
+### CI workflow example
+
+A typical CI integration pipes traces to your observability stack after each build:
+
+```bash
+# Run the build
+grog build //...
+
+# Export trace to JSONL and ship to your log aggregator
+grog traces export --format=jsonl --limit 1 >> /shared/grog-traces.jsonl
+```
+
+For detailed setup instructions with specific analytics backends, see the [Integrations](/tracing/integrations/bigquery/) guides.
+
+## Managing traces
+
+### Syncing remote traces
+
+When using a remote cache backend (S3, GCS, Azure), traces written by other machines (e.g. CI) are stored remotely but not automatically available for local querying. Use `sync` to download them:
+
+```bash
+grog traces pull
+```
+
+To automatically sync remote traces before every query command (`list`, `show`, `stats`, `export`), enable `auto_pull`:
+
+```toml
+[traces]
+enabled = true
+auto_pull = true
+```
+
+With `auto_pull` enabled, running `grog traces list` will first download any new remote trace files, then query across all traces — both local and those from CI or other team members.
+
+### Pruning old traces
+
+Traces accumulate over time. Use `prune` to delete traces older than a given duration:
+
+```bash
+grog traces prune --older-than 30d
+grog traces prune --older-than 72h
+```
+
+### Storage
+
+Traces are stored as Parquet files under a `traces/` prefix with date-based partitioning — two tables (builds + spans), one file per trace:
+
+```
+traces/
+  builds/
+    2026-03-30/
+      <trace-id>.parquet     # 1 row with build metadata
+  spans/
+    2026-03-30/
+      <trace-id>.parquet     # 1 row per target with phase timing
+```
+
+There is no index file. DuckDB queries Parquet files directly via glob patterns, so storage scales to any number of traces without index maintenance overhead. Each trace is typically a few KB, so storage costs are minimal even for large monorepos with frequent builds.
+
+## Configuration reference
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `traces.enabled` | bool | `false` | Enable trace collection |
+| `traces.auto_pull` | bool | `false` | Automatically download remote traces before query commands |
+| `traces.backend` | string | _(uses cache backend)_ | Override storage backend (`"s3"` or `"gcs"`) |
+| `traces.gcs.bucket` | string | | GCS bucket for trace storage |
+| `traces.gcs.prefix` | string | `/` | Prefix within the GCS bucket |
+| `traces.s3.bucket` | string | | S3 bucket for trace storage |
+| `traces.s3.prefix` | string | `/` | Prefix within the S3 bucket |

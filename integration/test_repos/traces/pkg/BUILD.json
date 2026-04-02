@@ -1,0 +1,17 @@
+{
+  "targets": [
+    {
+      "name": "build_a",
+      "inputs": ["src/*.txt"],
+      "command": "cat src/input.txt > output_a.txt",
+      "outputs": ["output_a.txt"]
+    },
+    {
+      "name": "build_b",
+      "inputs": ["src/*.txt"],
+      "dependencies": ["//pkg:build_a"],
+      "command": "cat src/input.txt > output_b.txt",
+      "outputs": ["output_b.txt"]
+    }
+  ]
+}
