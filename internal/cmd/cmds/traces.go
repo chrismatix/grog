@@ -8,6 +8,8 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/table"
 	"github.com/spf13/cobra"
 
 	"grog/internal/caching/backends"
@@ -345,16 +347,14 @@ func printSpanTable(spans []tracing.SpanRow) {
 		return
 	}
 
-	// Spans are already sorted by total_duration_millis DESC from the query.
-	// Apply additional sort if requested.
 	displaySpans := spans
 	if tracesShowTop > 0 && len(displaySpans) > tracesShowTop {
 		displaySpans = displaySpans[:tracesShowTop]
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "TARGET\tSTATUS\tCACHE\tTOTAL\tCMD\tHASH\tI/O\tQUEUE")
+	headers := []string{"TARGET", "STATUS", "CACHE", "TOTAL", "CMD", "HASH", "I/O", "QUEUE"}
 
+	var rows [][]string
 	for _, s := range displaySpans {
 		status := "ok"
 		if s.Status == "FAILURE" {
@@ -372,70 +372,246 @@ func printSpanTable(spans []tracing.SpanRow) {
 
 		ioMillis := s.OutputWriteMillis + s.OutputLoadMillis + s.CacheWriteMillis + s.DepLoadMillis
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-			s.Label,
-			status,
-			cache,
+		row := []string{
+			s.Label, status, cache,
 			formatMillis(s.TotalDurationMillis),
 			formatMillis(s.CommandDurationMillis),
 			formatMillis(s.HashDurationMillis),
 			formatMillis(ioMillis),
 			formatMillis(s.QueueWaitMillis),
-		)
+		}
+
+		if styled() {
+			row[0] = renderLabel(s.Label)
+			if status == "FAIL" {
+				row[1] = impactHighStyle.Render(status)
+			}
+			if cache == "hit" {
+				row[2] = dimStyle.Render(cache)
+			}
+		}
+
+		rows = append(rows, row)
 	}
-	w.Flush()
+
+	if styled() {
+		t := table.New().
+			Headers(headers...).
+			Rows(rows...).
+			Border(lipgloss.NormalBorder()).
+			BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("238"))).
+			StyleFunc(func(row, col int) lipgloss.Style {
+				if row == table.HeaderRow {
+					return headerStyle
+				}
+				return lipgloss.NewStyle()
+			})
+		fmt.Println(t.Render())
+	} else {
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, strings.Join(headers, "\t"))
+		for _, row := range rows {
+			fmt.Fprintln(w, strings.Join(row, "\t"))
+		}
+		w.Flush()
+	}
+}
+
+// styled returns true if lipgloss rendering should be used.
+func styled() bool {
+	return console.UseTea()
+}
+
+// lipgloss styles for bottleneck report
+var (
+	headerStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))
+	sectionStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12")).MarginTop(1)
+	hintStyle      = lipgloss.NewStyle().Italic(true).Foreground(lipgloss.Color("241"))
+	impactHighStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196")) // red
+	impactMedStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("214")) // orange
+	impactLowStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("226")) // yellow
+	labelStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("75"))
+	dimStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+)
+
+func renderImpact(impact float64) string {
+	bar := fmt.Sprintf("%.0fms", impact)
+	if !styled() {
+		return bar
+	}
+	if impact > 10000 {
+		return impactHighStyle.Render(bar)
+	} else if impact > 3000 {
+		return impactMedStyle.Render(bar)
+	}
+	return impactLowStyle.Render(bar)
+}
+
+func renderSection(title string) string {
+	if styled() {
+		return sectionStyle.Render(title)
+	}
+	return "\n" + title
+}
+
+func renderHint(text string) string {
+	if styled() {
+		return hintStyle.Render("  " + text)
+	}
+	return "  " + text
+}
+
+func renderLabel(label string) string {
+	if styled() {
+		return labelStyle.Render(label)
+	}
+	return label
+}
+
+func renderDim(text string) string {
+	if styled() {
+		return dimStyle.Render(text)
+	}
+	return text
 }
 
 func printBottleneckReport(r *tracing.BottleneckReport) {
 	if len(r.SlowestTargets) > 0 {
-		fmt.Println("\nSlowest targets (avg command duration):")
-		for _, t := range r.SlowestTargets {
-			fmt.Printf("  %s  %s (n=%d)\n", formatMillis(int64(t.AvgCmd)), t.Label, t.Count)
+		fmt.Println(renderSection("Highest impact targets (avg duration x frequency):"))
+		if styled() {
+			printBottleneckTable(r.SlowestTargets, func(t tracing.TargetBottleneck) []string {
+				return []string{
+					renderImpact(t.Impact),
+					renderLabel(t.Label),
+					formatMillis(int64(t.AvgCmd)),
+					fmt.Sprintf("%.0f%%", t.Frequency*100),
+					fmt.Sprintf("%d", t.Count),
+				}
+			}, []string{"IMPACT", "TARGET", "AVG CMD", "FREQ", "N"})
+		} else {
+			for _, t := range r.SlowestTargets {
+				fmt.Printf("  %s  %s  (avg: %s, freq: %.0f%%, n=%d)\n",
+					renderImpact(t.Impact), t.Label, formatMillis(int64(t.AvgCmd)),
+					t.Frequency*100, t.Count)
+			}
 		}
 	}
 
 	if len(r.QueueSaturated) > 0 {
-		fmt.Println("\nWorker pool saturation (avg queue wait > 500ms):")
-		for _, t := range r.QueueSaturated {
-			fmt.Printf("  %s  %s (n=%d)\n", formatMillis(int64(t.AvgQueue)), t.Label, t.Count)
+		fmt.Println(renderSection("Worker pool saturation (avg queue wait > 500ms):"))
+		if styled() {
+			printBottleneckTable(r.QueueSaturated, func(t tracing.TargetBottleneck) []string {
+				return []string{
+					formatMillis(int64(t.AvgQueue)),
+					renderLabel(t.Label),
+					fmt.Sprintf("%d", t.Count),
+				}
+			}, []string{"AVG QUEUE", "TARGET", "N"})
+		} else {
+			for _, t := range r.QueueSaturated {
+				fmt.Printf("  %s  %s (n=%d)\n", formatMillis(int64(t.AvgQueue)), t.Label, t.Count)
+			}
 		}
-		fmt.Println("  Hint: consider increasing num_workers")
+		fmt.Println(renderHint("consider increasing num_workers"))
 	}
 
 	if len(r.IOBottlenecks) > 0 {
-		fmt.Println("\nI/O bottlenecks (avg I/O time > 1s):")
-		for _, t := range r.IOBottlenecks {
-			fmt.Printf("  %s  %s (output_write: %s, output_load: %s, cache_write: %s, n=%d)\n",
-				formatMillis(int64(t.AvgIO)), t.Label,
-				formatMillis(int64(t.AvgOutputWrite)),
-				formatMillis(int64(t.AvgOutputLoad)),
-				formatMillis(int64(t.AvgCacheWrite)),
-				t.Count)
+		fmt.Println(renderSection("I/O bottlenecks (avg I/O time > 1s):"))
+		if styled() {
+			printBottleneckTable(r.IOBottlenecks, func(t tracing.TargetBottleneck) []string {
+				return []string{
+					formatMillis(int64(t.AvgIO)),
+					renderLabel(t.Label),
+					formatMillis(int64(t.AvgOutputWrite)),
+					formatMillis(int64(t.AvgOutputLoad)),
+					formatMillis(int64(t.AvgCacheWrite)),
+					fmt.Sprintf("%d", t.Count),
+				}
+			}, []string{"AVG I/O", "TARGET", "WRITE", "LOAD", "CACHE", "N"})
+		} else {
+			for _, t := range r.IOBottlenecks {
+				fmt.Printf("  %s  %s (write: %s, load: %s, cache: %s, n=%d)\n",
+					formatMillis(int64(t.AvgIO)), t.Label,
+					formatMillis(int64(t.AvgOutputWrite)),
+					formatMillis(int64(t.AvgOutputLoad)),
+					formatMillis(int64(t.AvgCacheWrite)),
+					t.Count)
+			}
 		}
 	}
 
 	if len(r.SlowHashing) > 0 {
-		fmt.Println("\nSlow hashing (avg hash time > 200ms):")
-		for _, t := range r.SlowHashing {
-			fmt.Printf("  %s  %s (n=%d)\n", formatMillis(int64(t.AvgHash)), t.Label, t.Count)
+		fmt.Println(renderSection("Slow hashing (avg hash time > 200ms):"))
+		if styled() {
+			printBottleneckTable(r.SlowHashing, func(t tracing.TargetBottleneck) []string {
+				return []string{
+					formatMillis(int64(t.AvgHash)),
+					renderLabel(t.Label),
+					fmt.Sprintf("%d", t.Count),
+				}
+			}, []string{"AVG HASH", "TARGET", "N"})
+		} else {
+			for _, t := range r.SlowHashing {
+				fmt.Printf("  %s  %s (n=%d)\n", formatMillis(int64(t.AvgHash)), t.Label, t.Count)
+			}
 		}
-		fmt.Println("  Hint: reduce input glob scope or split into smaller targets")
+		fmt.Println(renderHint("reduce input glob scope or split into smaller targets"))
 	}
 
 	if len(r.FrequentMisses) > 0 {
-		fmt.Printf("\nFrequent cache misses (>%.0f%% miss rate, overall avg: %.0f%%):\n",
-			r.OverallCacheMissRate+30, r.OverallCacheMissRate)
-		for _, t := range r.FrequentMisses {
-			fmt.Printf("  %.0f%%  %s (n=%d)\n", t.MissRate, t.Label, t.Count)
+		fmt.Println(renderSection(fmt.Sprintf("Frequent cache misses (>%.0f%% miss rate, overall avg: %.0f%%):",
+			r.OverallCacheMissRate+30, r.OverallCacheMissRate)))
+		if styled() {
+			printBottleneckTable(r.FrequentMisses, func(t tracing.TargetBottleneck) []string {
+				return []string{
+					fmt.Sprintf("%.0f%%", t.MissRate),
+					renderLabel(t.Label),
+					fmt.Sprintf("%d", t.Count),
+				}
+			}, []string{"MISS RATE", "TARGET", "N"})
+		} else {
+			for _, t := range r.FrequentMisses {
+				fmt.Printf("  %.0f%%  %s (n=%d)\n", t.MissRate, t.Label, t.Count)
+			}
 		}
 	}
 
 	if len(r.FlakyTargets) > 0 {
-		fmt.Println("\nFrequently failing targets:")
-		for _, t := range r.FlakyTargets {
-			fmt.Printf("  %d/%d  %s\n", t.Failures, t.Count, t.Label)
+		fmt.Println(renderSection("Frequently failing targets:"))
+		if styled() {
+			printBottleneckTable(r.FlakyTargets, func(t tracing.TargetBottleneck) []string {
+				return []string{
+					fmt.Sprintf("%d/%d", t.Failures, t.Count),
+					renderLabel(t.Label),
+				}
+			}, []string{"FAILS", "TARGET"})
+		} else {
+			for _, t := range r.FlakyTargets {
+				fmt.Printf("  %d/%d  %s\n", t.Failures, t.Count, t.Label)
+			}
 		}
 	}
+}
+
+func printBottleneckTable(items []tracing.TargetBottleneck, rowFn func(tracing.TargetBottleneck) []string, headers []string) {
+	var rows [][]string
+	for _, item := range items {
+		rows = append(rows, rowFn(item))
+	}
+
+	t := table.New().
+		Headers(headers...).
+		Rows(rows...).
+		Border(lipgloss.NormalBorder()).
+		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("238"))).
+		StyleFunc(func(row, col int) lipgloss.Style {
+			if row == table.HeaderRow {
+				return headerStyle
+			}
+			return lipgloss.NewStyle()
+		})
+
+	fmt.Println(t.Render())
 }
 
 func parseDuration(s string) (time.Duration, error) {

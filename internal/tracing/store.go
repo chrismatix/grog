@@ -322,6 +322,8 @@ func (s *TraceStore) Stats(ctx context.Context, limit int) (*TraceStats, error) 
 type TargetBottleneck struct {
 	Label          string
 	Count          int
+	Frequency      float64 // fraction of builds that include this target (0-1)
+	Impact         float64 // avg_cmd * frequency — weighted importance score
 	AvgCmd         float64
 	AvgQueue       float64
 	AvgIO          float64
@@ -359,27 +361,32 @@ func (s *TraceStore) Bottlenecks(ctx context.Context, limit int) (*BottleneckRep
 		limit = 20
 	}
 
-	query := fmt.Sprintf(`SELECT
-		label,
-		COUNT(*) as n,
-		AVG(command_duration_millis) as avg_cmd,
-		AVG(queue_wait_millis) as avg_queue,
-		AVG(output_write_millis + output_load_millis + cache_write_millis) as avg_io,
-		AVG(hash_duration_millis) as avg_hash,
-		SUM(CASE WHEN cache_result = 'CACHE_MISS' THEN 1 ELSE 0 END)::FLOAT / COUNT(*) * 100 as miss_rate,
-		SUM(CASE WHEN status = 'FAILURE' THEN 1 ELSE 0 END) as failures,
-		AVG(output_write_millis) as avg_output_write,
-		AVG(output_load_millis) as avg_output_load,
-		AVG(cache_write_millis) as avg_cache_write
-		FROM read_parquet('%s', union_by_name=true)
-		WHERE trace_id IN (
+	// Subquery: get the trace IDs and count of recent builds
+	query := fmt.Sprintf(`WITH recent_builds AS (
 			SELECT trace_id FROM read_parquet('%s', union_by_name=true)
 			ORDER BY start_time_unix_millis DESC LIMIT %d
-		)
+		),
+		build_count AS (SELECT COUNT(*) as total FROM recent_builds)
+		SELECT
+			label,
+			COUNT(*) as n,
+			COUNT(*)::FLOAT / (SELECT total FROM build_count) as frequency,
+			AVG(command_duration_millis) * COUNT(*)::FLOAT / (SELECT total FROM build_count) as impact,
+			AVG(command_duration_millis) as avg_cmd,
+			AVG(queue_wait_millis) as avg_queue,
+			AVG(output_write_millis + output_load_millis + cache_write_millis) as avg_io,
+			AVG(hash_duration_millis) as avg_hash,
+			SUM(CASE WHEN cache_result = 'CACHE_MISS' THEN 1 ELSE 0 END)::FLOAT / COUNT(*) * 100 as miss_rate,
+			SUM(CASE WHEN status = 'FAILURE' THEN 1 ELSE 0 END) as failures,
+			AVG(output_write_millis) as avg_output_write,
+			AVG(output_load_millis) as avg_output_load,
+			AVG(cache_write_millis) as avg_cache_write
+		FROM read_parquet('%s', union_by_name=true)
+		WHERE trace_id IN (SELECT trace_id FROM recent_builds)
 		GROUP BY label
 		HAVING n > 1
-		ORDER BY avg_cmd DESC`,
-		s.resolver.SpansGlob(), s.resolver.BuildsGlob(), limit)
+		ORDER BY impact DESC`,
+		s.resolver.BuildsGlob(), limit, s.resolver.SpansGlob())
 
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
@@ -394,8 +401,8 @@ func (s *TraceStore) Bottlenecks(ctx context.Context, limit int) (*BottleneckRep
 	var totalMissRate float64
 	for rows.Next() {
 		var t TargetBottleneck
-		if err := rows.Scan(&t.Label, &t.Count, &t.AvgCmd, &t.AvgQueue,
-			&t.AvgIO, &t.AvgHash, &t.MissRate, &t.Failures,
+		if err := rows.Scan(&t.Label, &t.Count, &t.Frequency, &t.Impact,
+			&t.AvgCmd, &t.AvgQueue, &t.AvgIO, &t.AvgHash, &t.MissRate, &t.Failures,
 			&t.AvgOutputWrite, &t.AvgOutputLoad, &t.AvgCacheWrite); err != nil {
 			return nil, err
 		}
