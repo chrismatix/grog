@@ -300,7 +300,7 @@ Both DuckDB and ClickHouse support querying Parquet files without any data loadi
 When using a remote cache backend (S3, GCS, Azure), traces written by other machines (e.g. CI) are stored remotely but not automatically available for local querying. Use `sync` to download them:
 
 ```bash
-grog traces sync
+grog traces pull
 ```
 
 To automatically sync remote traces before every query command (`list`, `show`, `stats`, `export`), enable `auto_sync`:

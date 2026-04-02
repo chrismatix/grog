@@ -113,7 +113,7 @@ func (s *TraceStore) Write(ctx context.Context, trace *BuildTrace) error {
 // It lists keys from the remote backend and triggers a Get() for each missing
 // file, which causes the RemoteWrapper to fetch and cache it locally.
 // Returns the number of files synced.
-func (s *TraceStore) Sync(ctx context.Context) (int, error) {
+func (s *TraceStore) Pull(ctx context.Context) (int, error) {
 	listable, ok := s.writer.backend.(backends.ListableBackend)
 	if !ok {
 		return 0, fmt.Errorf("cache backend does not support listing (no remote backend configured)")

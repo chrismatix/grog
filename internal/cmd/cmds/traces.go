@@ -63,13 +63,13 @@ func autoSync(ctx context.Context, store *tracing.TraceStore, logger *console.Lo
 	if !config.Global.Traces.AutoSync {
 		return
 	}
-	synced, err := store.Sync(ctx)
+	pulled, err := store.Pull(ctx)
 	if err != nil {
 		logger.Debugf("auto-sync: %v", err)
 		return
 	}
-	if synced > 0 {
-		logger.Infof("Synced %d remote trace files.", synced)
+	if pulled > 0 {
+		logger.Infof("Pulled %d remote trace files.", pulled)
 	}
 }
 
@@ -202,21 +202,21 @@ var tracesStatsCmd = &cobra.Command{
 	},
 }
 
-var tracesSyncCmd = &cobra.Command{
-	Use:   "sync",
+var tracesPullCmd = &cobra.Command{
+	Use:   "pull",
 	Short: "Download remote traces to local cache for querying.",
-	Example: `  grog traces sync`,
+	Example: `  grog traces pull`,
 	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := console.SetupCommand()
 		store := getTraceStore(ctx, logger)
 		defer store.Close()
 
-		synced, err := store.Sync(ctx)
+		pulled, err := store.Pull(ctx)
 		if err != nil {
-			logger.Fatalf("sync failed: %v", err)
+			logger.Fatalf("pull failed: %v", err)
 		}
-		logger.Infof("Synced %d remote trace files.", synced)
+		logger.Infof("Pulled %d remote trace files.", pulled)
 	},
 }
 
@@ -715,6 +715,6 @@ func AddTracesCmd(rootCmd *cobra.Command) {
 	TracesCmd.AddCommand(tracesStatsCmd)
 	TracesCmd.AddCommand(tracesExportCmd)
 	TracesCmd.AddCommand(tracesPruneCmd)
-	TracesCmd.AddCommand(tracesSyncCmd)
+	TracesCmd.AddCommand(tracesPullCmd)
 	rootCmd.AddCommand(TracesCmd)
 }
