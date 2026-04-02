@@ -1,0 +1,90 @@
+---
+title: BigQuery
+description: Load Grog execution traces into BigQuery for historical build analytics across large teams.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+BigQuery is a natural fit for historical build analytics across large teams. Load JSONL [execution traces](/tracing/) into a table and query across weeks or months of builds.
+
+## Setup
+
+1. Export traces to a JSONL file:
+
+```bash
+grog traces export --format=jsonl --output traces.jsonl
+```
+
+2. Create a BigQuery dataset and load the data:
+
+```bash
+bq mk --dataset my_project:grog_traces
+
+bq load \
+  --source_format=NEWLINE_DELIMITED_JSON \
+  --autodetect \
+  my_project:grog_traces.builds \
+  traces.jsonl
+```
+
+<Aside>
+BigQuery auto-detects the schema from the JSONL. For production use, define an explicit schema to handle the nested `spans` array correctly.
+</Aside>
+
+## Example queries
+
+**Average build duration over the last 30 days:**
+
+```sql
+SELECT
+  DATE(TIMESTAMP_MILLIS(start_time_unix_millis)) AS build_date,
+  command,
+  AVG(total_duration_millis) / 1000 AS avg_duration_sec,
+  COUNT(*) AS build_count
+FROM `my_project.grog_traces.builds`
+WHERE start_time_unix_millis > UNIX_MILLIS(TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY))
+GROUP BY build_date, command
+ORDER BY build_date DESC
+```
+
+**Slowest targets by average command duration:**
+
+```sql
+SELECT
+  span.label,
+  AVG(span.command_duration_millis) AS avg_cmd_ms,
+  AVG(span.queue_wait_millis) AS avg_queue_ms,
+  COUNT(*) AS executions
+FROM `my_project.grog_traces.builds`,
+  UNNEST(spans) AS span
+WHERE span.cache_result = 'CACHE_MISS'
+GROUP BY span.label
+HAVING executions > 5
+ORDER BY avg_cmd_ms DESC
+LIMIT 20
+```
+
+**Cache hit rate trend:**
+
+```sql
+SELECT
+  DATE(TIMESTAMP_MILLIS(start_time_unix_millis)) AS build_date,
+  SUM(cache_hit_count) AS hits,
+  SUM(total_targets) AS total,
+  SAFE_DIVIDE(SUM(cache_hit_count), SUM(total_targets)) * 100 AS hit_rate_pct
+FROM `my_project.grog_traces.builds`
+GROUP BY build_date
+ORDER BY build_date DESC
+```
+
+## Automating ingestion in CI
+
+Add a step to your CI pipeline that exports and loads traces after each build:
+
+```yaml
+- name: Export and upload traces
+  run: |
+    grog traces export --format=jsonl --limit 1 --output trace.jsonl
+    bq load --source_format=NEWLINE_DELIMITED_JSON \
+      my_project:grog_traces.builds trace.jsonl
+```

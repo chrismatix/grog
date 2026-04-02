@@ -30,6 +30,18 @@ export default defineConfig({
           autogenerate: { directory: "topics" }
         },
         {
+          label: "Tracing",
+          collapsed: false,
+          items: [
+            "tracing",
+            {
+              label: "Integrations",
+              collapsed: true,
+              autogenerate: { directory: "tracing/integrations" }
+            }
+          ]
+        },
+        {
           label: "Reference",
           collapsed: false,
           autogenerate: { directory: "reference", collapsed: true }

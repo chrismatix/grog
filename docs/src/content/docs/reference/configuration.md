@@ -92,7 +92,7 @@ For instance, to set or override the `fail_fast` option set `GROG_FAIL_FAST=fals
 - **traces.gcs.bucket** / **traces.s3.bucket**: Bucket name for trace storage when using a separate backend.
 - **traces.gcs.prefix** / **traces.s3.prefix**: Optional prefix within the bucket. Defaults to `/`.
 
-See [Execution Traces](/topics/execution-traces/) for usage details and dashboard integration.
+See [Execution Traces](/tracing/) for usage details and dashboard integration.
 
 ## Profiles
 
