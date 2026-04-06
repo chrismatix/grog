@@ -1,9 +1,9 @@
 ---
 title: DuckDB
-description: Query Grog execution trace Parquet files directly with DuckDB for fast ad-hoc build analytics.
+description: Query Grog execution trace Parquet files directly with DuckDB.
 ---
 
-[DuckDB](https://duckdb.org/) is the fastest way to explore [execution trace](/tracing/) data interactively. It reads Parquet files directly — no server, no import, no setup beyond `brew install duckdb`.
+[DuckDB](https://duckdb.org/) reads [execution trace](/tracing/) Parquet files directly — no server, no import step.
 
 ```bash
 TRACES=~/.grog/*/cache/traces

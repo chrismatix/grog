@@ -1,11 +1,11 @@
 ---
-title: Execution Traces
-description: Capture and analyze build execution traces for performance insights and dashboard integration.
+title: Introduction
+description: Capture and query build execution traces.
 ---
 
 import { Aside } from "@astrojs/starlight/components";
 
-Grog can record execution traces for every build, test, and run invocation. Traces capture per-target phase-level timing data, making it easy to identify bottlenecks, track cache efficiency, and monitor build performance over time.
+Grog can record execution traces for every build, test, and run invocation. Traces capture per-target phase-level timing data.
 
 Traces are stored as [Parquet](https://parquet.apache.org/) files using the same [remote caching](/topics/remote-caching/) backends (local filesystem, S3, or GCS) and can be queried from the terminal or exported for use in dashboards like Grafana, Datadog, or Jaeger.
 
@@ -176,7 +176,7 @@ This maps each build to an OTLP trace with the build as the root span and each t
 - **Datadog APM** — Build performance monitoring
 
 <Aside>
-The OTLP export produces structured JSON without requiring the OpenTelemetry SDK as a dependency, keeping the Grog binary lean.
+The OTLP export produces structured JSON without requiring the OpenTelemetry SDK as a dependency.
 </Aside>
 
 ### CI workflow example
@@ -191,7 +191,7 @@ grog build //...
 grog traces export --format=jsonl --limit 1 >> /shared/grog-traces.jsonl
 ```
 
-For detailed setup instructions with specific analytics backends, see the [Integrations](/tracing/integrations/bigquery/) guides.
+For detailed setup instructions with specific backends, see the [Integrations](/tracing/integrations/bigquery/) guides. The [`examples/tracing`](https://github.com/groglang/grog/tree/main/examples/tracing) directory contains a Docker Compose setup that runs Jaeger, Grafana Tempo, and Loki locally.
 
 ## Managing traces
 
@@ -202,16 +202,6 @@ When using a remote cache backend (S3, GCS, Azure), traces written by other mach
 ```bash
 grog traces pull
 ```
-
-To automatically sync remote traces before every query command (`list`, `show`, `stats`, `export`), enable `auto_pull`:
-
-```toml
-[traces]
-enabled = true
-auto_pull = true
-```
-
-With `auto_pull` enabled, running `grog traces list` will first download any new remote trace files, then query across all traces — both local and those from CI or other team members.
 
 ### Pruning old traces
 
@@ -236,14 +226,13 @@ traces/
       <trace-id>.parquet     # 1 row per target with phase timing
 ```
 
-There is no index file. DuckDB queries Parquet files directly via glob patterns, so storage scales to any number of traces without index maintenance overhead. Each trace is typically a few KB, so storage costs are minimal even for large monorepos with frequent builds.
+There is no index file. DuckDB queries Parquet files directly via glob patterns. Each trace is typically a few KB.
 
 ## Configuration reference
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `traces.enabled` | bool | `false` | Enable trace collection |
-| `traces.auto_pull` | bool | `false` | Automatically download remote traces before query commands |
 | `traces.backend` | string | _(uses cache backend)_ | Override storage backend (`"s3"` or `"gcs"`) |
 | `traces.gcs.bucket` | string | | GCS bucket for trace storage |
 | `traces.gcs.prefix` | string | `/` | Prefix within the GCS bucket |

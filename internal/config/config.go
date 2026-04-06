@@ -235,8 +235,7 @@ type AzureCacheConfig struct {
 
 type TracesConfig struct {
 	Enabled  bool         `mapstructure:"enabled"`
-	AutoPull bool         `mapstructure:"auto_pull"`
-	Backend  CacheBackend `mapstructure:"backend"`
+Backend  CacheBackend `mapstructure:"backend"`
 	GCS      GCSCacheConfig `mapstructure:"gcs"`
 	S3       S3CacheConfig  `mapstructure:"s3"`
 }

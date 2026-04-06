@@ -58,21 +58,6 @@ func getTraceStore(ctx context.Context, logger *console.Logger) *tracing.TraceSt
 	return store
 }
 
-// autoPull downloads remote traces to local cache if auto_pull is enabled.
-func autoPull(ctx context.Context, store *tracing.TraceStore, logger *console.Logger) {
-	if !config.Global.Traces.AutoPull {
-		return
-	}
-	pulled, err := store.Pull(ctx)
-	if err != nil {
-		logger.Debugf("auto-pull: %v", err)
-		return
-	}
-	if pulled > 0 {
-		logger.Infof("Pulled %d remote trace files.", pulled)
-	}
-}
-
 var TracesCmd = &cobra.Command{
 	Use:   "traces",
 	Short: "View and manage build execution traces.",
@@ -91,7 +76,6 @@ var tracesListCmd = &cobra.Command{
 		ctx, logger := console.SetupCommand()
 		store := getTraceStore(ctx, logger)
 		defer store.Close()
-		autoPull(ctx, store, logger)
 
 		opts := tracing.ListOptions{
 			Limit:        tracesListLimit,
@@ -179,7 +163,6 @@ var tracesShowCmd = &cobra.Command{
 		ctx, logger := console.SetupCommand()
 		store := getTraceStore(ctx, logger)
 		defer store.Close()
-		autoPull(ctx, store, logger)
 
 		trace, err := store.FindAndLoad(ctx, args[0])
 		if err != nil {
@@ -201,7 +184,6 @@ var tracesStatsCmd = &cobra.Command{
 		ctx, logger := console.SetupCommand()
 		store := getTraceStore(ctx, logger)
 		defer store.Close()
-		autoPull(ctx, store, logger)
 
 		limit := tracesListLimit
 		if limit <= 0 {
@@ -257,7 +239,6 @@ var tracesExportCmd = &cobra.Command{
 		ctx, logger := console.SetupCommand()
 		store := getTraceStore(ctx, logger)
 		defer store.Close()
-		autoPull(ctx, store, logger)
 
 		opts := tracing.ListOptions{Limit: tracesExportLimit}
 		if tracesExportSince != "" {
