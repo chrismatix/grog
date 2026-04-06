@@ -12,13 +12,13 @@ Send OTLP traces directly to the Datadog intake API without running the Datadog 
 ```bash
 grog traces export --format=otel --limit 1 --output /tmp/trace-otel.json
 
-curl -X POST "https://api.datadoghq.com/api/intake/otlp/v1/traces" \
+curl -X POST "https://otlp.datadoghq.com/v1/traces" \
   -H "Content-Type: application/json" \
   -H "DD-API-KEY: $DD_API_KEY" \
   -d @/tmp/trace-otel.json
 ```
 
-Replace `api.datadoghq.com` with your [Datadog site](https://docs.datadoghq.com/getting_started/site/) (e.g. `api.datadoghq.eu`, `api.us5.datadoghq.com`).
+Replace `otlp.datadoghq.com` with the OTLP endpoint for your [Datadog site](https://docs.datadoghq.com/getting_started/site/) (e.g. `otlp.datadoghq.eu`, `otlp.us5.datadoghq.com`).
 
 ## Via the Datadog Agent
 
