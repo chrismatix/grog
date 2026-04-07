@@ -1,0 +1,16 @@
+---
+title: Jaeger
+description: Send Grog execution traces to Jaeger for waterfall visualization of build execution.
+---
+
+Jaeger provides waterfall visualization for [execution traces](/tracing/), similar to Grafana Tempo. Send OTLP traces via the collector:
+
+```bash
+grog traces export --format=otel --limit 1 --output /tmp/trace-otel.json
+
+curl -X POST http://jaeger-collector:4318/v1/traces \
+  -H "Content-Type: application/json" \
+  -d @/tmp/trace-otel.json
+```
+
+In the Jaeger UI, search for service `grog` to find your build traces. Each build appears as a trace with one span per target, sorted by start time.

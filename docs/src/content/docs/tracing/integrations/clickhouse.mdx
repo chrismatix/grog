@@ -1,0 +1,81 @@
+---
+title: ClickHouse
+description: Load Grog execution traces into ClickHouse or query Parquet files directly with clickhouse local.
+---
+
+JSONL [execution traces](/tracing/) can be loaded into ClickHouse, or you can query the Parquet files directly with `clickhouse local`.
+
+## Setup
+
+Create a table:
+
+```sql
+CREATE TABLE grog_traces (
+  trace_id String,
+  command String,
+  start_time DateTime64(3) MATERIALIZED fromUnixTimestamp64Milli(start_time_unix_millis),
+  start_time_unix_millis Int64,
+  total_duration_millis Int64,
+  total_targets Int32,
+  cache_hit_count Int32,
+  failure_count Int32,
+  git_commit String,
+  git_branch String,
+  is_ci Bool
+) ENGINE = MergeTree()
+ORDER BY (start_time_unix_millis);
+```
+
+Load traces:
+
+```bash
+grog traces export --format=jsonl | clickhouse-client \
+  --query="INSERT INTO grog_traces FORMAT JSONEachRow"
+```
+
+For per-target analysis, create a separate spans table or use ClickHouse's JSON functions to extract nested span data.
+
+## Querying Parquet directly
+
+Alternatively, skip the import entirely and query trace Parquet files directly with `clickhouse local`:
+
+```bash
+TRACES=~/.grog/*/cache/traces
+
+# Build duration trend
+clickhouse local --query "
+  SELECT toDate(fromUnixTimestamp64Milli(start_time_unix_millis)) AS day,
+         avg(total_duration_millis) / 1000 AS avg_sec,
+         count() AS builds
+  FROM file('$TRACES/builds/**/*.parquet', Parquet)
+  GROUP BY day ORDER BY day DESC LIMIT 14;
+"
+
+# Slowest targets
+clickhouse local --query "
+  SELECT label, avg(command_duration_millis) AS avg_cmd_ms, count() AS n
+  FROM file('$TRACES/spans/**/*.parquet', Parquet)
+  WHERE cache_result = 'CACHE_MISS'
+  GROUP BY label ORDER BY avg_cmd_ms DESC LIMIT 10;
+"
+```
+
+For traces on S3, use the `s3()` table function:
+
+```sql
+SELECT * FROM s3('s3://my-bucket/traces/builds/**/*.parquet', 'Parquet')
+ORDER BY start_time_unix_millis DESC LIMIT 10;
+```
+
+## Example query (imported data)
+
+```sql
+SELECT
+  toDate(start_time) AS day,
+  avg(total_duration_millis) / 1000 AS avg_sec,
+  avg(cache_hit_count * 100.0 / total_targets) AS cache_hit_pct
+FROM grog_traces
+WHERE is_ci = true AND start_time > now() - INTERVAL 14 DAY
+GROUP BY day
+ORDER BY day
+```

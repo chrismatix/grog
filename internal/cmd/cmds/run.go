@@ -146,6 +146,7 @@ func buildAndRunTargets(ctx context.Context, logger *console.Logger, graph *dag.
 		selection.NonTestOnly,
 		config.Global.StreamLogs,
 		config.Global.GetLoadOutputsMode(),
+		"run",
 	)
 
 	for _, runTarget := range runTargets {

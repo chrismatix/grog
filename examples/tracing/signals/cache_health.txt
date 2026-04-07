@@ -1,0 +1,4 @@
+checkout-page hit_rate=0.89 miss_burst=14 warmup_seconds=22
+recommendations hit_rate=0.76 miss_burst=31 warmup_seconds=35
+pricing-table hit_rate=0.93 miss_burst=9 warmup_seconds=11
+fraud-model hit_rate=0.81 miss_burst=18 warmup_seconds=29

@@ -56,6 +56,16 @@ type Target struct {
 
 	ExecutionTime time.Duration `json:"-"`
 	CacheTime     time.Duration `json:"-"`
+
+	// Phase-level timing for trace collection.
+	StartTime       time.Time     `json:"-"`
+	QueueWait       time.Duration `json:"-"`
+	HashDuration    time.Duration `json:"-"`
+	CacheCheckTime  time.Duration `json:"-"`
+	OutputWriteTime time.Duration `json:"-"`
+	OutputLoadTime  time.Duration `json:"-"`
+	CacheWriteTime  time.Duration `json:"-"`
+	DepLoadTime     time.Duration `json:"-"`
 }
 
 type OutputCheck struct {

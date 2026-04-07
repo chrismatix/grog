@@ -10,8 +10,23 @@ permissions:
 
 jobs:
   release-bin:
-    name: Release binaries
-    runs-on: ubuntu-latest
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            runner: ubuntu-latest
+          - goos: linux
+            goarch: arm64
+            runner: ubuntu-24.04-arm
+          - goos: darwin
+            goarch: amd64
+            runner: macos-latest
+          - goos: darwin
+            goarch: arm64
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: Checkout code
@@ -22,24 +37,69 @@ jobs:
         with:
           go-version: "1.26"
 
+      - name: Install protoc (Linux)
+        if: matrix.goos == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+
+      - name: Install protoc (macOS)
+        if: matrix.goos == 'darwin'
+        run: brew install protobuf
+
+      - name: Install Go dependencies
+        run: |
+          go mod tidy
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+
+      - name: Build release binary
+        run: make release-build GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }}
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: grog-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+
+  release-pkl:
+    name: Build pkl package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Install pkl
         run: |
           curl -L -o pkl-bin 'https://github.com/apple/pkl/releases/download/0.30.0/pkl-linux-amd64'
           chmod +x pkl-bin
           sudo mv pkl-bin /usr/local/bin/pkl
-
           pkl --version
 
-      - name: Install dependencies
+      - name: Build pkl package
         run: |
-          go mod tidy
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          VERSION=${GITHUB_REF_NAME} && cd pkl && VERSION=$VERSION pkl project package
 
+      - name: Upload pkl artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pkl-package
+          path: pkl/.out/**/*
 
-      - name: Build release binaries
-        run: make release
+  publish:
+    name: Publish release
+    needs: [release-bin, release-pkl]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Assemble dist
+        run: |
+          mkdir -p dist
+          cp artifacts/grog-*/* dist/
+          cd dist && shasum -a 256 * > SHASUMS256.txt
 
       - name: Draft Release Notes
         uses: release-drafter/release-drafter@v6
@@ -53,7 +113,6 @@ jobs:
         with:
           files: |
             dist/*
-            pkl/.out/**/*
-          body: ${{ steps.release_drafter.outputs.body }}
+            artifacts/pkl-package/**/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

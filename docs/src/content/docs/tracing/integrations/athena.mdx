@@ -1,0 +1,66 @@
+---
+title: AWS Athena
+description: Query Grog execution traces directly from S3 using AWS Athena without any data loading step.
+---
+
+If you already use S3 for Grog's remote cache, Athena lets you query [execution traces](/tracing/) directly from S3 without any data loading step.
+
+## Setup
+
+1. Configure Grog to store traces on S3:
+
+```toml
+[traces]
+enabled = true
+backend = "s3"
+
+[traces.s3]
+bucket = "my-grog-data"
+prefix = "traces"
+```
+
+2. Export traces to a dedicated S3 path as JSONL:
+
+```bash
+grog traces export --format=jsonl --output /tmp/traces.jsonl
+aws s3 cp /tmp/traces.jsonl s3://my-grog-data/analytics/traces.jsonl
+```
+
+3. Create an Athena table:
+
+```sql
+CREATE EXTERNAL TABLE grog_traces (
+  trace_id STRING,
+  command STRING,
+  start_time_unix_millis BIGINT,
+  total_duration_millis BIGINT,
+  total_targets INT,
+  cache_hit_count INT,
+  failure_count INT,
+  git_commit STRING,
+  git_branch STRING,
+  is_ci BOOLEAN,
+  spans ARRAY<STRUCT<
+    label: STRING,
+    status: STRING,
+    cache_result: STRING,
+    command_duration_millis: BIGINT,
+    queue_wait_millis: BIGINT,
+    hash_duration_millis: BIGINT,
+    output_write_millis: BIGINT,
+    output_load_millis: BIGINT
+  >>
+)
+ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'
+LOCATION 's3://my-grog-data/analytics/';
+```
+
+4. Query as usual:
+
+```sql
+SELECT trace_id, command, total_duration_millis / 1000.0 AS duration_sec
+FROM grog_traces
+WHERE is_ci = true
+ORDER BY start_time_unix_millis DESC
+LIMIT 20;
+```

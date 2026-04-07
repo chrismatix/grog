@@ -1,0 +1,29 @@
+---
+title: jq
+description: Analyze Grog execution traces from the command line using jq for quick, one-off queries.
+---
+
+For quick, one-off analysis of [execution traces](/tracing/) without any infrastructure, pipe JSONL through `jq`:
+
+```bash
+# Top 10 slowest builds
+grog traces export --format=jsonl | \
+  jq -r '[.total_duration_millis / 1000, .trace_id, .command] | @tsv' | \
+  sort -rn | head -10
+
+# Targets with worst cache hit rates
+grog traces export --format=jsonl | \
+  jq -r '.spans[] | select(.cache_result == "CACHE_MISS") | .label' | \
+  sort | uniq -c | sort -rn | head -10
+
+# Find targets with high queue wait (worker pool contention)
+grog traces export --format=jsonl | \
+  jq -r '.spans[] | select(.queue_wait_millis > 1000) | "\(.queue_wait_millis)ms \(.label)"' | \
+  sort -rn | head -10
+
+# Average command duration per target across all traces
+grog traces export --format=jsonl | \
+  jq -r '.spans[] | select(.command_duration_millis > 0) | "\(.label)\t\(.command_duration_millis)"' | \
+  awk -F'\t' '{sum[$1]+=$2; count[$1]++} END {for (t in sum) printf "%dms\t%s\n", sum[t]/count[t], t}' | \
+  sort -rn | head -20
+```

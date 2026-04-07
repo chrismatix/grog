@@ -25,7 +25,11 @@ import (
 	"grog/internal/model"
 	"grog/internal/output"
 	"grog/internal/selection"
+	"grog/internal/tracing"
 )
+
+// GrogVersion is set by the root command during initialization.
+var GrogVersion string
 
 var BuildCmd = &cobra.Command{
 	Use:   "build",
@@ -67,7 +71,9 @@ func AddBuildCmd(rootCmd *cobra.Command) {
 	rootCmd.AddCommand(BuildCmd)
 }
 
-// RunBuild runs the build/test command for the given target pattern
+// RunBuild runs the build/test command for the given target pattern.
+// commandOverride optionally overrides the trace command name (e.g. "run").
+// If empty, the command name is derived from the testFilter.
 func RunBuild(
 	ctx context.Context,
 	logger *console.Logger,
@@ -76,8 +82,24 @@ func RunBuild(
 	testFilter selection.TargetTypeSelection,
 	streamLogs bool,
 	loadOutputsMode config.LoadOutputsMode,
+	commandOverride ...string,
 ) {
 	startTime := time.Now()
+
+	// Determine command name for tracing
+	commandName := "build"
+	if len(commandOverride) > 0 && commandOverride[0] != "" {
+		commandName = commandOverride[0]
+	} else if testFilter == selection.TestOnly {
+		commandName = "test"
+	} else if testFilter == selection.AllTargets {
+		commandName = "build_and_test"
+	}
+
+	var traceCollector *tracing.TraceCollector
+	if config.Global.Traces.Enabled {
+		traceCollector = tracing.NewTraceCollector(commandName, targetPatterns, GrogVersion)
+	}
 	errs := analysis.CheckTargetConstraints(logger, graph.GetNodes())
 	if len(errs) > 0 {
 		for _, err := range errs {
@@ -151,6 +173,32 @@ func RunBuild(
 		loadOutputsMode,
 	)
 	completionMap, executionErr := executor.Execute(ctx)
+
+	// Write trace (synchronous — Parquet writes are fast for local FS,
+	// and we need to ensure the write completes before the process exits)
+	if traceCollector != nil && completionMap != nil {
+		buildTrace := traceCollector.Finalize(completionMap, graph, executor.AsyncWaitTime())
+
+		// Use the dedicated traces backend if configured, otherwise fall back to the main cache
+		traceBackend := cache
+		if config.Global.Traces.Backend != "" {
+			traceCacheConfig := config.CacheConfig{
+				Backend: config.Global.Traces.Backend,
+				GCS:     config.Global.Traces.GCS,
+				S3:      config.Global.Traces.S3,
+			}
+			if tb, err := backends.GetCacheBackend(ctx, traceCacheConfig); err == nil {
+				traceBackend = tb
+			} else {
+				logger.Warnf("failed to instantiate traces backend, falling back to cache: %v", err)
+			}
+		}
+
+		traceWriter := tracing.NewTraceWriter(traceBackend)
+		if err := traceWriter.Write(context.WithoutCancel(ctx), buildTrace); err != nil {
+			logger.Warnf("failed to write trace: %v", err)
+		}
+	}
 
 	elapsedTime := time.Since(startTime).Seconds()
 	// Mostly used to keep our test fixtures deterministic

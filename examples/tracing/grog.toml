@@ -1,0 +1,4 @@
+num_workers = 2
+
+[traces]
+enabled = true

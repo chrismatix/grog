@@ -1,0 +1,69 @@
+---
+title: DuckDB
+description: Query Grog execution trace Parquet files directly with DuckDB.
+---
+
+[DuckDB](https://duckdb.org/) reads [execution trace](/tracing/) Parquet files directly — no server, no import step.
+
+```bash
+TRACES=~/.grog/*/cache/traces
+
+# Recent builds overview
+duckdb -c "
+  SELECT trace_id[:8] AS id, command, total_targets, cache_hit_count,
+         total_duration_millis / 1000.0 AS sec, git_commit[:7] AS commit
+  FROM read_parquet('$TRACES/builds/**/*.parquet')
+  ORDER BY start_time_unix_millis DESC LIMIT 20;
+"
+
+# Top 10 slowest targets (cache misses only)
+duckdb -c "
+  SELECT label,
+         AVG(command_duration_millis)::INT AS avg_cmd_ms,
+         AVG(queue_wait_millis)::INT AS avg_queue_ms,
+         COUNT(*) AS n
+  FROM read_parquet('$TRACES/spans/**/*.parquet')
+  WHERE cache_result = 'CACHE_MISS'
+  GROUP BY label HAVING n > 3
+  ORDER BY avg_cmd_ms DESC LIMIT 10;
+"
+
+# Cache hit rate trend (last 2 weeks)
+duckdb -c "
+  SELECT DATE_TRUNC('day', EPOCH_MS(start_time_unix_millis)) AS day,
+         SUM(cache_hit_count)::FLOAT / SUM(total_targets) * 100 AS hit_pct,
+         COUNT(*) AS builds
+  FROM read_parquet('$TRACES/builds/**/*.parquet')
+  GROUP BY day ORDER BY day DESC LIMIT 14;
+"
+
+# Targets where most time is spent in I/O (potential cache bottleneck)
+duckdb -c "
+  SELECT label,
+         AVG(output_write_millis + output_load_millis + cache_write_millis)::INT AS avg_io_ms,
+         AVG(command_duration_millis)::INT AS avg_cmd_ms,
+         COUNT(*) AS n
+  FROM read_parquet('$TRACES/spans/**/*.parquet')
+  GROUP BY label ORDER BY avg_io_ms DESC LIMIT 10;
+"
+```
+
+## S3 and GCS access
+
+For traces stored on S3 or GCS:
+
+```bash
+# S3
+duckdb -c "
+  CREATE SECRET (TYPE S3, REGION 'us-east-1');
+  SELECT * FROM read_parquet('s3://my-bucket/traces/builds/**/*.parquet')
+  ORDER BY start_time_unix_millis DESC LIMIT 10;
+"
+
+# GCS
+duckdb -c "
+  CREATE SECRET (TYPE GCS, KEY_ID 'GOOG...', SECRET '...');
+  SELECT * FROM read_parquet('gcs://my-bucket/traces/builds/**/*.parquet')
+  ORDER BY start_time_unix_millis DESC LIMIT 10;
+"
+```

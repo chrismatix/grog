@@ -186,3 +186,9 @@ func (rw *RemoteWrapper) Exists(ctx context.Context, path string, key string) (b
 	// Check if the file exists in the remote cache
 	return rw.remote.Exists(ctx, path, key)
 }
+
+// ListKeys delegates to the remote backend for a complete picture of all
+// keys, including those written by other machines.
+func (rw *RemoteWrapper) ListKeys(ctx context.Context, path string, suffix string) ([]string, error) {
+	return rw.remote.ListKeys(ctx, path, suffix)
+}

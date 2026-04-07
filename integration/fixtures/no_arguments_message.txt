@@ -19,6 +19,7 @@ Available Commands:
   run            Builds and runs one or more targets' binary outputs.
   taint          Taints targets by pattern to force execution regardless of cache status.
   test           Loads the user configuration and executes test targets.
+  traces         View and manage build execution traces.
   version        Print the version info.
 
 Flags:
