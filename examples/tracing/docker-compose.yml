@@ -1,9 +1,9 @@
 services:
   jaeger:
-    image: jaegertracing/jaeger:2
+    image: jaegertracing/jaeger:2.17.0
     ports:
-      - "16686:16686" # UI
-      - "4318:4318"   # OTLP HTTP
+      - "${JAEGER_UI_PORT:-16686}:16686"   # UI
+      - "${JAEGER_OTLP_PORT:-4318}:4318"   # OTLP HTTP
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
 
@@ -13,13 +13,13 @@ services:
     volumes:
       - ./tempo.yml:/etc/tempo.yml:ro
     ports:
-      - "4320:4318" # OTLP HTTP (remapped to avoid conflict with Jaeger)
-      - "3200:3200" # Tempo API
+      - "${TEMPO_OTLP_PORT:-4320}:4318" # OTLP HTTP (remapped to avoid conflict with Jaeger)
+      - "${TEMPO_API_PORT:-3200}:3200"  # Tempo API
 
   loki:
     image: grafana/loki:3.4.2
     ports:
-      - "3100:3100"
+      - "${LOKI_PORT:-3100}:3100"
     command: ["-config.file=/etc/loki/local-config.yaml"]
 
   promtail:
@@ -27,6 +27,7 @@ services:
     volumes:
       - ./promtail.yml:/etc/promtail/config.yml:ro
       - /tmp:/tmp:ro
+      - promtail_positions:/var/lib/promtail
     command: ["-config.file=/etc/promtail/config.yml"]
     depends_on:
       - loki
@@ -34,7 +35,7 @@ services:
   grafana:
     image: grafana/grafana:11.5.2
     ports:
-      - "3000:3000"
+      - "${GRAFANA_PORT:-3300}:3000"
     environment:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
@@ -43,3 +44,6 @@ services:
     depends_on:
       - tempo
       - loki
+
+volumes:
+  promtail_positions:

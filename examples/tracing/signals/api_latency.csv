@@ -1,0 +1,6 @@
+service,p50_ms,p95_ms,p99_ms
+checkout-api,84,241,511
+inventory-api,39,92,188
+pricing-api,51,161,299
+fraud-api,121,344,702
+email-worker,64,118,205
