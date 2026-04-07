@@ -26,6 +26,6 @@ Grog is a lightweight monorepo build orchestrator focused on fast incremental ru
 - https://grog.build/reference/configuration/
 - https://grog.build/reference/target-configuration/
 - https://grog.build/reference/target-aliases/
-- https://grog.build/reference/cli/grog/
+- https://grog.build/reference/commands/
 
-Use the sitemap for complete page discovery, including all CLI subcommand references.
+Use the sitemap for complete page discovery, including the full CLI command reference.
