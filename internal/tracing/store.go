@@ -296,19 +296,37 @@ type TraceStats struct {
 	TotalFails   int
 }
 
-func (s *TraceStore) Stats(ctx context.Context, limit int) (*TraceStats, error) {
+// StatsOptions controls filtering for Stats and Bottlenecks.
+type StatsOptions struct {
+	Limit   int
+	Command string
+}
+
+func (s *TraceStore) Stats(ctx context.Context, opts StatsOptions) (*TraceStats, error) {
+	limit := opts.Limit
 	if limit <= 0 {
 		limit = 20
+	}
+
+	var conditions []string
+	if opts.Command != "" {
+		conditions = append(conditions, fmt.Sprintf("command = '%s'", sanitize(opts.Command)))
+	}
+
+	where := ""
+	if len(conditions) > 0 {
+		where = "WHERE " + strings.Join(conditions, " AND ")
 	}
 
 	query := fmt.Sprintf(`SELECT
 		COUNT(*) as n,
 		AVG(total_duration_millis) as avg_ms,
 		SUM(cache_hit_count)::FLOAT / NULLIF(SUM(total_targets), 0) * 100 as hit_pct,
-		SUM(failure_count) as fails
+		COALESCE(SUM(failure_count), 0) as fails
 		FROM (SELECT * FROM read_parquet('%s', union_by_name=true)
+			%s
 			ORDER BY start_time_unix_millis DESC LIMIT %d)`,
-		s.resolver.BuildsGlob(), limit)
+		s.resolver.BuildsGlob(), where, limit)
 
 	row := s.db.QueryRowContext(ctx, query)
 	var stats TraceStats
@@ -362,14 +380,26 @@ const (
 	maxBottlenecksPerCategory  = 10
 )
 
-func (s *TraceStore) Bottlenecks(ctx context.Context, limit int) (*BottleneckReport, error) {
+func (s *TraceStore) Bottlenecks(ctx context.Context, opts StatsOptions) (*BottleneckReport, error) {
+	limit := opts.Limit
 	if limit <= 0 {
 		limit = 20
+	}
+
+	var conditions []string
+	if opts.Command != "" {
+		conditions = append(conditions, fmt.Sprintf("command = '%s'", sanitize(opts.Command)))
+	}
+
+	where := ""
+	if len(conditions) > 0 {
+		where = "WHERE " + strings.Join(conditions, " AND ")
 	}
 
 	// Subquery: get the trace IDs and count of recent builds
 	query := fmt.Sprintf(`WITH recent_builds AS (
 			SELECT trace_id FROM read_parquet('%s', union_by_name=true)
+			%s
 			ORDER BY start_time_unix_millis DESC LIMIT %d
 		),
 		build_count AS (SELECT COUNT(*) as total FROM recent_builds)
@@ -392,7 +422,7 @@ func (s *TraceStore) Bottlenecks(ctx context.Context, limit int) (*BottleneckRep
 		GROUP BY label
 		HAVING n > 1
 		ORDER BY impact DESC`,
-		s.resolver.BuildsGlob(), limit, s.resolver.SpansGlob())
+		s.resolver.BuildsGlob(), where, limit, s.resolver.SpansGlob())
 
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {

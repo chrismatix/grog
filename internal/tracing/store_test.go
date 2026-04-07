@@ -172,15 +172,120 @@ func TestTraceStore_Stats(t *testing.T) {
 	}
 	defer store.Close()
 
-	stats, err := store.Stats(ctx, 10)
+	testCases := []struct {
+		name               string
+		options            StatsOptions
+		expectedTraceCount int
+		expectedTotalFails int
+	}{
+		{
+			name: "all commands",
+			options: StatsOptions{
+				Limit: 10,
+			},
+			expectedTraceCount: 2,
+			expectedTotalFails: 4,
+		},
+		{
+			name: "build only",
+			options: StatsOptions{
+				Limit:   10,
+				Command: "build",
+			},
+			expectedTraceCount: 2,
+			expectedTotalFails: 4,
+		},
+		{
+			name: "test only no matches",
+			options: StatsOptions{
+				Limit:   10,
+				Command: "test",
+			},
+			expectedTraceCount: 0,
+			expectedTotalFails: 0,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			stats, err := store.Stats(ctx, testCase.options)
+			if err != nil {
+				t.Fatalf("Stats failed: %v", err)
+			}
+			if stats.TraceCount != testCase.expectedTraceCount {
+				t.Errorf("expected %d traces, got %d", testCase.expectedTraceCount, stats.TraceCount)
+			}
+			if stats.TotalFails != testCase.expectedTotalFails {
+				t.Errorf("expected %d total failures, got %d", testCase.expectedTotalFails, stats.TotalFails)
+			}
+		})
+	}
+}
+
+func TestTraceStore_StatsFiltersByCommand(t *testing.T) {
+	dir := t.TempDir()
+	fs := backends.NewFileSystemCacheForTest(dir, t.TempDir())
+	writer := NewTraceWriter(fs)
+	ctx := context.Background()
+
+	now := time.Now()
+	if err := writer.Write(ctx, makeTestTrace("build-trace", now.UnixMilli(), "build")); err != nil {
+		t.Fatalf("Write build trace failed: %v", err)
+	}
+	if err := writer.Write(ctx, makeTestTrace("test-trace", now.Add(time.Minute).UnixMilli(), "test")); err != nil {
+		t.Fatalf("Write test trace failed: %v", err)
+	}
+
+	resolver := &PathResolver{
+		buildsBase: dir + "/traces/builds",
+		spansBase:  dir + "/traces/spans",
+	}
+	store, err := NewTraceStore(fs, resolver)
 	if err != nil {
-		t.Fatalf("Stats failed: %v", err)
+		t.Fatalf("NewTraceStore failed: %v", err)
 	}
-	if stats.TraceCount != 2 {
-		t.Errorf("expected 2 traces, got %d", stats.TraceCount)
+	defer store.Close()
+
+	testCases := []struct {
+		name               string
+		options            StatsOptions
+		expectedTraceCount int
+	}{
+		{
+			name: "all",
+			options: StatsOptions{
+				Limit: 10,
+			},
+			expectedTraceCount: 2,
+		},
+		{
+			name: "build",
+			options: StatsOptions{
+				Limit:   10,
+				Command: "build",
+			},
+			expectedTraceCount: 1,
+		},
+		{
+			name: "test",
+			options: StatsOptions{
+				Limit:   10,
+				Command: "test",
+			},
+			expectedTraceCount: 1,
+		},
 	}
-	if stats.TotalFails != 4 { // 2 failures per trace
-		t.Errorf("expected 4 total failures, got %d", stats.TotalFails)
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			stats, err := store.Stats(ctx, testCase.options)
+			if err != nil {
+				t.Fatalf("Stats failed: %v", err)
+			}
+			if stats.TraceCount != testCase.expectedTraceCount {
+				t.Errorf("expected %d traces, got %d", testCase.expectedTraceCount, stats.TraceCount)
+			}
+		})
 	}
 }
 

@@ -38,6 +38,14 @@ cases:
       - stats
     skip_fixture: true
 
+  # Verify stats supports filtering by build command type
+  - name: traces_stats_build_only
+    grog_args:
+      - traces
+      - stats
+      - --command-type=build
+    skip_fixture: true
+
   # Verify JSONL export produces output (non-deterministic)
   - name: traces_export_jsonl
     grog_args:

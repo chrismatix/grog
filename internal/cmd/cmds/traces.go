@@ -27,6 +27,8 @@ var tracesListFailuresOnly bool
 var tracesShowSortBy string
 var tracesShowTop int
 
+var tracesStatsLimit int
+var tracesStatsCommandType string
 var tracesStatsDetailed bool
 
 var tracesExportFormat string
@@ -65,6 +67,28 @@ var TracesCmd = &cobra.Command{
 	Long:  `View, analyze, and export build execution traces for performance analysis and dashboard integration.`,
 }
 
+func normalizeTraceCommand(command string) (string, error) {
+	switch command {
+	case "":
+		return "", nil
+	case "build", "test", "run":
+		return command, nil
+	default:
+		return "", fmt.Errorf("invalid command %q (use build, test, or run)", command)
+	}
+}
+
+func normalizeTraceStatsCommandType(commandType string) (string, error) {
+	switch commandType {
+	case "", "all":
+		return "", nil
+	case "build", "test":
+		return commandType, nil
+	default:
+		return "", fmt.Errorf("invalid command type %q (use build, test, or all)", commandType)
+	}
+}
+
 var tracesListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List recent build traces.",
@@ -78,9 +102,14 @@ var tracesListCmd = &cobra.Command{
 		store := getTraceStore(ctx, logger)
 		defer store.Close()
 
+		command, err := normalizeTraceCommand(tracesListCommand)
+		if err != nil {
+			logger.Fatalf("%v", err)
+		}
+
 		opts := tracing.ListOptions{
 			Limit:        tracesListLimit,
-			Command:      tracesListCommand,
+			Command:      command,
 			FailuresOnly: tracesListFailuresOnly,
 		}
 		if tracesListSince != "" {
@@ -182,19 +211,25 @@ var tracesStatsCmd = &cobra.Command{
 	Use:   "stats",
 	Short: "Show aggregate statistics across recent traces.",
 	Example: `  grog traces stats
-  grog traces stats --detailed`,
+  grog traces stats --command-type build
+  grog traces stats --detailed --command-type test`,
 	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := console.SetupCommand()
 		store := getTraceStore(ctx, logger)
 		defer store.Close()
 
-		limit := tracesListLimit
-		if limit <= 0 {
-			limit = 20
+		command, err := normalizeTraceStatsCommandType(tracesStatsCommandType)
+		if err != nil {
+			logger.Fatalf("%v", err)
 		}
 
-		stats, err := store.Stats(ctx, limit)
+		statsOptions := tracing.StatsOptions{
+			Limit:   tracesStatsLimit,
+			Command: command,
+		}
+
+		stats, err := store.Stats(ctx, statsOptions)
 		if err != nil {
 			logger.Fatalf("failed to compute stats: %v", err)
 		}
@@ -206,7 +241,7 @@ var tracesStatsCmd = &cobra.Command{
 		printStatsSummary(stats)
 
 		if tracesStatsDetailed {
-			report, err := store.Bottlenecks(ctx, limit)
+			report, err := store.Bottlenecks(ctx, statsOptions)
 			if err != nil {
 				logger.Fatalf("failed to compute bottleneck analysis: %v", err)
 			}
@@ -216,10 +251,10 @@ var tracesStatsCmd = &cobra.Command{
 }
 
 var tracesPullCmd = &cobra.Command{
-	Use:   "pull",
-	Short: "Download remote traces to local cache for querying.",
+	Use:     "pull",
+	Short:   "Download remote traces to local cache for querying.",
 	Example: `  grog traces pull`,
-	Args: cobra.NoArgs,
+	Args:    cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := console.SetupCommand()
 		store := getTraceStore(ctx, logger)
@@ -493,9 +528,9 @@ func styled() bool {
 
 // lipgloss styles for bottleneck report
 var (
-	headerStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))
-	sectionStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12")).MarginTop(1)
-	hintStyle      = lipgloss.NewStyle().Italic(true).Foreground(lipgloss.Color("241"))
+	headerStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))
+	sectionStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12")).MarginTop(1)
+	hintStyle       = lipgloss.NewStyle().Italic(true).Foreground(lipgloss.Color("241"))
 	impactHighStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196")) // red
 	impactMedStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("214")) // orange
 	impactLowStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("226")) // yellow
@@ -772,7 +807,8 @@ func AddTracesCmd(rootCmd *cobra.Command) {
 	tracesShowCmd.Flags().StringVar(&tracesShowSortBy, "sort-by", "total", "Sort targets by: total, command, queue, hash")
 	tracesShowCmd.Flags().IntVar(&tracesShowTop, "top", 0, "Show only the N slowest targets (0 = all)")
 
-	tracesStatsCmd.Flags().IntVar(&tracesListLimit, "limit", 20, "Number of recent traces to aggregate")
+	tracesStatsCmd.Flags().IntVar(&tracesStatsLimit, "limit", 20, "Number of recent traces to aggregate")
+	tracesStatsCmd.Flags().StringVar(&tracesStatsCommandType, "command-type", "all", "Filter by build command type (build, test, all)")
 	tracesStatsCmd.Flags().BoolVar(&tracesStatsDetailed, "detailed", false, "Load full traces for per-target analysis")
 
 	tracesExportCmd.Flags().StringVar(&tracesExportFormat, "format", "jsonl", "Export format: jsonl or otel")
