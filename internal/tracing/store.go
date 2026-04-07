@@ -11,7 +11,7 @@ import (
 
 	"grog/internal/caching/backends"
 
-	_ "github.com/marcboeker/go-duckdb"
+	_ "github.com/duckdb/duckdb-go/v2"
 	"github.com/parquet-go/parquet-go"
 )
 

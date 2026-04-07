@@ -67,26 +67,12 @@ release-pkl:
 	@cd pkl && VERSION=$(VERSION) pkl project package
 
 
-# Build release targets for static binaries across architectures.
-release: clean
-	@echo "Building release binaries"
-	@mkdir -p dist
-
-	$(MAKE) release-build GOOS=linux GOARCH=amd64
-	$(MAKE) release-build GOOS=linux GOARCH=arm64
-	$(MAKE) release-build GOOS=darwin GOARCH=amd64
-	$(MAKE) release-build GOOS=darwin GOARCH=arm64
-
-	$(MAKE) release-pkl
-
-	@shasum -a 256 dist/* > dist/SHASUMS256.txt
-
-	@echo "Release build completed."
-
-# CGO_ENABLED=0 ensures static linking.
+# Build a release binary for the current GOOS/GOARCH.
+# Called by CI matrix; locally: make release-build GOOS=darwin GOARCH=arm64
 release-build: gen-proto
 	@echo "Building for $(GOOS)/$(GOARCH)"
-	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(LD_FLAGS) -o dist/grog-$(GOOS)-$(GOARCH)
+	@mkdir -p dist
+	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(LD_FLAGS) -o dist/grog-$(GOOS)-$(GOARCH)
 	@cd dist && shasum -a 256 grog-$(GOOS)-$(GOARCH) > grog-$(GOOS)-$(GOARCH).sha256
 
 gen-proto:
