@@ -55,6 +55,10 @@ func (m *mockCacheBackend) Exists(ctx context.Context, path string, key string) 
 	return false, errors.New("Exists not implemented in mock")
 }
 
+func (m *mockCacheBackend) ListKeys(ctx context.Context, path string, suffix string) ([]string, error) {
+	return nil, nil
+}
+
 func TestRemoteWrapper_Get(t *testing.T) {
 	ctx := context.Background()
 	path := "test/path"

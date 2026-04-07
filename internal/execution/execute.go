@@ -134,13 +134,16 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 
 		outputIdentifiers := e.getDependencyOutputIdentifiers(target)
 
+		hashStart := time.Now()
 		err = e.targetHasher.SetTargetChangeHash(target)
+		target.HashDuration = time.Since(hashStart)
 		if err != nil {
 			return dag.CacheMiss, err
 		}
 
+		queuedAt := time.Now()
 		// taskFunc will be run in the worker pool
-		taskFunc := e.getTaskFunc(ctx, target, binTools, outputIdentifiers)
+		taskFunc := e.getTaskFunc(ctx, target, binTools, outputIdentifiers, queuedAt)
 		return coordinator.TaskPool().Run(taskFunc)
 	}
 
@@ -238,13 +241,17 @@ func (e *Executor) getTaskFunc(
 	target *model.Target,
 	binToolPaths BinToolMap,
 	outputIdentifiers OutputIdentifierMap,
+	queuedAt time.Time,
 ) worker.TaskFunc[dag.CacheResult] {
 	return func(update worker.StatusFunc) (dag.CacheResult, error) {
 		startTime := time.Now()
+		target.StartTime = startTime
+		target.QueueWait = startTime.Sub(queuedAt)
 
 		logger := console.GetLogger(ctx)
 		update(worker.Status(fmt.Sprintf("%s: checking cache.", target.Label)))
 
+		cacheCheckStart := time.Now()
 		targetResult, err := e.targetCache.Load(ctx, target.ChangeHash)
 		if err != nil {
 			// TODO distinguish between NotFound and cache backend errors
@@ -265,6 +272,7 @@ func (e *Executor) getTaskFunc(
 		if taintedErr != nil {
 			logger.Errorf("Failed to check if target %s is tainted: %v", target.Label, taintedErr)
 		}
+		target.CacheCheckTime = time.Since(cacheCheckStart)
 
 		if isTainted {
 			logger.Debugf("running target %s due to being tainted", target.Label)
@@ -291,9 +299,10 @@ func (e *Executor) getTaskFunc(
 				update,
 			)
 
-			cacheStart := time.Now()
+			outputLoadStart := time.Now()
 			loadingErr := e.registry.LoadOutputs(ctx, target, targetResult, progress)
-			target.CacheTime += time.Since(cacheStart)
+			target.OutputLoadTime = time.Since(outputLoadStart)
+			target.CacheTime += target.OutputLoadTime
 			if loadingErr != nil {
 				// Don't return so that we instead break out and continue executing the target
 				logger.Errorf("%s re-running due to output loading failure: %v", target.Label, loadingErr)
@@ -320,9 +329,11 @@ func (e *Executor) getTaskFunc(
 
 		if e.loadOutputsMode == config.LoadOutputsMinimal {
 			update(worker.Status(fmt.Sprintf("%s: loading dependency outputs (load_outputs=minimal).", target.Label)))
+			depLoadStart := time.Now()
 			if loadDepsErr := e.LoadDependencyOutputs(ctx, target, update); loadDepsErr != nil {
 				return dag.CacheMiss, fmt.Errorf("failed to load dependency outputs for target %s: %w", target.Label, loadDepsErr)
 			}
+			target.DepLoadTime = time.Since(depLoadStart)
 		}
 
 		return e.executeTarget(ctx, target, binToolPaths, outputIdentifiers, update, isTainted)
@@ -461,9 +472,10 @@ func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, u
 			0,
 			update,
 		)
-		cacheStart := time.Now()
+		outputWriteStart := time.Now()
 		writeResult, writeErr := e.registry.PrepareOutputs(ctx, target, progress)
-		target.CacheTime += time.Since(cacheStart)
+		target.OutputWriteTime = time.Since(outputWriteStart)
+		target.CacheTime += target.OutputWriteTime
 		if writeErr != nil {
 			return writeErr
 		}
@@ -480,9 +492,10 @@ func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, u
 	target.OutputsLoaded = true
 	target.OutputHash = targetResult.OutputHash
 
-	cacheStart := time.Now()
+	cacheWriteStart := time.Now()
 	defer func() {
-		target.CacheTime += time.Since(cacheStart)
+		target.CacheWriteTime = time.Since(cacheWriteStart)
+		target.CacheTime += target.CacheWriteTime
 	}()
 
 	return e.cacheWriter.PersistPreparedTarget(ctx, target.Label.String(), preparedTarget, update)

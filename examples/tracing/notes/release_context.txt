@@ -1,0 +1,3 @@
+Promo traffic is expected to spike around lunch due to an email campaign.
+The fraud service was rolled out to a new model version this morning.
+Recommendation cache churn is known to be noisy after catalog imports.

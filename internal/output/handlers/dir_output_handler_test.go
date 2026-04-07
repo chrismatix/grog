@@ -42,6 +42,9 @@ func (m *mockCacheBackend) Delete(ctx context.Context, path string, key string) 
 func (m *mockCacheBackend) Exists(ctx context.Context, path string, key string) (bool, error) {
 	return false, nil
 }
+func (m *mockCacheBackend) ListKeys(ctx context.Context, path string, suffix string) ([]string, error) {
+	return nil, nil
+}
 
 // TestDirectoryOutputHandler_WriteAndLoad tests writing and loading directory
 // outputs with the following structure:

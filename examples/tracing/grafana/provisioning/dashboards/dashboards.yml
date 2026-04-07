@@ -1,0 +1,12 @@
+apiVersion: 1
+
+providers:
+  - name: tracing-example
+    orgId: 1
+    folder: Tracing Example
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/provisioning/dashboards/json

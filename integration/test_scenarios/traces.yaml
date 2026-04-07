@@ -1,0 +1,78 @@
+name: traces
+repo: traces
+cases:
+  # Verify traces list works when no traces exist yet
+  - name: traces_list_empty
+    grog_args:
+      - traces
+      - list
+
+  # Run a build to generate a trace
+  - name: traces_build_targets
+    grog_args:
+      - build
+
+  # Verify traces list shows a trace (output has non-deterministic fields)
+  - name: traces_list_after_build
+    grog_args:
+      - traces
+      - list
+    skip_fixture: true
+
+  # Verify list filtering by command returns no match for 'test'
+  - name: traces_list_filter_no_match
+    grog_args:
+      - traces
+      - list
+      - --command=test
+
+  # Run a second build (fully cached) to generate another trace
+  - name: traces_build_cached
+    grog_args:
+      - build
+
+  # Verify stats works (durations are non-deterministic)
+  - name: traces_stats
+    grog_args:
+      - traces
+      - stats
+    skip_fixture: true
+
+  # Verify JSONL export produces output (non-deterministic)
+  - name: traces_export_jsonl
+    grog_args:
+      - traces
+      - export
+      - --format=jsonl
+      - --limit=1
+    skip_fixture: true
+
+  # Verify OTLP export produces output (non-deterministic)
+  - name: traces_export_otel
+    grog_args:
+      - traces
+      - export
+      - --format=otel
+      - --limit=1
+    skip_fixture: true
+
+  # Prune with nothing old enough to prune
+  - name: traces_prune_nothing
+    grog_args:
+      - traces
+      - prune
+      - --older-than=1h
+
+  # Prune everything
+  - name: traces_prune_all
+    grog_args:
+      - traces
+      - prune
+      - --older-than=0h
+    skip_fixture: true
+
+  # Verify list is empty after pruning all
+  - name: traces_list_after_prune_all
+    grog_args:
+      - traces
+      - list

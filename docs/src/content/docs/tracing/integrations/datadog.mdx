@@ -1,0 +1,46 @@
+---
+title: Datadog
+description: Send Grog execution traces to Datadog APM.
+---
+
+Datadog APM can ingest OTLP [execution traces](/tracing/).
+
+## Direct API ingestion (agentless)
+
+Send OTLP traces directly to the Datadog intake API without running the Datadog Agent. This is the simplest option for CI or environments where you don't want to install the agent.
+
+```bash
+grog traces export --format=otel --limit 1 --output /tmp/trace-otel.json
+
+curl -X POST "https://otlp.datadoghq.com/v1/traces" \
+  -H "Content-Type: application/json" \
+  -H "DD-API-KEY: $DD_API_KEY" \
+  -d @/tmp/trace-otel.json
+```
+
+Replace `otlp.datadoghq.com` with the OTLP endpoint for your [Datadog site](https://docs.datadoghq.com/getting_started/site/) (e.g. `otlp.datadoghq.eu`, `otlp.us5.datadoghq.com`).
+
+## Via the Datadog Agent
+
+If you already run the Datadog Agent, send traces to its local OTLP endpoint instead:
+
+```bash
+grog traces export --format=otel --limit 1 --output /tmp/trace-otel.json
+
+curl -X POST http://localhost:4318/v1/traces \
+  -H "Content-Type: application/json" \
+  -d @/tmp/trace-otel.json
+```
+
+Ensure the Agent is configured to accept OTLP:
+
+```yaml
+# datadog.yaml
+otlp_config:
+  receiver:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+```
+
+In both cases, traces appear in Datadog APM under service `grog`.
