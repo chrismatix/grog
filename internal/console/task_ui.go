@@ -177,10 +177,14 @@ func (m *model) View() string {
 	label := m.streamLogsCommandLabel()
 
 	// Render header
-	if label == "" {
-		s.WriteString(m.header + "\n")
-	} else {
-		s.WriteString(m.header + ": " + label + "\n")
+	if m.header != "" || label != "" {
+		if label == "" {
+			s.WriteString(m.header + "\n")
+		} else if m.header == "" {
+			s.WriteString(label + "\n")
+		} else {
+			s.WriteString(m.header + ": " + label + "\n")
+		}
 	}
 
 	// Render tasks in order:

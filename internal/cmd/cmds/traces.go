@@ -232,14 +232,13 @@ var tracesPullCmd = &cobra.Command{
 			teaCtx, program, sendMsg := console.StartTaskUI(ctx)
 			ctx = teaCtx
 
-			sendMsg(console.HeaderMsg("Pulling traces"))
 			startedAt := time.Now().Unix()
 
 			onProgress = func(current, total int) {
 				sendMsg(console.TaskStateMsg{
 					State: console.TaskStateMap{
 						0: console.TaskState{
-							Status:       fmt.Sprintf("Downloading trace files (%d/%d)", current, total),
+							Status:       fmt.Sprintf("Pulling traces (%d/%d)", current, total),
 							StartedAtSec: startedAt,
 							Progress: &console.Progress{
 								StartedAtSec: startedAt,
