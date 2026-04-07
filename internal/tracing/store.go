@@ -109,7 +109,7 @@ func (s *TraceStore) Write(ctx context.Context, trace *BuildTrace) error {
 	return s.writer.Write(ctx, trace)
 }
 
-// Sync downloads remote trace files that are not yet in the local cache.
+// Pull downloads remote trace files that are not yet in the local cache.
 // It lists keys from the remote backend and triggers a Get() for each missing
 // file, which causes the RemoteWrapper to fetch and cache it locally.
 // Returns the number of files synced.
@@ -131,9 +131,15 @@ func (s *TraceStore) Pull(ctx context.Context) (int, error) {
 			subPath := fmt.Sprintf("%s/%s", table, parts[0])
 			fileName := parts[1]
 
-			// Check if it already exists locally
-			exists, _ := s.writer.backend.Exists(ctx, subPath, fileName)
-			if exists {
+			// Check if it already exists locally (not remotely) to avoid
+			// skipping files that only exist on the remote backend.
+			localExists := false
+			if rw, ok := s.writer.backend.(*backends.RemoteWrapper); ok {
+				localExists, _ = rw.GetFS().Exists(ctx, subPath, fileName)
+			} else {
+				localExists, _ = s.writer.backend.Exists(ctx, subPath, fileName)
+			}
+			if localExists {
 				continue
 			}
 
@@ -169,8 +175,13 @@ func (s *TraceStore) List(ctx context.Context, opts ListOptions) ([]BuildRow, er
 	}
 
 	limit := opts.Limit
-	if limit <= 0 {
+	if limit < 0 {
 		limit = 20
+	}
+
+	limitClause := ""
+	if limit > 0 {
+		limitClause = fmt.Sprintf("LIMIT %d", limit)
 	}
 
 	query := fmt.Sprintf(`SELECT trace_id, workspace, git_commit, git_branch, grog_version, platform,
@@ -179,8 +190,8 @@ func (s *TraceStore) List(ctx context.Context, opts ListOptions) ([]BuildRow, er
 		critical_path_exec_millis, critical_path_cache_millis, async_cache_wait_millis,
 		is_ci, requested_patterns
 		FROM read_parquet('%s', union_by_name=true)
-		%s ORDER BY start_time_unix_millis DESC LIMIT %d`,
-		s.resolver.BuildsGlob(), where, limit)
+		%s ORDER BY start_time_unix_millis DESC %s`,
+		s.resolver.BuildsGlob(), where, limitClause)
 
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {

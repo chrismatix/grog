@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -169,6 +170,9 @@ var tracesShowCmd = &cobra.Command{
 			logger.Fatalf("failed to load trace: %v", err)
 		}
 
+		// Sort spans by the requested dimension
+		sortSpans(trace.Spans, tracesShowSortBy)
+
 		printBuildSummary(&trace.Build)
 		printSpanTable(trace.Spans)
 	},
@@ -321,6 +325,27 @@ var tracesPruneCmd = &cobra.Command{
 }
 
 // helpers
+
+func sortSpans(spans []tracing.SpanRow, sortBy string) {
+	switch sortBy {
+	case "command":
+		sort.Slice(spans, func(i, j int) bool {
+			return spans[i].CommandDurationMillis > spans[j].CommandDurationMillis
+		})
+	case "queue":
+		sort.Slice(spans, func(i, j int) bool {
+			return spans[i].QueueWaitMillis > spans[j].QueueWaitMillis
+		})
+	case "hash":
+		sort.Slice(spans, func(i, j int) bool {
+			return spans[i].HashDurationMillis > spans[j].HashDurationMillis
+		})
+	default: // "total"
+		sort.Slice(spans, func(i, j int) bool {
+			return spans[i].TotalDurationMillis > spans[j].TotalDurationMillis
+		})
+	}
+}
 
 func printBuildSummary(b *tracing.BuildRow) {
 	t := time.UnixMilli(b.StartTimeUnixMillis)

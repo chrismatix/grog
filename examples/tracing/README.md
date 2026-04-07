@@ -73,6 +73,14 @@ In Jaeger, search for service `grog` to find build traces.
 In Grafana, the Tempo and Loki datasources are pre-configured. Use
 **Explore** to query traces in Tempo or log lines in Loki.
 
+Grafana also provisions a starter dashboard named **Grog Tracing Overview**
+inside the **Tracing Example** folder. After running `sh ./seed.sh`, it shows:
+
+- latest build duration, cache hits, and failures
+- duration trends from the seeded synthetic traces
+- cache hits versus total targets
+- the raw seeded trace events from Loki
+
 ## Services
 
 | Container | Port | Purpose |
