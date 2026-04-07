@@ -22,6 +22,13 @@ Reference for the `grog` CLI.
 - [`grog run`](#grog-run)
 - [`grog taint`](#grog-taint)
 - [`grog test`](#grog-test)
+- [`grog traces`](#grog-traces)
+- [`grog traces export`](#grog-traces-export)
+- [`grog traces list`](#grog-traces-list)
+- [`grog traces prune`](#grog-traces-prune)
+- [`grog traces pull`](#grog-traces-pull)
+- [`grog traces show`](#grog-traces-show)
+- [`grog traces stats`](#grog-traces-stats)
 - [`grog version`](#grog-version)
 
 ## grog
@@ -67,6 +74,7 @@ Reference for the `grog` CLI.
 * [`grog run`](#grog-run) - Builds and runs one or more targets' binary outputs.
 * [`grog taint`](#grog-taint) - Taints targets by pattern to force execution regardless of cache status.
 * [`grog test`](#grog-test) - Loads the user configuration and executes test targets.
+* [`grog traces`](#grog-traces) - View and manage build execution traces.
 * [`grog version`](#grog-version) - Print the version info.
 
 
@@ -950,6 +958,383 @@ grog test [flags]
 
 ---
 
+## grog traces
+
+View and manage build execution traces.
+
+### Synopsis
+
+View, analyze, and export build execution traces for performance analysis and dashboard integration.
+
+### Options
+
+```text
+  -h, --help   help for traces
+```
+
+### Options inherited from parent commands
+
+```text
+  -a, --all-platforms                 Select all platforms (bypasses platform selectors)
+      --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
+      --color string                  Set color output (yes, no, or auto) (default "auto")
+      --debug                         Enable debug logging
+      --disable-default-shell-flags   Do not prepend "set -eu" to target commands
+      --disable-progress-tracker      Disable progress tracking updates
+      --disable-tea                   Disable interactive TUI (Bubble Tea)
+      --enable-cache                  Enable cache (default true)
+      --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
+      --fail-fast                     Fail fast on first error
+      --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
+      --log-level string              Set log level (trace, debug, info, warn, error)
+      --platform string               Force a specific platform in the form os/arch
+      --profile string                Select a configuration profile to use
+      --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
+      --stream-logs                   Forward all target build/test logs to stdout/-err
+      --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+  -v, --verbose count                 Set verbosity level (-v, -vv)
+```
+
+### See also
+
+* [`grog`](#grog)
+* [`grog traces export`](#grog-traces-export) - Export traces for dashboard integration.
+* [`grog traces list`](#grog-traces-list) - List recent build traces.
+* [`grog traces prune`](#grog-traces-prune) - Delete traces older than a specified duration.
+* [`grog traces pull`](#grog-traces-pull) - Download remote traces to local cache for querying.
+* [`grog traces show`](#grog-traces-show) - Show details of a specific trace.
+* [`grog traces stats`](#grog-traces-stats) - Show aggregate statistics across recent traces.
+
+
+
+---
+
+## grog traces export
+
+Export traces for dashboard integration.
+
+```text
+grog traces export [flags]
+```
+
+### Examples
+
+```text
+  grog traces export --format=jsonl
+  grog traces export --format=otel --output traces.json
+```
+
+### Options
+
+```text
+      --format string   Export format: jsonl or otel (default "jsonl")
+  -h, --help            help for export
+      --limit int       Maximum number of traces to export (0 = all)
+      --output string   Output file (default: stdout)
+      --since string    Only export traces after this date (YYYY-MM-DD)
+```
+
+### Options inherited from parent commands
+
+```text
+  -a, --all-platforms                 Select all platforms (bypasses platform selectors)
+      --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
+      --color string                  Set color output (yes, no, or auto) (default "auto")
+      --debug                         Enable debug logging
+      --disable-default-shell-flags   Do not prepend "set -eu" to target commands
+      --disable-progress-tracker      Disable progress tracking updates
+      --disable-tea                   Disable interactive TUI (Bubble Tea)
+      --enable-cache                  Enable cache (default true)
+      --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
+      --fail-fast                     Fail fast on first error
+      --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
+      --log-level string              Set log level (trace, debug, info, warn, error)
+      --platform string               Force a specific platform in the form os/arch
+      --profile string                Select a configuration profile to use
+      --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
+      --stream-logs                   Forward all target build/test logs to stdout/-err
+      --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+  -v, --verbose count                 Set verbosity level (-v, -vv)
+```
+
+### See also
+
+* [`grog traces`](#grog-traces) - View and manage build execution traces.
+
+
+
+---
+
+## grog traces list
+
+List recent build traces.
+
+```text
+grog traces list [flags]
+```
+
+### Examples
+
+```text
+  grog traces list
+  grog traces list --limit 50
+  grog traces list --since 2026-03-01 --command build
+  grog traces list --failures-only
+```
+
+### Options
+
+```text
+      --command string   Filter by command type (build, test, run)
+      --failures-only    Only show traces with failures
+  -h, --help             help for list
+      --limit int        Maximum number of traces to display (default 20)
+      --since string     Only show traces after this date (YYYY-MM-DD)
+```
+
+### Options inherited from parent commands
+
+```text
+  -a, --all-platforms                 Select all platforms (bypasses platform selectors)
+      --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
+      --color string                  Set color output (yes, no, or auto) (default "auto")
+      --debug                         Enable debug logging
+      --disable-default-shell-flags   Do not prepend "set -eu" to target commands
+      --disable-progress-tracker      Disable progress tracking updates
+      --disable-tea                   Disable interactive TUI (Bubble Tea)
+      --enable-cache                  Enable cache (default true)
+      --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
+      --fail-fast                     Fail fast on first error
+      --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
+      --log-level string              Set log level (trace, debug, info, warn, error)
+      --platform string               Force a specific platform in the form os/arch
+      --profile string                Select a configuration profile to use
+      --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
+      --stream-logs                   Forward all target build/test logs to stdout/-err
+      --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+  -v, --verbose count                 Set verbosity level (-v, -vv)
+```
+
+### See also
+
+* [`grog traces`](#grog-traces) - View and manage build execution traces.
+
+
+
+---
+
+## grog traces prune
+
+Delete traces older than a specified duration.
+
+```text
+grog traces prune [flags]
+```
+
+### Examples
+
+```text
+  grog traces prune --older-than 30d
+  grog traces prune --older-than 7d
+```
+
+### Options
+
+```text
+  -h, --help                help for prune
+      --older-than string   Delete traces older than this duration (e.g. 30d, 72h) (default "30d")
+```
+
+### Options inherited from parent commands
+
+```text
+  -a, --all-platforms                 Select all platforms (bypasses platform selectors)
+      --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
+      --color string                  Set color output (yes, no, or auto) (default "auto")
+      --debug                         Enable debug logging
+      --disable-default-shell-flags   Do not prepend "set -eu" to target commands
+      --disable-progress-tracker      Disable progress tracking updates
+      --disable-tea                   Disable interactive TUI (Bubble Tea)
+      --enable-cache                  Enable cache (default true)
+      --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
+      --fail-fast                     Fail fast on first error
+      --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
+      --log-level string              Set log level (trace, debug, info, warn, error)
+      --platform string               Force a specific platform in the form os/arch
+      --profile string                Select a configuration profile to use
+      --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
+      --stream-logs                   Forward all target build/test logs to stdout/-err
+      --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+  -v, --verbose count                 Set verbosity level (-v, -vv)
+```
+
+### See also
+
+* [`grog traces`](#grog-traces) - View and manage build execution traces.
+
+
+
+---
+
+## grog traces pull
+
+Download remote traces to local cache for querying.
+
+```text
+grog traces pull [flags]
+```
+
+### Examples
+
+```text
+  grog traces pull
+```
+
+### Options
+
+```text
+  -h, --help   help for pull
+```
+
+### Options inherited from parent commands
+
+```text
+  -a, --all-platforms                 Select all platforms (bypasses platform selectors)
+      --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
+      --color string                  Set color output (yes, no, or auto) (default "auto")
+      --debug                         Enable debug logging
+      --disable-default-shell-flags   Do not prepend "set -eu" to target commands
+      --disable-progress-tracker      Disable progress tracking updates
+      --disable-tea                   Disable interactive TUI (Bubble Tea)
+      --enable-cache                  Enable cache (default true)
+      --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
+      --fail-fast                     Fail fast on first error
+      --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
+      --log-level string              Set log level (trace, debug, info, warn, error)
+      --platform string               Force a specific platform in the form os/arch
+      --profile string                Select a configuration profile to use
+      --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
+      --stream-logs                   Forward all target build/test logs to stdout/-err
+      --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+  -v, --verbose count                 Set verbosity level (-v, -vv)
+```
+
+### See also
+
+* [`grog traces`](#grog-traces) - View and manage build execution traces.
+
+
+
+---
+
+## grog traces show
+
+Show details of a specific trace.
+
+```text
+grog traces show <trace-id> [flags]
+```
+
+### Examples
+
+```text
+  grog traces show a1b2c3d4
+  grog traces show a1b2c3d4 --sort-by command --top 10
+```
+
+### Options
+
+```text
+  -h, --help             help for show
+      --sort-by string   Sort targets by: total, command, queue, hash (default "total")
+      --top int          Show only the N slowest targets (0 = all)
+```
+
+### Options inherited from parent commands
+
+```text
+  -a, --all-platforms                 Select all platforms (bypasses platform selectors)
+      --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
+      --color string                  Set color output (yes, no, or auto) (default "auto")
+      --debug                         Enable debug logging
+      --disable-default-shell-flags   Do not prepend "set -eu" to target commands
+      --disable-progress-tracker      Disable progress tracking updates
+      --disable-tea                   Disable interactive TUI (Bubble Tea)
+      --enable-cache                  Enable cache (default true)
+      --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
+      --fail-fast                     Fail fast on first error
+      --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
+      --log-level string              Set log level (trace, debug, info, warn, error)
+      --platform string               Force a specific platform in the form os/arch
+      --profile string                Select a configuration profile to use
+      --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
+      --stream-logs                   Forward all target build/test logs to stdout/-err
+      --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+  -v, --verbose count                 Set verbosity level (-v, -vv)
+```
+
+### See also
+
+* [`grog traces`](#grog-traces) - View and manage build execution traces.
+
+
+
+---
+
+## grog traces stats
+
+Show aggregate statistics across recent traces.
+
+```text
+grog traces stats [flags]
+```
+
+### Examples
+
+```text
+  grog traces stats
+  grog traces stats --detailed
+```
+
+### Options
+
+```text
+      --detailed    Load full traces for per-target analysis
+  -h, --help        help for stats
+      --limit int   Number of recent traces to aggregate (default 20)
+```
+
+### Options inherited from parent commands
+
+```text
+  -a, --all-platforms                 Select all platforms (bypasses platform selectors)
+      --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
+      --color string                  Set color output (yes, no, or auto) (default "auto")
+      --debug                         Enable debug logging
+      --disable-default-shell-flags   Do not prepend "set -eu" to target commands
+      --disable-progress-tracker      Disable progress tracking updates
+      --disable-tea                   Disable interactive TUI (Bubble Tea)
+      --enable-cache                  Enable cache (default true)
+      --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
+      --fail-fast                     Fail fast on first error
+      --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
+      --log-level string              Set log level (trace, debug, info, warn, error)
+      --platform string               Force a specific platform in the form os/arch
+      --profile string                Select a configuration profile to use
+      --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
+      --stream-logs                   Forward all target build/test logs to stdout/-err
+      --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+  -v, --verbose count                 Set verbosity level (-v, -vv)
+```
+
+### See also
+
+* [`grog traces`](#grog-traces) - View and manage build execution traces.
+
+
+
+---
+
 ## grog version
 
 Print the version info.
@@ -1003,4 +1388,4 @@ grog version [flags]
 
 
 
-###### Auto generated by spf13/cobra on 3-Apr-2026
+###### Auto generated by spf13/cobra on 7-Apr-2026
