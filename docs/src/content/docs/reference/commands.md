@@ -1,5 +1,7 @@
 ---
-title: "CLI"
+title: "CLI Commands"
+sidebar:
+  label: "Commands"
 ---
 
 Reference for the `grog` CLI.

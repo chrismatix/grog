@@ -54,6 +54,6 @@ It executes target graphs in parallel, hashes inputs for incremental builds, and
 - https://grog.build/reference/configuration/
 - https://grog.build/reference/labels/
 - https://grog.build/reference/troubleshooting/
-- https://grog.build/reference/cli/grog/ - root CLI reference and links to all subcommands.
+- https://grog.build/reference/commands/ - single-page CLI command reference.
 
 For complete and up-to-date discovery of every docs URL, use the sitemap index.

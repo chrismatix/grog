@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	outputDirectoryRelativePath = "src/content/docs/reference/cli"
-	outputFileName              = "index.md"
+	outputDirectoryRelativePath = "src/content/docs/reference"
+	outputFileName              = "commands.md"
 )
 
 func main() {
@@ -55,6 +55,11 @@ func docsDirectory() string {
 }
 
 func removeLegacyCommandDocs(directory string, rootCommandName string) error {
+	legacyDirectory := filepath.Join(directory, "cli")
+	if err := os.RemoveAll(legacyDirectory); err != nil {
+		return fmt.Errorf("remove legacy directory %q: %w", legacyDirectory, err)
+	}
+
 	patterns := []string{
 		filepath.Join(directory, rootCommandName+"*.md"),
 		filepath.Join(directory, outputFileName),
@@ -81,7 +86,9 @@ func generateCLIDocument(rootCommand *cobra.Command) (string, error) {
 
 	var builder strings.Builder
 	builder.WriteString(`---
-title: "CLI"
+title: "CLI Commands"
+sidebar:
+  label: "Commands"
 ---
 `)
 	builder.WriteString("\n")
