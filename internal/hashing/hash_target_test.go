@@ -3,6 +3,7 @@ package hashing
 import (
 	"testing"
 
+	"grog/internal/config"
 	"grog/internal/label"
 	"grog/internal/model"
 )
@@ -28,6 +29,54 @@ func TestHashTargetDefinition_FingerprintAffectsHash(t *testing.T) {
 
 	if hashWithV1 == hashWithV101 {
 		t.Fatalf("expected hash to change when fingerprint value changes: %s", hashWithV101)
+	}
+}
+
+func TestHashTargetDefinition_DockerBackendAffectsHashForDockerTargets(t *testing.T) {
+	dockerTarget := model.Target{
+		Label:   label.TL("pkg", "target"),
+		Command: "docker build .",
+		Outputs: []model.Output{model.NewOutput("docker", "my-image")},
+	}
+
+	config.Global.Docker.Backend = config.DockerBackendFSTarball
+	hashTarball, err := hashTargetDefinition(dockerTarget, nil)
+	if err != nil {
+		t.Fatalf("hashTargetDefinition returned error: %v", err)
+	}
+
+	config.Global.Docker.Backend = config.DockerBackendRegistry
+	hashRegistry, err := hashTargetDefinition(dockerTarget, nil)
+	if err != nil {
+		t.Fatalf("hashTargetDefinition returned error: %v", err)
+	}
+
+	if hashTarball == hashRegistry {
+		t.Fatalf("expected different hashes for different docker backends, got: %s", hashTarball)
+	}
+}
+
+func TestHashTargetDefinition_DockerBackendDoesNotAffectNonDockerTargets(t *testing.T) {
+	target := model.Target{
+		Label:   label.TL("pkg", "target"),
+		Command: "echo hi",
+		Outputs: []model.Output{model.NewOutput("file", "output.txt")},
+	}
+
+	config.Global.Docker.Backend = config.DockerBackendFSTarball
+	hashTarball, err := hashTargetDefinition(target, nil)
+	if err != nil {
+		t.Fatalf("hashTargetDefinition returned error: %v", err)
+	}
+
+	config.Global.Docker.Backend = config.DockerBackendRegistry
+	hashRegistry, err := hashTargetDefinition(target, nil)
+	if err != nil {
+		t.Fatalf("hashTargetDefinition returned error: %v", err)
+	}
+
+	if hashTarball != hashRegistry {
+		t.Fatalf("expected same hash for non-docker target regardless of docker backend, got: %s vs %s", hashTarball, hashRegistry)
 	}
 }
 

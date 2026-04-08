@@ -44,11 +44,26 @@ func hashTargetDefinition(target model.Target, dependencyHashes []string) (strin
 		_, err = hasher.WriteString(config.Global.GetPlatform())
 	}
 
+	// Include the docker backend in the hash for targets with docker outputs
+	// so that cache results from different backends (tarball vs registry) can co-exist
+	if hasDockerOutput(target) {
+		_, err = hasher.WriteString(config.Global.Docker.Backend)
+	}
+
 	if err != nil {
 		return "", err
 	}
 	// Return the hash as a hexadecimal string.
 	return hasher.SumString(), nil
+}
+
+func hasDockerOutput(target model.Target) bool {
+	for _, output := range target.AllOutputs() {
+		if output.Type == "docker" {
+			return true
+		}
+	}
+	return false
 }
 
 func sorted(s []string) string {
