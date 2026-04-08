@@ -1,0 +1,31 @@
+name: environments
+repo: environments
+cases:
+  - name: env_list_all
+    grog_args:
+      - list
+      - //...
+
+  - name: env_graph_json
+    grog_args:
+      - graph
+      - -o
+      - json
+      - //sandboxed/...
+
+  - name: env_build_local_target
+    grog_args:
+      - build
+      - //local:hello
+
+  - name: env_list_starlark
+    grog_args:
+      - list
+      - //starlark_env/...
+
+  - name: env_build_sandboxed_target_no_docker
+    grog_args:
+      - build
+      - //sandboxed:compile
+    expect_fail: true
+    skip_fixture: true

@@ -1,0 +1,9 @@
+{
+  "targets": [
+    {
+      "name": "hello",
+      "command": "echo hello > output.txt",
+      "outputs": ["output.txt"]
+    }
+  ]
+}
