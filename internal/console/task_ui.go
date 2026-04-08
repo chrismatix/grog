@@ -195,12 +195,19 @@ func (m *model) View() string {
 	}
 	sort.Ints(keys)
 
+	indent := "    "
+	progressIndent := "     "
+	if m.header == "" {
+		indent = ""
+		progressIndent = " "
+	}
+
 	for _, i := range keys {
 		if status, ok := m.tasks[i]; ok {
 			timePassed := int(time.Since(time.Unix(status.StartedAtSec, 0)).Seconds())
-			s.WriteString(fmt.Sprintf("    %s %ds\n", status.Status, timePassed))
+			s.WriteString(fmt.Sprintf("%s%s %ds\n", indent, status.Status, timePassed))
 			if status.Progress != nil && status.Progress.shouldRender() {
-				s.WriteString(fmt.Sprintf("     ╰─%s\n", formatProgressBar(*status.Progress, 24)))
+				s.WriteString(fmt.Sprintf("%s╰─%s\n", progressIndent, formatProgressBar(*status.Progress, 24)))
 			}
 		}
 	}
