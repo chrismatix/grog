@@ -1,7 +1,7 @@
 module package
 
 import "alias.pkl"
-//import "environment.pkl"
+import "environment.pkl"
 
 import "output_check.pkl"
 
@@ -16,6 +16,7 @@ class Target {
   output_checks: Listing<output_check>?
   timeout: String?
 
+  environment: String?
   environment_variables: Mapping<String, String>?
   fingerprint: Mapping<String, String>?
   // Target Filtering
@@ -29,4 +30,4 @@ targets: Listing<Target>(isDistinctBy((it) -> it.name))
 
 aliases: Listing<alias>(isDistinctBy((it) -> it.name))?
 
-environments: Listing<alias>(isDistinctBy((it) -> it.name))?
+environments: Listing<environment>(isDistinctBy((it) -> it.name))?

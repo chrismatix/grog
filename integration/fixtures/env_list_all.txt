@@ -1,0 +1,6 @@
+//local:hello
+//sandboxed:build-image
+//sandboxed:compile
+//sandboxed:docker-env
+//starlark_env:sandbox
+//starlark_env:sandboxed-task

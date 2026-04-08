@@ -54,6 +54,8 @@ type TestTable struct {
 	// Only run this test when REQUIRES_CREDENTIALS is set
 	// (for tests that require cloud credentials)
 	RequiresCredentials bool `yaml:"requires_credentials"`
+	// Only run this test when Docker is available
+	RequiresDocker bool `yaml:"requires_docker"`
 	// Whether to skip the clean step
 	SkipClean bool `yaml:"skip_clean"`
 }
@@ -108,6 +110,11 @@ func TestCliScenarios(t *testing.T) {
 	for _, tt := range testTables {
 		if tt.RequiresCredentials {
 			if os.Getenv("REQUIRES_CREDENTIALS") == "" {
+				continue
+			}
+		}
+		if tt.RequiresDocker {
+			if !isDockerAvailable() {
 				continue
 			}
 		}
@@ -256,6 +263,13 @@ func runSetupCommand(command string, repoPath string) ([]byte, error) {
 	cmd := exec.Command("sh", "-c", command)
 	cmd.Dir = repoPath
 	return cmd.CombinedOutput()
+}
+
+func isDockerAvailable() bool {
+	cmd := exec.Command("docker", "info")
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	return cmd.Run() == nil
 }
 
 func getCoverDir() (string, error) {

@@ -37,6 +37,9 @@ type Target struct {
 	OutputChecks         []OutputCheck       `json:"output_checks,omitempty"`
 	Timeout              time.Duration       `json:"timeout,omitempty"`
 
+	// Environment is the label of the environment this target runs in (nil = host execution)
+	Environment *label.TargetLabel `json:"environment,omitempty"`
+
 	// UnresolvedInputs are the inputs as specified by the user (no glob resolving)
 	UnresolvedInputs []string `json:"-"`
 	// BinOutput is always a path to a binary file

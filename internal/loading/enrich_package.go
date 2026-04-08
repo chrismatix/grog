@@ -89,6 +89,19 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 			targetPlatforms = append([]string{}, pkg.DefaultPlatforms...)
 		}
 
+		// Parse the environment reference if specified
+		var envLabel *label.TargetLabel
+		if target.Environment != "" {
+			parsed, err := label.ParseTargetLabel(packagePath, target.Environment)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse environment for target %s: %w", targetLabel, err)
+			}
+			envLabel = &parsed
+			// Add the environment as an implicit dependency so the DAG walker
+			// builds it (and its own deps) before this target runs.
+			deps = append(deps, parsed)
+		}
+
 		targets[targetLabel] = &model.Target{
 			SourceFilePath:       pkg.SourceFilePath,
 			Label:                targetLabel,
@@ -105,6 +118,7 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 			Fingerprint:          target.Fingerprint,
 			EnvironmentVariables: target.EnvironmentVariables,
 			Timeout:              timeout,
+			Environment:          envLabel,
 		}
 	}
 
@@ -129,10 +143,51 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 		}
 	}
 
+	environments := make(map[label.TargetLabel]*model.Environment)
+	for _, env := range pkg.Environments {
+		if env.Type != "docker" {
+			return nil, fmt.Errorf("unsupported environment type %q for environment %s (only \"docker\" is supported)", env.Type, env.Name)
+		}
+
+		var envDeps []label.TargetLabel
+		for _, dep := range env.Dependencies {
+			depLabel, err := label.ParseTargetLabel(packagePath, dep)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse dependency for environment %s: %w", env.Name, err)
+			}
+			envDeps = append(envDeps, depLabel)
+		}
+
+		envPackagePath := packagePath
+		if envPackagePath == "." {
+			envPackagePath = ""
+		}
+		envLabel := label.TargetLabel{Package: envPackagePath, Name: env.Name}
+
+		if _, ok := targets[envLabel]; ok {
+			return nil, fmt.Errorf("duplicate label: environment %s conflicts with a target (package file %s)", env.Name, pkg.SourceFilePath)
+		}
+		if _, ok := aliases[envLabel]; ok {
+			return nil, fmt.Errorf("duplicate label: environment %s conflicts with an alias (package file %s)", env.Name, pkg.SourceFilePath)
+		}
+		if _, ok := environments[envLabel]; ok {
+			return nil, fmt.Errorf("duplicate environment label: %s (package file %s)", env.Name, pkg.SourceFilePath)
+		}
+
+		environments[envLabel] = &model.Environment{
+			SourceFilePath: pkg.SourceFilePath,
+			Label:          envLabel,
+			Type:           env.Type,
+			Dependencies:   envDeps,
+			DockerImage:    env.DockerImage,
+		}
+	}
+
 	return &model.Package{
-		Path:    packagePath,
-		Targets: targets,
-		Aliases: aliases,
+		Path:         packagePath,
+		Targets:      targets,
+		Aliases:      aliases,
+		Environments: environments,
 	}, nil
 }
 
