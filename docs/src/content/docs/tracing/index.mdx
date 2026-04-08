@@ -134,7 +134,10 @@ grog traces stats
 Shows average build duration, cache hit rate, and failure count over recent traces. Add `--detailed` to load full traces and show per-target breakdowns (slowest targets, highest queue wait, most frequent failures):
 
 ```bash
+grog traces stats --command-type build
+grog traces stats --ci true
 grog traces stats --detailed --limit 50
+grog traces stats --detailed --command-type test
 ```
 
 ## Dashboard integration
