@@ -22,10 +22,3 @@ cases:
     grog_args:
       - list
       - //starlark_env/...
-
-  - name: env_build_sandboxed_target_no_docker
-    grog_args:
-      - build
-      - //sandboxed:compile
-    expect_fail: true
-    skip_fixture: true

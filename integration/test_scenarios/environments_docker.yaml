@@ -1,0 +1,18 @@
+name: environments docker execution
+repo: environments
+requires_docker: true
+cases:
+  # Build the sandboxed target inside Docker.
+  # The target writes GROG_SANDBOXED=$GROG_SANDBOXED to verify.txt.
+  # GROG_SANDBOXED=true is only set by the Docker runner, so this
+  # proves the command executed inside a container.
+  - name: env_build_sandboxed_in_docker
+    grog_args:
+      - build
+      - //sandboxed:compile
+    skip_fixture: true
+
+  # Verify the sandboxed target actually ran in Docker by checking
+  # that verify.txt contains GROG_SANDBOXED=true.
+  - name: env_verify_docker_execution
+    setup_command: "grep -q 'GROG_SANDBOXED=true' sandboxed/verify.txt"
