@@ -300,6 +300,7 @@ type TraceStats struct {
 type StatsOptions struct {
 	Limit   int
 	Command string
+	IsCI    *bool
 }
 
 func (s *TraceStore) Stats(ctx context.Context, opts StatsOptions) (*TraceStats, error) {
@@ -311,6 +312,9 @@ func (s *TraceStore) Stats(ctx context.Context, opts StatsOptions) (*TraceStats,
 	var conditions []string
 	if opts.Command != "" {
 		conditions = append(conditions, fmt.Sprintf("command = '%s'", sanitize(opts.Command)))
+	}
+	if opts.IsCI != nil {
+		conditions = append(conditions, fmt.Sprintf("is_ci = %t", *opts.IsCI))
 	}
 
 	where := ""
@@ -389,6 +393,9 @@ func (s *TraceStore) Bottlenecks(ctx context.Context, opts StatsOptions) (*Bottl
 	var conditions []string
 	if opts.Command != "" {
 		conditions = append(conditions, fmt.Sprintf("command = '%s'", sanitize(opts.Command)))
+	}
+	if opts.IsCI != nil {
+		conditions = append(conditions, fmt.Sprintf("is_ci = %t", *opts.IsCI))
 	}
 
 	where := ""

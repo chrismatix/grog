@@ -29,6 +29,7 @@ var tracesShowTop int
 
 var tracesStatsLimit int
 var tracesStatsCommandType string
+var tracesStatsCI string
 var tracesStatsDetailed bool
 
 var tracesExportFormat string
@@ -86,6 +87,21 @@ func normalizeTraceStatsCommandType(commandType string) (string, error) {
 		return commandType, nil
 	default:
 		return "", fmt.Errorf("invalid command type %q (use build, test, or all)", commandType)
+	}
+}
+
+func normalizeTraceStatsCI(ciValue string) (*bool, error) {
+	switch ciValue {
+	case "", "all":
+		return nil, nil
+	case "true":
+		isCI := true
+		return &isCI, nil
+	case "false":
+		isCI := false
+		return &isCI, nil
+	default:
+		return nil, fmt.Errorf("invalid ci filter %q (use true, false, or all)", ciValue)
 	}
 }
 
@@ -212,6 +228,7 @@ var tracesStatsCmd = &cobra.Command{
 	Short: "Show aggregate statistics across recent traces.",
 	Example: `  grog traces stats
   grog traces stats --command-type build
+  grog traces stats --ci true
   grog traces stats --detailed --command-type test`,
 	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -223,10 +240,15 @@ var tracesStatsCmd = &cobra.Command{
 		if err != nil {
 			logger.Fatalf("%v", err)
 		}
+		isCI, err := normalizeTraceStatsCI(tracesStatsCI)
+		if err != nil {
+			logger.Fatalf("%v", err)
+		}
 
 		statsOptions := tracing.StatsOptions{
 			Limit:   tracesStatsLimit,
 			Command: command,
+			IsCI:    isCI,
 		}
 
 		stats, err := store.Stats(ctx, statsOptions)
@@ -809,6 +831,7 @@ func AddTracesCmd(rootCmd *cobra.Command) {
 
 	tracesStatsCmd.Flags().IntVar(&tracesStatsLimit, "limit", 20, "Number of recent traces to aggregate")
 	tracesStatsCmd.Flags().StringVar(&tracesStatsCommandType, "command-type", "all", "Filter by build command type (build, test, all)")
+	tracesStatsCmd.Flags().StringVar(&tracesStatsCI, "ci", "all", "Filter by CI origin (true, false, all)")
 	tracesStatsCmd.Flags().BoolVar(&tracesStatsDetailed, "detailed", false, "Load full traces for per-target analysis")
 
 	tracesExportCmd.Flags().StringVar(&tracesExportFormat, "format", "jsonl", "Export format: jsonl or otel")

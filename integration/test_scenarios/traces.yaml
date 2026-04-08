@@ -46,6 +46,16 @@ cases:
       - --command-type=build
     skip_fixture: true
 
+  # Verify stats supports filtering by CI-origin traces
+  - name: traces_stats_ci_only
+    grog_args:
+      - traces
+      - stats
+      - --ci=true
+    env_vars:
+      - "CI=1"
+    skip_fixture: true
+
   # Verify JSONL export produces output (non-deterministic)
   - name: traces_export_jsonl
     grog_args:

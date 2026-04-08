@@ -49,6 +49,12 @@ func makeTestTrace(id string, startMillis int64, command string) *BuildTrace {
 	}
 }
 
+func makeTestTraceWithCI(id string, startMillis int64, command string, isCI bool) *BuildTrace {
+	trace := makeTestTrace(id, startMillis, command)
+	trace.Build.IsCI = isCI
+	return trace
+}
+
 func TestTraceWriter_WriteParquet(t *testing.T) {
 	writer, dir := newTestWriter(t)
 	ctx := context.Background()
@@ -156,7 +162,7 @@ func TestTraceStore_Stats(t *testing.T) {
 
 	now := time.Now()
 	for i, id := range []string{"s1", "s2"} {
-		trace := makeTestTrace(id, now.Add(time.Duration(i)*time.Minute).UnixMilli(), "build")
+		trace := makeTestTraceWithCI(id, now.Add(time.Duration(i)*time.Minute).UnixMilli(), "build", false)
 		if err := writer.Write(ctx, trace); err != nil {
 			t.Fatalf("Write failed: %v", err)
 		}
@@ -229,10 +235,10 @@ func TestTraceStore_StatsFiltersByCommand(t *testing.T) {
 	ctx := context.Background()
 
 	now := time.Now()
-	if err := writer.Write(ctx, makeTestTrace("build-trace", now.UnixMilli(), "build")); err != nil {
+	if err := writer.Write(ctx, makeTestTraceWithCI("build-trace", now.UnixMilli(), "build", false)); err != nil {
 		t.Fatalf("Write build trace failed: %v", err)
 	}
-	if err := writer.Write(ctx, makeTestTrace("test-trace", now.Add(time.Minute).UnixMilli(), "test")); err != nil {
+	if err := writer.Write(ctx, makeTestTraceWithCI("test-trace", now.Add(time.Minute).UnixMilli(), "test", true)); err != nil {
 		t.Fatalf("Write test trace failed: %v", err)
 	}
 
@@ -271,6 +277,75 @@ func TestTraceStore_StatsFiltersByCommand(t *testing.T) {
 			options: StatsOptions{
 				Limit:   10,
 				Command: "test",
+			},
+			expectedTraceCount: 1,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			stats, err := store.Stats(ctx, testCase.options)
+			if err != nil {
+				t.Fatalf("Stats failed: %v", err)
+			}
+			if stats.TraceCount != testCase.expectedTraceCount {
+				t.Errorf("expected %d traces, got %d", testCase.expectedTraceCount, stats.TraceCount)
+			}
+		})
+	}
+}
+
+func TestTraceStore_StatsFiltersByCI(t *testing.T) {
+	dir := t.TempDir()
+	fs := backends.NewFileSystemCacheForTest(dir, t.TempDir())
+	writer := NewTraceWriter(fs)
+	ctx := context.Background()
+
+	now := time.Now()
+	if err := writer.Write(ctx, makeTestTraceWithCI("local-trace", now.UnixMilli(), "build", false)); err != nil {
+		t.Fatalf("Write local trace failed: %v", err)
+	}
+	if err := writer.Write(ctx, makeTestTraceWithCI("ci-trace", now.Add(time.Minute).UnixMilli(), "build", true)); err != nil {
+		t.Fatalf("Write CI trace failed: %v", err)
+	}
+
+	resolver := &PathResolver{
+		buildsBase: dir + "/traces/builds",
+		spansBase:  dir + "/traces/spans",
+	}
+	store, err := NewTraceStore(fs, resolver)
+	if err != nil {
+		t.Fatalf("NewTraceStore failed: %v", err)
+	}
+	defer store.Close()
+
+	trueValue := true
+	falseValue := false
+	testCases := []struct {
+		name               string
+		options            StatsOptions
+		expectedTraceCount int
+	}{
+		{
+			name: "all",
+			options: StatsOptions{
+				Limit: 10,
+			},
+			expectedTraceCount: 2,
+		},
+		{
+			name: "ci only",
+			options: StatsOptions{
+				Limit: 10,
+				IsCI:  &trueValue,
+			},
+			expectedTraceCount: 1,
+		},
+		{
+			name: "non ci only",
+			options: StatsOptions{
+				Limit: 10,
+				IsCI:  &falseValue,
 			},
 			expectedTraceCount: 1,
 		},
