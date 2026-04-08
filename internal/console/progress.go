@@ -12,12 +12,23 @@ import (
 // RenderAfterSeconds determines how long to wait before rendering progress bars.
 const RenderAfterSeconds = 1
 
+// ProgressUnit controls how Current/Total values are formatted in the bar.
+type ProgressUnit int
+
+const (
+	// ProgressUnitBytes formats values as human-readable byte counts (default).
+	ProgressUnitBytes ProgressUnit = iota
+	// ProgressUnitCount formats values as plain integers.
+	ProgressUnitCount
+)
+
 // Progress represents a unit of work with a current and total value.
 // It is used to render progress bars in the task UI.
 type Progress struct {
 	StartedAtSec int64
 	Current      int64
 	Total        int64
+	Unit         ProgressUnit
 }
 
 // percent clamps the progress to the 0-100 range.
@@ -82,7 +93,14 @@ func formatProgressBar(p Progress, width int) string {
 			b.WriteString(" ")
 		}
 	}
-	return fmt.Sprintf("[%s] %3d%% %s/%s", b.String(), percent, formatBytes(p.Current), formatBytes(p.Total))
+	var suffix string
+	switch p.Unit {
+	case ProgressUnitCount:
+		suffix = fmt.Sprintf("%d/%d", p.Current, p.Total)
+	default:
+		suffix = fmt.Sprintf("%s/%s", formatBytes(p.Current), formatBytes(p.Total))
+	}
+	return fmt.Sprintf("[%s] %3d%% %s", b.String(), percent, suffix)
 }
 
 // formatBytes renders a human-readable byte count for progress bars.

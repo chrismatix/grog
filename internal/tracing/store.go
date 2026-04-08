@@ -113,17 +113,26 @@ func (s *TraceStore) Write(ctx context.Context, trace *BuildTrace) error {
 // It lists keys from the remote backend and triggers a Get() for each missing
 // file, which causes the RemoteWrapper to fetch and cache it locally.
 // Returns the number of files synced.
-func (s *TraceStore) Pull(ctx context.Context) (int, error) {
-	synced := 0
+// PullProgress is called during Pull to report progress.
+// current is the number of files processed so far, total is the total number of
+// remote files to process.
+type PullProgress func(current, total int)
+
+func (s *TraceStore) Pull(ctx context.Context, onProgress PullProgress) (int, error) {
+	// First pass: collect all remote keys and filter to those needing sync.
+	type pullItem struct {
+		subPath  string
+		fileName string
+	}
+	var items []pullItem
+
 	for _, table := range []string{tracesBuildsPath, tracesSpansPath} {
 		remoteKeys, err := s.writer.backend.ListKeys(ctx, table, ".parquet")
 		if err != nil {
-			return synced, fmt.Errorf("list remote keys for %s: %w", table, err)
+			return 0, fmt.Errorf("list remote keys for %s: %w", table, err)
 		}
 
 		for _, key := range remoteKeys {
-			// key is relative like "2026-03-30/trace-id.parquet"
-			// Split into path component (date dir) and filename
 			parts := strings.SplitN(key, "/", 2)
 			if len(parts) != 2 {
 				continue
@@ -131,25 +140,32 @@ func (s *TraceStore) Pull(ctx context.Context) (int, error) {
 			subPath := fmt.Sprintf("%s/%s", table, parts[0])
 			fileName := parts[1]
 
-			// Check if it already exists locally (not remotely) to avoid
-			// skipping files that only exist on the remote backend.
 			localExists := false
 			if rw, ok := s.writer.backend.(*backends.RemoteWrapper); ok {
 				localExists, _ = rw.GetFS().Exists(ctx, subPath, fileName)
 			} else {
 				localExists, _ = s.writer.backend.Exists(ctx, subPath, fileName)
 			}
-			if localExists {
-				continue
+			if !localExists {
+				items = append(items, pullItem{subPath: subPath, fileName: fileName})
 			}
+		}
+	}
 
-			// Trigger a Get which will fetch from remote and cache locally
-			reader, err := s.writer.backend.Get(ctx, subPath, fileName)
-			if err != nil {
-				continue // best-effort — skip files that fail
-			}
+	total := len(items)
+	if onProgress != nil {
+		onProgress(0, total)
+	}
+
+	synced := 0
+	for i, item := range items {
+		reader, err := s.writer.backend.Get(ctx, item.subPath, item.fileName)
+		if err == nil {
 			reader.Close()
 			synced++
+		}
+		if onProgress != nil {
+			onProgress(i+1, total)
 		}
 	}
 
