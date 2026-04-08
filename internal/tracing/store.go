@@ -160,11 +160,10 @@ func (s *TraceStore) Pull(ctx context.Context, onProgress PullProgress) (int, er
 	synced := 0
 	for i, item := range items {
 		reader, err := s.writer.backend.Get(ctx, item.subPath, item.fileName)
-		if err != nil {
-			continue // best-effort — skip files that fail
+		if err == nil {
+			reader.Close()
+			synced++
 		}
-		reader.Close()
-		synced++
 		if onProgress != nil {
 			onProgress(i+1, total)
 		}

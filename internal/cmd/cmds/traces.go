@@ -244,6 +244,7 @@ var tracesPullCmd = &cobra.Command{
 								StartedAtSec: startedAt,
 								Current:      int64(current),
 								Total:        int64(total),
+								Unit:         console.ProgressUnitCount,
 							},
 						},
 					},
