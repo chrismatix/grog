@@ -43,6 +43,7 @@ func executeTarget(
 	binToolPaths BinToolMap,
 	outputIdentifiers OutputIdentifierMap,
 	streamLogs bool,
+	env *model.Environment,
 ) error {
 	if target.Timeout > 0 {
 		var cancel context.CancelFunc
@@ -50,7 +51,13 @@ func executeTarget(
 		defer cancel()
 	}
 
-	cmdOut, err := runTargetCommand(ctx, target, binToolPaths, outputIdentifiers, target.Command, streamLogs)
+	var cmdOut []byte
+	var err error
+	if env != nil {
+		cmdOut, err = runTargetCommandInDocker(ctx, target, env, binToolPaths, outputIdentifiers, target.Command, streamLogs)
+	} else {
+		cmdOut, err = runTargetCommand(ctx, target, binToolPaths, outputIdentifiers, target.Command, streamLogs)
+	}
 
 	if err != nil {
 		if ctx.Err() != nil {

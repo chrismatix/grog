@@ -6,8 +6,9 @@ import "grog/internal/label"
 type NodeType string
 
 const (
-	TargetNode NodeType = "target"
-	AliasNode  NodeType = "alias"
+	TargetNode      NodeType = "target"
+	AliasNode       NodeType = "alias"
+	EnvironmentNode NodeType = "environment"
 )
 
 // BuildNode represents a node in the build graph. It is implemented by

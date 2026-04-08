@@ -38,6 +38,12 @@ func hashTargetDefinition(target model.Target, dependencyHashes []string) (strin
 	_, err = hasher.WriteString(sorted(dependencyHashes))
 	_, err = hasher.WriteString(sortedKeyValue(target.Fingerprint))
 
+	// Include the environment reference in the hash so that changing a
+	// target's environment invalidates its cache.
+	if target.Environment != nil {
+		_, err = hasher.WriteString(target.Environment.String())
+	}
+
 	// By default, target hashes are separate between platforms unless
 	// the target has a multiplatform-cache tag
 	if !target.IsMultiplatformCache() {

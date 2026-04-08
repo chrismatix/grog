@@ -25,6 +25,12 @@ func BuildNodeMapFromPackages(packages []*Package) (BuildNodeMap, error) {
 			}
 			nodes[a.Label] = a
 		}
+		for _, e := range pkg.GetEnvironments() {
+			if _, ok := nodes[e.Label]; ok {
+				return nil, fmt.Errorf("duplicate label: %s (environment conflicts with existing node)", e.Label)
+			}
+			nodes[e.Label] = e
+		}
 	}
 	return nodes, nil
 }
