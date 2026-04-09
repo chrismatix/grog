@@ -1,209 +1,106 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
-	"io"
+	"strings"
 	"sync"
 
 	"grog/internal/caching"
 	"grog/internal/console"
-	"grog/internal/hashing"
+	"grog/internal/dockerproxy"
 	"grog/internal/model"
 	"grog/internal/proto/gen"
 	"grog/internal/worker"
 
-	"github.com/google/go-containerregistry/pkg/name"
-	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/daemon"
-	"github.com/google/go-containerregistry/pkg/v1/empty"
-	"github.com/google/go-containerregistry/pkg/v1/mutate"
-	"github.com/google/go-containerregistry/pkg/v1/tarball"
-	"github.com/shirou/gopsutil/mem"
-	"golang.org/x/sync/semaphore"
+	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/client"
+	"github.com/docker/docker/errdefs"
 )
 
-// DockerOutputHandler caches docker images either as tarball's or in a registry
+// DockerOutputHandler caches docker images by pushing them to an in-process
+// OCI Distribution registry that proxies blob/manifest writes into grog's CAS.
+//
+// The Docker daemon does the actual pushing — streaming compressed layers from
+// its content store directly to our loopback HTTP endpoint, which forwards them
+// to the configured remote cache backend (S3/GCS/Azure/disk). Grog never holds
+// image bytes in its own memory and never has to recompress layers, so the
+// throughput matches what `docker push` to a real registry would achieve.
 type DockerOutputHandler struct {
 	cas *caching.Cas
 
-	// Shared across the handler instance: caps total concurrent in-flight layer bytes.
-	maxInFlightBytes int64
-	inFlightBytes    *semaphore.Weighted
+	// dockerClient is created lazily on first use; sync.Once protects construction.
+	dockerInit   sync.Once
+	dockerClient *client.Client
+	dockerErr    error
+
+	// proxy is the loopback OCI registry. Lazily started on first push so that
+	// runs without docker targets pay no cost.
+	proxyInit sync.Once
+	proxy     *dockerproxy.Registry
+	proxyErr  error
 }
 
-// dockerImageWritePlan writes a Docker image's config, layers, and manifest to the CAS.
-// Layer data is read from the local Docker daemon via go-containerregistry and uploaded
-// concurrently, throttled by a shared memory-based semaphore to avoid OOM on large images.
-type dockerImageWritePlan struct {
-	handler        *DockerOutputHandler
-	configBytes    []byte
-	configDigest   string
-	manifestBytes  []byte
-	manifestDigest string
-	layers         []v1.Layer
-	manifest       *v1.Manifest
-	imageName      string
-	totalBytes     int64
-	targetLabel    string
+// NewDockerOutputHandler creates a new DockerOutputHandler. The Docker client
+// and the in-process registry are both created lazily on first use.
+func NewDockerOutputHandler(_ context.Context, cas *caching.Cas) *DockerOutputHandler {
+	return &DockerOutputHandler{cas: cas}
 }
 
-func (d *dockerImageWritePlan) Execute(ctx context.Context, tracker *worker.ProgressTracker) error {
-	logger := console.GetLogger(ctx)
-
-	progress := tracker
-	if progress != nil {
-		progress = progress.SubTracker(
-			fmt.Sprintf("%s: writing docker image %s", d.targetLabel, d.imageName),
-			d.totalBytes,
-		)
-	}
-
-	var configReader io.Reader = bytes.NewReader(d.configBytes)
-	if progress != nil {
-		configReader = progress.WrapReader(configReader)
-	}
-	logger.Debugf("writing Docker config %s for image %s to CAS", d.configDigest, d.imageName)
-	if err := d.handler.cas.Write(ctx, d.configDigest, configReader); err != nil {
-		return fmt.Errorf("failed to write config blob for image %s: %w", d.imageName, err)
-	}
-
-	var waitGroup sync.WaitGroup
-	errChan := make(chan error, len(d.layers))
-	for index, layer := range d.layers {
-		waitGroup.Add(1)
-		go func(index int, layer v1.Layer) {
-			defer waitGroup.Done()
-			descriptor := d.manifest.Layers[index]
-
-			cost := descriptor.Size
-			if cost <= 0 {
-				cost = 1 << 20
-			}
-			if cost > d.handler.maxInFlightBytes {
-				cost = d.handler.maxInFlightBytes
-			}
-			if err := d.handler.inFlightBytes.Acquire(ctx, cost); err != nil {
-				errChan <- fmt.Errorf("failed to acquire in-flight budget for layer %d (%s): %w", index, descriptor.Digest, err)
-				return
-			}
-			defer d.handler.inFlightBytes.Release(cost)
-
-			layerReader, err := layer.Compressed()
-			if err != nil {
-				errChan <- fmt.Errorf("failed to open layer %d for image %s: %w", index, d.imageName, err)
-				return
-			}
-			defer layerReader.Close()
-
-			reader := io.Reader(layerReader)
-			if progress != nil {
-				reader = progress.WrapReadCloser(layerReader)
-			}
-
-			logger.Debugf("writing Docker layer %s for image %s to CAS", descriptor.Digest, d.imageName)
-			if err := d.handler.cas.Write(ctx, descriptor.Digest.String(), reader); err != nil {
-				errChan <- fmt.Errorf("failed to write layer %s to cache: %w", descriptor.Digest, err)
-				return
-			}
-		}(index, layer)
-	}
-	waitGroup.Wait()
-	close(errChan)
-	for err := range errChan {
-		if err != nil {
-			return err
-		}
-	}
-
-	var manifestReader io.Reader = bytes.NewReader(d.manifestBytes)
-	if progress != nil {
-		manifestReader = progress.WrapReader(manifestReader)
-	}
-	logger.Debugf("writing Docker manifest %s for image %s to CAS", d.manifestDigest, d.imageName)
-	if err := d.handler.cas.Write(ctx, d.manifestDigest, manifestReader); err != nil {
-		return fmt.Errorf("failed to write manifest for image %s: %w", d.imageName, err)
-	}
-
-	if progress != nil {
-		progress.Complete()
-	}
-	logger.Debugf("successfully saved Docker image %s to cache", d.imageName)
-	return nil
-}
-
-func (d *dockerImageWritePlan) Cleanup(context.Context) error {
-	return nil
-}
-
-// NewDockerOutputHandler creates a new DockerOutputHandler
-func NewDockerOutputHandler(ctx context.Context, cas *caching.Cas) *DockerOutputHandler {
-	logger := console.GetLogger(ctx)
-	freeMemory, err := freeSystemMemoryBytes()
-	if err != nil {
-		logger.Warnf("failed to determine free system memory: %v", err)
-		// Fall back to a very conservative default: 1024 MiB
-		freeMemory = 1024 << 20
-	} else {
-		// By default only use half of the system memory for Docker layers.
-		// TODO: We should turn this into a global budget
-		freeMemory /= 2
-	}
-
-	// Ensure we never end up with a 0/negative budget ().
-	if freeMemory < 64<<20 {
-		freeMemory = 64 << 20 // 64 MiB minimum
-	}
-	logger.Debugf("using %d MiB of system memory for Docker layer caching", freeMemory>>20)
-
-	return &DockerOutputHandler{
-		cas:              cas,
-		maxInFlightBytes: int64(freeMemory),
-		inFlightBytes:    semaphore.NewWeighted(int64(freeMemory)),
-	}
-}
-
-func freeSystemMemoryBytes() (uint64, error) {
-	vm, err := mem.VirtualMemory()
-	if err != nil {
-		return 0, err
-	}
-	return vm.Available, nil
-}
-
-// Type returns the type of the handler
+// Type returns the type of the handler.
 func (d *DockerOutputHandler) Type() HandlerType {
 	return DockerHandler
 }
 
-// Hash hashes the local Docker image manifest which should be the source of truth for the image
-func (d *DockerOutputHandler) Hash(ctx context.Context, _ model.Target, output model.Output) (string, error) {
-	logger := console.GetLogger(ctx)
-	imageName := output.Identifier
-
-	logger.Debugf("hashing Docker image %s manifest", imageName)
-
-	// Parse the image reference
-	ref, err := name.ParseReference(imageName)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse image reference %q: %w", imageName, err)
-	}
-
-	// Get the image from the Docker daemon
-	img, err := daemon.Image(ref)
-	if err != nil {
-		return "", fmt.Errorf("failed to get image %q from Docker daemon: %w", imageName, err)
-	}
-
-	rawManifest, err := img.RawManifest()
-	if err != nil {
-		return "", fmt.Errorf("failed to read manifest for image %q: %w", imageName, err)
-	}
-
-	return hashing.HashBytes(rawManifest), nil
+func (d *DockerOutputHandler) ensureClient() (*client.Client, error) {
+	d.dockerInit.Do(func() {
+		cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+		if err != nil {
+			d.dockerErr = fmt.Errorf("failed to create docker client: %w", err)
+			return
+		}
+		d.dockerClient = cli
+	})
+	return d.dockerClient, d.dockerErr
 }
 
+func (d *DockerOutputHandler) ensureProxy(ctx context.Context) (*dockerproxy.Registry, error) {
+	d.proxyInit.Do(func() {
+		reg, err := dockerproxy.New(ctx, d.cas)
+		if err != nil {
+			d.proxyErr = fmt.Errorf("failed to start in-process docker registry proxy: %w", err)
+			return
+		}
+		d.proxy = reg
+	})
+	return d.proxy, d.proxyErr
+}
+
+// Hash returns a stable identifier for the local Docker image. We use the
+// Docker image ID (the digest of the image config) which fully identifies the
+// image content and matches what DockerRegistryOutputHandler uses, so the two
+// backends are interchangeable from a caching standpoint.
+func (d *DockerOutputHandler) Hash(ctx context.Context, _ model.Target, output model.Output) (string, error) {
+	cli, err := d.ensureClient()
+	if err != nil {
+		return "", err
+	}
+
+	imageName := output.Identifier
+	console.GetLogger(ctx).Debugf("hashing Docker image %s via local daemon", imageName)
+
+	inspect, err := cli.ImageInspect(ctx, imageName)
+	if err != nil {
+		return "", fmt.Errorf("failed to inspect image %q: %w", imageName, err)
+	}
+	return inspect.ID, nil
+}
+
+// Write tags the local image with a loopback registry reference and stages a
+// write plan that will push it via cli.ImagePush during the cache-write phase.
+// No image bytes are read in this method — the heavy lifting is deferred until
+// Execute, when the daemon streams the layers itself.
 func (d *DockerOutputHandler) Write(
 	ctx context.Context,
 	target model.Target,
@@ -213,89 +110,61 @@ func (d *DockerOutputHandler) Write(
 	logger := console.GetLogger(ctx)
 	imageName := output.Identifier
 
-	logger.Debugf("saving Docker image %s to content-addressable cache", imageName)
-
-	// Parse the image reference
-	ref, err := name.ParseReference(imageName)
+	cli, err := d.ensureClient()
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse image reference %q: %w", imageName, err)
+		return nil, err
 	}
-
-	// Get the image from the Docker daemon
-	img, err := daemon.Image(ref)
+	proxy, err := d.ensureProxy(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get image %q from Docker daemon: %w", imageName, err)
+		return nil, err
 	}
 
-	// Collect manifest/config/layers
-	manifest, err := img.Manifest()
+	inspect, err := cli.ImageInspect(ctx, imageName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read manifest for image %q: %w", imageName, err)
-	}
-	manifestBytes, err := img.RawManifest()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read raw manifest for image %q: %w", imageName, err)
-	}
-	manifestDigest := hashing.HashBytes(manifestBytes)
-
-	configBytes, err := img.RawConfigFile()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config for image %q: %w", imageName, err)
-	}
-	configDigest := manifest.Config.Digest.String()
-	configSize := manifest.Config.Size
-	if configSize == 0 {
-		configSize = int64(len(configBytes))
-	}
-	layers, err := img.Layers()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read layers for image %q: %w", imageName, err)
-	}
-	if len(layers) != len(manifest.Layers) {
-		return nil, fmt.Errorf("manifest for image %q describes %d layers but %d layers were loaded", imageName, len(manifest.Layers), len(layers))
-	}
-	imageId, err := img.ConfigName()
-	if err != nil {
-		return nil, fmt.Errorf("failed to compute image id for %q: %w", imageName, err)
+		return nil, fmt.Errorf("%s: image output %s was not created: %w", target.Label.String(), imageName, err)
 	}
 
-	totalBytes := int64(len(manifestBytes)) + configSize
-	for _, layer := range manifest.Layers {
-		totalBytes += layer.Size
+	repoName := loopbackRepoName(inspect.ID)
+	loopbackRef := fmt.Sprintf("%s/%s:%s", proxy.Addr(), repoName, shortID(inspect.ID))
+
+	logger.Debugf("tagging Docker image %s as %s for loopback push", imageName, loopbackRef)
+	if err := cli.ImageTag(ctx, imageName, loopbackRef); err != nil {
+		return nil, fmt.Errorf("failed to tag image %q as %q: %w", imageName, loopbackRef, err)
+	}
+
+	dockerImageOutput := &gen.DockerImageOutput{
+		Mode:     gen.ImageMode_LAYERS,
+		LocalTag: imageName,
+		ImageId:  inspect.ID,
+		// ManifestDigest is filled in by Execute once the daemon has produced one.
 	}
 
 	genOutput := &gen.Output{
 		Kind: &gen.Output_DockerImage{
-			DockerImage: &gen.DockerImageOutput{
-				Mode:           gen.ImageMode_LAYERS,
-				LocalTag:       imageName,
-				ImageId:        imageId.String(),
-				ManifestDigest: &gen.Digest{Hash: manifestDigest, SizeBytes: int64(len(manifestBytes))},
-				ConfigDigest:   &gen.Digest{Hash: configDigest, SizeBytes: configSize},
-			},
+			DockerImage: dockerImageOutput,
 		},
 	}
 
-	writePlan := &dockerImageWritePlan{
-		handler:        d,
-		configBytes:    configBytes,
-		configDigest:   configDigest,
-		manifestBytes:  manifestBytes,
-		manifestDigest: manifestDigest,
-		layers:         layers,
-		manifest:       manifest,
-		imageName:      imageName,
-		totalBytes:     totalBytes,
+	plan := &dockerImageWritePlan{
+		dockerClient:   cli,
+		proxy:          proxy,
+		output:         dockerImageOutput,
+		loopbackRef:    loopbackRef,
+		repoName:       repoName,
+		localImageName: imageName,
 		targetLabel:    target.Label.String(),
 	}
 
 	return &PreparedOutput{
 		Output:    genOutput,
-		WritePlan: writePlan,
+		WritePlan: plan,
 	}, nil
 }
 
-// Load loads the Docker image from the cache and imports it into the Docker engine using go-containerregistry
+// Load restores a previously cached image into the local Docker daemon by
+// pulling it from the loopback registry by manifest digest. The daemon does
+// the actual layer download — grog only translates the cached digests into
+// a registry reference and tags the result.
 func (d *DockerOutputHandler) Load(
 	ctx context.Context,
 	target model.Target,
@@ -306,163 +175,146 @@ func (d *DockerOutputHandler) Load(
 	if dockerImage.GetMode() != gen.ImageMode_LAYERS {
 		return fmt.Errorf("cannot restore %s docker cache as layer cache is configured", dockerImage.GetMode())
 	}
-	return d.loadFromCasLayers(ctx, target, output.GetDockerImage(), tracker)
-}
 
-func (d *DockerOutputHandler) loadFromCasLayers(
-	ctx context.Context,
-	target model.Target,
-	dockerImage *gen.DockerImageOutput,
-	tracker *worker.ProgressTracker,
-) error {
 	logger := console.GetLogger(ctx)
-	imageName := dockerImage.GetLocalTag()
-	manifestDigest := dockerImage.GetManifestDigest()
-	configDigest := dockerImage.GetConfigDigest()
+	localImageName := dockerImage.GetLocalTag()
+	imageID := dockerImage.GetImageId()
+	manifestDigest := dockerImage.GetManifestDigest().GetHash()
 
-	logger.Debugf("loading Docker image %s from CAS layers", imageName)
-
-	ref, err := name.ParseReference(imageName)
-	if err != nil {
-		return fmt.Errorf("failed to parse image reference %q: %w", imageName, err)
+	if manifestDigest == "" {
+		return fmt.Errorf("cached docker image %q has no manifest digest", localImageName)
 	}
 
-	if existingImg, err := daemon.Image(ref); err == nil {
-		existingImageId, err := existingImg.ConfigName()
-		if err == nil && dockerImage.GetImageId() != "" && existingImageId.String() == dockerImage.GetImageId() {
-			logger.Debugf("image %s already exists locally so skipping load", imageName)
+	cli, err := d.ensureClient()
+	if err != nil {
+		return err
+	}
+	proxy, err := d.ensureProxy(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Fast path: the image content is already present in the daemon. Just make
+	// sure the requested local tag points at it.
+	if imageID != "" {
+		if _, err := cli.ImageInspect(ctx, imageID); err == nil {
+			if err := cli.ImageTag(ctx, imageID, localImageName); err != nil {
+				return fmt.Errorf("failed to tag existing image %q as %q: %w", imageID, localImageName, err)
+			}
+			logger.Debugf("image %s already present locally, skipped pull", localImageName)
 			return nil
 		}
 	}
 
-	logger.Debugf("loading Docker manifest %s for image %s from CAS", manifestDigest.GetHash(), imageName)
-	manifestBytes, err := d.cas.LoadBytes(ctx, manifestDigest.GetHash())
+	repoName := loopbackRepoName(imageID)
+	pullRef := fmt.Sprintf("%s/%s@%s", proxy.Addr(), repoName, manifestDigest)
+
+	logger.Debugf("pulling Docker image %s from loopback registry", pullRef)
+	pullReader, err := cli.ImagePull(ctx, pullRef, image.PullOptions{
+		RegistryAuth: emptyRegistryAuth,
+	})
 	if err != nil {
-		return fmt.Errorf("failed to read manifest for image %s from cache: %w", imageName, err)
+		return fmt.Errorf("failed to pull image %q from loopback registry: %w", pullRef, err)
+	}
+	defer pullReader.Close()
+
+	if err := consumeDockerProgress(pullReader, tracker, fmt.Sprintf("%s: pulling cache for %s", target.Label, localImageName)); err != nil {
+		return fmt.Errorf("error reading pull response: %w", err)
 	}
 
-	manifest, err := v1.ParseManifest(bytes.NewReader(manifestBytes))
-	if err != nil {
-		return fmt.Errorf("failed to parse manifest for image %s: %w", imageName, err)
+	// After pull, the daemon stores the image under the loopback @digest reference.
+	// Re-tag it as the original local image name and discard the loopback ref.
+	if err := cli.ImageTag(ctx, pullRef, localImageName); err != nil {
+		return fmt.Errorf("failed to tag pulled image %q as %q: %w", pullRef, localImageName, err)
+	}
+	if _, err := cli.ImageRemove(ctx, pullRef, image.RemoveOptions{}); err != nil && !errdefs.IsNotFound(err) {
+		logger.Warnf("failed to remove loopback ref %q from local daemon: %v", pullRef, err)
 	}
 
-	manifestSize := manifestDigest.GetSizeBytes()
-	if manifestSize == 0 {
-		manifestSize = int64(len(manifestBytes))
-	}
-
-	logger.Debugf("loading Docker config %s for image %s from CAS", configDigest.GetHash(), imageName)
-	configReader, err := d.cas.Load(ctx, configDigest.GetHash())
-	if err != nil {
-		return fmt.Errorf("failed to read config for image %s from cache: %w", imageName, err)
-	}
-	defer configReader.Close()
-
-	progress := tracker
-	totalBytes := manifestSize + configDigest.GetSizeBytes()
-	for _, layer := range manifest.Layers {
-		totalBytes += layer.Size
-	}
-
-	if progress != nil {
-		progress = progress.SubTracker(
-			fmt.Sprintf("%s: loading docker image %s", target.Label, imageName),
-			totalBytes,
-		)
-		configReader = struct {
-			io.Reader
-			io.Closer
-		}{
-			Reader: progress.WrapReader(configReader),
-			Closer: configReader,
-		}
-	}
-
-	configBytes, err := io.ReadAll(configReader)
-	if err != nil {
-		return fmt.Errorf("failed to read config bytes for image %s: %w", imageName, err)
-	}
-
-	configFile, err := v1.ParseConfigFile(bytes.NewReader(configBytes))
-	if err != nil {
-		return fmt.Errorf("failed to parse config for image %s: %w", imageName, err)
-	}
-
-	layers := make([]v1.Layer, 0, len(manifest.Layers))
-	for idx, descriptor := range manifest.Layers {
-		desc := descriptor // capture
-		opener := func() (io.ReadCloser, error) {
-			logger.Debugf("loading Docker layer %s for image %s from CAS", desc.Digest.String(), imageName)
-			reader, err := d.cas.Load(ctx, desc.Digest.String())
-			if err != nil {
-				return nil, err
-			}
-			if progress != nil {
-				return struct {
-					io.Reader
-					io.Closer
-				}{
-					Reader: progress.WrapReader(reader),
-					Closer: reader,
-				}, nil
-			}
-			return reader, nil
-		}
-		layer, err := tarball.LayerFromOpener(opener, tarball.WithMediaType(desc.MediaType))
-		if err != nil {
-			return fmt.Errorf("failed to reconstruct layer %s for image %s: %w", desc.Digest, imageName, err)
-		}
-		layers = append(layers, layer)
-		_ = idx
-	}
-
-	imgWithConfig, err := mutate.ConfigFile(empty.Image, configFile)
-	if err != nil {
-		return fmt.Errorf("failed to set config for image %s: %w", imageName, err)
-	}
-
-	imgWithConfig = mutate.ConfigMediaType(imgWithConfig, manifest.Config.MediaType)
-
-	imgWithLayers, err := mutate.AppendLayers(imgWithConfig, layers...)
-	if err != nil {
-		return fmt.Errorf("failed to append layers for image %s: %w", imageName, err)
-	}
-
-	imgWithLayers = mutate.MediaType(imgWithLayers, manifest.MediaType)
-
-	tag, err := name.NewTag(imageName)
-	if err != nil {
-		return fmt.Errorf("failed to parse image tag %q: %w", imageName, err)
-	}
-
-	writtenTag, err := daemon.Write(tag, imgWithLayers)
-	if err != nil {
-		return fmt.Errorf("failed to write image %q to Docker daemon: %w", imageName, err)
-	}
-
-	logger.Debugf("successfully loaded Docker image %s (written tag: %s)", imageName, writtenTag)
-	logger.Infof("Loaded image %s from cache backend", imageName)
-
-	if progress != nil {
-		progress.Complete()
-	}
-
+	logger.Debugf("successfully loaded Docker image %s from cache", localImageName)
+	logger.Infof("Loaded image %s from cache backend", localImageName)
 	return nil
 }
 
-func (d *DockerOutputHandler) getCachedTarballSize(ctx context.Context, digest string, tag name.Tag) (int64, error) {
-	console.GetLogger(ctx).Debugf("loading cached Docker tarball %s", digest)
-	img, err := tarball.Image(func() (io.ReadCloser, error) {
-		return d.cas.Load(ctx, digest)
-	}, &tag)
-	if err != nil {
-		return 0, fmt.Errorf("failed to read cached tarball for digest %s: %w", digest, err)
-	}
+// dockerImageWritePlan defers the actual `docker push` to the cache-write phase.
+// Execute pushes to the loopback registry, then mutates the embedded Output proto
+// to record the manifest digest the daemon produced — that's how Load later knows
+// which manifest to pull.
+type dockerImageWritePlan struct {
+	dockerClient *client.Client
+	proxy        *dockerproxy.Registry
 
-	tarballSize, err := img.Size()
-	if err != nil {
-		return 0, fmt.Errorf("failed to get size for cached tarball %s: %w", digest, err)
-	}
+	// output is the same pointer that lives in PreparedTargetResult.TargetResult.Outputs[i].
+	// Execute mutates its ManifestDigest field; the cache writer persists the
+	// proto AFTER all write plans succeed, so the mutation is captured.
+	output *gen.DockerImageOutput
 
-	return tarballSize, nil
+	loopbackRef    string // host:port/repo:tag — the local tag we put on the image
+	repoName       string // path part of loopbackRef, used to look up the manifest digest
+	localImageName string
+	targetLabel    string
 }
+
+func (d *dockerImageWritePlan) Execute(ctx context.Context, tracker *worker.ProgressTracker) error {
+	logger := console.GetLogger(ctx)
+
+	// Defensive: drop any stale value left over from a previous push under
+	// the same name (shouldn't happen, but cheap insurance).
+	d.proxy.ResetManifest(d.repoName)
+
+	logger.Debugf("pushing Docker image %s to loopback registry", d.loopbackRef)
+	pushReader, err := d.dockerClient.ImagePush(ctx, d.loopbackRef, image.PushOptions{
+		RegistryAuth: emptyRegistryAuth,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to push image %q to loopback registry: %w", d.loopbackRef, err)
+	}
+	defer pushReader.Close()
+
+	if err := consumeDockerProgress(pushReader, tracker, fmt.Sprintf("%s: caching docker image %s", d.targetLabel, d.localImageName)); err != nil {
+		return fmt.Errorf("error reading push response: %w", err)
+	}
+
+	manifestDigest := d.proxy.LastManifestDigest(d.repoName)
+	if manifestDigest == "" {
+		return fmt.Errorf("docker push for %q completed but the loopback registry never received a manifest", d.loopbackRef)
+	}
+	d.output.ManifestDigest = &gen.Digest{Hash: manifestDigest}
+
+	logger.Debugf("successfully cached Docker image %s (manifest %s)", d.localImageName, manifestDigest)
+	return nil
+}
+
+func (d *dockerImageWritePlan) Cleanup(ctx context.Context) error {
+	if _, err := d.dockerClient.ImageRemove(ctx, d.loopbackRef, image.RemoveOptions{}); err != nil && !errdefs.IsNotFound(err) {
+		console.GetLogger(ctx).Warnf("failed to remove loopback tag %q: %v", d.loopbackRef, err)
+	}
+	return nil
+}
+
+// loopbackRepoName builds a repository path component from an image ID. The
+// path is stable for a given image so concurrent pushes of the same content
+// converge on the same name (which is fine — the manifest digest they record
+// is identical).
+func loopbackRepoName(imageID string) string {
+	return "grog-cache/" + shortID(imageID)
+}
+
+// shortID strips the sha256: prefix from a digest and returns the first 32
+// hex characters. Long enough to be effectively unique within a build, short
+// enough to keep log lines readable.
+func shortID(imageID string) string {
+	id := strings.TrimPrefix(imageID, "sha256:")
+	if len(id) > 32 {
+		id = id[:32]
+	}
+	if id == "" {
+		id = "unknown"
+	}
+	return id
+}
+
+// emptyRegistryAuth is a base64-encoded empty AuthConfig. The Docker daemon
+// requires *some* RegistryAuth header on push/pull even when the target is a
+// non-authenticated localhost registry; an empty JSON object satisfies it.
+var emptyRegistryAuth = base64.URLEncoding.EncodeToString([]byte("{}"))

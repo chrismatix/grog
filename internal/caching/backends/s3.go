@@ -1,7 +1,6 @@
 package backends
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
@@ -31,17 +31,33 @@ type S3Client interface {
 
 	// ObjectExists checks if an object exists in S3.
 	ObjectExists(ctx context.Context, bucket, key string) (bool, error)
+
+	// ObjectSize returns the size in bytes of the object without downloading
+	// it. Implementations should use a HEAD-style call (e.g. S3 HeadObject).
+	ObjectSize(ctx context.Context, bucket, key string) (int64, error)
 }
 
 // AWSS3Adapter adapts the AWS S3 client to the S3Client interface.
 type AWSS3Adapter struct {
-	client *s3.Client
+	client   *s3.Client
+	uploader *manager.Uploader
 }
 
 // NewAWSS3Adapter creates a new adapter for the AWS S3 client.
+// The adapter wraps the provided S3 client with a streaming multipart Uploader
+// so PutObject can stream arbitrarily large bodies without buffering them in memory.
 func NewAWSS3Adapter(client *s3.Client) *AWSS3Adapter {
+	uploader := manager.NewUploader(client, func(u *manager.Uploader) {
+		// 16 MiB parts; AWS minimum is 5 MiB. Larger parts mean fewer requests
+		// for big layers but a bigger floor on per-upload memory usage.
+		u.PartSize = 16 * 1024 * 1024
+		// Concurrency per upload — keep this modest because grog already runs
+		// many uploads in parallel at the target/output level.
+		u.Concurrency = 4
+	})
 	return &AWSS3Adapter{
-		client: client,
+		client:   client,
+		uploader: uploader,
 	}
 }
 
@@ -60,22 +76,19 @@ func (a *AWSS3Adapter) GetObject(ctx context.Context, bucket, key string) (io.Re
 	return result.Body, nil
 }
 
-// PutObject uploads an object to S3 using the AWS S3 client.
+// PutObject uploads an object to S3 by streaming the body through the
+// multipart Uploader. The body is consumed lazily — at most PartSize *
+// Concurrency bytes are buffered in memory at a time, regardless of total size.
 func (a *AWSS3Adapter) PutObject(ctx context.Context, bucket, key string, body io.Reader) error {
-	data, err := io.ReadAll(body)
+	_, err := a.uploader.Upload(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+		Body:   body,
+	})
 	if err != nil {
-		return fmt.Errorf("read body: %w", err)
+		return fmt.Errorf("s3 upload: %w", err)
 	}
-
-	input := &s3.PutObjectInput{
-		Bucket:        aws.String(bucket),
-		Key:           aws.String(key),
-		Body:          bytes.NewReader(data),
-		ContentLength: aws.Int64(int64(len(data))),
-	}
-
-	_, err = a.client.PutObject(ctx, input)
-	return err
+	return nil
 }
 
 // DeleteObject removes an object from S3 using the AWS S3 client.
@@ -87,6 +100,22 @@ func (a *AWSS3Adapter) DeleteObject(ctx context.Context, bucket, key string) err
 
 	_, err := a.client.DeleteObject(ctx, input)
 	return err
+}
+
+// ObjectSize returns the size of an object in S3 via a HeadObject call —
+// no body is downloaded.
+func (a *AWSS3Adapter) ObjectSize(ctx context.Context, bucket, key string) (int64, error) {
+	out, err := a.client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return 0, err
+	}
+	if out.ContentLength == nil {
+		return 0, fmt.Errorf("s3 head: missing content length for %s/%s", bucket, key)
+	}
+	return *out.ContentLength, nil
 }
 
 // ObjectExists checks if an object exists in S3 using the AWS S3 client.
@@ -231,6 +260,16 @@ func (s *S3Cache) Delete(ctx context.Context, path string, key string) error {
 	logger.Tracef("Deleting file from s3 for path: %s", s3Path)
 
 	return s.client.DeleteObject(ctx, s.bucketName, s3Path)
+}
+
+// Size returns the byte size of an object in S3 via the underlying client's
+// HeadObject-equivalent call. No body is downloaded.
+func (s *S3Cache) Size(ctx context.Context, path, key string) (int64, error) {
+	logger := console.GetLogger(ctx)
+	s3Path := s.buildPath(path, key)
+	logger.Tracef("Sizing object in s3 for path: %s", s3Path)
+
+	return s.client.ObjectSize(ctx, s.bucketName, s3Path)
 }
 
 // Exists checks if a file exists in S3.

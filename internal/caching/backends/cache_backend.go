@@ -26,6 +26,12 @@ type CacheBackend interface {
 	// Exists checks if a file exists in the cache with the given key.
 	Exists(ctx context.Context, path string, key string) (bool, error)
 
+	// Size returns the byte size of the entry without reading its content.
+	// Used by the dockerproxy registry to populate Content-Length headers on
+	// blob HEAD/GET responses (the Docker daemon refuses responses without one).
+	// Returns an error if the entry does not exist.
+	Size(ctx context.Context, path, key string) (int64, error)
+
 	// ListKeys returns all keys under the given path that match the given suffix.
 	// Keys are returned as relative paths (e.g. "2026-03-30/trace-id.parquet").
 	ListKeys(ctx context.Context, path string, suffix string) ([]string, error)

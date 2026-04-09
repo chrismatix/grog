@@ -62,6 +62,14 @@ func (m *mockS3Client) ObjectExists(ctx context.Context, bucket, key string) (bo
 	return ok, nil
 }
 
+func (m *mockS3Client) ObjectSize(ctx context.Context, bucket, key string) (int64, error) {
+	data, ok := m.objects[key]
+	if !ok {
+		return 0, errors.New("object not found")
+	}
+	return int64(len(data)), nil
+}
+
 func TestS3Cache_TypeName(t *testing.T) {
 	cache := &S3Cache{}
 	assert.Equal(t, "s3", cache.TypeName())

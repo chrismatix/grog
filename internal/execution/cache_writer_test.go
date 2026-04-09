@@ -45,6 +45,10 @@ func (r *recordingCacheBackend) Exists(context.Context, string, string) (bool, e
 	return false, nil
 }
 
+func (r *recordingCacheBackend) Size(context.Context, string, string) (int64, error) {
+	return 0, nil
+}
+
 func (r *recordingCacheBackend) ListKeys(context.Context, string, string) ([]string, error) {
 	return nil, nil
 }

@@ -192,3 +192,13 @@ func (rw *RemoteWrapper) Exists(ctx context.Context, path string, key string) (b
 func (rw *RemoteWrapper) ListKeys(ctx context.Context, path string, suffix string) ([]string, error) {
 	return rw.remote.ListKeys(ctx, path, suffix)
 }
+
+// Size returns the byte size of the entry. The fast path stats the local
+// filesystem cache; if the file is not yet cached locally, the wrapper asks
+// the remote backend (which uses a metadata-only call like S3 HeadObject).
+func (rw *RemoteWrapper) Size(ctx context.Context, path, key string) (int64, error) {
+	if size, err := rw.fs.Size(ctx, path, key); err == nil {
+		return size, nil
+	}
+	return rw.remote.Size(ctx, path, key)
+}

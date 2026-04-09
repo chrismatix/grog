@@ -138,6 +138,18 @@ func (fsc *FileSystemCache) Exists(ctx context.Context, path, key string) (bool,
 	return true, nil
 }
 
+// Size returns the size in bytes of the cached file with the given key, or
+// an error if the file is missing. Backends that don't implement SizeAware
+// fall back to reading the entry; this implementation is just an os.Stat.
+func (fsc *FileSystemCache) Size(_ context.Context, path, key string) (int64, error) {
+	filePath := fsc.buildFilePath(path, key)
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return 0, err
+	}
+	return info.Size(), nil
+}
+
 // ListKeys walks the directory tree and returns keys matching the suffix.
 func (fsc *FileSystemCache) ListKeys(ctx context.Context, path string, suffix string) ([]string, error) {
 	dir := fsc.getDir(path)

@@ -42,6 +42,9 @@ func (m *mockCacheBackend) Delete(ctx context.Context, path string, key string) 
 func (m *mockCacheBackend) Exists(ctx context.Context, path string, key string) (bool, error) {
 	return false, nil
 }
+func (m *mockCacheBackend) Size(ctx context.Context, path string, key string) (int64, error) {
+	return 0, nil
+}
 func (m *mockCacheBackend) ListKeys(ctx context.Context, path string, suffix string) ([]string, error) {
 	return nil, nil
 }

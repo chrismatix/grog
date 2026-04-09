@@ -65,6 +65,13 @@ func (c *Cas) LoadBytes(ctx context.Context, digest string) ([]byte, error) {
 	return io.ReadAll(reader)
 }
 
+// Size returns the byte size of the CAS entry with the given digest. The
+// dockerproxy registry uses this to populate Content-Length headers on blob
+// HEAD/GET responses, which the Docker daemon insists on.
+func (c *Cas) Size(ctx context.Context, digest string) (int64, error) {
+	return c.backend.Size(ctx, "cas", digest)
+}
+
 func (c *Cas) Exists(ctx context.Context, digest string) (bool, error) {
 	if cached, ok := c.keyExistsCache.Load(digest); ok && cached.(bool) {
 		return cached.(bool), nil

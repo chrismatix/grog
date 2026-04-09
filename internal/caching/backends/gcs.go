@@ -136,6 +136,20 @@ func (gcs *GCSCache) Delete(ctx context.Context, path string, key string) error 
 	return nil
 }
 
+// Size returns the byte size of an object in GCS via Object.Attrs (a metadata
+// fetch — no body is downloaded).
+func (gcs *GCSCache) Size(ctx context.Context, path, key string) (int64, error) {
+	logger := console.GetLogger(ctx)
+	gcsPath := gcs.buildPath(path, key)
+	logger.Tracef("Sizing object in GCS for path: %s", gcsPath)
+
+	attrs, err := gcs.client.Bucket(gcs.bucketName).Object(gcsPath).Attrs(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get object attrs: %w", err)
+	}
+	return attrs.Size, nil
+}
+
 // Exists checks if a file exists in GCS.
 func (gcs *GCSCache) Exists(ctx context.Context, path string, key string) (bool, error) {
 	logger := console.GetLogger(ctx)

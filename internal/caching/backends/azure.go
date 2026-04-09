@@ -27,6 +27,9 @@ type AzureBlobClient interface {
 
 	// BlobExists checks if a blob exists in Azure Blob Storage.
 	BlobExists(ctx context.Context, container, blob string) (bool, error)
+
+	// BlobSize returns the size in bytes of a blob without downloading it.
+	BlobSize(ctx context.Context, container, blob string) (int64, error)
 }
 
 // AzureBlobAdapter adapts the Azure azblob client to the AzureBlobClient interface.
@@ -77,6 +80,20 @@ func (a *AzureBlobAdapter) BlobExists(ctx context.Context, container, blobName s
 	}
 
 	return true, nil
+}
+
+// BlobSize returns the size of a blob via a properties request (no body
+// download).
+func (a *AzureBlobAdapter) BlobSize(ctx context.Context, container, blobName string) (int64, error) {
+	blobClient := a.client.ServiceClient().NewContainerClient(container).NewBlobClient(blobName)
+	props, err := blobClient.GetProperties(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	if props.ContentLength == nil {
+		return 0, fmt.Errorf("azure get properties: missing content length for %s/%s", container, blobName)
+	}
+	return *props.ContentLength, nil
 }
 
 // isBlobNotFoundError checks whether an error from the Azure SDK indicates that a blob was not found.
@@ -230,6 +247,16 @@ func (a *AzureCache) Exists(ctx context.Context, path string, key string) (bool,
 	logger.Tracef("Checking existence of file in Azure for path: %s", blobPath)
 
 	return a.client.BlobExists(ctx, a.containerName, blobPath)
+}
+
+// Size returns the byte size of a blob in Azure Blob Storage via a properties
+// request — no body is downloaded.
+func (a *AzureCache) Size(ctx context.Context, path, key string) (int64, error) {
+	logger := console.GetLogger(ctx)
+	blobPath := a.buildPath(path, key)
+	logger.Tracef("Sizing blob in Azure for path: %s", blobPath)
+
+	return a.client.BlobSize(ctx, a.containerName, blobPath)
 }
 
 // ListKeys uses Azure Blob Storage list blobs to list keys under the given path.

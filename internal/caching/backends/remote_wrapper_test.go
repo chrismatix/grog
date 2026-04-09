@@ -16,6 +16,7 @@ type mockCacheBackend struct {
 	setFunc    func(ctx context.Context, path, key string, content io.Reader) error
 	deleteFunc func(ctx context.Context, path string, key string) error
 	existsFunc func(ctx context.Context, path string, key string) (bool, error)
+	sizeFunc   func(ctx context.Context, path string, key string) (int64, error)
 	clearFunc  func(ctx context.Context, expunge bool) error
 	typeName   string
 }
@@ -53,6 +54,13 @@ func (m *mockCacheBackend) Exists(ctx context.Context, path string, key string) 
 		return m.existsFunc(ctx, path, key)
 	}
 	return false, errors.New("Exists not implemented in mock")
+}
+
+func (m *mockCacheBackend) Size(ctx context.Context, path string, key string) (int64, error) {
+	if m.sizeFunc != nil {
+		return m.sizeFunc(ctx, path, key)
+	}
+	return 0, errors.New("Size not implemented in mock")
 }
 
 func (m *mockCacheBackend) ListKeys(ctx context.Context, path string, suffix string) ([]string, error) {
