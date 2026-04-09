@@ -51,3 +51,36 @@ func TestFormatLayerPhaseSummary_UnknownPhase(t *testing.T) {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
+
+// TestFormatLayerPhaseSummary_PluralizationOfLayerAlreadyExists is a
+// regression test: previously the daemon's "Layer already exists" status was
+// lowercased and prefixed with the count, producing the ungrammatical
+// "2 layer already exists". The fix is a noun-shaped short label ("cached")
+// that reads correctly with any count.
+func TestFormatLayerPhaseSummary_PluralizationOfLayerAlreadyExists(t *testing.T) {
+	got := formatLayerPhaseSummary("base", map[string]string{
+		"l1": "Layer already exists",
+		"l2": "Layer already exists",
+		"l3": "Layer already exists",
+	})
+	want := "base (3 cached)"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// TestFormatLayerPhaseSummary_PullStateLabels verifies the pull-side daemon
+// statuses get sensible noun-shaped labels too — "1 downloaded" rather than
+// "1 download complete".
+func TestFormatLayerPhaseSummary_PullStateLabels(t *testing.T) {
+	got := formatLayerPhaseSummary("base", map[string]string{
+		"l1": "Downloading",
+		"l2": "Download complete",
+		"l3": "Extracting",
+		"l4": "Pull complete",
+	})
+	want := "base (1 downloading, 1 extracting, 1 downloaded, 1 pulled)"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}

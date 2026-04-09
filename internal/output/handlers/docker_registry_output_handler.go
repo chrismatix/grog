@@ -392,16 +392,42 @@ func consumeDockerProgress(
 	return nil
 }
 
+// layerPhaseLabels maps the verbose docker daemon status strings to short,
+// noun-shaped labels that read correctly with any count: "1 cached" /
+// "5 cached", "1 pushing" / "5 pushing". The previous version simply
+// lowercased the daemon's status, which produced ungrammatical phrases like
+// "2 layer already exists".
+//
+// Order matters: when multiple phases are active we list them in this order
+// so the most action-relevant ("pushing") comes first.
+var layerPhaseLabels = []struct {
+	state string
+	label string
+}{
+	{"Pushing", "pushing"},
+	{"Downloading", "downloading"},
+	{"Extracting", "extracting"},
+	{"Verifying Checksum", "verifying"},
+	{"Preparing", "preparing"},
+	{"Waiting", "waiting"},
+	{"Mounted from", "mounted"},
+	{"Pushed", "pushed"},
+	{"Download complete", "downloaded"},
+	{"Pull complete", "pulled"},
+	{"Layer already exists", "cached"},
+	{"Already exists", "cached"},
+}
+
 // formatLayerPhaseSummary builds a human-readable summary of the phases a
 // docker push/pull is currently in, grouped by state so the UI shows one line
 // per state rather than one line per layer.
 //
 // Example output with five layers:
 //
-//	"//foo:bar: caching docker image foo (3 pushing, 1 preparing, 1 pushed)"
+//	"//foo:bar: caching docker image foo (3 pushing, 1 preparing, 1 cached)"
 //
-// States are grouped in a fixed order ("Pushing"/"Pushed"/"Preparing"/...) so
-// the line stays readable as layers transition.
+// States are grouped in a fixed order so the line stays readable as layers
+// transition. Unknown daemon states are appended in alphabetical order.
 func formatLayerPhaseSummary(base string, layerStates map[string]string) string {
 	if len(layerStates) == 0 {
 		return base
@@ -411,37 +437,17 @@ func formatLayerPhaseSummary(base string, layerStates map[string]string) string 
 		counts[state]++
 	}
 
-	// Preferred ordering so the most-important phases are listed first. Any
-	// state not in the list falls through to alphabetical order at the end.
-	order := []string{
-		"Pushing",
-		"Downloading",
-		"Extracting",
-		"Preparing",
-		"Waiting",
-		"Mounted from",
-		"Pushed",
-		"Download complete",
-		"Pull complete",
-		"Layer already exists",
-	}
-
-	seen := make(map[string]bool, len(order))
+	seen := make(map[string]bool, len(layerPhaseLabels))
 	var parts []string
-	appendPart := func(state string) {
-		if seen[state] {
-			return
-		}
-		seen[state] = true
-		if n := counts[state]; n > 0 {
-			parts = append(parts, fmt.Sprintf("%d %s", n, strings.ToLower(state)))
+	for _, ph := range layerPhaseLabels {
+		seen[ph.state] = true
+		if n := counts[ph.state]; n > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", n, ph.label))
 		}
 	}
-
-	for _, state := range order {
-		appendPart(state)
-	}
-	// Catch-all: any state we don't know about, in stable alphabetical order.
+	// Catch-all: any daemon state we don't know about, in stable alphabetical
+	// order. We lower-case it but otherwise leave it untouched — these are
+	// rare enough that grammatical-perfection isn't worth the mapping table.
 	var extras []string
 	for state := range counts {
 		if !seen[state] {
@@ -450,7 +456,7 @@ func formatLayerPhaseSummary(base string, layerStates map[string]string) string 
 	}
 	sort.Strings(extras)
 	for _, state := range extras {
-		appendPart(state)
+		parts = append(parts, fmt.Sprintf("%d %s", counts[state], strings.ToLower(state)))
 	}
 
 	if len(parts) == 0 {

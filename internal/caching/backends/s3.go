@@ -111,9 +111,16 @@ func (a *AWSS3Adapter) DeleteObject(ctx context.Context, bucket, key string) err
 }
 
 // CopyObject performs a server-side copy. Bytes never transit the client.
-// Note: S3 server-side CopyObject works for objects up to 5 GB. Layers
-// exceeding that limit would require multipart copy via UploadPartCopy;
-// callers that may exceed 5 GB should add that fallback.
+//
+// Limitation: S3 single-call CopyObject is capped at 5 GiB. Docker layers
+// larger than that are rare in practice but not impossible — when one is
+// pushed through this backend the daemon will see a 4xx from the StagedWriter
+// commit step and surface it as a push failure with a clear "InvalidRequest"
+// error message from the AWS SDK. The fix is to fall back to multipart copy
+// (CreateMultipartUpload + UploadPartCopy + CompleteMultipartUpload) when the
+// source object exceeds the limit; tracked as a follow-up rather than added
+// here to keep this PR focused on the streaming refactor that landed the
+// staged-writer interface.
 func (a *AWSS3Adapter) CopyObject(ctx context.Context, bucket, srcKey, destKey string) error {
 	_, err := a.client.CopyObject(ctx, &s3.CopyObjectInput{
 		Bucket:     aws.String(bucket),

@@ -57,6 +57,17 @@ type Registry struct {
 	listener net.Listener
 	logger   *console.Logger
 
+	// sessionCtx is a long-lived context that backs every chunked upload
+	// session. It is *not* derived from any individual HTTP request — that
+	// would be wrong, because cas.BeginWrite hands the context to a
+	// background goroutine that lives across the POST/PATCH/.../PUT
+	// boundary, and net/http cancels each request's context as soon as the
+	// handler returns. sessionCtx is cancelled exactly once, by Close, so
+	// any backend implementation that observes ctx cancellation (S3, GCS,
+	// Azure) tears its in-flight upload down on shutdown.
+	sessionCtx    context.Context
+	sessionCancel context.CancelFunc
+
 	uploadsMu sync.Mutex
 	uploads   map[string]*pendingUpload
 
@@ -87,10 +98,17 @@ func New(ctx context.Context, cas *caching.Cas) (*Registry, error) {
 		return nil, fmt.Errorf("dockerproxy: listen: %w", err)
 	}
 
+	// Derive the session context from the caller's ctx so that cancelling
+	// the parent (e.g. SIGINT during a build) tears down any in-flight
+	// staged uploads. The cancel func is called explicitly from Close.
+	sessionCtx, sessionCancel := context.WithCancel(ctx)
+
 	r := &Registry{
 		cas:             cas,
 		listener:        listener,
 		logger:          console.GetLogger(ctx),
+		sessionCtx:      sessionCtx,
+		sessionCancel:   sessionCancel,
 		uploads:         make(map[string]*pendingUpload),
 		manifestsByName: make(map[string]string),
 	}
@@ -127,6 +145,15 @@ func (r *Registry) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = r.server.Shutdown(ctx)
+
+	// Cancel the session context first. This propagates to any backend
+	// staged-writer goroutines that block on network I/O (S3 uploader,
+	// GCS resumable upload, Azure UploadStream); their failures bubble
+	// through pending PATCH io.Copy loops and unblock the per-upload
+	// mutexes so the cleanup loop below isn't held up by a slow PATCH.
+	if r.sessionCancel != nil {
+		r.sessionCancel()
+	}
 
 	r.uploadsMu.Lock()
 	for id, u := range r.uploads {
@@ -292,8 +319,12 @@ func (r *Registry) startBlobUpload(w http.ResponseWriter, req *http.Request, nam
 	}
 
 	// Chunked upload — open a staged writer up front so PATCH and PUT can
-	// stream straight into it without buffering through a temp file.
-	id, err := r.openUpload(req.Context())
+	// stream straight into it without buffering through a temp file. The
+	// session uses the registry's long-lived ctx, NOT req.Context(): the
+	// POST handler returns 202 immediately and net/http cancels its
+	// request context, but the staged writer needs to keep accepting
+	// bytes through subsequent PATCH/PUT requests.
+	id, err := r.openUpload()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "BLOB_UPLOAD_INVALID", err.Error())
 		return
@@ -353,8 +384,9 @@ func (r *Registry) patchBlobUpload(w http.ResponseWriter, req *http.Request, nam
 	if copyErr != nil {
 		// On a partial write the session is in an unknown state — cancel
 		// the staged writer so the daemon starts over instead of trusting
-		// a stale Range header.
-		r.cancelUpload(req.Context(), uploadID)
+		// a stale Range header. Cancel uses the session ctx (not the
+		// request ctx) so cleanup survives a client disconnect mid-PATCH.
+		r.cancelUpload(uploadID)
 		writeError(w, http.StatusInternalServerError, "BLOB_UPLOAD_INVALID", copyErr.Error())
 		return
 	}
@@ -401,7 +433,7 @@ func (r *Registry) finishBlobUpload(w http.ResponseWriter, req *http.Request, na
 	if req.ContentLength != 0 {
 		if _, err := io.Copy(upload, req.Body); err != nil {
 			upload.mu.Unlock()
-			r.cancelUpload(req.Context(), uploadID)
+			r.cancelUpload(uploadID)
 			writeError(w, http.StatusInternalServerError, "BLOB_UPLOAD_INVALID", err.Error())
 			return
 		}
@@ -414,14 +446,17 @@ func (r *Registry) finishBlobUpload(w http.ResponseWriter, req *http.Request, na
 	// of which branch we take below.
 	r.dropUpload(uploadID)
 
+	// Use the session ctx for Commit/Cancel — these run on a backend
+	// goroutine that may outlive the request, and we don't want a client
+	// disconnect to interrupt a final commit.
 	if actualDigest != digest {
-		_ = writer.Cancel(req.Context())
+		_ = writer.Cancel(r.sessionCtx)
 		writeError(w, http.StatusBadRequest, "DIGEST_INVALID",
 			fmt.Sprintf("digest mismatch: client=%s actual=%s", digest, actualDigest))
 		return
 	}
 
-	if err := writer.Commit(req.Context(), "cas", digest); err != nil {
+	if err := writer.Commit(r.sessionCtx, "cas", digest); err != nil {
 		writeError(w, http.StatusInternalServerError, "BLOB_UPLOAD_INVALID", err.Error())
 		return
 	}
@@ -527,8 +562,13 @@ func (r *Registry) ResetManifest(name string) {
 // writer up front. Subsequent PATCH calls stream their bodies straight into
 // this writer, and PUT either Commits or Cancels it depending on whether the
 // daemon-supplied digest matches the running SHA256.
-func (r *Registry) openUpload(ctx context.Context) (string, error) {
-	sw, err := r.cas.BeginWrite(ctx)
+//
+// The staged writer is opened with the registry's long-lived sessionCtx so
+// it survives the POST handler returning. Backends like S3/GCS/Azure run a
+// background goroutine for the upload that observes ctx cancellation; using
+// req.Context() here would tear the upload down before the first PATCH.
+func (r *Registry) openUpload() (string, error) {
+	sw, err := r.cas.BeginWrite(r.sessionCtx)
 	if err != nil {
 		return "", fmt.Errorf("open staged writer: %w", err)
 	}
@@ -560,14 +600,15 @@ func (r *Registry) dropUpload(id string) {
 
 // cancelUpload removes the session and cancels the underlying staged writer.
 // Used when a PATCH fails partway through and the session can no longer be
-// trusted.
-func (r *Registry) cancelUpload(ctx context.Context, id string) {
+// trusted. Cancellation always uses the session ctx so cleanup runs even
+// when the triggering request has been cancelled by the client.
+func (r *Registry) cancelUpload(id string) {
 	r.uploadsMu.Lock()
 	upload, ok := r.uploads[id]
 	delete(r.uploads, id)
 	r.uploadsMu.Unlock()
 	if ok {
-		upload.cancel(ctx)
+		upload.cancel(r.sessionCtx)
 	}
 }
 

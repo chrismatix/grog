@@ -147,6 +147,11 @@ func (gcs *GCSCache) Delete(ctx context.Context, path string, key string) error 
 // On Commit, the staging object is server-side copied to its final
 // content-addressed key via Object.CopierFrom and the staging object is
 // deleted. No bytes pass through grog twice.
+//
+// The ctx passed here lives for the entire upload session — it's captured
+// inside *storage.Writer which uses it to drive the resumable upload — so
+// callers must pass a context that outlives all subsequent Write calls
+// (e.g. the dockerproxy registry's session ctx, not an HTTP request ctx).
 func (gcs *GCSCache) BeginWrite(ctx context.Context) (StagedWriter, error) {
 	stagingKey := gcs.buildPath(gcsStagingPath, uuid.NewString())
 	wc := gcs.client.Bucket(gcs.bucketName).Object(stagingKey).NewWriter(ctx)
@@ -156,23 +161,19 @@ func (gcs *GCSCache) BeginWrite(ctx context.Context) (StagedWriter, error) {
 		stagingKey: stagingKey,
 		writer:     wc,
 		buildPath:  gcs.buildPath,
-		ctx:        ctx,
 	}, nil
 }
 
 // gcsStagedWriter is the StagedWriter implementation for GCS. The streaming
-// resumable upload is owned by *storage.Writer; Commit promotes the staging
-// object via a server-side rewrite using Object.CopierFrom.
+// resumable upload is owned by *storage.Writer (which captures the ctx from
+// BeginWrite internally); Commit promotes the staging object via a
+// server-side rewrite using Object.CopierFrom.
 type gcsStagedWriter struct {
 	client     *storage.Client
 	bucket     string
 	stagingKey string
 	writer     *storage.Writer
 	buildPath  func(path, key string) string
-	// ctx is the context the upload was opened with — needed for the GCS
-	// SDK's Writer/Object operations which all take a context. Commit/Cancel
-	// receive their own ctx and use that for the copy/delete steps.
-	ctx context.Context
 
 	mu       sync.Mutex
 	finished bool

@@ -365,6 +365,98 @@ func TestNotFoundForUnknownPath(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
+// ctxObservingBackend wraps a CacheBackend and hands every BeginWrite the
+// caller's ctx via a StagedWriter that fails Write/Commit once that ctx is
+// cancelled. It exists to reproduce the cloud-backend pattern (S3/GCS/Azure)
+// where a background upload goroutine observes the BeginWrite ctx — the
+// FileSystemCache used by newTestRegistry doesn't have this dependency, so
+// the bug it guards against is invisible without a custom mock.
+type ctxObservingBackend struct {
+	backends.CacheBackend
+}
+
+func (b *ctxObservingBackend) BeginWrite(ctx context.Context) (backends.StagedWriter, error) {
+	inner, err := b.CacheBackend.BeginWrite(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &ctxObservingStagedWriter{ctx: ctx, inner: inner}, nil
+}
+
+type ctxObservingStagedWriter struct {
+	ctx   context.Context
+	inner backends.StagedWriter
+}
+
+func (w *ctxObservingStagedWriter) Write(p []byte) (int, error) {
+	if err := w.ctx.Err(); err != nil {
+		return 0, fmt.Errorf("ctx-aware staged writer write: %w", err)
+	}
+	return w.inner.Write(p)
+}
+
+func (w *ctxObservingStagedWriter) Commit(ctx context.Context, path, key string) error {
+	if err := w.ctx.Err(); err != nil {
+		return fmt.Errorf("ctx-aware staged writer commit: %w", err)
+	}
+	return w.inner.Commit(ctx, path, key)
+}
+
+func (w *ctxObservingStagedWriter) Cancel(ctx context.Context) error {
+	return w.inner.Cancel(ctx)
+}
+
+// TestRegistry_ChunkedUploadSurvivesPostContextCancellation is a regression
+// test for the bug where openUpload was passing the POST request's context
+// to cas.BeginWrite. net/http cancels the request's ctx as soon as the
+// handler returns, so any backend that captured the ctx (S3, GCS, Azure)
+// would tear its upload goroutine down before the daemon's first PATCH
+// arrived.
+//
+// This test uses a backend whose StagedWriter checks ctx.Err() on every
+// Write to surface the bug — without the fix, the test fails on PATCH.
+func TestRegistry_ChunkedUploadSurvivesPostContextCancellation(t *testing.T) {
+	ctx := context.Background()
+	fs := backends.NewFileSystemCacheForTest(t.TempDir(), t.TempDir())
+	cas := caching.NewCas(&ctxObservingBackend{CacheBackend: fs})
+
+	reg, err := dockerproxy.New(ctx, cas)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = reg.Close() })
+
+	// POST: open chunked session
+	startResp, err := http.Post(urlFor(reg, "/v2/some/repo/blobs/uploads/"), "application/octet-stream", nil)
+	require.NoError(t, err)
+	startResp.Body.Close()
+	require.Equal(t, http.StatusAccepted, startResp.StatusCode)
+	location := startResp.Header.Get("Location")
+
+	// PATCH a chunk in a *separate* HTTP request — at this point the POST
+	// request's context is already cancelled by net/http. If openUpload
+	// captured req.Context() into the staged writer, this Write would fail
+	// with "context canceled" and the daemon would never reach a successful
+	// PUT.
+	payload := []byte("post-context-cancellation payload")
+	digest := digestOf(payload)
+
+	patchReq, err := http.NewRequest(http.MethodPatch, urlFor(reg, location), bytes.NewReader(payload))
+	require.NoError(t, err)
+	patchResp, err := http.DefaultClient.Do(patchReq)
+	require.NoError(t, err)
+	patchBody, _ := io.ReadAll(patchResp.Body)
+	patchResp.Body.Close()
+	require.Equal(t, http.StatusAccepted, patchResp.StatusCode, "PATCH body: %s", patchBody)
+
+	// PUT to finalize
+	putReq, err := http.NewRequest(http.MethodPut, urlFor(reg, location)+"?digest="+digest, nil)
+	require.NoError(t, err)
+	putResp, err := http.DefaultClient.Do(putReq)
+	require.NoError(t, err)
+	putBody, _ := io.ReadAll(putResp.Body)
+	putResp.Body.Close()
+	require.Equal(t, http.StatusCreated, putResp.StatusCode, "PUT body: %s", putBody)
+}
+
 func TestConcurrentChunkedUploadsAreIsolated(t *testing.T) {
 	reg, cas := newTestRegistry(t)
 	ctx := context.Background()

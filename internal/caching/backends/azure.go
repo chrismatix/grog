@@ -125,7 +125,7 @@ func (a *AzureBlobAdapter) CopyBlob(ctx context.Context, container, srcBlob, des
 		return fmt.Errorf("azure start copy %s -> %s: %w", srcBlob, destBlob, err)
 	}
 
-	// Poll until the destination blob's CopyStatus is "success". Azure
+	// Poll until the destination blob's CopyStatus reports success. Azure
 	// transitions are typically near-instant within a single account, so a
 	// short poll interval is fine.
 	const (
@@ -142,11 +142,11 @@ func (a *AzureBlobAdapter) CopyBlob(ctx context.Context, container, srcBlob, des
 			return fmt.Errorf("azure copy %s -> %s: missing copy status", srcBlob, destBlob)
 		}
 		switch *props.CopyStatus {
-		case "success":
+		case blob.CopyStatusTypeSuccess:
 			return nil
-		case "pending":
+		case blob.CopyStatusTypePending:
 			// fall through to sleep
-		case "aborted", "failed":
+		case blob.CopyStatusTypeAborted, blob.CopyStatusTypeFailed:
 			return fmt.Errorf("azure copy %s -> %s: %s", srcBlob, destBlob, *props.CopyStatus)
 		default:
 			return fmt.Errorf("azure copy %s -> %s: unexpected status %q", srcBlob, destBlob, *props.CopyStatus)
@@ -161,11 +161,6 @@ func (a *AzureBlobAdapter) CopyBlob(ctx context.Context, container, srcBlob, des
 		}
 	}
 }
-
-// Ensure the blob package is referenced even when no exported symbol from it
-// is used directly — the StartCopyFromURL response type lives there and may
-// otherwise look like an unused import to the linter.
-var _ = blob.CopyStatusTypeSuccess
 
 // isBlobNotFoundError checks whether an error from the Azure SDK indicates that a blob was not found.
 func isBlobNotFoundError(err error) bool {
