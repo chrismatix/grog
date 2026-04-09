@@ -145,6 +145,38 @@ func (pt *ProgressTracker) Complete() {
 	pt.Add(remaining)
 }
 
+// SetStatus updates the tracker's status text and pushes a refresh to the UI,
+// even if no bytes of progress have been recorded. This is useful when a long
+// operation has distinct phases (preparing, streaming, flushing, finalizing)
+// and the caller wants the user to see phase transitions without needing a
+// progress bar.
+//
+// Status changes on a child tracker do not propagate; callers updating a plan's
+// top-level status should target the tracker they own.
+//
+// No-op if the status is unchanged, so callers can SetStatus on every event
+// without flooding the UI.
+func (pt *ProgressTracker) SetStatus(status string) {
+	if pt == nil {
+		return
+	}
+
+	pt.mu.Lock()
+	if pt.status == status {
+		pt.mu.Unlock()
+		return
+	}
+	pt.status = status
+	current, total := pt.aggregateLocked()
+	// statusForChildStatusLocked may pick a child's status when there's exactly
+	// one child — that's fine: the display text we compute here matches what
+	// the usual send() path would produce on a progress tick.
+	displayStatus := pt.statusForChildStatusLocked(status)
+	pt.mu.Unlock()
+
+	pt.send(displayStatus, current, total)
+}
+
 func (pt *ProgressTracker) onChildDelta(child *ProgressTracker, delta int64) {
 	if pt == nil || delta == 0 {
 		return

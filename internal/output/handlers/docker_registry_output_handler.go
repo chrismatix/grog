@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	dockerconfig "github.com/docker/cli/cli/config"
@@ -41,6 +42,11 @@ type dockerRegistryWritePlan struct {
 }
 
 func (d *dockerRegistryWritePlan) Execute(ctx context.Context, tracker *worker.ProgressTracker) error {
+	baseStatus := fmt.Sprintf("%s: pushing cache for %s", d.targetLabel, d.localImageName)
+	// Surface the plan's phase immediately so the UI doesn't dwell on
+	// "writing cache" while the daemon prepares (gzips, serializes) layers.
+	tracker.SetStatus(baseStatus)
+
 	auth, err := makeRegistryAuth(d.remoteImageName)
 	if err != nil {
 		return err
@@ -54,7 +60,7 @@ func (d *dockerRegistryWritePlan) Execute(ctx context.Context, tracker *worker.P
 	}
 	defer pushReader.Close()
 
-	if err := consumeDockerProgress(pushReader, tracker, fmt.Sprintf("%s: pushing cache for %s", d.targetLabel, d.localImageName)); err != nil {
+	if err := consumeDockerProgress(pushReader, tracker, baseStatus); err != nil {
 		return fmt.Errorf("error reading push response: %w", err)
 	}
 
@@ -280,9 +286,22 @@ type dockerLayerProgress struct {
 	total       int64
 }
 
-// consumeDockerProgress decodes Docker CLI JSON messages and bridges them into our ProgressTracker model.
-// It creates child trackers per layer (jm.ID) when a total is known and updates them as Current advances.
-// If parent is nil, the stream is still drained but no progress is emitted.
+// consumeDockerProgress decodes Docker CLI JSON messages and bridges them into
+// our ProgressTracker model. It does two things:
+//
+//  1. For every layer that emits "Pushing"/"Downloading" messages with a known
+//     total, it creates a child sub-tracker and updates it as bytes flow.
+//  2. It updates the parent tracker's *status text* (via SetStatus) as the
+//     daemon reports non-progress phase transitions like "Preparing",
+//     "Waiting", "Pushed" or "Layer already exists". This gives the user a
+//     visible signal that work is happening even during phases where the
+//     daemon is not shipping bytes through our HTTP endpoint (e.g. gzipping
+//     layers on an overlay2-backed daemon, or waiting for our own
+//     finishBlobUpload to flush a temp file into the cache).
+//
+// The base status string is set on the parent immediately so the UI reflects
+// the current plan even before the first daemon message arrives. If parent is
+// nil, the stream is still drained but no progress is emitted.
 func consumeDockerProgress(
 	reader io.Reader,
 	parent *worker.ProgressTracker,
@@ -291,8 +310,19 @@ func consumeDockerProgress(
 	if reader == nil {
 		return nil
 	}
+
+	// Seed the parent status so the UI shows something meaningful immediately,
+	// before the daemon has sent its first JSON message.
+	parent.SetStatus(status)
+
 	dec := json.NewDecoder(reader)
 	layers := make(map[string]*dockerLayerProgress)
+
+	// layerStates tracks the most recent non-empty daemon status for each
+	// layer ID. lastPhaseStatus remembers what we last pushed to parent.SetStatus
+	// so we don't flood the UI with identical updates.
+	layerStates := make(map[string]string)
+	lastPhaseStatus := status
 
 	for {
 		var jsonMessage jsonmessage.JSONMessage
@@ -307,7 +337,21 @@ func consumeDockerProgress(
 			return jsonMessage.Error
 		}
 
-		// Only handle progress-bearing messages
+		// Update the plan-level phase summary whenever a layer transitions to
+		// a new named state. This runs even for messages that have no
+		// Progress field, so "Preparing" and "Waiting" phases become visible.
+		if jsonMessage.ID != "" && jsonMessage.Status != "" {
+			if layerStates[jsonMessage.ID] != jsonMessage.Status {
+				layerStates[jsonMessage.ID] = jsonMessage.Status
+				summary := formatLayerPhaseSummary(status, layerStates)
+				if summary != lastPhaseStatus {
+					parent.SetStatus(summary)
+					lastPhaseStatus = summary
+				}
+			}
+		}
+
+		// Only handle progress-bearing messages for per-layer sub-trackers.
 		if jsonMessage.ID == "" || jsonMessage.Progress == nil {
 			continue
 		}
@@ -346,4 +390,71 @@ func consumeDockerProgress(
 		st.tracker.Complete()
 	}
 	return nil
+}
+
+// formatLayerPhaseSummary builds a human-readable summary of the phases a
+// docker push/pull is currently in, grouped by state so the UI shows one line
+// per state rather than one line per layer.
+//
+// Example output with five layers:
+//
+//	"//foo:bar: caching docker image foo (3 pushing, 1 preparing, 1 pushed)"
+//
+// States are grouped in a fixed order ("Pushing"/"Pushed"/"Preparing"/...) so
+// the line stays readable as layers transition.
+func formatLayerPhaseSummary(base string, layerStates map[string]string) string {
+	if len(layerStates) == 0 {
+		return base
+	}
+	counts := make(map[string]int)
+	for _, state := range layerStates {
+		counts[state]++
+	}
+
+	// Preferred ordering so the most-important phases are listed first. Any
+	// state not in the list falls through to alphabetical order at the end.
+	order := []string{
+		"Pushing",
+		"Downloading",
+		"Extracting",
+		"Preparing",
+		"Waiting",
+		"Mounted from",
+		"Pushed",
+		"Download complete",
+		"Pull complete",
+		"Layer already exists",
+	}
+
+	seen := make(map[string]bool, len(order))
+	var parts []string
+	appendPart := func(state string) {
+		if seen[state] {
+			return
+		}
+		seen[state] = true
+		if n := counts[state]; n > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", n, strings.ToLower(state)))
+		}
+	}
+
+	for _, state := range order {
+		appendPart(state)
+	}
+	// Catch-all: any state we don't know about, in stable alphabetical order.
+	var extras []string
+	for state := range counts {
+		if !seen[state] {
+			extras = append(extras, state)
+		}
+	}
+	sort.Strings(extras)
+	for _, state := range extras {
+		appendPart(state)
+	}
+
+	if len(parts) == 0 {
+		return base
+	}
+	return fmt.Sprintf("%s (%s)", base, strings.Join(parts, ", "))
 }

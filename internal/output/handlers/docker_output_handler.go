@@ -258,6 +258,13 @@ type dockerImageWritePlan struct {
 func (d *dockerImageWritePlan) Execute(ctx context.Context, tracker *worker.ProgressTracker) error {
 	logger := console.GetLogger(ctx)
 
+	baseStatus := fmt.Sprintf("%s: caching docker image %s", d.targetLabel, d.localImageName)
+	// Surface the plan's phase immediately so the UI stops saying
+	// "writing cache" before the daemon has sent its first JSON message. For
+	// big overlay2-backed images the gzip/prepare phase alone can take
+	// several minutes, and the user should see *something* during that wait.
+	tracker.SetStatus(baseStatus)
+
 	// Defensive: drop any stale value left over from a previous push under
 	// the same name (shouldn't happen, but cheap insurance).
 	d.proxy.ResetManifest(d.repoName)
@@ -271,9 +278,14 @@ func (d *dockerImageWritePlan) Execute(ctx context.Context, tracker *worker.Prog
 	}
 	defer pushReader.Close()
 
-	if err := consumeDockerProgress(pushReader, tracker, fmt.Sprintf("%s: caching docker image %s", d.targetLabel, d.localImageName)); err != nil {
+	if err := consumeDockerProgress(pushReader, tracker, baseStatus); err != nil {
 		return fmt.Errorf("error reading push response: %w", err)
 	}
+
+	// The stream has drained but the plan still has finalisation work (reading
+	// the manifest digest back and mutating the output proto). Call it out so
+	// the user knows we've moved on from the daemon push itself.
+	tracker.SetStatus(baseStatus + ": finalizing")
 
 	manifestDigest := d.proxy.LastManifestDigest(d.repoName)
 	if manifestDigest == "" {

@@ -7,6 +7,47 @@ import (
 	"grog/internal/config"
 )
 
+func TestProgressTrackerSetStatusEmitsUpdate(t *testing.T) {
+	t.Helper()
+
+	var mu sync.Mutex
+	var updates []StatusUpdate
+	tracker := NewProgressTracker("initial", 0, func(update StatusUpdate) {
+		mu.Lock()
+		defer mu.Unlock()
+		updates = append(updates, update)
+	})
+	if tracker == nil {
+		t.Fatalf("expected tracker")
+	}
+
+	// Setting the same status must be a no-op so callers can safely call
+	// SetStatus on every daemon event without flooding the UI.
+	tracker.SetStatus("initial")
+	mu.Lock()
+	if got := len(updates); got != 0 {
+		mu.Unlock()
+		t.Fatalf("expected 0 updates for unchanged status, got %d", got)
+	}
+	mu.Unlock()
+
+	// A new status triggers a send even without any progress advancement.
+	tracker.SetStatus("phase: preparing")
+	mu.Lock()
+	defer mu.Unlock()
+	if len(updates) != 1 {
+		t.Fatalf("expected one update, got %d", len(updates))
+	}
+	if got := updates[0].Status; got != "phase: preparing" {
+		t.Fatalf("unexpected status: %q", got)
+	}
+	// No progress was recorded, so the emitted Progress payload should have a
+	// zero Total — that's how the UI knows not to render a progress bar.
+	if updates[0].Progress == nil || updates[0].Progress.Total != 0 {
+		t.Fatalf("expected zero-total progress payload, got %+v", updates[0].Progress)
+	}
+}
+
 func TestProgressTrackerAggregatesChildren(t *testing.T) {
 	t.Helper()
 
