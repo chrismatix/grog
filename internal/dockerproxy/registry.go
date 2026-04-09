@@ -32,12 +32,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
 	"net"
 	"net/http"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -55,7 +55,6 @@ type Registry struct {
 	cas      *caching.Cas
 	server   *http.Server
 	listener net.Listener
-	tempDir  string
 	logger   *console.Logger
 
 	uploadsMu sync.Mutex
@@ -68,15 +67,16 @@ type Registry struct {
 	manifestsByName map[string]string
 }
 
-// pendingUpload tracks an in-flight chunked blob upload. Bytes are buffered
-// to a temp file rather than memory so layers larger than RAM are tolerated.
-// A running SHA256 lets us validate the client-supplied digest at PUT time
-// without re-reading the file.
+// pendingUpload tracks an in-flight chunked blob upload. Incoming PATCH bytes
+// are streamed straight into a CAS staged writer (no temp file double copy)
+// and a running SHA256 lets us validate the client-supplied digest at PUT
+// time without re-reading anything.
 type pendingUpload struct {
 	mu       sync.Mutex
-	file     *os.File
+	writer   caching.StagedWriter
 	digester hash.Hash
 	written  int64
+	finished bool // true after Commit/Cancel; further Writes are rejected
 }
 
 // New starts an OCI Distribution v2 server on a random loopback port.
@@ -87,16 +87,9 @@ func New(ctx context.Context, cas *caching.Cas) (*Registry, error) {
 		return nil, fmt.Errorf("dockerproxy: listen: %w", err)
 	}
 
-	tempDir, err := os.MkdirTemp("", "grog-dockerproxy-*")
-	if err != nil {
-		_ = listener.Close()
-		return nil, fmt.Errorf("dockerproxy: temp dir: %w", err)
-	}
-
 	r := &Registry{
 		cas:             cas,
 		listener:        listener,
-		tempDir:         tempDir,
 		logger:          console.GetLogger(ctx),
 		uploads:         make(map[string]*pendingUpload),
 		manifestsByName: make(map[string]string),
@@ -128,8 +121,8 @@ func (r *Registry) Addr() string {
 	return r.listener.Addr().String()
 }
 
-// Close stops the HTTP server, removes any pending uploads, and deletes
-// the temp directory. Safe to call multiple times.
+// Close stops the HTTP server and cancels any pending uploads.
+// Safe to call multiple times.
 func (r *Registry) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -137,12 +130,12 @@ func (r *Registry) Close() error {
 
 	r.uploadsMu.Lock()
 	for id, u := range r.uploads {
-		u.close()
+		u.cancel(ctx)
 		delete(r.uploads, id)
 	}
 	r.uploadsMu.Unlock()
 
-	return os.RemoveAll(r.tempDir)
+	return nil
 }
 
 // digestPattern accepts the canonical OCI digest form sha256:<64-hex>.
@@ -274,16 +267,21 @@ func (r *Registry) getBlob(w http.ResponseWriter, req *http.Request, digest stri
 
 // startBlobUpload handles both monolithic POST (with ?digest=) and the start
 // of a chunked upload session (no digest, returns a session UUID + Location).
+//
+// Both code paths stream the body straight into a CAS staged writer — there is
+// no temp file in either case. The chunked path opens the staged writer here
+// and stores it in the session for subsequent PATCH/PUT to write into; the
+// monolithic path opens, writes, verifies the digest, and commits in one go.
 func (r *Registry) startBlobUpload(w http.ResponseWriter, req *http.Request, name string) {
 	digest := req.URL.Query().Get("digest")
 
 	if digest != "" {
-		// Monolithic upload — body contains the entire blob.
+		// Monolithic upload — the entire blob is in this request body.
 		if !digestPattern.MatchString(digest) {
 			writeError(w, http.StatusBadRequest, "DIGEST_INVALID", "invalid digest format")
 			return
 		}
-		if err := r.cas.Write(req.Context(), digest, req.Body); err != nil {
+		if err := r.writeBlobMonolithic(req.Context(), digest, req.Body); err != nil {
 			writeError(w, http.StatusInternalServerError, "BLOB_UPLOAD_INVALID", err.Error())
 			return
 		}
@@ -293,8 +291,9 @@ func (r *Registry) startBlobUpload(w http.ResponseWriter, req *http.Request, nam
 		return
 	}
 
-	// Chunked upload — open a temp file and return a session ID.
-	id, err := r.openUpload()
+	// Chunked upload — open a staged writer up front so PATCH and PUT can
+	// stream straight into it without buffering through a temp file.
+	id, err := r.openUpload(req.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "BLOB_UPLOAD_INVALID", err.Error())
 		return
@@ -303,6 +302,31 @@ func (r *Registry) startBlobUpload(w http.ResponseWriter, req *http.Request, nam
 	w.Header().Set("Docker-Upload-UUID", id)
 	w.Header().Set("Range", "0-0")
 	w.WriteHeader(http.StatusAccepted)
+}
+
+// writeBlobMonolithic streams a single-request blob upload into the CAS and
+// verifies the supplied digest at the end. Used by the rare monolithic POST
+// path; chunked PATCH/PUT goes through the upload-session machinery instead.
+func (r *Registry) writeBlobMonolithic(ctx context.Context, digest string, body io.Reader) error {
+	sw, err := r.cas.BeginWrite(ctx)
+	if err != nil {
+		return fmt.Errorf("begin staged write: %w", err)
+	}
+	digester := sha256.New()
+	tee := io.TeeReader(body, digester)
+	if _, err := io.Copy(sw, tee); err != nil {
+		_ = sw.Cancel(ctx)
+		return fmt.Errorf("stream body to staged writer: %w", err)
+	}
+	actual := "sha256:" + hex.EncodeToString(digester.Sum(nil))
+	if actual != digest {
+		_ = sw.Cancel(ctx)
+		return fmt.Errorf("digest mismatch: client=%s actual=%s", digest, actual)
+	}
+	if err := sw.Commit(ctx, "cas", digest); err != nil {
+		return fmt.Errorf("commit blob: %w", err)
+	}
+	return nil
 }
 
 func (r *Registry) patchBlobUpload(w http.ResponseWriter, req *http.Request, name, uploadID string) {
@@ -317,14 +341,20 @@ func (r *Registry) patchBlobUpload(w http.ResponseWriter, req *http.Request, nam
 	}
 
 	upload.mu.Lock()
+	if upload.finished {
+		upload.mu.Unlock()
+		writeError(w, http.StatusConflict, "BLOB_UPLOAD_INVALID", "upload session is closed")
+		return
+	}
 	_, copyErr := io.Copy(upload, req.Body)
 	written := upload.written
 	upload.mu.Unlock()
 
 	if copyErr != nil {
-		// On a partial write the session is in an unknown state — drop it
-		// so the daemon starts over instead of trusting a stale Range header.
-		r.removeUpload(uploadID)
+		// On a partial write the session is in an unknown state — cancel
+		// the staged writer so the daemon starts over instead of trusting
+		// a stale Range header.
+		r.cancelUpload(req.Context(), uploadID)
 		writeError(w, http.StatusInternalServerError, "BLOB_UPLOAD_INVALID", copyErr.Error())
 		return
 	}
@@ -356,33 +386,45 @@ func (r *Registry) finishBlobUpload(w http.ResponseWriter, req *http.Request, na
 		return
 	}
 
-	// The PUT body may carry a final trailing chunk (the spec allows it).
+	// Take ownership of the session for the rest of the request — we either
+	// commit or cancel before returning, and we don't want a concurrent PATCH
+	// (which would be a protocol violation anyway) to race with us.
 	upload.mu.Lock()
+	if upload.finished {
+		upload.mu.Unlock()
+		writeError(w, http.StatusConflict, "BLOB_UPLOAD_INVALID", "upload session is closed")
+		return
+	}
+	upload.finished = true
+
+	// The PUT body may carry a final trailing chunk (the spec allows it).
 	if req.ContentLength != 0 {
 		if _, err := io.Copy(upload, req.Body); err != nil {
 			upload.mu.Unlock()
-			r.removeUpload(uploadID)
+			r.cancelUpload(req.Context(), uploadID)
 			writeError(w, http.StatusInternalServerError, "BLOB_UPLOAD_INVALID", err.Error())
 			return
 		}
 	}
 	actualDigest := "sha256:" + hex.EncodeToString(upload.digester.Sum(nil))
+	writer := upload.writer
 	upload.mu.Unlock()
 
+	// Always remove the upload from the registry's session map, regardless
+	// of which branch we take below.
+	r.dropUpload(uploadID)
+
 	if actualDigest != digest {
-		r.removeUpload(uploadID)
+		_ = writer.Cancel(req.Context())
 		writeError(w, http.StatusBadRequest, "DIGEST_INVALID",
 			fmt.Sprintf("digest mismatch: client=%s actual=%s", digest, actualDigest))
 		return
 	}
 
-	// Stream the temp file into the CAS, then clean up.
-	if err := upload.streamToCAS(req.Context(), r.cas, digest); err != nil {
-		r.removeUpload(uploadID)
+	if err := writer.Commit(req.Context(), "cas", digest); err != nil {
 		writeError(w, http.StatusInternalServerError, "BLOB_UPLOAD_INVALID", err.Error())
 		return
 	}
-	r.removeUpload(uploadID)
 
 	w.Header().Set("Location", "/v2/"+name+"/blobs/"+digest)
 	w.Header().Set("Docker-Content-Digest", digest)
@@ -481,16 +523,20 @@ func (r *Registry) ResetManifest(name string) {
 
 // upload session management ---------------------------------------------------
 
-func (r *Registry) openUpload() (string, error) {
-	id := uuid.NewString()
-	f, err := os.CreateTemp(r.tempDir, "upload-*")
+// openUpload starts a new chunked upload session by opening a CAS staged
+// writer up front. Subsequent PATCH calls stream their bodies straight into
+// this writer, and PUT either Commits or Cancels it depending on whether the
+// daemon-supplied digest matches the running SHA256.
+func (r *Registry) openUpload(ctx context.Context) (string, error) {
+	sw, err := r.cas.BeginWrite(ctx)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("open staged writer: %w", err)
 	}
 	upload := &pendingUpload{
-		file:     f,
+		writer:   sw,
 		digester: sha256.New(),
 	}
+	id := uuid.NewString()
 	r.uploadsMu.Lock()
 	r.uploads[id] = upload
 	r.uploadsMu.Unlock()
@@ -503,21 +549,36 @@ func (r *Registry) getUpload(id string) *pendingUpload {
 	return r.uploads[id]
 }
 
-func (r *Registry) removeUpload(id string) {
+// dropUpload removes the session from the registry's map without cancelling
+// the staged writer — used by finishBlobUpload, which has already taken
+// ownership of the writer and will Commit or Cancel it itself.
+func (r *Registry) dropUpload(id string) {
+	r.uploadsMu.Lock()
+	delete(r.uploads, id)
+	r.uploadsMu.Unlock()
+}
+
+// cancelUpload removes the session and cancels the underlying staged writer.
+// Used when a PATCH fails partway through and the session can no longer be
+// trusted.
+func (r *Registry) cancelUpload(ctx context.Context, id string) {
 	r.uploadsMu.Lock()
 	upload, ok := r.uploads[id]
 	delete(r.uploads, id)
 	r.uploadsMu.Unlock()
 	if ok {
-		upload.close()
+		upload.cancel(ctx)
 	}
 }
 
-// Write implements io.Writer for streaming chunks into the upload session.
-// Both the temp file and the running digester are advanced for the bytes
-// that were actually persisted, never for bytes that failed to write.
+// Write implements io.Writer for streaming chunks into the upload session's
+// staged writer. The running digester is advanced for the bytes that were
+// actually persisted, never for bytes that failed to write.
 func (u *pendingUpload) Write(p []byte) (int, error) {
-	n, err := u.file.Write(p)
+	if u.writer == nil {
+		return 0, errors.New("upload session: write after commit/cancel")
+	}
+	n, err := u.writer.Write(p)
 	if n > 0 {
 		u.digester.Write(p[:n])
 		u.written += int64(n)
@@ -525,21 +586,18 @@ func (u *pendingUpload) Write(p []byte) (int, error) {
 	return n, err
 }
 
-func (u *pendingUpload) streamToCAS(ctx context.Context, cas *caching.Cas, digest string) error {
-	if _, err := u.file.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("seek upload temp file: %w", err)
-	}
-	return cas.Write(ctx, digest, u.file)
-}
-
-func (u *pendingUpload) close() {
-	if u.file == nil {
+// cancel discards the staged writer. Safe to call from any goroutine; the
+// caller is responsible for serialising with concurrent Writes (the registry
+// achieves this by removing the session from its map before calling cancel).
+func (u *pendingUpload) cancel(ctx context.Context) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.writer == nil {
 		return
 	}
-	name := u.file.Name()
-	_ = u.file.Close()
-	_ = os.Remove(name)
-	u.file = nil
+	_ = u.writer.Cancel(ctx)
+	u.writer = nil
+	u.finished = true
 }
 
 // helpers --------------------------------------------------------------------

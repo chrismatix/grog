@@ -45,6 +45,9 @@ func (m *mockCacheBackend) Exists(ctx context.Context, path string, key string) 
 func (m *mockCacheBackend) Size(ctx context.Context, path string, key string) (int64, error) {
 	return 0, nil
 }
+func (m *mockCacheBackend) BeginWrite(ctx context.Context) (backends.StagedWriter, error) {
+	return nil, errors.New("BeginWrite not implemented in mock")
+}
 func (m *mockCacheBackend) ListKeys(ctx context.Context, path string, suffix string) ([]string, error) {
 	return nil, nil
 }

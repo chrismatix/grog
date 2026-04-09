@@ -6,13 +6,20 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 
 	"cloud.google.com/go/storage"
+	"github.com/google/uuid"
 	"google.golang.org/api/iterator"
 
 	"grog/internal/config"
 	"grog/internal/console"
 )
+
+// gcsStagingPath is the path used for in-flight uploads. Anything under this
+// prefix is staged data and must be invisible to Get/Exists/Size against any
+// cache key.
+const gcsStagingPath = ".uploads"
 
 // GCSCache implements the CacheBackend interface using Google Cloud Storage.
 type GCSCache struct {
@@ -133,6 +140,97 @@ func (gcs *GCSCache) Delete(ctx context.Context, path string, key string) error 
 		return fmt.Errorf("failed to delete object: %w", err)
 	}
 
+	return nil
+}
+
+// BeginWrite opens a streaming upload to a staging object under .uploads/<uuid>.
+// On Commit, the staging object is server-side copied to its final
+// content-addressed key via Object.CopierFrom and the staging object is
+// deleted. No bytes pass through grog twice.
+func (gcs *GCSCache) BeginWrite(ctx context.Context) (StagedWriter, error) {
+	stagingKey := gcs.buildPath(gcsStagingPath, uuid.NewString())
+	wc := gcs.client.Bucket(gcs.bucketName).Object(stagingKey).NewWriter(ctx)
+	return &gcsStagedWriter{
+		client:     gcs.client,
+		bucket:     gcs.bucketName,
+		stagingKey: stagingKey,
+		writer:     wc,
+		buildPath:  gcs.buildPath,
+		ctx:        ctx,
+	}, nil
+}
+
+// gcsStagedWriter is the StagedWriter implementation for GCS. The streaming
+// resumable upload is owned by *storage.Writer; Commit promotes the staging
+// object via a server-side rewrite using Object.CopierFrom.
+type gcsStagedWriter struct {
+	client     *storage.Client
+	bucket     string
+	stagingKey string
+	writer     *storage.Writer
+	buildPath  func(path, key string) string
+	// ctx is the context the upload was opened with — needed for the GCS
+	// SDK's Writer/Object operations which all take a context. Commit/Cancel
+	// receive their own ctx and use that for the copy/delete steps.
+	ctx context.Context
+
+	mu       sync.Mutex
+	finished bool
+}
+
+func (w *gcsStagedWriter) Write(p []byte) (int, error) {
+	return w.writer.Write(p)
+}
+
+func (w *gcsStagedWriter) Commit(ctx context.Context, path, key string) error {
+	w.mu.Lock()
+	if w.finished {
+		w.mu.Unlock()
+		return errors.New("gcs staged writer: commit after commit/cancel")
+	}
+	w.finished = true
+	w.mu.Unlock()
+
+	// Closing the writer flushes and finalizes the resumable upload.
+	if err := w.writer.Close(); err != nil {
+		_ = w.cleanupStaging(ctx)
+		return fmt.Errorf("close staging writer: %w", err)
+	}
+
+	finalKey := w.buildPath(path, key)
+	src := w.client.Bucket(w.bucket).Object(w.stagingKey)
+	dst := w.client.Bucket(w.bucket).Object(finalKey)
+	if _, err := dst.CopierFrom(src).Run(ctx); err != nil {
+		_ = w.cleanupStaging(ctx)
+		return fmt.Errorf("copy staging -> final: %w", err)
+	}
+
+	_ = w.cleanupStaging(ctx)
+	return nil
+}
+
+func (w *gcsStagedWriter) Cancel(ctx context.Context) error {
+	w.mu.Lock()
+	if w.finished {
+		w.mu.Unlock()
+		return nil
+	}
+	w.finished = true
+	w.mu.Unlock()
+
+	// Aborting the resumable upload — *storage.Writer doesn't expose a
+	// dedicated abort, but Close on a writer that hasn't been fully written
+	// to ends the upload session. Any partial object is deleted below.
+	_ = w.writer.Close()
+	return w.cleanupStaging(ctx)
+}
+
+func (w *gcsStagedWriter) cleanupStaging(ctx context.Context) error {
+	if err := w.client.Bucket(w.bucket).Object(w.stagingKey).Delete(ctx); err != nil {
+		// Not fatal — orphan staging objects can be cleaned up by a GCS
+		// lifecycle rule on the .uploads/ prefix.
+		return err
+	}
 	return nil
 }
 

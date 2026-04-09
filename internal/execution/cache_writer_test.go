@@ -3,6 +3,7 @@ package execution
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"sync"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"grog/internal/caching"
+	"grog/internal/caching/backends"
 	"grog/internal/console"
 	"grog/internal/output"
 	"grog/internal/output/handlers"
@@ -47,6 +49,10 @@ func (r *recordingCacheBackend) Exists(context.Context, string, string) (bool, e
 
 func (r *recordingCacheBackend) Size(context.Context, string, string) (int64, error) {
 	return 0, nil
+}
+
+func (r *recordingCacheBackend) BeginWrite(context.Context) (backends.StagedWriter, error) {
+	return nil, errors.New("BeginWrite not implemented in recordingCacheBackend")
 }
 
 func (r *recordingCacheBackend) ListKeys(context.Context, string, string) ([]string, error) {
