@@ -167,6 +167,54 @@ func TestProgressTrackerPrefersParentStatusWithMultipleChildren(t *testing.T) {
 	}
 }
 
+// TestProgressTrackerSetStatusOverridesSingleChildPreference is a regression
+// test for the docker push phase-summary visibility gap: when a push had
+// exactly one in-flight layer (the common case for sequential per-layer
+// uploads), the single child tracker's stored status was masking the
+// parent's SetStatus calls. After SetStatus is invoked on the parent,
+// statusForChildStatusLocked must return the parent status even with one
+// child. Trackers that never SetStatus keep the default single-child
+// inheritance (see TestProgressTrackerUsesChildStatusWhenOnlyChild).
+func TestProgressTrackerSetStatusOverridesSingleChildPreference(t *testing.T) {
+	t.Helper()
+
+	var mu sync.Mutex
+	var updates []StatusUpdate
+	tracker := NewProgressTracker("root", 0, func(update StatusUpdate) {
+		mu.Lock()
+		defer mu.Unlock()
+		updates = append(updates, update)
+	})
+
+	tracker.SetStatus("phase: preparing")
+
+	// One child exists: pre-fix, this child's status "child-a" would win.
+	child := tracker.SubTracker("child-a", 1024)
+	child.Add(1024)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if len(updates) == 0 {
+		t.Fatalf("expected updates")
+	}
+
+	// Collect the status text from every update. None of them should fall
+	// back to the child's status once SetStatus has been called on the
+	// parent.
+	for i, u := range updates {
+		if u.Status == "child-a" {
+			t.Fatalf("update %d unexpectedly used child status: %q", i, u.Status)
+		}
+	}
+
+	// And the most recent displayed status should be the SetStatus value.
+	last := updates[len(updates)-1]
+	if last.Status != "phase: preparing" {
+		t.Fatalf("last status = %q, want %q", last.Status, "phase: preparing")
+	}
+}
+
 func TestProgressTrackerUsesChildStatusWhenOnlyChild(t *testing.T) {
 	t.Helper()
 
