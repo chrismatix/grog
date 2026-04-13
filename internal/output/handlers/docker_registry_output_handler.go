@@ -319,10 +319,10 @@ func consumeDockerProgress(
 	layers := make(map[string]*dockerLayerProgress)
 
 	// layerStates tracks the most recent non-empty daemon status for each
-	// layer ID. lastPhaseStatus remembers what we last pushed to parent.SetStatus
-	// so we don't flood the UI with identical updates.
+	// layer ID. lastPhaseSummary remembers what we last pushed to
+	// parent.SetSubStatus so we don't flood the UI with identical updates.
 	layerStates := make(map[string]string)
-	lastPhaseStatus := status
+	lastPhaseSummary := ""
 
 	for {
 		var jsonMessage jsonmessage.JSONMessage
@@ -340,13 +340,14 @@ func consumeDockerProgress(
 		// Update the plan-level phase summary whenever a layer transitions to
 		// a new named state. This runs even for messages that have no
 		// Progress field, so "Preparing" and "Waiting" phases become visible.
+		// The summary is shown as a sub-status line below the main status.
 		if jsonMessage.ID != "" && jsonMessage.Status != "" {
 			if layerStates[jsonMessage.ID] != jsonMessage.Status {
 				layerStates[jsonMessage.ID] = jsonMessage.Status
-				summary := formatLayerPhaseSummary(status, layerStates)
-				if summary != lastPhaseStatus {
-					parent.SetStatus(summary)
-					lastPhaseStatus = summary
+				phaseSummary := formatPhaseSummary(layerStates)
+				if phaseSummary != lastPhaseSummary {
+					parent.SetSubStatus(phaseSummary)
+					lastPhaseSummary = phaseSummary
 				}
 			}
 		}
@@ -418,19 +419,19 @@ var layerPhaseLabels = []struct {
 	{"Already exists", "cached"},
 }
 
-// formatLayerPhaseSummary builds a human-readable summary of the phases a
-// docker push/pull is currently in, grouped by state so the UI shows one line
-// per state rather than one line per layer.
+// formatPhaseSummary builds a human-readable summary of the phases a
+// docker push/pull is currently in, grouped by state. Returns just the
+// parenthetical summary intended for rendering as a sub-status line.
 //
 // Example output with five layers:
 //
-//	"//foo:bar: caching docker image foo (3 pushing, 1 preparing, 1 cached)"
+//	"(3 pushing, 1 preparing, 1 cached)"
 //
 // States are grouped in a fixed order so the line stays readable as layers
 // transition. Unknown daemon states are appended in alphabetical order.
-func formatLayerPhaseSummary(base string, layerStates map[string]string) string {
+func formatPhaseSummary(layerStates map[string]string) string {
 	if len(layerStates) == 0 {
-		return base
+		return ""
 	}
 	counts := make(map[string]int)
 	for _, state := range layerStates {
@@ -460,7 +461,17 @@ func formatLayerPhaseSummary(base string, layerStates map[string]string) string 
 	}
 
 	if len(parts) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("(%s)", strings.Join(parts, ", "))
+}
+
+// formatLayerPhaseSummary builds a human-readable summary with the base status
+// prefix. Used for logging and non-UI contexts.
+func formatLayerPhaseSummary(base string, layerStates map[string]string) string {
+	summary := formatPhaseSummary(layerStates)
+	if summary == "" {
 		return base
 	}
-	return fmt.Sprintf("%s (%s)", base, strings.Join(parts, ", "))
+	return fmt.Sprintf("%s %s", base, summary)
 }

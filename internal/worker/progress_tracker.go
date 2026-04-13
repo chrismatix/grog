@@ -177,6 +177,26 @@ func (pt *ProgressTracker) SetStatus(status string) {
 	pt.send(displayStatus, current, total)
 }
 
+// SetSubStatus sets a secondary detail line on the task without changing the
+// main status text. This is useful for contextual information that would
+// otherwise crowd the primary status line (e.g., Docker layer phase summaries).
+func (pt *ProgressTracker) SetSubStatus(subStatus string) {
+	if pt == nil {
+		return
+	}
+
+	pt.mu.Lock()
+	current, total := pt.aggregateLocked()
+	status := pt.statusForChildStatusLocked(pt.status)
+	pt.mu.Unlock()
+
+	pt.update(StatusUpdate{
+		Status:    status,
+		SubStatus: subStatus,
+		Progress:  &console.Progress{Current: current, Total: total, StartedAtSec: pt.startedAtSec},
+	})
+}
+
 func (pt *ProgressTracker) onChildDelta(child *ProgressTracker, delta int64) {
 	if pt == nil || delta == 0 {
 		return
