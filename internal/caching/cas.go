@@ -50,6 +50,21 @@ func (c *Cas) WriteBytes(ctx context.Context, digest string, content []byte) err
 	return c.Write(ctx, digest, bytes.NewReader(content))
 }
 
+// StagedWriter is re-exported so callers don't have to import the backends
+// package just to type the streaming writer the dockerproxy registry uses.
+type StagedWriter = backends.StagedWriter
+
+// BeginWrite opens a streaming writer that can be Commit'ed to the CAS once
+// the caller has determined the digest of the bytes it pushed in. Used by
+// the dockerproxy registry to stream PATCH bodies straight into the backend
+// without buffering them through a temp file first.
+//
+// The caller MUST call Commit (with the verified digest) or Cancel on the
+// returned writer; deferring Cancel right after BeginWrite is the safe pattern.
+func (c *Cas) BeginWrite(ctx context.Context) (StagedWriter, error) {
+	return c.backend.BeginWrite(ctx)
+}
+
 // Load loads the content for a given digest
 func (c *Cas) Load(ctx context.Context, digest string) (io.ReadCloser, error) {
 	return c.backend.Get(ctx, "cas", digest)
@@ -63,6 +78,13 @@ func (c *Cas) LoadBytes(ctx context.Context, digest string) ([]byte, error) {
 	}
 	defer reader.Close()
 	return io.ReadAll(reader)
+}
+
+// Size returns the byte size of the CAS entry with the given digest. The
+// dockerproxy registry uses this to populate Content-Length headers on blob
+// HEAD/GET responses, which the Docker daemon insists on.
+func (c *Cas) Size(ctx context.Context, digest string) (int64, error) {
+	return c.backend.Size(ctx, "cas", digest)
 }
 
 func (c *Cas) Exists(ctx context.Context, digest string) (bool, error) {

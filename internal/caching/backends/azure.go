@@ -2,16 +2,26 @@ package backends
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
+	"github.com/google/uuid"
 
 	"grog/internal/config"
 	"grog/internal/console"
 )
+
+// azureStagingPath is the path used for in-flight uploads. Anything under
+// this prefix is staged data and must be invisible to Get/Exists/Size against
+// any cache key.
+const azureStagingPath = ".uploads"
 
 // AzureBlobClient defines the interface for Azure Blob Storage operations.
 // This interface allows for easy mocking in tests.
@@ -27,6 +37,15 @@ type AzureBlobClient interface {
 
 	// BlobExists checks if a blob exists in Azure Blob Storage.
 	BlobExists(ctx context.Context, container, blob string) (bool, error)
+
+	// BlobSize returns the size in bytes of a blob without downloading it.
+	BlobSize(ctx context.Context, container, blob string) (int64, error)
+
+	// CopyBlob performs a server-side copy from srcBlob to destBlob within
+	// the same container. Bytes do not transit the client. Used by AzureCache's
+	// staged-write commit step to promote a staging blob to its final
+	// content-addressed key without re-uploading the data.
+	CopyBlob(ctx context.Context, container, srcBlob, destBlob string) error
 }
 
 // AzureBlobAdapter adapts the Azure azblob client to the AzureBlobClient interface.
@@ -77,6 +96,70 @@ func (a *AzureBlobAdapter) BlobExists(ctx context.Context, container, blobName s
 	}
 
 	return true, nil
+}
+
+// BlobSize returns the size of a blob via a properties request (no body
+// download).
+func (a *AzureBlobAdapter) BlobSize(ctx context.Context, container, blobName string) (int64, error) {
+	blobClient := a.client.ServiceClient().NewContainerClient(container).NewBlobClient(blobName)
+	props, err := blobClient.GetProperties(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	if props.ContentLength == nil {
+		return 0, fmt.Errorf("azure get properties: missing content length for %s/%s", container, blobName)
+	}
+	return *props.ContentLength, nil
+}
+
+// CopyBlob performs a server-side copy by initiating a StartCopyFromURL and
+// polling until completion. The copy is asynchronous on the Azure side; for
+// objects within the same storage account it usually finishes near-instantly,
+// but we poll defensively to handle larger blobs.
+func (a *AzureBlobAdapter) CopyBlob(ctx context.Context, container, srcBlob, destBlob string) error {
+	containerClient := a.client.ServiceClient().NewContainerClient(container)
+	srcURL := containerClient.NewBlobClient(srcBlob).URL()
+	dstClient := containerClient.NewBlobClient(destBlob)
+
+	if _, err := dstClient.StartCopyFromURL(ctx, srcURL, nil); err != nil {
+		return fmt.Errorf("azure start copy %s -> %s: %w", srcBlob, destBlob, err)
+	}
+
+	// Poll until the destination blob's CopyStatus reports success. Azure
+	// transitions are typically near-instant within a single account, so a
+	// short poll interval is fine.
+	const (
+		pollInterval = 100 * time.Millisecond
+		pollTimeout  = 5 * time.Minute
+	)
+	deadline := time.Now().Add(pollTimeout)
+	for {
+		props, err := dstClient.GetProperties(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("azure poll copy status: %w", err)
+		}
+		if props.CopyStatus == nil {
+			return fmt.Errorf("azure copy %s -> %s: missing copy status", srcBlob, destBlob)
+		}
+		switch *props.CopyStatus {
+		case blob.CopyStatusTypeSuccess:
+			return nil
+		case blob.CopyStatusTypePending:
+			// fall through to sleep
+		case blob.CopyStatusTypeAborted, blob.CopyStatusTypeFailed:
+			return fmt.Errorf("azure copy %s -> %s: %s", srcBlob, destBlob, *props.CopyStatus)
+		default:
+			return fmt.Errorf("azure copy %s -> %s: unexpected status %q", srcBlob, destBlob, *props.CopyStatus)
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("azure copy %s -> %s: timed out after %s", srcBlob, destBlob, pollTimeout)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(pollInterval):
+		}
+	}
 }
 
 // isBlobNotFoundError checks whether an error from the Azure SDK indicates that a blob was not found.
@@ -230,6 +313,113 @@ func (a *AzureCache) Exists(ctx context.Context, path string, key string) (bool,
 	logger.Tracef("Checking existence of file in Azure for path: %s", blobPath)
 
 	return a.client.BlobExists(ctx, a.containerName, blobPath)
+}
+
+// BeginWrite opens a streaming upload to a staging blob under .uploads/<uuid>.
+// On Commit, the staging blob is server-side copied to its final
+// content-addressed name and the staging blob is deleted. Bytes never transit
+// grog twice.
+//
+// The Azure SDK's UploadStream call wants the full reader handed to it (no
+// per-write streaming Writer abstraction). We bridge this by spawning a
+// background goroutine that calls UploadStream against an io.Pipe; the
+// returned StagedWriter writes into the pipe.
+func (a *AzureCache) BeginWrite(ctx context.Context) (StagedWriter, error) {
+	stagingPath := a.buildPath(azureStagingPath, uuid.NewString())
+
+	pr, pw := io.Pipe()
+	sw := &azureStagedWriter{
+		client:      a.client,
+		container:   a.containerName,
+		stagingPath: stagingPath,
+		pipeWriter:  pw,
+		done:        make(chan error, 1),
+		buildPath:   a.buildPath,
+	}
+
+	go func() {
+		err := a.client.UploadBlob(ctx, a.containerName, stagingPath, pr)
+		_ = pr.CloseWithError(err)
+		sw.done <- err
+	}()
+
+	return sw, nil
+}
+
+// azureStagedWriter is the StagedWriter implementation for Azure Blob Storage.
+type azureStagedWriter struct {
+	client      AzureBlobClient
+	container   string
+	stagingPath string
+	pipeWriter  *io.PipeWriter
+	done        chan error
+	buildPath   func(path, key string) string
+
+	mu       sync.Mutex
+	finished bool
+}
+
+func (w *azureStagedWriter) Write(p []byte) (int, error) {
+	return w.pipeWriter.Write(p)
+}
+
+func (w *azureStagedWriter) Commit(ctx context.Context, path, key string) error {
+	w.mu.Lock()
+	if w.finished {
+		w.mu.Unlock()
+		return errors.New("azure staged writer: commit after commit/cancel")
+	}
+	w.finished = true
+	w.mu.Unlock()
+
+	if err := w.pipeWriter.Close(); err != nil {
+		_ = w.cleanupStaging(ctx)
+		return fmt.Errorf("close staging pipe: %w", err)
+	}
+	if err := <-w.done; err != nil {
+		_ = w.cleanupStaging(ctx)
+		return fmt.Errorf("upload to staging blob: %w", err)
+	}
+
+	finalPath := w.buildPath(path, key)
+	if err := w.client.CopyBlob(ctx, w.container, w.stagingPath, finalPath); err != nil {
+		_ = w.cleanupStaging(ctx)
+		return fmt.Errorf("copy staging -> final: %w", err)
+	}
+
+	_ = w.cleanupStaging(ctx)
+	return nil
+}
+
+func (w *azureStagedWriter) Cancel(ctx context.Context) error {
+	w.mu.Lock()
+	if w.finished {
+		w.mu.Unlock()
+		return nil
+	}
+	w.finished = true
+	w.mu.Unlock()
+
+	_ = w.pipeWriter.CloseWithError(errors.New("azure staged write cancelled"))
+	<-w.done
+	return w.cleanupStaging(ctx)
+}
+
+func (w *azureStagedWriter) cleanupStaging(ctx context.Context) error {
+	if err := w.client.DeleteBlob(ctx, w.container, w.stagingPath); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Size returns the byte size of a blob in Azure Blob Storage via a properties
+// request — no body is downloaded.
+func (a *AzureCache) Size(ctx context.Context, path, key string) (int64, error) {
+	logger := console.GetLogger(ctx)
+	blobPath := a.buildPath(path, key)
+	logger.Tracef("Sizing blob in Azure for path: %s", blobPath)
+
+	return a.client.BlobSize(ctx, a.containerName, blobPath)
 }
 
 // ListKeys uses Azure Blob Storage list blobs to list keys under the given path.

@@ -20,8 +20,9 @@ import (
 type StatusFunc func(StatusUpdate)
 
 type StatusUpdate struct {
-	Status   string
-	Progress *console.Progress
+	Status    string
+	SubStatus string
+	Progress  *console.Progress
 }
 
 func Status(status string) StatusUpdate {
@@ -30,6 +31,10 @@ func Status(status string) StatusUpdate {
 
 func StatusWithProgress(status string, progress *console.Progress) StatusUpdate {
 	return StatusUpdate{Status: status, Progress: progress}
+}
+
+func StatusWithSubStatus(status, subStatus string) StatusUpdate {
+	return StatusUpdate{Status: status, SubStatus: subStatus}
 }
 
 type TaskResult[T any] struct {
@@ -161,9 +166,10 @@ func (twp *TaskWorkerPool[T]) setTaskState(workerId int, status StatusUpdate, lv
 	key := workerId + twp.workerIdOffset
 	state, exists := twp.taskState[key]
 	if !exists {
-		twp.taskState[key] = console.TaskState{Status: status.Status, Progress: status.Progress, StartedAtSec: time.Now().Unix()}
+		twp.taskState[key] = console.TaskState{Status: status.Status, SubStatus: status.SubStatus, Progress: status.Progress, StartedAtSec: time.Now().Unix()}
 	} else {
 		state.Status = status.Status
+		state.SubStatus = status.SubStatus
 		state.Progress = status.Progress
 		twp.taskState[key] = state
 	}

@@ -61,6 +61,25 @@ func (m *mockAzureBlobClient) BlobExists(ctx context.Context, container, blob st
 	return ok, nil
 }
 
+func (m *mockAzureBlobClient) BlobSize(ctx context.Context, container, blob string) (int64, error) {
+	data, ok := m.objects[blob]
+	if !ok {
+		return 0, errors.New("blob not found")
+	}
+	return int64(len(data)), nil
+}
+
+func (m *mockAzureBlobClient) CopyBlob(ctx context.Context, container, srcBlob, destBlob string) error {
+	data, ok := m.objects[srcBlob]
+	if !ok {
+		return errors.New("source blob not found")
+	}
+	dup := make([]byte, len(data))
+	copy(dup, data)
+	m.objects[destBlob] = dup
+	return nil
+}
+
 func TestAzureCache_TypeName(t *testing.T) {
 	cache := &AzureCache{}
 	assert.Equal(t, "azure", cache.TypeName())

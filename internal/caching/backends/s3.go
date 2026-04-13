@@ -1,17 +1,19 @@
 package backends
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/google/uuid"
 
 	grogconfig "grog/internal/config"
 	"grog/internal/console"
@@ -31,17 +33,39 @@ type S3Client interface {
 
 	// ObjectExists checks if an object exists in S3.
 	ObjectExists(ctx context.Context, bucket, key string) (bool, error)
+
+	// ObjectSize returns the size in bytes of the object without downloading
+	// it. Implementations should use a HEAD-style call (e.g. S3 HeadObject).
+	ObjectSize(ctx context.Context, bucket, key string) (int64, error)
+
+	// CopyObject performs a server-side copy from srcKey to destKey within
+	// the same bucket. Bytes do not transit the client. Used by S3Cache's
+	// staged-write commit step to promote a staging object to its final
+	// content-addressed key without re-uploading the data.
+	CopyObject(ctx context.Context, bucket, srcKey, destKey string) error
 }
 
 // AWSS3Adapter adapts the AWS S3 client to the S3Client interface.
 type AWSS3Adapter struct {
-	client *s3.Client
+	client   *s3.Client
+	uploader *manager.Uploader
 }
 
 // NewAWSS3Adapter creates a new adapter for the AWS S3 client.
+// The adapter wraps the provided S3 client with a streaming multipart Uploader
+// so PutObject can stream arbitrarily large bodies without buffering them in memory.
 func NewAWSS3Adapter(client *s3.Client) *AWSS3Adapter {
+	uploader := manager.NewUploader(client, func(u *manager.Uploader) {
+		// 16 MiB parts; AWS minimum is 5 MiB. Larger parts mean fewer requests
+		// for big layers but a bigger floor on per-upload memory usage.
+		u.PartSize = 16 * 1024 * 1024
+		// Concurrency per upload — keep this modest because grog already runs
+		// many uploads in parallel at the target/output level.
+		u.Concurrency = 4
+	})
 	return &AWSS3Adapter{
-		client: client,
+		client:   client,
+		uploader: uploader,
 	}
 }
 
@@ -60,22 +84,19 @@ func (a *AWSS3Adapter) GetObject(ctx context.Context, bucket, key string) (io.Re
 	return result.Body, nil
 }
 
-// PutObject uploads an object to S3 using the AWS S3 client.
+// PutObject uploads an object to S3 by streaming the body through the
+// multipart Uploader. The body is consumed lazily — at most PartSize *
+// Concurrency bytes are buffered in memory at a time, regardless of total size.
 func (a *AWSS3Adapter) PutObject(ctx context.Context, bucket, key string, body io.Reader) error {
-	data, err := io.ReadAll(body)
+	_, err := a.uploader.Upload(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+		Body:   body,
+	})
 	if err != nil {
-		return fmt.Errorf("read body: %w", err)
+		return fmt.Errorf("s3 upload: %w", err)
 	}
-
-	input := &s3.PutObjectInput{
-		Bucket:        aws.String(bucket),
-		Key:           aws.String(key),
-		Body:          bytes.NewReader(data),
-		ContentLength: aws.Int64(int64(len(data))),
-	}
-
-	_, err = a.client.PutObject(ctx, input)
-	return err
+	return nil
 }
 
 // DeleteObject removes an object from S3 using the AWS S3 client.
@@ -87,6 +108,45 @@ func (a *AWSS3Adapter) DeleteObject(ctx context.Context, bucket, key string) err
 
 	_, err := a.client.DeleteObject(ctx, input)
 	return err
+}
+
+// CopyObject performs a server-side copy. Bytes never transit the client.
+//
+// Limitation: S3 single-call CopyObject is capped at 5 GiB. Docker layers
+// larger than that are rare in practice but not impossible — when one is
+// pushed through this backend the daemon will see a 4xx from the StagedWriter
+// commit step and surface it as a push failure with a clear "InvalidRequest"
+// error message from the AWS SDK. The fix is to fall back to multipart copy
+// (CreateMultipartUpload + UploadPartCopy + CompleteMultipartUpload) when the
+// source object exceeds the limit; tracked as a follow-up rather than added
+// here to keep this PR focused on the streaming refactor that landed the
+// staged-writer interface.
+func (a *AWSS3Adapter) CopyObject(ctx context.Context, bucket, srcKey, destKey string) error {
+	_, err := a.client.CopyObject(ctx, &s3.CopyObjectInput{
+		Bucket:     aws.String(bucket),
+		Key:        aws.String(destKey),
+		CopySource: aws.String(bucket + "/" + srcKey),
+	})
+	if err != nil {
+		return fmt.Errorf("s3 copy %s -> %s: %w", srcKey, destKey, err)
+	}
+	return nil
+}
+
+// ObjectSize returns the size of an object in S3 via a HeadObject call —
+// no body is downloaded.
+func (a *AWSS3Adapter) ObjectSize(ctx context.Context, bucket, key string) (int64, error) {
+	out, err := a.client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return 0, err
+	}
+	if out.ContentLength == nil {
+		return 0, fmt.Errorf("s3 head: missing content length for %s/%s", bucket, key)
+	}
+	return *out.ContentLength, nil
 }
 
 // ObjectExists checks if an object exists in S3 using the AWS S3 client.
@@ -231,6 +291,127 @@ func (s *S3Cache) Delete(ctx context.Context, path string, key string) error {
 	logger.Tracef("Deleting file from s3 for path: %s", s3Path)
 
 	return s.client.DeleteObject(ctx, s.bucketName, s3Path)
+}
+
+// s3StagingPath is the path component used for staged uploads under the
+// configured workspace prefix. Anything under this prefix is in-flight and
+// must be invisible to Get/Exists/Size against any cache key.
+const s3StagingPath = ".uploads"
+
+// BeginWrite opens a streaming upload to a staging key under .uploads/<uuid>.
+// On Commit, the staging object is server-side copied to its final
+// content-addressed key and the staging object is deleted. No bytes pass
+// through grog twice.
+func (s *S3Cache) BeginWrite(ctx context.Context) (StagedWriter, error) {
+	stagingKey := s.buildPath(s3StagingPath, uuid.NewString())
+
+	pr, pw := io.Pipe()
+	sw := &s3StagedWriter{
+		client:     s.client,
+		bucket:     s.bucketName,
+		stagingKey: stagingKey,
+		pipeWriter: pw,
+		done:       make(chan error, 1),
+		buildPath:  s.buildPath,
+	}
+
+	go func() {
+		// PutObject streams from the pipe via s3manager.Uploader. The Upload
+		// call only returns once the pipe sees EOF (success) or an error.
+		err := s.client.PutObject(ctx, s.bucketName, stagingKey, pr)
+		_ = pr.CloseWithError(err) // unblock any pending writers if upload errored mid-stream
+		sw.done <- err
+	}()
+
+	return sw, nil
+}
+
+// s3StagedWriter is the StagedWriter implementation for S3. Writes go through
+// an io.Pipe into a background s3manager.Uploader; Commit is a server-side
+// CopyObject from the staging key to the final cache key.
+type s3StagedWriter struct {
+	client     S3Client
+	bucket     string
+	stagingKey string
+	pipeWriter *io.PipeWriter
+	done       chan error
+	buildPath  func(path, key string) string
+
+	mu       sync.Mutex
+	finished bool
+}
+
+func (w *s3StagedWriter) Write(p []byte) (int, error) {
+	return w.pipeWriter.Write(p)
+}
+
+func (w *s3StagedWriter) Commit(ctx context.Context, path, key string) error {
+	w.mu.Lock()
+	if w.finished {
+		w.mu.Unlock()
+		return errors.New("s3 staged writer: commit after commit/cancel")
+	}
+	w.finished = true
+	w.mu.Unlock()
+
+	// Closing the pipe writer with EOF lets the background upload finish
+	// successfully. Wait for the upload to drain before issuing the copy.
+	if err := w.pipeWriter.Close(); err != nil {
+		_ = w.cleanupStaging(ctx)
+		return fmt.Errorf("close staging pipe: %w", err)
+	}
+	if err := <-w.done; err != nil {
+		_ = w.cleanupStaging(ctx)
+		return fmt.Errorf("upload to staging key: %w", err)
+	}
+
+	finalKey := w.buildPath(path, key)
+	if err := w.client.CopyObject(ctx, w.bucket, w.stagingKey, finalKey); err != nil {
+		_ = w.cleanupStaging(ctx)
+		return fmt.Errorf("copy staging -> final: %w", err)
+	}
+
+	// Best-effort cleanup of the staging object — the final object exists
+	// regardless of whether this delete succeeds.
+	_ = w.cleanupStaging(ctx)
+	return nil
+}
+
+func (w *s3StagedWriter) Cancel(ctx context.Context) error {
+	w.mu.Lock()
+	if w.finished {
+		w.mu.Unlock()
+		return nil
+	}
+	w.finished = true
+	w.mu.Unlock()
+
+	// Close the pipe with an error so the upload goroutine sees a failed
+	// read, the s3manager.Uploader aborts the multipart upload internally,
+	// and we can drain the done channel without deadlocking.
+	_ = w.pipeWriter.CloseWithError(errors.New("s3 staged write cancelled"))
+	<-w.done
+
+	return w.cleanupStaging(ctx)
+}
+
+func (w *s3StagedWriter) cleanupStaging(ctx context.Context) error {
+	if err := w.client.DeleteObject(ctx, w.bucket, w.stagingKey); err != nil {
+		// Not fatal — orphan staging objects can be cleaned up by an S3
+		// lifecycle rule on the .uploads/ prefix. We log via the caller.
+		return err
+	}
+	return nil
+}
+
+// Size returns the byte size of an object in S3 via the underlying client's
+// HeadObject-equivalent call. No body is downloaded.
+func (s *S3Cache) Size(ctx context.Context, path, key string) (int64, error) {
+	logger := console.GetLogger(ctx)
+	s3Path := s.buildPath(path, key)
+	logger.Tracef("Sizing object in s3 for path: %s", s3Path)
+
+	return s.client.ObjectSize(ctx, s.bucketName, s3Path)
 }
 
 // Exists checks if a file exists in S3.

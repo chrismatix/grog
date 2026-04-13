@@ -62,6 +62,27 @@ func (m *mockS3Client) ObjectExists(ctx context.Context, bucket, key string) (bo
 	return ok, nil
 }
 
+func (m *mockS3Client) ObjectSize(ctx context.Context, bucket, key string) (int64, error) {
+	data, ok := m.objects[key]
+	if !ok {
+		return 0, errors.New("object not found")
+	}
+	return int64(len(data)), nil
+}
+
+func (m *mockS3Client) CopyObject(ctx context.Context, bucket, srcKey, destKey string) error {
+	data, ok := m.objects[srcKey]
+	if !ok {
+		return errors.New("source object not found")
+	}
+	// S3 server-side copy materialises a fresh object at destKey containing
+	// the same bytes; the source object remains in place.
+	dup := make([]byte, len(data))
+	copy(dup, data)
+	m.objects[destKey] = dup
+	return nil
+}
+
 func TestS3Cache_TypeName(t *testing.T) {
 	cache := &S3Cache{}
 	assert.Equal(t, "s3", cache.TypeName())

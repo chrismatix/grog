@@ -2,6 +2,7 @@ package backends
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -164,5 +165,173 @@ func TestFileSystemCacheSetForCasDoesNotDoubleNestCasDirectory(t *testing.T) {
 	}
 	if string(readContent) != content {
 		t.Fatalf("unexpected Get content: got %q, want %q", string(readContent), content)
+	}
+}
+
+// TestFileSystemCache_BeginWriteCommit verifies that bytes streamed through a
+// staged writer end up at the final cache key after Commit and that the
+// staging directory is left empty (the staging file was renamed, not copied).
+func TestFileSystemCache_BeginWriteCommit(t *testing.T) {
+	ctx := context.Background()
+	sharedCasDir := t.TempDir()
+	cache := &FileSystemCache{
+		workspaceCacheDir: t.TempDir(),
+		sharedCasDir:      sharedCasDir,
+	}
+
+	sw, err := cache.BeginWrite(ctx)
+	if err != nil {
+		t.Fatalf("BeginWrite failed: %v", err)
+	}
+
+	payload := []byte("staged write content")
+	if _, err := sw.Write(payload); err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+	if err := sw.Commit(ctx, "cas", "sha256:cafef00d"); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	// Read it back via the normal CAS path.
+	reader, err := cache.Get(ctx, "cas", "sha256:cafef00d")
+	if err != nil {
+		t.Fatalf("Get after commit failed: %v", err)
+	}
+	defer reader.Close()
+	got, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("read after commit: %v", err)
+	}
+	if string(got) != string(payload) {
+		t.Fatalf("commit content mismatch: got %q want %q", got, payload)
+	}
+
+	// The staging directory must be empty — the file was renamed, not copied.
+	stagingEntries, err := os.ReadDir(filepath.Join(sharedCasDir, fsStagingDirName))
+	if err != nil {
+		t.Fatalf("read staging dir: %v", err)
+	}
+	if len(stagingEntries) != 0 {
+		t.Fatalf("expected staging dir to be empty after commit, got %d entries", len(stagingEntries))
+	}
+}
+
+// TestFileSystemCache_BeginWriteCancel verifies that Cancel removes the
+// staged file and never makes it visible at any cache key.
+func TestFileSystemCache_BeginWriteCancel(t *testing.T) {
+	ctx := context.Background()
+	sharedCasDir := t.TempDir()
+	cache := &FileSystemCache{
+		workspaceCacheDir: t.TempDir(),
+		sharedCasDir:      sharedCasDir,
+	}
+
+	sw, err := cache.BeginWrite(ctx)
+	if err != nil {
+		t.Fatalf("BeginWrite failed: %v", err)
+	}
+	if _, err := sw.Write([]byte("partial garbage")); err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+	if err := sw.Cancel(ctx); err != nil {
+		t.Fatalf("Cancel failed: %v", err)
+	}
+
+	// Cancel must be idempotent.
+	if err := sw.Cancel(ctx); err != nil {
+		t.Fatalf("second Cancel returned error: %v", err)
+	}
+
+	// The staging dir should be empty.
+	stagingEntries, err := os.ReadDir(filepath.Join(sharedCasDir, fsStagingDirName))
+	if err != nil {
+		t.Fatalf("read staging dir: %v", err)
+	}
+	if len(stagingEntries) != 0 {
+		t.Fatalf("expected staging dir to be empty after cancel, got %d entries", len(stagingEntries))
+	}
+
+	// Writes after Cancel must be rejected.
+	if _, err := sw.Write([]byte("after cancel")); err == nil {
+		t.Fatalf("expected Write after Cancel to fail")
+	}
+}
+
+// TestFileSystemCache_BeginWriteListKeysFiltersStaging verifies that
+// in-flight uploads under .staging/ never leak into ListKeys output. Stale
+// staging files (e.g. from a crashed previous run) must look invisible to
+// cache enumeration.
+func TestFileSystemCache_BeginWriteListKeysFiltersStaging(t *testing.T) {
+	ctx := context.Background()
+	sharedCasDir := t.TempDir()
+	cache := &FileSystemCache{
+		workspaceCacheDir: t.TempDir(),
+		sharedCasDir:      sharedCasDir,
+	}
+
+	// Drop a real cache entry alongside a leaked staging file.
+	if err := cache.Set(ctx, "cas", "sha256:committed", strings.NewReader("ok")); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(sharedCasDir, fsStagingDirName), 0755); err != nil {
+		t.Fatalf("mkdir staging: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sharedCasDir, fsStagingDirName, "leaked-upload"), []byte("dangling"), 0644); err != nil {
+		t.Fatalf("write leaked staging file: %v", err)
+	}
+
+	keys, err := cache.ListKeys(ctx, "cas", "")
+	if err != nil {
+		t.Fatalf("ListKeys: %v", err)
+	}
+
+	for _, k := range keys {
+		if strings.Contains(k, fsStagingDirName) {
+			t.Fatalf("ListKeys leaked staging entry: %q", k)
+		}
+	}
+
+	// Sanity check: the committed entry is still discoverable.
+	var found bool
+	for _, k := range keys {
+		if k == "sha256:committed" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("ListKeys missing committed entry; got %v", keys)
+	}
+}
+
+// TestFileSystemCache_BeginWriteCommitErrorOnDoubleCommit guards against
+// callers trying to reuse a staged writer after Commit/Cancel.
+func TestFileSystemCache_BeginWriteCommitErrorOnDoubleCommit(t *testing.T) {
+	ctx := context.Background()
+	cache := &FileSystemCache{
+		workspaceCacheDir: t.TempDir(),
+		sharedCasDir:      t.TempDir(),
+	}
+
+	sw, err := cache.BeginWrite(ctx)
+	if err != nil {
+		t.Fatalf("BeginWrite: %v", err)
+	}
+	if _, err := sw.Write([]byte("data")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if err := sw.Commit(ctx, "cas", "sha256:abc"); err != nil {
+		t.Fatalf("first Commit: %v", err)
+	}
+	if err := sw.Commit(ctx, "cas", "sha256:def"); err == nil {
+		t.Fatalf("expected second Commit to fail")
+	}
+	// Cancel after Commit should be a no-op (no error).
+	if err := sw.Cancel(ctx); err != nil {
+		t.Fatalf("Cancel after Commit: %v", err)
+	}
+	// And Write should fail.
+	if _, err := sw.Write([]byte("more")); err == nil || !errors.Is(err, err) {
+		t.Fatalf("expected Write after Commit to fail; got %v", err)
 	}
 }
