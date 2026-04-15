@@ -48,7 +48,6 @@ It executes target graphs in parallel, hashes inputs for incremental builds, and
 
 ### Querying and CI
 - https://grog.build/topics/querying/ - label syntax, selection patterns, tag filters, and CI usage patterns.
-- https://grog.build/recipes/github-actions/ - CI integration examples.
 
 ### Full Reference
 - https://grog.build/reference/configuration/

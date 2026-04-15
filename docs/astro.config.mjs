@@ -45,11 +45,6 @@ export default defineConfig({
           label: "Reference",
           collapsed: false,
           autogenerate: { directory: "reference", collapsed: true }
-        },
-        {
-          label: "Recipes",
-          collapsed: true,
-          autogenerate: { directory: "recipes" }
         }
       ],
       expressiveCode: {
