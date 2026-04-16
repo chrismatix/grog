@@ -265,10 +265,6 @@ func (d *dockerImageWritePlan) Execute(ctx context.Context, tracker *worker.Prog
 	// several minutes, and the user should see *something* during that wait.
 	tracker.SetStatus(baseStatus)
 
-	// Defensive: drop any stale value left over from a previous push under
-	// the same name (shouldn't happen, but cheap insurance).
-	d.proxy.ResetManifest(d.repoName)
-
 	logger.Debugf("pushing Docker image %s to loopback registry", d.loopbackRef)
 	pushReader, err := d.dockerClient.ImagePush(ctx, d.loopbackRef, image.PushOptions{
 		RegistryAuth: emptyRegistryAuth,

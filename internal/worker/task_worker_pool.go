@@ -33,10 +33,6 @@ func StatusWithProgress(status string, progress *console.Progress) StatusUpdate 
 	return StatusUpdate{Status: status, Progress: progress}
 }
 
-func StatusWithSubStatus(status, subStatus string) StatusUpdate {
-	return StatusUpdate{Status: status, SubStatus: subStatus}
-}
-
 type TaskResult[T any] struct {
 	Return T
 	Error  error

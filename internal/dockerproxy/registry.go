@@ -547,15 +547,6 @@ func (r *Registry) LastManifestDigest(name string) string {
 	return r.manifestsByName[name]
 }
 
-// ResetManifest forgets any recorded manifest digest for the given name.
-// Call before initiating a push so a stale value cannot be observed if
-// the new push fails before the manifest stage.
-func (r *Registry) ResetManifest(name string) {
-	r.manifestsMu.Lock()
-	defer r.manifestsMu.Unlock()
-	delete(r.manifestsByName, name)
-}
-
 // upload session management ---------------------------------------------------
 
 // openUpload starts a new chunked upload session by opening a CAS staged

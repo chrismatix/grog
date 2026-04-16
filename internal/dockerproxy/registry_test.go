@@ -308,10 +308,6 @@ func TestPutManifestStoresByContentDigest(t *testing.T) {
 
 	// LastManifestDigest must reflect the digest just pushed.
 	assert.Equal(t, expectedDigest, reg.LastManifestDigest("grog/myrepo"))
-
-	// ResetManifest clears the slot for that name.
-	reg.ResetManifest("grog/myrepo")
-	assert.Equal(t, "", reg.LastManifestDigest("grog/myrepo"))
 }
 
 func TestGetManifestByDigest(t *testing.T) {

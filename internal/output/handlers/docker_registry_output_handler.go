@@ -465,13 +465,3 @@ func formatPhaseSummary(layerStates map[string]string) string {
 	}
 	return fmt.Sprintf("(%s)", strings.Join(parts, ", "))
 }
-
-// formatLayerPhaseSummary builds a human-readable summary with the base status
-// prefix. Used for logging and non-UI contexts.
-func formatLayerPhaseSummary(base string, layerStates map[string]string) string {
-	summary := formatPhaseSummary(layerStates)
-	if summary == "" {
-		return base
-	}
-	return fmt.Sprintf("%s %s", base, summary)
-}
