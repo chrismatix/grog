@@ -1,2 +1,2 @@
 [docker]
-backend = "tarball"
+backend = "fs"
