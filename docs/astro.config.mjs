@@ -17,7 +17,7 @@ export default defineConfig({
       plugins: [starlightThemeRapide()],
       social: [
         { icon: "github", label: "GitHub", href: "https://github.com/chrismatix/grog" },
-        { icon: "slack", label: "Slack", href: "https://grog-build.slack.com" },
+        { icon: "slack", label: "Slack", href: "https://join.slack.com/t/grog-build/shared_invite/zt-3vipu1c5w-9ouz0nDV0YNKYIqskMgv5Q" },
       ],
       sidebar: [
         {

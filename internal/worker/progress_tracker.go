@@ -14,8 +14,17 @@ import (
 // same logical unit of work. Progress can be subdivided into child trackers
 // when multiple operations contribute to the same overall status.
 type ProgressTracker struct {
-	status string
-	update StatusFunc
+	status    string
+	subStatus string
+	update    StatusFunc
+
+	// statusSet is flipped to true the first time a caller explicitly calls
+	// SetStatus on this tracker. Once set, statusForChildStatusLocked always
+	// returns pt.status — even when there is exactly one child — so phase
+	// summaries and other caller-provided labels aren't masked by a single
+	// child inheriting the base status. Before any SetStatus call, the
+	// default "single child inherits" behaviour is preserved (and tested).
+	statusSet bool
 
 	mu       sync.Mutex
 	total    int64
@@ -103,6 +112,7 @@ func (pt *ProgressTracker) Add(delta int64) {
 	pt.step = computeStep(total)
 	send := parent == nil && pt.shouldSendLocked(current, total)
 	status := pt.status
+	subStatus := pt.subStatus
 
 	if parent != nil {
 		pt.mu.Unlock()
@@ -111,7 +121,7 @@ func (pt *ProgressTracker) Add(delta int64) {
 	}
 
 	if send {
-		pt.send(status, current, total)
+		pt.send(status, subStatus, current, total)
 	}
 	pt.mu.Unlock()
 }
@@ -145,6 +155,70 @@ func (pt *ProgressTracker) Complete() {
 	pt.Add(remaining)
 }
 
+// SetStatus updates the tracker's status text and pushes a refresh to the UI,
+// even if no bytes of progress have been recorded. This is useful when a long
+// operation has distinct phases (preparing, streaming, flushing, finalizing)
+// and the caller wants the user to see phase transitions without needing a
+// progress bar.
+//
+// Calling SetStatus also flips the tracker into "explicit status" mode: from
+// now on, statusForChildStatusLocked will always return pt.status — even when
+// a single child exists. This matters for docker pushes where the daemon's
+// progress stream creates per-layer sub-trackers with the same base status as
+// the parent; without this override the parent's phase-summary updates would
+// be masked by the single in-flight child. Callers that do not call SetStatus
+// keep the default behaviour (single child inherits the parent's display).
+//
+// Status changes on a child tracker do not propagate; callers updating a
+// plan's top-level status should target the tracker they own.
+//
+// An update is emitted only when the *displayed* text actually changes, so
+// re-calling SetStatus with the same string is cheap and won't flood the UI.
+func (pt *ProgressTracker) SetStatus(status string) {
+	if pt == nil {
+		return
+	}
+
+	pt.mu.Lock()
+	prevDisplayed := pt.statusForChildStatusLocked(pt.status)
+	pt.status = status
+	pt.statusSet = true
+	newDisplayed := pt.statusForChildStatusLocked(status)
+	current, total := pt.aggregateLocked()
+	subStatus := pt.subStatus
+	pt.mu.Unlock()
+
+	if prevDisplayed == newDisplayed {
+		return
+	}
+	pt.send(newDisplayed, subStatus, current, total)
+}
+
+// SetSubStatus sets a secondary detail line on the task without changing the
+// main status text. This is useful for contextual information that would
+// otherwise crowd the primary status line (e.g., Docker layer phase summaries).
+func (pt *ProgressTracker) SetSubStatus(subStatus string) {
+	if pt == nil {
+		return
+	}
+
+	pt.mu.Lock()
+	if pt.subStatus == subStatus {
+		pt.mu.Unlock()
+		return
+	}
+	pt.subStatus = subStatus
+	current, total := pt.aggregateLocked()
+	status := pt.statusForChildStatusLocked(pt.status)
+	pt.mu.Unlock()
+
+	pt.update(StatusUpdate{
+		Status:    status,
+		SubStatus: subStatus,
+		Progress:  &console.Progress{Current: current, Total: total, StartedAtSec: pt.startedAtSec},
+	})
+}
+
 func (pt *ProgressTracker) onChildDelta(child *ProgressTracker, delta int64) {
 	if pt == nil || delta == 0 {
 		return
@@ -166,9 +240,10 @@ func (pt *ProgressTracker) onChildDelta(child *ProgressTracker, delta int64) {
 	pt.step = computeStep(total)
 	send := pt.shouldSendLocked(current, total)
 	status := pt.statusForChildStatusLocked(child.status)
+	subStatus := pt.subStatus
 
 	if send {
-		pt.send(status, current, total)
+		pt.send(status, subStatus, current, total)
 	}
 	pt.mu.Unlock()
 }
@@ -205,8 +280,12 @@ func (pt *ProgressTracker) shouldSendLocked(current, total int64) bool {
 	return false
 }
 
-func (pt *ProgressTracker) send(status string, current, total int64) {
-	pt.update(StatusWithProgress(status, &console.Progress{Current: current, Total: total, StartedAtSec: pt.startedAtSec}))
+func (pt *ProgressTracker) send(status, subStatus string, current, total int64) {
+	pt.update(StatusUpdate{
+		Status:    status,
+		SubStatus: subStatus,
+		Progress:  &console.Progress{Current: current, Total: total, StartedAtSec: pt.startedAtSec},
+	})
 }
 
 func computeStep(total int64) int64 {
@@ -218,16 +297,22 @@ func computeStep(total int64) int64 {
 func (pt *ProgressTracker) maybeSend(status string, current, total int64) {
 	pt.mu.Lock()
 	shouldSend := pt.shouldSendLocked(current, total)
+	subStatus := pt.subStatus
 	pt.mu.Unlock()
 	if shouldSend {
-		pt.send(status, current, total)
+		pt.send(status, subStatus, current, total)
 	}
 }
 
 // statusForChildStatusLocked picks the status string to display for aggregated
 // progress updates. Child status lines are shown only when the tracker has a
-// single child so the parent message stays visible when multiple subtasks run.
+// single child and the tracker's own status has not been explicitly set — the
+// latter case lets callers like consumeDockerProgress push phase summaries
+// onto the parent without being silently overridden by a single child.
 func (pt *ProgressTracker) statusForChildStatusLocked(childStatus string) string {
+	if pt.statusSet {
+		return pt.status
+	}
 	if len(pt.children) == 1 {
 		return childStatus
 	}

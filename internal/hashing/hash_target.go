@@ -45,7 +45,7 @@ func hashTargetDefinition(target model.Target, dependencyHashes []string) (strin
 	}
 
 	// Include the docker backend in the hash for targets with docker outputs
-	// so that cache results from different backends (tarball vs registry) can co-exist
+	// so that cache results from different backends (fs vs registry) can co-exist
 	if hasDockerOutput(target) {
 		_, err = hasher.WriteString(config.Global.Docker.Backend)
 	}

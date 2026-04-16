@@ -39,8 +39,8 @@ func TestHashTargetDefinition_DockerBackendAffectsHashForDockerTargets(t *testin
 		Outputs: []model.Output{model.NewOutput("docker", "my-image")},
 	}
 
-	config.Global.Docker.Backend = config.DockerBackendFSTarball
-	hashTarball, err := hashTargetDefinition(dockerTarget, nil)
+	config.Global.Docker.Backend = config.DockerBackendFS
+	hashFS, err := hashTargetDefinition(dockerTarget, nil)
 	if err != nil {
 		t.Fatalf("hashTargetDefinition returned error: %v", err)
 	}
@@ -51,8 +51,8 @@ func TestHashTargetDefinition_DockerBackendAffectsHashForDockerTargets(t *testin
 		t.Fatalf("hashTargetDefinition returned error: %v", err)
 	}
 
-	if hashTarball == hashRegistry {
-		t.Fatalf("expected different hashes for different docker backends, got: %s", hashTarball)
+	if hashFS == hashRegistry {
+		t.Fatalf("expected different hashes for different docker backends, got: %s", hashFS)
 	}
 }
 
@@ -63,8 +63,8 @@ func TestHashTargetDefinition_DockerBackendDoesNotAffectNonDockerTargets(t *test
 		Outputs: []model.Output{model.NewOutput("file", "output.txt")},
 	}
 
-	config.Global.Docker.Backend = config.DockerBackendFSTarball
-	hashTarball, err := hashTargetDefinition(target, nil)
+	config.Global.Docker.Backend = config.DockerBackendFS
+	hashFS, err := hashTargetDefinition(target, nil)
 	if err != nil {
 		t.Fatalf("hashTargetDefinition returned error: %v", err)
 	}
@@ -75,8 +75,8 @@ func TestHashTargetDefinition_DockerBackendDoesNotAffectNonDockerTargets(t *test
 		t.Fatalf("hashTargetDefinition returned error: %v", err)
 	}
 
-	if hashTarball != hashRegistry {
-		t.Fatalf("expected same hash for non-docker target regardless of docker backend, got: %s vs %s", hashTarball, hashRegistry)
+	if hashFS != hashRegistry {
+		t.Fatalf("expected same hash for non-docker target regardless of docker backend, got: %s vs %s", hashFS, hashRegistry)
 	}
 }
 

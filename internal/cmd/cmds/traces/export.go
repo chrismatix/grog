@@ -1,6 +1,7 @@
 package traces
 
 import (
+	"io"
 	"os"
 	"time"
 
@@ -42,22 +43,12 @@ var exportCmd = &cobra.Command{
 			logger.Fatalf("failed to list traces: %v", err)
 		}
 
-		var traces []*tracing.BuildTrace
-		for _, entry := range entries {
-			trace, loadErr := store.FindAndLoad(ctx, entry.TraceID)
-			if loadErr != nil {
-				logger.Warnf("skipping trace %s: %v", entry.TraceID, loadErr)
-				continue
-			}
-			traces = append(traces, trace)
-		}
-
-		if len(traces) == 0 {
+		if len(entries) == 0 {
 			logger.Info("No traces to export.")
 			return
 		}
 
-		w := os.Stdout
+		var w io.Writer = os.Stdout
 		if exportOutput != "" {
 			f, openErr := os.Create(exportOutput)
 			if openErr != nil {
@@ -69,11 +60,11 @@ var exportCmd = &cobra.Command{
 
 		switch exportFormat {
 		case "jsonl":
-			if err := tracing.ExportJSONL(traces, w); err != nil {
+			if err := tracing.ExportJSONL(ctx, store, entries, w); err != nil {
 				logger.Fatalf("export failed: %v", err)
 			}
 		case "otel":
-			if err := tracing.ExportOTLP(traces, w); err != nil {
+			if err := tracing.ExportOTLP(ctx, store, entries, w); err != nil {
 				logger.Fatalf("export failed: %v", err)
 			}
 		default:

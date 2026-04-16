@@ -1,6 +1,8 @@
 package tracing
 
 import (
+	"bufio"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -9,53 +11,117 @@ import (
 	"time"
 )
 
-// ExportJSONL writes each BuildTrace as a single JSON line.
-func ExportJSONL(traces []*BuildTrace, w io.Writer) error {
-	encoder := json.NewEncoder(w)
-	for _, trace := range traces {
-		// Flatten into a single JSON object with build fields + spans array
-		obj := map[string]any{
-			"trace_id":                  trace.Build.TraceID,
-			"workspace":                 trace.Build.Workspace,
-			"git_commit":                trace.Build.GitCommit,
-			"git_branch":                trace.Build.GitBranch,
-			"grog_version":              trace.Build.GrogVersion,
-			"platform":                  trace.Build.Platform,
-			"command":                   trace.Build.Command,
-			"start_time_unix_millis":    trace.Build.StartTimeUnixMillis,
-			"total_duration_millis":     trace.Build.TotalDurationMillis,
-			"total_targets":             trace.Build.TotalTargets,
-			"success_count":             trace.Build.SuccessCount,
-			"failure_count":             trace.Build.FailureCount,
-			"cache_hit_count":           trace.Build.CacheHitCount,
-			"critical_path_exec_millis": trace.Build.CriticalPathExecMillis,
-			"critical_path_cache_millis": trace.Build.CriticalPathCacheMillis,
-			"async_cache_wait_millis":   trace.Build.AsyncCacheWaitMillis,
-			"is_ci":                     trace.Build.IsCI,
-			"requested_patterns":        trace.Build.RequestedPatterns,
-			"spans":                     trace.Spans,
+// SpanLoader loads spans for a batch of traces in one query.
+// Satisfied by *TraceStore.
+type SpanLoader interface {
+	LoadSpansForTraces(ctx context.Context, traceIDs []string) (map[string][]SpanRow, error)
+}
+
+// exportChunkSize bounds how many traces' spans are held in memory at once.
+const exportChunkSize = 200
+
+func buildJSONLObj(b BuildRow, spans []SpanRow) map[string]any {
+	return map[string]any{
+		"trace_id":                   b.TraceID,
+		"workspace":                  b.Workspace,
+		"git_commit":                 b.GitCommit,
+		"git_branch":                 b.GitBranch,
+		"grog_version":               b.GrogVersion,
+		"platform":                   b.Platform,
+		"command":                    b.Command,
+		"start_time_unix_millis":     b.StartTimeUnixMillis,
+		"total_duration_millis":      b.TotalDurationMillis,
+		"total_targets":              b.TotalTargets,
+		"success_count":              b.SuccessCount,
+		"failure_count":              b.FailureCount,
+		"cache_hit_count":            b.CacheHitCount,
+		"critical_path_exec_millis":  b.CriticalPathExecMillis,
+		"critical_path_cache_millis": b.CriticalPathCacheMillis,
+		"async_cache_wait_millis":    b.AsyncCacheWaitMillis,
+		"is_ci":                      b.IsCI,
+		"requested_patterns":         b.RequestedPatterns,
+		"spans":                      spans,
+	}
+}
+
+// ExportJSONL streams traces as newline-delimited JSON, loading spans in
+// chunks so memory stays bounded regardless of how many builds are exported.
+func ExportJSONL(ctx context.Context, loader SpanLoader, builds []BuildRow, w io.Writer) error {
+	bw := bufio.NewWriter(w)
+	defer bw.Flush()
+	encoder := json.NewEncoder(bw)
+
+	return forEachChunk(ctx, loader, builds, func(b BuildRow, spans []SpanRow) error {
+		if err := encoder.Encode(buildJSONLObj(b, spans)); err != nil {
+			return fmt.Errorf("encode trace %s: %w", b.TraceID, err)
 		}
-		if err := encoder.Encode(obj); err != nil {
-			return fmt.Errorf("encode trace %s: %w", trace.Build.TraceID, err)
+		return nil
+	})
+}
+
+// ExportOTLP streams traces as an OTLP JSON document. The top-level object
+// must be emitted as a single value, so spans are still loaded chunk-by-chunk
+// but each resourceSpans entry is written to the buffered writer as it is
+// produced to avoid holding every OTLP span in memory.
+func ExportOTLP(ctx context.Context, loader SpanLoader, builds []BuildRow, w io.Writer) error {
+	bw := bufio.NewWriter(w)
+	defer bw.Flush()
+
+	if _, err := bw.WriteString("{\n  \"resourceSpans\": ["); err != nil {
+		return err
+	}
+
+	first := true
+	err := forEachChunk(ctx, loader, builds, func(b BuildRow, spans []SpanRow) error {
+		rs := buildOTLPResourceSpans(&BuildTrace{Build: b, Spans: spans})
+		data, err := json.MarshalIndent(rs, "    ", "  ")
+		if err != nil {
+			return fmt.Errorf("encode trace %s: %w", b.TraceID, err)
+		}
+		if first {
+			if _, err := bw.WriteString("\n    "); err != nil {
+				return err
+			}
+			first = false
+		} else {
+			if _, err := bw.WriteString(",\n    "); err != nil {
+				return err
+			}
+		}
+		_, err = bw.Write(data)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = bw.WriteString("\n  ]\n}\n")
+	return err
+}
+
+func forEachChunk(ctx context.Context, loader SpanLoader, builds []BuildRow, emit func(BuildRow, []SpanRow) error) error {
+	for start := 0; start < len(builds); start += exportChunkSize {
+		end := start + exportChunkSize
+		if end > len(builds) {
+			end = len(builds)
+		}
+		chunk := builds[start:end]
+
+		ids := make([]string, len(chunk))
+		for i, b := range chunk {
+			ids[i] = b.TraceID
+		}
+		spansByID, err := loader.LoadSpansForTraces(ctx, ids)
+		if err != nil {
+			return fmt.Errorf("load spans: %w", err)
+		}
+		for _, b := range chunk {
+			if err := emit(b, spansByID[b.TraceID]); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
-}
-
-// ExportOTLP writes traces in OpenTelemetry-compatible JSON format.
-func ExportOTLP(traces []*BuildTrace, w io.Writer) error {
-	export := otlpExport{
-		ResourceSpans: make([]otlpResourceSpans, 0, len(traces)),
-	}
-
-	for _, trace := range traces {
-		rs := buildOTLPResourceSpans(trace)
-		export.ResourceSpans = append(export.ResourceSpans, rs)
-	}
-
-	encoder := json.NewEncoder(w)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(export)
 }
 
 // OTLP JSON structures
