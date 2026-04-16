@@ -171,6 +171,12 @@ var digestPattern = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
 // handle is the single ServeMux entry — we route by URL shape ourselves
 // because the OCI <name> can itself contain slashes (e.g. "library/ubuntu").
 func (r *Registry) handle(w http.ResponseWriter, req *http.Request) {
+	// net/http gives each request a fresh context that doesn't carry our
+	// logger, so any downstream CAS call that does console.GetLogger(ctx)
+	// would hit the "no logger found" fallback and spam warnings. Attach the
+	// registry's logger up front so every handler and backend call made with
+	// req.Context() inherits it.
+	req = req.WithContext(console.WithLogger(req.Context(), r.logger))
 	r.logger.Tracef("dockerproxy: %s %s", req.Method, req.URL.RequestURI())
 	// Version probe — both GET and HEAD must return 200 with the API version header.
 	if req.URL.Path == "/v2/" || req.URL.Path == "/v2" {
