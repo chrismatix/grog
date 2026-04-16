@@ -202,6 +202,7 @@ func (d *DockerOutputHandler) Load(
 				return fmt.Errorf("failed to tag existing image %q as %q: %w", imageID, localImageName, err)
 			}
 			logger.Debugf("image %s already present locally, skipped pull", localImageName)
+			logger.Infof("Loaded image %s from cache backend", localImageName)
 			return nil
 		}
 	}
