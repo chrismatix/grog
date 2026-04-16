@@ -5,7 +5,10 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -16,6 +19,7 @@ type mockCacheBackend struct {
 	setFunc    func(ctx context.Context, path, key string, content io.Reader) error
 	deleteFunc func(ctx context.Context, path string, key string) error
 	existsFunc func(ctx context.Context, path string, key string) (bool, error)
+	sizeFunc   func(ctx context.Context, path string, key string) (int64, error)
 	clearFunc  func(ctx context.Context, expunge bool) error
 	typeName   string
 }
@@ -53,6 +57,17 @@ func (m *mockCacheBackend) Exists(ctx context.Context, path string, key string) 
 		return m.existsFunc(ctx, path, key)
 	}
 	return false, errors.New("Exists not implemented in mock")
+}
+
+func (m *mockCacheBackend) Size(ctx context.Context, path string, key string) (int64, error) {
+	if m.sizeFunc != nil {
+		return m.sizeFunc(ctx, path, key)
+	}
+	return 0, errors.New("Size not implemented in mock")
+}
+
+func (m *mockCacheBackend) BeginWrite(ctx context.Context) (StagedWriter, error) {
+	return nil, errors.New("BeginWrite not implemented in mock")
 }
 
 func (m *mockCacheBackend) ListKeys(ctx context.Context, path string, suffix string) ([]string, error) {
@@ -444,4 +459,157 @@ func TestRemoteWrapper_Exists(t *testing.T) {
 			t.Errorf("expected error %q, got %q", "remote exists failed", err.Error())
 		}
 	})
+}
+
+// remoteWrapperTestStagedWriter is a tiny in-memory StagedWriter implementation
+// for verifying the RemoteWrapper fanout: it captures every byte that hits
+// Write so the test can assert that the same payload reached both sides.
+type remoteWrapperTestStagedWriter struct {
+	mu        sync.Mutex
+	buf       bytes.Buffer
+	committed bool
+	cancelled bool
+	commitTo  string // path/key
+}
+
+func (w *remoteWrapperTestStagedWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.buf.Write(p)
+}
+
+func (w *remoteWrapperTestStagedWriter) Commit(_ context.Context, path, key string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.committed = true
+	w.commitTo = path + "/" + key
+	return nil
+}
+
+func (w *remoteWrapperTestStagedWriter) Cancel(_ context.Context) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.cancelled = true
+	return nil
+}
+
+// TestRemoteWrapper_BeginWriteFansOut verifies that bytes streamed through
+// the fanout writer reach both the local fs cache and the remote backend
+// simultaneously, and that Commit promotes both sides.
+func TestRemoteWrapper_BeginWriteFansOut(t *testing.T) {
+	ctx := context.Background()
+
+	sharedCasDir := t.TempDir()
+	fs := &FileSystemCache{
+		workspaceCacheDir: t.TempDir(),
+		sharedCasDir:      sharedCasDir,
+	}
+
+	remoteCapture := &remoteWrapperTestStagedWriter{}
+	remote := &mockCacheBackend{
+		// We can't add a beginWriteFunc field without changing the mock's
+		// public shape; for this test we satisfy BeginWrite by overriding it
+		// via a closure that returns the capture writer.
+	}
+	// Stash the capture on the mock so the wrapper can find it. This is a
+	// little ugly, but adding a beginWriteFunc field would touch every
+	// existing mockCacheBackend caller for one test.
+	rw := &RemoteWrapper{fs: fs, remote: &beginWriteAwareMock{
+		mockCacheBackend: remote,
+		writer:           remoteCapture,
+	}}
+
+	sw, err := rw.BeginWrite(ctx)
+	if err != nil {
+		t.Fatalf("BeginWrite: %v", err)
+	}
+
+	payload := []byte("fanned-out content")
+	if _, err := sw.Write(payload); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if err := sw.Commit(ctx, "cas", "sha256:cafe"); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	// fs side: the bytes should be at the final cache key.
+	gotFS, err := io.ReadAll(must(fs.Get(ctx, "cas", "sha256:cafe")))
+	if err != nil {
+		t.Fatalf("read fs: %v", err)
+	}
+	if string(gotFS) != string(payload) {
+		t.Fatalf("fs payload mismatch: got %q want %q", gotFS, payload)
+	}
+
+	// remote side: the capture writer should have the same bytes and be Committed.
+	if !remoteCapture.committed {
+		t.Fatal("expected remote staged writer to be committed")
+	}
+	if got := remoteCapture.buf.String(); got != string(payload) {
+		t.Fatalf("remote payload mismatch: got %q want %q", got, payload)
+	}
+	if remoteCapture.commitTo != "cas/sha256:cafe" {
+		t.Fatalf("remote commit destination: %q", remoteCapture.commitTo)
+	}
+}
+
+// TestRemoteWrapper_BeginWriteCancel verifies that Cancel cancels both sides
+// and the fs cache does not contain the half-written entry.
+func TestRemoteWrapper_BeginWriteCancel(t *testing.T) {
+	ctx := context.Background()
+
+	sharedCasDir := t.TempDir()
+	fs := &FileSystemCache{
+		workspaceCacheDir: t.TempDir(),
+		sharedCasDir:      sharedCasDir,
+	}
+	remoteCapture := &remoteWrapperTestStagedWriter{}
+	rw := &RemoteWrapper{fs: fs, remote: &beginWriteAwareMock{
+		mockCacheBackend: &mockCacheBackend{},
+		writer:           remoteCapture,
+	}}
+
+	sw, err := rw.BeginWrite(ctx)
+	if err != nil {
+		t.Fatalf("BeginWrite: %v", err)
+	}
+	if _, err := sw.Write([]byte("partial")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if err := sw.Cancel(ctx); err != nil {
+		t.Fatalf("Cancel: %v", err)
+	}
+
+	// fs side: nothing committed.
+	if _, err := fs.Get(ctx, "cas", "sha256:should-not-exist"); err == nil {
+		t.Fatal("fs should not contain a committed key after Cancel")
+	}
+	// fs staging dir should be empty.
+	stagingEntries, _ := os.ReadDir(filepath.Join(sharedCasDir, fsStagingDirName))
+	if len(stagingEntries) != 0 {
+		t.Fatalf("expected staging dir empty after cancel, got %d entries", len(stagingEntries))
+	}
+	// remote side: cancelled.
+	if !remoteCapture.cancelled {
+		t.Fatal("expected remote staged writer to be cancelled")
+	}
+}
+
+// beginWriteAwareMock wraps mockCacheBackend with a fixed-return BeginWrite,
+// so the existing dozens of mockCacheBackend callers don't need to grow a new
+// field for the BeginWrite tests.
+type beginWriteAwareMock struct {
+	*mockCacheBackend
+	writer StagedWriter
+}
+
+func (m *beginWriteAwareMock) BeginWrite(_ context.Context) (StagedWriter, error) {
+	return m.writer, nil
+}
+
+func must[T any](v T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+	return v
 }

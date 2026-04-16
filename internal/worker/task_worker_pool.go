@@ -20,8 +20,9 @@ import (
 type StatusFunc func(StatusUpdate)
 
 type StatusUpdate struct {
-	Status   string
-	Progress *console.Progress
+	Status    string
+	SubStatus string
+	Progress  *console.Progress
 }
 
 func Status(status string) StatusUpdate {
@@ -135,7 +136,7 @@ func (twp *TaskWorkerPool[T]) worker(ctx context.Context, workerId int) {
 				if isDebug {
 					taskStatus = fmt.Sprintf("%s (worker %d)", status.Status, workerId)
 				}
-				twp.setTaskState(workerId, StatusUpdate{Status: taskStatus, Progress: status.Progress}, zapcore.InfoLevel)
+				twp.setTaskState(workerId, StatusUpdate{Status: taskStatus, SubStatus: status.SubStatus, Progress: status.Progress}, zapcore.InfoLevel)
 			})
 
 			if j.result != nil {
@@ -161,9 +162,10 @@ func (twp *TaskWorkerPool[T]) setTaskState(workerId int, status StatusUpdate, lv
 	key := workerId + twp.workerIdOffset
 	state, exists := twp.taskState[key]
 	if !exists {
-		twp.taskState[key] = console.TaskState{Status: status.Status, Progress: status.Progress, StartedAtSec: time.Now().Unix()}
+		twp.taskState[key] = console.TaskState{Status: status.Status, SubStatus: status.SubStatus, Progress: status.Progress, StartedAtSec: time.Now().Unix()}
 	} else {
 		state.Status = status.Status
+		state.SubStatus = status.SubStatus
 		state.Progress = status.Progress
 		twp.taskState[key] = state
 	}

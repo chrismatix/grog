@@ -22,6 +22,7 @@ type HeaderMsg string
 // TaskState reflects the current State of a task for display
 type TaskState struct {
 	Status       string
+	SubStatus    string // optional secondary detail line rendered below status
 	StartedAtSec int64
 	Progress     *Progress
 }
@@ -202,11 +203,20 @@ func (m *model) View() string {
 		progressIndent = " "
 	}
 
+	dim := color.New(color.Faint).SprintFunc()
 	for _, i := range keys {
 		if status, ok := m.tasks[i]; ok {
 			timePassed := int(time.Since(time.Unix(status.StartedAtSec, 0)).Seconds())
 			s.WriteString(fmt.Sprintf("%s%s %ds\n", indent, status.Status, timePassed))
-			if status.Progress != nil && status.Progress.shouldRender() {
+			hasProgress := status.Progress != nil && status.Progress.shouldRender()
+			if status.SubStatus != "" {
+				connector := "╰─"
+				if hasProgress {
+					connector = "├─"
+				}
+				s.WriteString(fmt.Sprintf("%s%s%s\n", progressIndent, connector, dim(status.SubStatus)))
+			}
+			if hasProgress {
 				s.WriteString(fmt.Sprintf("%s╰─%s\n", progressIndent, formatProgressBar(*status.Progress, 24)))
 			}
 		}
