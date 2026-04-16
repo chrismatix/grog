@@ -289,6 +289,57 @@ func (s *TraceStore) LoadSpans(ctx context.Context, traceID string) ([]SpanRow, 
 	return scanSpanRows(rows)
 }
 
+// LoadSpansForTraces retrieves all spans for the given trace IDs in a single
+// parquet scan, returning a map keyed by trace_id. Large ID sets are chunked
+// internally to keep the generated SQL bounded.
+func (s *TraceStore) LoadSpansForTraces(ctx context.Context, traceIDs []string) (map[string][]SpanRow, error) {
+	result := make(map[string][]SpanRow, len(traceIDs))
+	if len(traceIDs) == 0 {
+		return result, nil
+	}
+
+	const chunkSize = 500
+	for start := 0; start < len(traceIDs); start += chunkSize {
+		end := start + chunkSize
+		if end > len(traceIDs) {
+			end = len(traceIDs)
+		}
+		chunk := traceIDs[start:end]
+
+		quoted := make([]string, 0, len(chunk))
+		for _, id := range chunk {
+			quoted = append(quoted, "'"+sanitize(id)+"'")
+		}
+
+		query := fmt.Sprintf(`SELECT trace_id, label, package, change_hash, output_hash,
+			status, cache_result, command, exit_code, is_test,
+			start_time_unix_millis, end_time_unix_millis, total_duration_millis,
+			queue_wait_millis, hash_duration_millis, cache_check_millis,
+			command_duration_millis, output_write_millis, output_load_millis,
+			cache_write_millis, dep_load_millis, tags, dependencies
+			FROM read_parquet('%s', union_by_name=true)
+			WHERE trace_id IN (%s)`,
+			s.resolver.SpansGlob(), strings.Join(quoted, ","))
+
+		rows, err := s.db.QueryContext(ctx, query)
+		if err != nil {
+			if isNoFilesError(err) {
+				continue
+			}
+			return nil, err
+		}
+		spans, err := scanSpanRows(rows)
+		rows.Close()
+		if err != nil {
+			return nil, err
+		}
+		for _, sp := range spans {
+			result[sp.TraceID] = append(result[sp.TraceID], sp)
+		}
+	}
+	return result, nil
+}
+
 // FindAndLoad retrieves a full trace by ID prefix.
 func (s *TraceStore) FindAndLoad(ctx context.Context, traceIDPrefix string) (*BuildTrace, error) {
 	build, err := s.LoadBuild(ctx, traceIDPrefix)
