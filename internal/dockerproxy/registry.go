@@ -103,7 +103,7 @@ func New(ctx context.Context, cas *caching.Cas) (*Registry, error) {
 	// staged uploads. The cancel func is called explicitly from Close.
 	sessionCtx, sessionCancel := context.WithCancel(ctx)
 
-	r := &Registry{
+	registry := &Registry{
 		cas:             cas,
 		listener:        listener,
 		logger:          console.GetLogger(ctx),
@@ -114,23 +114,23 @@ func New(ctx context.Context, cas *caching.Cas) (*Registry, error) {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v2/", r.handle)
-	mux.HandleFunc("/v2", r.handle)
+	mux.HandleFunc("/v2/", registry.handle)
+	mux.HandleFunc("/v2", registry.handle)
 
-	r.server = &http.Server{
+	registry.server = &http.Server{
 		Handler:           mux,
 		ReadHeaderTimeout: 30 * time.Second,
 	}
 
 	go func() {
-		if err := r.server.Serve(listener); err != nil && err != http.ErrServerClosed {
-			r.logger.Warnf("dockerproxy server stopped: %v", err)
+		if err := registry.server.Serve(listener); err != nil && err != http.ErrServerClosed {
+			registry.logger.Warnf("dockerproxy server stopped: %v", err)
 		}
 	}()
 
-	r.logger.Debugf("dockerproxy listening on %s", listener.Addr())
+	registry.logger.Debugf("dockerproxy listening on %s", listener.Addr())
 
-	return r, nil
+	return registry, nil
 }
 
 // Addr returns the host:port of the loopback registry, suitable for use as
@@ -339,33 +339,33 @@ func (r *Registry) startBlobUpload(w http.ResponseWriter, req *http.Request, nam
 // verifies the supplied digest at the end. Used by the rare monolithic POST
 // path; chunked PATCH/PUT goes through the upload-session machinery instead.
 func (r *Registry) writeBlobMonolithic(ctx context.Context, digest string, body io.Reader) error {
-	sw, err := r.cas.BeginWrite(ctx)
+	stagedWriter, err := r.cas.BeginWrite(ctx)
 	if err != nil {
 		return fmt.Errorf("begin staged write: %w", err)
 	}
 	digester := sha256.New()
 	tee := io.TeeReader(body, digester)
-	if _, err := io.Copy(sw, tee); err != nil {
-		_ = sw.Cancel(ctx)
+	if _, err := io.Copy(stagedWriter, tee); err != nil {
+		_ = stagedWriter.Cancel(ctx)
 		return fmt.Errorf("stream body to staged writer: %w", err)
 	}
 	actual := "sha256:" + hex.EncodeToString(digester.Sum(nil))
 	if actual != digest {
-		_ = sw.Cancel(ctx)
+		_ = stagedWriter.Cancel(ctx)
 		return fmt.Errorf("digest mismatch: client=%s actual=%s", digest, actual)
 	}
-	if err := sw.Commit(ctx, "cas", digest); err != nil {
+	if err := stagedWriter.Commit(ctx, "cas", digest); err != nil {
 		return fmt.Errorf("commit blob: %w", err)
 	}
 	return nil
 }
 
-func (r *Registry) patchBlobUpload(w http.ResponseWriter, req *http.Request, name, uploadID string) {
-	if uploadID == "" {
+func (r *Registry) patchBlobUpload(w http.ResponseWriter, req *http.Request, name, uploadId string) {
+	if uploadId == "" {
 		writeError(w, http.StatusBadRequest, "BLOB_UPLOAD_INVALID", "missing upload id")
 		return
 	}
-	upload := r.getUpload(uploadID)
+	upload := r.getUpload(uploadId)
 	if upload == nil {
 		writeError(w, http.StatusNotFound, "BLOB_UPLOAD_UNKNOWN", "upload session not found")
 		return
@@ -386,13 +386,13 @@ func (r *Registry) patchBlobUpload(w http.ResponseWriter, req *http.Request, nam
 		// the staged writer so the daemon starts over instead of trusting
 		// a stale Range header. Cancel uses the session ctx (not the
 		// request ctx) so cleanup survives a client disconnect mid-PATCH.
-		r.cancelUpload(uploadID)
+		r.cancelUpload(uploadId)
 		writeError(w, http.StatusInternalServerError, "BLOB_UPLOAD_INVALID", copyErr.Error())
 		return
 	}
 
-	w.Header().Set("Location", "/v2/"+name+"/blobs/uploads/"+uploadID)
-	w.Header().Set("Docker-Upload-UUID", uploadID)
+	w.Header().Set("Location", "/v2/"+name+"/blobs/uploads/"+uploadId)
+	w.Header().Set("Docker-Upload-UUID", uploadId)
 	if written > 0 {
 		w.Header().Set("Range", "0-"+strconv.FormatInt(written-1, 10))
 	} else {
@@ -401,8 +401,8 @@ func (r *Registry) patchBlobUpload(w http.ResponseWriter, req *http.Request, nam
 	w.WriteHeader(http.StatusAccepted)
 }
 
-func (r *Registry) finishBlobUpload(w http.ResponseWriter, req *http.Request, name, uploadID string) {
-	if uploadID == "" {
+func (r *Registry) finishBlobUpload(w http.ResponseWriter, req *http.Request, name, uploadId string) {
+	if uploadId == "" {
 		writeError(w, http.StatusBadRequest, "BLOB_UPLOAD_INVALID", "missing upload id")
 		return
 	}
@@ -412,7 +412,7 @@ func (r *Registry) finishBlobUpload(w http.ResponseWriter, req *http.Request, na
 		return
 	}
 
-	upload := r.getUpload(uploadID)
+	upload := r.getUpload(uploadId)
 	if upload == nil {
 		writeError(w, http.StatusNotFound, "BLOB_UPLOAD_UNKNOWN", "upload session not found")
 		return
@@ -433,7 +433,7 @@ func (r *Registry) finishBlobUpload(w http.ResponseWriter, req *http.Request, na
 	if req.ContentLength != 0 {
 		if _, err := io.Copy(upload, req.Body); err != nil {
 			upload.mu.Unlock()
-			r.cancelUpload(uploadID)
+			r.cancelUpload(uploadId)
 			writeError(w, http.StatusInternalServerError, "BLOB_UPLOAD_INVALID", err.Error())
 			return
 		}
@@ -444,7 +444,7 @@ func (r *Registry) finishBlobUpload(w http.ResponseWriter, req *http.Request, na
 
 	// Always remove the upload from the registry's session map, regardless
 	// of which branch we take below.
-	r.dropUpload(uploadID)
+	r.dropUpload(uploadId)
 
 	// Use the session ctx for Commit/Cancel — these run on a backend
 	// goroutine that may outlive the request, and we don't want a client
@@ -559,12 +559,12 @@ func (r *Registry) LastManifestDigest(name string) string {
 // background goroutine for the upload that observes ctx cancellation; using
 // req.Context() here would tear the upload down before the first PATCH.
 func (r *Registry) openUpload() (string, error) {
-	sw, err := r.cas.BeginWrite(r.sessionCtx)
+	stagedWriter, err := r.cas.BeginWrite(r.sessionCtx)
 	if err != nil {
 		return "", fmt.Errorf("open staged writer: %w", err)
 	}
 	upload := &pendingUpload{
-		writer:   sw,
+		writer:   stagedWriter,
 		digester: sha256.New(),
 	}
 	id := uuid.NewString()
