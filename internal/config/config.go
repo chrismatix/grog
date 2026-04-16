@@ -139,9 +139,9 @@ func (w WorkspaceConfig) Validate() error {
 	}
 
 	if w.Docker.Backend != "" &&
-		(w.Docker.Backend != DockerBackendFSTarball && w.Docker.Backend != DockerBackendRegistry) {
+		(w.Docker.Backend != DockerBackendFS && w.Docker.Backend != DockerBackendRegistry) {
 		return fmt.Errorf("invalid docker backend: %s. Must be either %s or %s",
-			w.Docker.Backend, DockerBackendFSTarball, DockerBackendRegistry)
+			w.Docker.Backend, DockerBackendFS, DockerBackendRegistry)
 	}
 
 	// assert that tags and exclude tags do not overlap
@@ -240,8 +240,8 @@ Backend  CacheBackend `mapstructure:"backend"`
 	S3       S3CacheConfig  `mapstructure:"s3"`
 }
 const (
-	DockerBackendFSTarball = "tarball"
-	DockerBackendRegistry  = "registry"
+	DockerBackendFS       = "fs"
+	DockerBackendRegistry = "registry"
 )
 
 type DockerConfig struct {

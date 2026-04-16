@@ -66,7 +66,7 @@ func NewRegistry(
 		r.Register(handlers.NewDockerRegistryOutputHandler(cas, config.Global.Docker))
 	} else {
 		// The backend setting is validated in the config package
-		// so we can assume it's either "docker" or "fs-tarball"
+		// so we can assume it's either "registry" or "fs"
 		r.Register(handlers.NewDockerOutputHandler(ctx, cas))
 	}
 	return r
