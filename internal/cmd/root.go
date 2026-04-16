@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"grog/internal/cmd/cmds"
+	"grog/internal/cmd/cmds/traces"
 	"grog/internal/config"
 	"grog/internal/console"
 	"os"
@@ -175,7 +176,7 @@ func init() {
 	cmds.AddOwnersCmd(RootCmd)
 	cmds.AddChangesCmd(RootCmd)
 	cmds.AddListCmd(RootCmd)
-	cmds.AddTracesCmd(RootCmd)
+	traces.AddCmd(RootCmd)
 
 	if err != nil {
 		panic(err)
