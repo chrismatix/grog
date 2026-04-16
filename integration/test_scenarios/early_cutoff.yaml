@@ -1,0 +1,41 @@
+name: early cutoff
+repo: early_cutoff
+cases:
+  # Reset dep to the v1 variant so the scenario starts from a known state.
+  - name: early_cutoff_reset_to_v1
+    setup_command: "cp dep/BUILD.v1.json dep/BUILD.json"
+
+  # Initial build populates the cache for both dep and cons.
+  - name: early_cutoff_initial_build
+    grog_args:
+      - build
+      - //cons:cons
+
+  # Swap dep to v2: different command, byte-identical output content.
+  - name: early_cutoff_swap_to_v2
+    setup_command: "cp dep/BUILD.v2.json dep/BUILD.json"
+
+  # dep rebuilds because its ChangeHash changed (command differs) but
+  # cons should be a cache hit because dep's OutputHash is unchanged —
+  # this is the early-cutoff behaviour from #38 / v0.20.0.
+  # Expected: 2 targets completed (1 cache hits).
+  - name: early_cutoff_rebuild_same_output
+    grog_args:
+      - build
+      - //cons:cons
+
+  # Swap dep to v3: different command AND different output content.
+  - name: early_cutoff_swap_to_v3
+    setup_command: "cp dep/BUILD.v3.json dep/BUILD.json"
+
+  # dep rebuilds (new ChangeHash) and cons rebuilds (dep's OutputHash
+  # changed) — control case that the early-cutoff did not over-reach.
+  # Expected: 2 targets completed (0 cache hits).
+  - name: early_cutoff_rebuild_changed_output
+    grog_args:
+      - build
+      - //cons:cons
+
+  # Restore the repo to v1 so the checkout is clean after the test.
+  - name: early_cutoff_restore
+    setup_command: "cp dep/BUILD.v1.json dep/BUILD.json"
