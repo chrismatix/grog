@@ -1,0 +1,10 @@
+{
+  "targets": [
+    {
+      "name": "cons",
+      "dependencies": ["//dep:dep"],
+      "command": "cat ../dep/output.txt > consumed.txt",
+      "outputs": ["consumed.txt"]
+    }
+  ]
+}

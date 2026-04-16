@@ -1,0 +1,9 @@
+{
+  "targets": [
+    {
+      "name": "dep",
+      "command": "echo world > output.txt",
+      "outputs": ["output.txt"]
+    }
+  ]
+}
