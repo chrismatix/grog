@@ -47,6 +47,7 @@ type Executor struct {
 	coordinator      *PoolCoordinator
 	cacheWriter      *CacheWriter
 	asyncWaitTime    time.Duration
+	deferAsyncWait   bool
 }
 
 func NewExecutor(
@@ -154,13 +155,44 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	// was not interrupted.  Async cache writes use a non-cancellable context
 	// so they can outlive the build, but we must not block an interrupted
 	// shutdown waiting for slow remote uploads to finish.
-	if ctx.Err() == nil {
+	//
+	// When deferAsyncWait is set, the caller is responsible for invoking
+	// WaitForAsyncWrites itself (e.g. `grog run` waits after the user's
+	// binary finishes so cache uploads run in parallel with it).
+	if ctx.Err() == nil && !e.deferAsyncWait {
+		// Inline wait — do not log a "waiting" message because for plain
+		// `grog build` this is just the normal end-of-build cache flush.
 		waitStart := time.Now()
 		e.cacheWriter.Wait()
 		e.asyncWaitTime = time.Since(waitStart)
 	}
 
 	return completionMap, err
+}
+
+// DeferAsyncWait disables the implicit cacheWriter.Wait() at the end of
+// Execute. The caller must invoke WaitForAsyncWrites once it is ready to
+// block on outstanding uploads.
+func (e *Executor) DeferAsyncWait() {
+	e.deferAsyncWait = true
+}
+
+// WaitForAsyncWrites blocks until all outstanding async cache writes complete
+// and records the elapsed time as AsyncWaitTime. Intended for callers that
+// invoked DeferAsyncWait and ran other work (e.g. user binaries) in parallel
+// with cache uploads. Logs a status message when writes are still in flight so
+// the user understands the delay between their command finishing and the
+// process exiting.
+func (e *Executor) WaitForAsyncWrites(ctx context.Context) {
+	if e.cacheWriter == nil {
+		return
+	}
+	if e.cacheWriter.HasPendingWrites() {
+		console.GetLogger(ctx).Infof("Waiting for cache writes to finish in the background...")
+	}
+	waitStart := time.Now()
+	e.cacheWriter.Wait()
+	e.asyncWaitTime = time.Since(waitStart)
 }
 
 // AsyncWaitTime returns the wall-clock time spent waiting for the async I/O

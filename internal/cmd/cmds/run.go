@@ -138,7 +138,14 @@ func buildAndRunTargets(ctx context.Context, logger *console.Logger, graph *dag.
 		targetPatterns = append(targetPatterns, pattern)
 	}
 
-	RunBuild(
+	afterBuildSuccess := func() error {
+		for _, runTarget := range runTargets {
+			loadDependencyOutputsIfNeeded(ctx, logger, graph, runTarget)
+		}
+		return runTargetBinaries(ctx, logger, runTargets, userCommandArgs)
+	}
+
+	RunBuildAndAfter(
 		ctx,
 		logger,
 		targetPatterns,
@@ -146,16 +153,9 @@ func buildAndRunTargets(ctx context.Context, logger *console.Logger, graph *dag.
 		selection.NonTestOnly,
 		config.Global.StreamLogs,
 		config.Global.GetLoadOutputsMode(),
+		afterBuildSuccess,
 		"run",
 	)
-
-	for _, runTarget := range runTargets {
-		loadDependencyOutputsIfNeeded(ctx, logger, graph, runTarget)
-	}
-
-	if err := runTargetBinaries(ctx, logger, runTargets, userCommandArgs); err != nil {
-		logger.Fatalf("%v", err)
-	}
 }
 
 func loadDependencyOutputsIfNeeded(ctx context.Context, logger *console.Logger, graph *dag.DirectedTargetGraph, runTarget *model.Target) {

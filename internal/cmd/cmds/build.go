@@ -84,6 +84,26 @@ func RunBuild(
 	loadOutputsMode config.LoadOutputsMode,
 	commandOverride ...string,
 ) {
+	RunBuildAndAfter(ctx, logger, targetPatterns, graph, testFilter, streamLogs, loadOutputsMode, nil, commandOverride...)
+}
+
+// RunBuildAndAfter runs the build, then (only on build success) invokes
+// afterBuildSuccess in parallel with any in-flight async cache writes. The
+// async cache wait, trace finalization, and elapsed-time logging all happen
+// after the callback returns, so the callback gets to run while uploads
+// continue in the background. If afterBuildSuccess is nil, behavior matches
+// RunBuild.
+func RunBuildAndAfter(
+	ctx context.Context,
+	logger *console.Logger,
+	targetPatterns []label.TargetPattern,
+	graph *dag.DirectedTargetGraph,
+	testFilter selection.TargetTypeSelection,
+	streamLogs bool,
+	loadOutputsMode config.LoadOutputsMode,
+	afterBuildSuccess func() error,
+	commandOverride ...string,
+) {
 	startTime := time.Now()
 
 	// Determine command name for tracing
@@ -172,7 +192,41 @@ func RunBuild(
 		config.Global.EnableCache,
 		loadOutputsMode,
 	)
+	if afterBuildSuccess != nil {
+		executor.DeferAsyncWait()
+	}
 	completionMap, executionErr := executor.Execute(ctx)
+
+	// small helper for logging
+	goal := "Build"
+	if testFilter == selection.TestOnly {
+		goal = "Test"
+	} else if testFilter == selection.AllTargets {
+		goal = "Build and test"
+	}
+
+	// When an after-build callback is supplied (e.g. `grog run`), print the
+	// build-success summary before invoking it so the user sees the build
+	// finished before any binary output appears, and so async cache writes
+	// run in parallel with the user's command.
+	var afterBuildErr error
+	calledAfterBuild := false
+	if afterBuildSuccess != nil && buildSucceeded(executionErr, completionMap) {
+		successCount, cacheHits := completionMap.TargetSuccessCount()
+		logger.Infof("%s completed successfully. %s completed (%d cache hits).",
+			goal,
+			console.FCountTargets(successCount),
+			cacheHits)
+		afterBuildErr = afterBuildSuccess()
+		calledAfterBuild = true
+	}
+
+	// Block on outstanding async cache writes so the trace and elapsed time
+	// below report accurate numbers. WaitForAsyncWrites is a no-op if the
+	// build path already waited inside Execute.
+	if afterBuildSuccess != nil && ctx.Err() == nil {
+		executor.WaitForAsyncWrites(ctx)
+	}
 
 	// Write trace (synchronous — Parquet writes are fast for local FS,
 	// and we need to ensure the write completes before the process exits)
@@ -245,14 +299,6 @@ func RunBuild(
 		logger.Errorf("execution failed: %s", executionErr)
 	}
 
-	// small helper for logging
-	goal := "Build"
-	if testFilter == selection.TestOnly {
-		goal = "Test"
-	} else if testFilter == selection.AllTargets {
-		goal = "Build and test"
-	}
-
 	executionErrors := completionMap.GetErrors()
 	successCount, cacheHits := completionMap.TargetSuccessCount()
 
@@ -291,11 +337,31 @@ func RunBuild(
 	}
 
 	if executionErr == nil {
-		logger.Infof("%s completed successfully. %s completed (%d cache hits).",
-			goal,
-			console.FCountTargets(successCount),
-			cacheHits)
+		// Skip the success message if we already printed it before invoking
+		// the after-build callback above.
+		if !calledAfterBuild {
+			logger.Infof("%s completed successfully. %s completed (%d cache hits).",
+				goal,
+				console.FCountTargets(successCount),
+				cacheHits)
+		}
 	} else {
 		os.Exit(1)
 	}
+
+	if afterBuildErr != nil {
+		logger.Fatalf("%v", afterBuildErr)
+	}
+}
+
+// buildSucceeded reports whether the build phase finished cleanly and it is
+// safe to run a dependent post-build step such as user binaries.
+func buildSucceeded(executionErr error, completionMap dag.CompletionMap) bool {
+	if executionErr != nil {
+		return false
+	}
+	if completionMap == nil {
+		return false
+	}
+	return len(completionMap.GetErrors()) == 0
 }
