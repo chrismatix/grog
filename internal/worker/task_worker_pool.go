@@ -140,7 +140,7 @@ func (twp *TaskWorkerPool[T]) worker(ctx context.Context, workerId int) {
 				if isDebug {
 					taskStatus = fmt.Sprintf("%s (worker %d)", status.Status, workerId)
 				}
-				twp.setTaskState(workerId, StatusUpdate{Status: taskStatus, Progress: status.Progress}, zapcore.InfoLevel)
+				twp.setTaskState(workerId, StatusUpdate{Status: taskStatus, SubStatus: status.SubStatus, Progress: status.Progress}, zapcore.InfoLevel)
 			})
 
 			if j.result != nil {

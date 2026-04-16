@@ -14,8 +14,9 @@ import (
 // same logical unit of work. Progress can be subdivided into child trackers
 // when multiple operations contribute to the same overall status.
 type ProgressTracker struct {
-	status string
-	update StatusFunc
+	status    string
+	subStatus string
+	update    StatusFunc
 
 	// statusSet is flipped to true the first time a caller explicitly calls
 	// SetStatus on this tracker. Once set, statusForChildStatusLocked always
@@ -111,6 +112,7 @@ func (pt *ProgressTracker) Add(delta int64) {
 	pt.step = computeStep(total)
 	send := parent == nil && pt.shouldSendLocked(current, total)
 	status := pt.status
+	subStatus := pt.subStatus
 
 	if parent != nil {
 		pt.mu.Unlock()
@@ -119,7 +121,7 @@ func (pt *ProgressTracker) Add(delta int64) {
 	}
 
 	if send {
-		pt.send(status, current, total)
+		pt.send(status, subStatus, current, total)
 	}
 	pt.mu.Unlock()
 }
@@ -183,12 +185,13 @@ func (pt *ProgressTracker) SetStatus(status string) {
 	pt.statusSet = true
 	newDisplayed := pt.statusForChildStatusLocked(status)
 	current, total := pt.aggregateLocked()
+	subStatus := pt.subStatus
 	pt.mu.Unlock()
 
 	if prevDisplayed == newDisplayed {
 		return
 	}
-	pt.send(newDisplayed, current, total)
+	pt.send(newDisplayed, subStatus, current, total)
 }
 
 // SetSubStatus sets a secondary detail line on the task without changing the
@@ -200,6 +203,11 @@ func (pt *ProgressTracker) SetSubStatus(subStatus string) {
 	}
 
 	pt.mu.Lock()
+	if pt.subStatus == subStatus {
+		pt.mu.Unlock()
+		return
+	}
+	pt.subStatus = subStatus
 	current, total := pt.aggregateLocked()
 	status := pt.statusForChildStatusLocked(pt.status)
 	pt.mu.Unlock()
@@ -232,9 +240,10 @@ func (pt *ProgressTracker) onChildDelta(child *ProgressTracker, delta int64) {
 	pt.step = computeStep(total)
 	send := pt.shouldSendLocked(current, total)
 	status := pt.statusForChildStatusLocked(child.status)
+	subStatus := pt.subStatus
 
 	if send {
-		pt.send(status, current, total)
+		pt.send(status, subStatus, current, total)
 	}
 	pt.mu.Unlock()
 }
@@ -271,8 +280,12 @@ func (pt *ProgressTracker) shouldSendLocked(current, total int64) bool {
 	return false
 }
 
-func (pt *ProgressTracker) send(status string, current, total int64) {
-	pt.update(StatusWithProgress(status, &console.Progress{Current: current, Total: total, StartedAtSec: pt.startedAtSec}))
+func (pt *ProgressTracker) send(status, subStatus string, current, total int64) {
+	pt.update(StatusUpdate{
+		Status:    status,
+		SubStatus: subStatus,
+		Progress:  &console.Progress{Current: current, Total: total, StartedAtSec: pt.startedAtSec},
+	})
 }
 
 func computeStep(total int64) int64 {
@@ -284,9 +297,10 @@ func computeStep(total int64) int64 {
 func (pt *ProgressTracker) maybeSend(status string, current, total int64) {
 	pt.mu.Lock()
 	shouldSend := pt.shouldSendLocked(current, total)
+	subStatus := pt.subStatus
 	pt.mu.Unlock()
 	if shouldSend {
-		pt.send(status, current, total)
+		pt.send(status, subStatus, current, total)
 	}
 }
 

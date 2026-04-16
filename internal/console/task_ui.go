@@ -208,10 +208,15 @@ func (m *model) View() string {
 		if status, ok := m.tasks[i]; ok {
 			timePassed := int(time.Since(time.Unix(status.StartedAtSec, 0)).Seconds())
 			s.WriteString(fmt.Sprintf("%s%s %ds\n", indent, status.Status, timePassed))
+			hasProgress := status.Progress != nil && status.Progress.shouldRender()
 			if status.SubStatus != "" {
-				s.WriteString(fmt.Sprintf("%s%s\n", progressIndent, dim(status.SubStatus)))
+				connector := "╰─"
+				if hasProgress {
+					connector = "├─"
+				}
+				s.WriteString(fmt.Sprintf("%s%s%s\n", progressIndent, connector, dim(status.SubStatus)))
 			}
-			if status.Progress != nil && status.Progress.shouldRender() {
+			if hasProgress {
 				s.WriteString(fmt.Sprintf("%s╰─%s\n", progressIndent, formatProgressBar(*status.Progress, 24)))
 			}
 		}
