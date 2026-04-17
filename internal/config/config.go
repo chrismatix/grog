@@ -46,6 +46,12 @@ type WorkspaceConfig struct {
 	// Only relevant when AsyncCacheWrites is true. Defaults to 3 * num_workers.
 	NumIOWorkers int `mapstructure:"num_io_workers"`
 
+	// ConcurrencyGroups maps a concurrency group name to its capacity (the
+	// max sum of target weights that can run in parallel within the group).
+	// Groups referenced by a target but missing from this map default to
+	// capacity 1 (fully serialized).
+	ConcurrencyGroups map[string]int `mapstructure:"concurrency_groups"`
+
 	// Logging
 	LogLevel      string `mapstructure:"log_level"`
 	LogOutputPath string `mapstructure:"log_output_path"`

@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fatih/color"
 	"go.uber.org/zap/zapcore"
+	"golang.org/x/sync/semaphore"
 
 	"grog/internal/config"
 	"grog/internal/console"
@@ -40,18 +41,27 @@ type TaskResult[T any] struct {
 
 type TaskFunc[T any] func(update StatusFunc) (T, error)
 
-type job[T any] struct {
-	id     int
-	task   TaskFunc[T]
-	result chan TaskResult[T]
-}
-
+// TaskWorkerPool runs tasks under a weighted-semaphore admission policy.
+// maxWorkers is the total capacity; each task consumes one slot by default,
+// or weight slots when submitted via RunWeighted. Tasks execute on the
+// caller's goroutine (or a spawned goroutine for RunFireAndForget), so the
+// pool bounds concurrent execution without carrying a long-lived worker
+// goroutine per slot.
 type TaskWorkerPool[T any] struct {
 	logger     *console.Logger
 	maxWorkers int
 	totalTasks int
 
-	jobCh chan job[T]
+	// slots bounds concurrent task execution to maxWorkers total units of
+	// weight. Acquire is weight-aware so one multi-slot task can reserve
+	// several units at once.
+	slots *semaphore.Weighted
+
+	// freeIds hands out 1..maxWorkers display slot IDs used as keys in the
+	// UI taskState map. Each running task occupies exactly one display slot
+	// regardless of its weight; extra weight reduces how many siblings can
+	// run but is not separately visualized.
+	freeIds chan int
 
 	sendMsg func(msg tea.Msg)
 
@@ -59,11 +69,12 @@ type TaskWorkerPool[T any] struct {
 	nextTaskId     int
 	completedTasks int
 
-	workerIdOffset int   // offset applied to worker IDs in taskState keys
-	onStateChange  func() // if set, called instead of sending messages directly
+	workerIdOffset int
+	onStateChange  func()
 
 	activeJobs sync.WaitGroup
 
+	poolCtx      context.Context
 	closed       atomic.Bool
 	shutdownOnce sync.Once
 	watcherOnce  sync.Once
@@ -80,11 +91,17 @@ func NewTaskWorkerPool[T any](
 		maxWorkers = runtime.NumCPU()
 	}
 
+	freeIds := make(chan int, maxWorkers)
+	for i := 1; i <= maxWorkers; i++ {
+		freeIds <- i
+	}
+
 	return &TaskWorkerPool[T]{
 		logger:     logger,
 		maxWorkers: maxWorkers,
 		totalTasks: totalTasks,
-		jobCh:      make(chan job[T], maxWorkers),
+		slots:      semaphore.NewWeighted(int64(maxWorkers)),
+		freeIds:    freeIds,
 		sendMsg:    sendMsg,
 		taskState:  make(console.TaskStateMap),
 	}
@@ -102,13 +119,11 @@ func (twp *TaskWorkerPool[T]) SetOnStateChange(fn func()) {
 	twp.onStateChange = fn
 }
 
+// StartWorkers wires the pool to a context. No long-lived worker goroutines
+// are spawned; the context is used to abort in-flight Acquire calls on
+// cancellation and to trigger Shutdown.
 func (twp *TaskWorkerPool[T]) StartWorkers(ctx context.Context) {
-	// start workers
-	for i := 0; i < twp.maxWorkers; i++ {
-		workerId := i + 1
-		go twp.worker(ctx, workerId)
-	}
-	// schedule shutdown once
+	twp.poolCtx = ctx
 	twp.watcherOnce.Do(func() {
 		go func() {
 			<-ctx.Done()
@@ -117,37 +132,61 @@ func (twp *TaskWorkerPool[T]) StartWorkers(ctx context.Context) {
 	})
 }
 
-func (twp *TaskWorkerPool[T]) worker(ctx context.Context, workerId int) {
-	isDebug := config.Global.IsDebug()
+// run is the internal execution path. Callers are responsible for
+// managing activeJobs lifecycle before invoking this.
+func (twp *TaskWorkerPool[T]) run(task TaskFunc[T], weight int) (T, error) {
+	var zero T
 
-	for {
-		select {
-		case <-ctx.Done():
-			console.GetLogger(ctx).Debugf("Worker %d context cancelled, exiting", workerId)
-			return
-		case j, ok := <-twp.jobCh:
-			if !ok {
-				return
-			}
-
-			twp.logger.Debugf("Starting task %d on worker %d", j.id+1, workerId)
-			res, err := j.task(func(status StatusUpdate) {
-				taskStatus := status.Status
-				if isDebug {
-					taskStatus = fmt.Sprintf("%s (worker %d)", status.Status, workerId)
-				}
-				twp.setTaskState(workerId, StatusUpdate{Status: taskStatus, SubStatus: status.SubStatus, Progress: status.Progress}, zapcore.InfoLevel)
-			})
-
-			if j.result != nil {
-				j.result <- TaskResult[T]{Return: res, Error: err}
-				close(j.result)
-			}
-
-			twp.completeTask(workerId)
-			twp.activeJobs.Done()
-		}
+	if weight < 1 {
+		weight = 1
 	}
+	if weight > twp.maxWorkers {
+		return zero, fmt.Errorf("task weight %d exceeds num_workers %d", weight, twp.maxWorkers)
+	}
+
+	ctx := twp.poolCtx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	if err := twp.slots.Acquire(ctx, int64(weight)); err != nil {
+		return zero, err
+	}
+	defer twp.slots.Release(int64(weight))
+
+	// Bail after acquire in case the pool was shut down while we waited.
+	if twp.closed.Load() {
+		return zero, fmt.Errorf("worker pool is closed")
+	}
+
+	var workerId int
+	select {
+	case workerId = <-twp.freeIds:
+	case <-ctx.Done():
+		return zero, ctx.Err()
+	}
+	defer func() { twp.freeIds <- workerId }()
+
+	twp.mu.Lock()
+	id := twp.nextTaskId
+	twp.nextTaskId++
+	twp.mu.Unlock()
+	twp.logger.Debugf("Starting task %d on worker %d (weight=%d)", id+1, workerId, weight)
+
+	isDebug := config.Global.IsDebug()
+	res, err := task(func(status StatusUpdate) {
+		taskStatus := status.Status
+		if isDebug {
+			if weight > 1 {
+				taskStatus = fmt.Sprintf("%s (worker %d ×%d)", status.Status, workerId, weight)
+			} else {
+				taskStatus = fmt.Sprintf("%s (worker %d)", status.Status, workerId)
+			}
+		}
+		twp.setTaskState(workerId, StatusUpdate{Status: taskStatus, SubStatus: status.SubStatus, Progress: status.Progress}, zapcore.InfoLevel)
+	})
+	twp.completeTask(workerId)
+	return res, err
 }
 
 func (twp *TaskWorkerPool[T]) setTaskState(workerId int, status StatusUpdate, lvl zapcore.Level) {
@@ -224,64 +263,36 @@ func (twp *TaskWorkerPool[T]) NumWorkers() int {
 	return twp.maxWorkers
 }
 
+// Run executes task, occupying one worker slot for its lifetime.
 func (twp *TaskWorkerPool[T]) Run(task TaskFunc[T]) (T, error) {
+	return twp.RunWeighted(task, 1)
+}
+
+// RunWeighted executes task, occupying weight worker slots for its lifetime.
+// Weight must satisfy 1 <= weight <= num_workers; out-of-range weights
+// are rejected by the validator during package loading, but the pool also
+// returns an error at runtime if a caller slips one through.
+func (twp *TaskWorkerPool[T]) RunWeighted(task TaskFunc[T], weight int) (T, error) {
 	var zero T
 	if twp.closed.Load() {
 		return zero, fmt.Errorf("worker pool is closed")
 	}
 
-	twp.mu.Lock()
-	id := twp.nextTaskId
-	twp.nextTaskId++
-	twp.mu.Unlock()
+	twp.activeJobs.Add(1)
+	defer twp.activeJobs.Done()
 
-	resultCh := make(chan TaskResult[T], 1)
-	job := job[T]{id: id, task: task, result: resultCh}
-
-	if err := twp.enqueue(job); err != nil {
-		return zero, err
-	}
-
-	res := <-resultCh
-	return res.Return, res.Error
+	return twp.run(task, weight)
 }
 
+// Shutdown stops accepting new jobs. In-flight jobs that have already
+// acquired slot permits finish normally.
 func (twp *TaskWorkerPool[T]) Shutdown() {
 	twp.shutdownOnce.Do(func() {
 		twp.closed.Store(true)
-		close(twp.jobCh)
 	})
 }
 
-func (twp *TaskWorkerPool[T]) enqueue(job job[T]) (err error) {
-	twp.activeJobs.Add(1)
-
-	defer func() {
-		if r := recover(); r != nil {
-			twp.activeJobs.Done() // undo the Add if enqueue fails
-			if twp.closed.Load() {
-				err = fmt.Errorf("worker pool is closed")
-				return
-			}
-			panic(r)
-		}
-	}()
-
-	// enqueue or bail on context cancel
-	select {
-	case twp.jobCh <- job:
-	case <-time.After(time.Second): // backstop so we don't hang if closed
-		if twp.closed.Load() {
-			twp.activeJobs.Done()
-			return fmt.Errorf("worker pool is closed")
-		}
-		twp.jobCh <- job
-	}
-
-	return nil
-}
-
-// WaitForCompletion blocks until all enqueued jobs have finished.
+// WaitForCompletion blocks until all submitted jobs have finished.
 func (twp *TaskWorkerPool[T]) WaitForCompletion() {
 	twp.activeJobs.Wait()
 }
@@ -311,17 +322,18 @@ func (twp *TaskWorkerPool[T]) GetRunningCount() int {
 	return len(twp.taskState)
 }
 
-// RunFireAndForget enqueues a task without waiting for its result.
+// RunFireAndForget executes task on a background goroutine, returning
+// immediately. The returned error signals only that submission failed
+// (e.g. the pool is closed); task errors are discarded.
 func (twp *TaskWorkerPool[T]) RunFireAndForget(task TaskFunc[T]) error {
 	if twp.closed.Load() {
 		return fmt.Errorf("worker pool is closed")
 	}
 
-	twp.mu.Lock()
-	id := twp.nextTaskId
-	twp.nextTaskId++
-	twp.mu.Unlock()
-
-	job := job[T]{id: id, task: task, result: nil}
-	return twp.enqueue(job)
+	twp.activeJobs.Add(1)
+	go func() {
+		defer twp.activeJobs.Done()
+		_, _ = twp.run(task, 1)
+	}()
+	return nil
 }

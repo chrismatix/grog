@@ -120,7 +120,53 @@ func LoadPackages(ctx context.Context, startDir string) ([]*model.Package, error
 		packages = append(packages, loadedPackage)
 	}
 
+	if err := validateScheduling(packages); err != nil {
+		return nil, err
+	}
+
 	return packages, nil
+}
+
+// validateScheduling verifies that each target's weight fits within the global
+// worker pool and, when the target participates in a concurrency group, within
+// that group's capacity. These are misconfigurations that would otherwise
+// deadlock the scheduler at runtime, so fail loading instead.
+func validateScheduling(packages []*model.Package) error {
+	numWorkers := config.Global.NumWorkers
+	if numWorkers < 1 {
+		numWorkers = runtime.NumCPU()
+	}
+
+	for _, pkg := range packages {
+		for _, target := range pkg.Targets {
+			if target.Weight > numWorkers {
+				return fmt.Errorf(
+					"target %s declares weight=%d but num_workers=%d",
+					target.Label, target.Weight, numWorkers,
+				)
+			}
+			if target.ConcurrencyGroup == "" {
+				continue
+			}
+			capacity := GroupCapacity(target.ConcurrencyGroup)
+			if target.Weight > capacity {
+				return fmt.Errorf(
+					"target %s declares weight=%d in concurrency_group %q but group capacity=%d",
+					target.Label, target.Weight, target.ConcurrencyGroup, capacity,
+				)
+			}
+		}
+	}
+	return nil
+}
+
+// GroupCapacity returns the configured capacity for a concurrency group,
+// defaulting to 1 when the group is absent from config or misconfigured.
+func GroupCapacity(name string) int {
+	if capacity, ok := config.Global.ConcurrencyGroups[name]; ok && capacity > 0 {
+		return capacity
+	}
+	return 1
 }
 
 func mergePackages(from *model.Package, into *model.Package) error {

@@ -20,6 +20,9 @@ type TargetDTO struct {
 	Platforms            []string          `json:"platforms,omitempty" yaml:"platforms,omitempty" pkl:"platforms" starlark:"platforms"`
 	EnvironmentVariables map[string]string `json:"environment_variables,omitempty" yaml:"environment_variables,omitempty" pkl:"environment_variables" starlark:"environment_variables"`
 	Timeout              string            `json:"timeout,omitempty" yaml:"timeout,omitempty" pkl:"timeout" starlark:"timeout"`
+
+	ConcurrencyGroup string `json:"concurrency_group,omitempty" yaml:"concurrency_group,omitempty" pkl:"concurrency_group" starlark:"concurrency_group"`
+	Weight           int    `json:"weight,omitempty" yaml:"weight,omitempty" pkl:"weight" starlark:"weight"`
 }
 
 type AliasDTO struct {

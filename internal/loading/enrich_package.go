@@ -105,6 +105,8 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 			Fingerprint:          target.Fingerprint,
 			EnvironmentVariables: target.EnvironmentVariables,
 			Timeout:              timeout,
+			ConcurrencyGroup:     target.ConcurrencyGroup,
+			Weight:               target.Weight,
 		}
 	}
 

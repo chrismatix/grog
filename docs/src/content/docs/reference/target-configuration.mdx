@@ -33,6 +33,8 @@ Grog uses this information to ensure incremental, cached, and parallel builds.
 | `bin_output`            | `Output`                 | Specifically identifies a binary output from the target                |
 | `timeout`               | `string`                 | Maximum time allowed for the target command to run                    |
 | `environment_variables` | `Record<string, string>` | Additional environment variables set when running the target           |
+| `concurrency_group`     | `string`                 | Name of a concurrency group. Members compete for the group's capacity (default `1` = serialized) |
+| `weight`                | `int`                    | Worker slots this target occupies while running (default `1`)         |
 
 <Aside type="note">
   Targets with names ending in `test` are automatically treated as test targets.
@@ -164,3 +166,36 @@ Key-value pairs of environment variables that will be set for this target during
 The maximum time the target's command is allowed to run. If the command exceeds this duration, the build or test fails with a timeout error.
 
 Durations are expressed using Go's duration syntax, e.g. `30s`, `5m`.
+
+### concurrency_group
+
+Optional name of a concurrency group. Targets sharing a group compete for the group's capacity: each running member charges its `weight` against the group, and new members wait when the capacity is reached. Unconfigured groups default to capacity `1` — declaring `concurrency_group = "docker"` on two docker-build targets is enough to serialize them, without any `grog.toml` change.
+
+Group capacities are configured workspace-wide in `grog.toml` under `[concurrency_groups]` (see [Configuration → Concurrency Groups](/reference/configuration/#concurrency-groups)). Use groups for shared external resources — a single docker daemon, a test database, a GPU, a bound port — where the contention is not expressible as a target dependency.
+
+```pkl
+new Target {
+  name = "image"
+  concurrency_group = "docker"
+  command = "docker build -t myapp ."
+}
+```
+
+### weight
+
+How many worker slots this target occupies while running. Defaults to `1`.
+
+- Always counts against `num_workers` (the global slot pool).
+- If `concurrency_group` is set, also counts against the group's capacity.
+
+Set `weight > 1` for commands that are internally parallel — a compiler run with `-j`, a multi-core test suite, `rustc` with codegen-units — so Grog reserves proportional headroom and avoids oversubscribing the machine.
+
+Grog rejects at load time any target whose `weight` exceeds `num_workers` or its group's capacity; those configurations would otherwise block forever.
+
+```pkl
+new Target {
+  name = "libfoo"
+  weight = 4
+  command = "make -j4 libfoo"
+}
+```
