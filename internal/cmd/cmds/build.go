@@ -202,7 +202,6 @@ func RunBuildAndAfter(
 	}
 	completionMap, executionErr := executor.Execute(ctx)
 
-	// small helper for logging
 	goal := "Build"
 	if testFilter == selection.TestOnly {
 		goal = "Test"
@@ -210,24 +209,26 @@ func RunBuildAndAfter(
 		goal = "Build and test"
 	}
 
-	// Print the build summary before invoking the callback so the user sees
-	// the build finished before any binary output appears.
-	var afterBuildErr error
-	calledAfterBuild := false
-	if afterBuildSuccess != nil && buildSucceeded(executionErr, completionMap) {
+	// Print the build summary once, up front — it doubles as the signal that
+	// the build finished before any callback output appears.
+	buildOK := buildSucceeded(executionErr, completionMap)
+	if buildOK {
 		successCount, cacheHits := completionMap.TargetSuccessCount()
 		logger.Infof("%s completed successfully. %s completed (%d cache hits).",
 			goal,
 			console.FCountTargets(successCount),
 			cacheHits)
-		releaseWorkspaceLock()
-		afterBuildErr = afterBuildSuccess()
-		calledAfterBuild = true
 	}
 
-	if afterBuildSuccess != nil && ctx.Err() == nil {
-		executor.WaitForAsyncWrites(ctx)
+	// Run the callback (e.g. `grog run` binaries) in parallel with any
+	// outstanding async cache writes.
+	var afterBuildErr error
+	if afterBuildSuccess != nil && buildOK {
+		releaseWorkspaceLock()
+		afterBuildErr = afterBuildSuccess()
 	}
+
+	executor.WaitForAsyncWrites(ctx)
 
 	// Write trace (synchronous — Parquet writes are fast for local FS,
 	// and we need to ensure the write completes before the process exits)
@@ -337,14 +338,7 @@ func RunBuildAndAfter(
 		os.Exit(1)
 	}
 
-	if executionErr == nil {
-		if !calledAfterBuild {
-			logger.Infof("%s completed successfully. %s completed (%d cache hits).",
-				goal,
-				console.FCountTargets(successCount),
-				cacheHits)
-		}
-	} else {
+	if executionErr != nil {
 		os.Exit(1)
 	}
 
