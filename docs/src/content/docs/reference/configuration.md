@@ -32,7 +32,8 @@ environment_variables = { FOO = "bar" }
 # Cache Settings
 enable_cache = true # default
 async_cache_writes = true # default
-# num_io_workers = 12 # defaults to 3 * num_workers
+# num_io_workers = 64 # defaults to clamp(num_cpu * 4, 32, 256)
+# num_async_writers = 12 # defaults to 3 * num_workers
 
 [cache]
 backend = "gcs"  # Options: "" (local), "gcs", "s3", "azure"
@@ -81,7 +82,8 @@ For instance, to set or override the `fail_fast` option set `GROG_FAIL_FAST=fals
 - **hash_algorithm**: Selects the hash function used for cache keys and change detection. [`xxh3`](https://xxhash.com/) (default) offers extremely fast, 128-bit hashes with a negligible collision probability for typical builds, while `sha256` is slower but cryptographically strong—use it if you are hashing untrusted inputs or want a vanishingly small risk of collisions despite the performance cost.
 - **all_platforms**: When set to `true` skips the platform selection step and builds all targets for all platforms ([read more](/topics/querying)).
 - **async_cache_writes**: When `true` (default), cache writes are offloaded to a dedicated I/O worker pool, freeing task workers to start downstream targets sooner. Output hashes are still computed synchronously so dependency chains and cache keys stay correct. The I/O pool is drained before the build returns, and its progress is shown alongside running targets in the build UI. Write failures are non-fatal warnings — the build result is unaffected. Set to `false` to run cache writes inline on task workers (the pre-0.18 behaviour).
-- **num_io_workers**: Number of I/O workers for async cache writes. Only relevant when `async_cache_writes` is `true`. Defaults to `3 * num_workers`.
+- **num_io_workers**: Caps the number of concurrent I/O operations against the cache backend (CAS reads/writes, target/taint cache, tracing, docker proxy). Enforced via a process-wide semaphore so every backend call site shares the same budget. Defaults to `clamp(num_cpu * 4, 32, 256)` — the lower bound keeps remote backends saturated under typical RTT (Little's law); the upper bound stays well under Go's 10k-thread ceiling and the default open-file-descriptor limit.
+- **num_async_writers**: Size of the async cache-writer goroutine pool that drains deferred writes when `async_cache_writes` is `true`. Each task it dispatches still acquires a slot on the global I/O semaphore, so this knob only affects how many writes can be queued and drained in parallel — not the bound on backend traffic. Defaults to `3 * num_workers`.
 - **skip_workspace_lock**: When `true`, Grog does not acquire a workspace-level lock before executing. **Warning:** Running multiple grog instances without locking can corrupt the workspace or cache.
 
 ### Trace Settings

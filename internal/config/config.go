@@ -42,9 +42,20 @@ type WorkspaceConfig struct {
 	// are still computed synchronously so dependency chains stay correct.
 	// Pending I/O writes are drained before the build returns. Defaults to true.
 	AsyncCacheWrites bool `mapstructure:"async_cache_writes"`
-	// NumIOWorkers sets the number of I/O workers used for async cache writes.
-	// Only relevant when AsyncCacheWrites is true. Defaults to 3 * num_workers.
+	// NumIOWorkers caps the number of concurrent I/O operations against the
+	// cache backend (CAS reads/writes, target/taint cache, tracing, docker
+	// proxy). It is enforced via a process-wide semaphore inside the
+	// BoundedBackend wrapper, so every backend call site shares the same
+	// budget. Defaults to clamp(NumCPU * 4, 32, 256) — see
+	// backends.DefaultIOConcurrency for the reasoning.
 	NumIOWorkers int `mapstructure:"num_io_workers"`
+	// NumAsyncWriters sets the size of the async cache-writer goroutine pool
+	// that pulls deferred write tasks off the queue when AsyncCacheWrites is
+	// true. Each task it dispatches still acquires a slot on the global I/O
+	// semaphore, so this knob only affects how many writes can be queued and
+	// drained in parallel — not the bound on backend traffic. Defaults to
+	// 3 * num_workers.
+	NumAsyncWriters int `mapstructure:"num_async_writers"`
 
 	// Logging
 	LogLevel      string `mapstructure:"log_level"`
