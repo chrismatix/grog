@@ -88,12 +88,9 @@ func RunBuild(
 	RunBuildAndAfter(ctx, logger, targetPatterns, graph, testFilter, streamLogs, loadOutputsMode, nil, commandOverride...)
 }
 
-// RunBuildAndAfter runs the build, then (only on build success) invokes
-// afterBuildSuccess in parallel with any in-flight async cache writes. The
-// async cache wait, trace finalization, and elapsed-time logging all happen
-// after the callback returns, so the callback gets to run while uploads
-// continue in the background. If afterBuildSuccess is nil, behavior matches
-// RunBuild.
+// RunBuildAndAfter runs the build, then — on build success — invokes
+// afterBuildSuccess in parallel with any in-flight async cache writes.
+// afterBuildSuccess=nil is equivalent to RunBuild.
 func RunBuildAndAfter(
 	ctx context.Context,
 	logger *console.Logger,
@@ -169,10 +166,8 @@ func RunBuildAndAfter(
 	registry := output.NewRegistry(ctx, cas)
 
 	// Only lock the workspace once necessary, i.e., before we start building.
-	// The lock is released via releaseWorkspaceLock below. Callers that run a
-	// post-build step (e.g. `grog run` executing a user binary) release it
-	// before invoking the callback so the binary — which may itself shell out
-	// to `grog` — isn't blocked by a lock its parent process still holds.
+	// releaseWorkspaceLock is invoked explicitly before afterBuildSuccess so a
+	// user binary that itself shells out to grog doesn't deadlock on the lock.
 	releaseWorkspaceLock := func() {}
 	if config.Global.SkipWorkspaceLock {
 		logger.Warn("Skipping workspace lock. Concurrent grog executions may corrupt the cache or workspace state.")
@@ -215,12 +210,8 @@ func RunBuildAndAfter(
 		goal = "Build and test"
 	}
 
-	// When an after-build callback is supplied (e.g. `grog run`), print the
-	// build-success summary before invoking it so the user sees the build
-	// finished before any binary output appears, and so async cache writes
-	// run in parallel with the user's command. The workspace lock is released
-	// up front because the callback may run user binaries that themselves
-	// invoke `grog` — holding the lock across that would deadlock the child.
+	// Print the build summary before invoking the callback so the user sees
+	// the build finished before any binary output appears.
 	var afterBuildErr error
 	calledAfterBuild := false
 	if afterBuildSuccess != nil && buildSucceeded(executionErr, completionMap) {
@@ -234,9 +225,6 @@ func RunBuildAndAfter(
 		calledAfterBuild = true
 	}
 
-	// Block on outstanding async cache writes so the trace and elapsed time
-	// below report accurate numbers. WaitForAsyncWrites is a no-op if the
-	// build path already waited inside Execute.
 	if afterBuildSuccess != nil && ctx.Err() == nil {
 		executor.WaitForAsyncWrites(ctx)
 	}
@@ -350,8 +338,6 @@ func RunBuildAndAfter(
 	}
 
 	if executionErr == nil {
-		// Skip the success message if we already printed it before invoking
-		// the after-build callback above.
 		if !calledAfterBuild {
 			logger.Infof("%s completed successfully. %s completed (%d cache hits).",
 				goal,
@@ -367,8 +353,7 @@ func RunBuildAndAfter(
 	}
 }
 
-// buildSucceeded reports whether the build phase finished cleanly and it is
-// safe to run a dependent post-build step such as user binaries.
+// buildSucceeded reports whether it is safe to run a dependent post-build step.
 func buildSucceeded(executionErr error, completionMap dag.CompletionMap) bool {
 	if executionErr != nil {
 		return false

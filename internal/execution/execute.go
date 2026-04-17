@@ -152,16 +152,11 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	completionMap, err := walker.Walk(ctx)
 
 	// Wait for I/O pool to drain before returning, but only if the build
-	// was not interrupted.  Async cache writes use a non-cancellable context
+	// was not interrupted. Async cache writes use a non-cancellable context
 	// so they can outlive the build, but we must not block an interrupted
-	// shutdown waiting for slow remote uploads to finish.
-	//
-	// When deferAsyncWait is set, the caller is responsible for invoking
-	// WaitForAsyncWrites itself (e.g. `grog run` waits after the user's
-	// binary finishes so cache uploads run in parallel with it).
+	// shutdown waiting for slow remote uploads to finish. When
+	// deferAsyncWait is set, the caller owns the wait via WaitForAsyncWrites.
 	if ctx.Err() == nil && !e.deferAsyncWait {
-		// Inline wait — do not log a "waiting" message because for plain
-		// `grog build` this is just the normal end-of-build cache flush.
 		waitStart := time.Now()
 		e.cacheWriter.Wait()
 		e.asyncWaitTime = time.Since(waitStart)
@@ -170,19 +165,15 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	return completionMap, err
 }
 
-// DeferAsyncWait disables the implicit cacheWriter.Wait() at the end of
-// Execute. The caller must invoke WaitForAsyncWrites once it is ready to
-// block on outstanding uploads.
+// DeferAsyncWait opts out of the implicit cache-write wait in Execute so the
+// caller can run other work in parallel with uploads.
 func (e *Executor) DeferAsyncWait() {
 	e.deferAsyncWait = true
 }
 
-// WaitForAsyncWrites blocks until all outstanding async cache writes complete
-// and records the elapsed time as AsyncWaitTime. Intended for callers that
-// invoked DeferAsyncWait and ran other work (e.g. user binaries) in parallel
-// with cache uploads. Logs a status message when writes are still in flight so
-// the user understands the delay between their command finishing and the
-// process exiting.
+// WaitForAsyncWrites blocks until all outstanding async cache writes complete,
+// recording the elapsed time as AsyncWaitTime. Logs a status line when writes
+// are still in flight so the user understands the wait.
 func (e *Executor) WaitForAsyncWrites(ctx context.Context) {
 	if e.cacheWriter == nil {
 		return
