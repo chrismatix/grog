@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -167,7 +168,12 @@ func RunBuildAndAfter(
 	taintCache := caching.NewTaintCache(cache)
 	registry := output.NewRegistry(ctx, cas)
 
-	// Only lock the workspace once necessary, i.e., before we start building
+	// Only lock the workspace once necessary, i.e., before we start building.
+	// The lock is released via releaseWorkspaceLock below. Callers that run a
+	// post-build step (e.g. `grog run` executing a user binary) release it
+	// before invoking the callback so the binary — which may itself shell out
+	// to `grog` — isn't blocked by a lock its parent process still holds.
+	releaseWorkspaceLock := func() {}
 	if config.Global.SkipWorkspaceLock {
 		logger.Warn("Skipping workspace lock. Concurrent grog executions may corrupt the cache or workspace state.")
 	} else {
@@ -175,11 +181,15 @@ func RunBuildAndAfter(
 		if err := locker.Lock(ctx); err != nil {
 			logger.Fatalf("could not acquire workspace lock: %v", err)
 		}
-		defer func() {
-			if err := locker.Unlock(); err != nil {
-				logger.Fatalf("failed to release workspace lock: %v", err)
-			}
-		}()
+		var unlockOnce sync.Once
+		releaseWorkspaceLock = func() {
+			unlockOnce.Do(func() {
+				if err := locker.Unlock(); err != nil {
+					logger.Errorf("failed to release workspace lock: %v", err)
+				}
+			})
+		}
+		defer releaseWorkspaceLock()
 	}
 
 	executor := execution.NewExecutor(
@@ -208,7 +218,9 @@ func RunBuildAndAfter(
 	// When an after-build callback is supplied (e.g. `grog run`), print the
 	// build-success summary before invoking it so the user sees the build
 	// finished before any binary output appears, and so async cache writes
-	// run in parallel with the user's command.
+	// run in parallel with the user's command. The workspace lock is released
+	// up front because the callback may run user binaries that themselves
+	// invoke `grog` — holding the lock across that would deadlock the child.
 	var afterBuildErr error
 	calledAfterBuild := false
 	if afterBuildSuccess != nil && buildSucceeded(executionErr, completionMap) {
@@ -217,6 +229,7 @@ func RunBuildAndAfter(
 			goal,
 			console.FCountTargets(successCount),
 			cacheHits)
+		releaseWorkspaceLock()
 		afterBuildErr = afterBuildSuccess()
 		calledAfterBuild = true
 	}

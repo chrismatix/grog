@@ -36,6 +36,13 @@ type TaskStateMsg struct {
 func StartTaskUI(ctx context.Context) (context.Context, *tea.Program, func(tea.Msg)) {
 	msgCh := make(chan tea.Msg, 100)
 
+	// uiDone signals that the bubble tea program is no longer consuming from
+	// msgCh. Producers (workers publishing status updates) must stop trying
+	// to send once this is closed — otherwise they'll block forever filling
+	// up msgCh after the UI has been torn down, which happens when the caller
+	// returns from Execute while async I/O workers are still running.
+	uiDone := make(chan struct{})
+
 	// Because bubble tea manages the interrupt we overwrite
 	// the default cancellation mechanism in cmd_setup.go
 	wrappedCtx, cancel := context.WithCancel(ctx)
@@ -52,6 +59,8 @@ func StartTaskUI(ctx context.Context) (context.Context, *tea.Program, func(tea.M
 	p := tea.NewProgram(initialModel(ctx, msgCh, cancel), opts...)
 
 	go func() {
+		defer close(uiDone)
+
 		errCh := make(chan error, 1)
 
 		go func() {
@@ -70,10 +79,12 @@ func StartTaskUI(ctx context.Context) (context.Context, *tea.Program, func(tea.M
 		}
 	}()
 
-	// inspired by program.Send
+	// inspired by program.Send. Drops messages once the UI has shut down so
+	// that background producers never block on a full msgCh.
 	sendFunc := func(msg tea.Msg) {
 		select {
 		case <-wrappedCtx.Done():
+		case <-uiDone:
 		case msgCh <- msg:
 		}
 	}
