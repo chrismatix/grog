@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 
 	"grog/internal/caching"
+	"grog/internal/caching/backends"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/model"
@@ -209,9 +210,13 @@ func (d *DirectoryOutputHandler) Write(
 	}, nil
 }
 
-// uploadFilesToCas uploads files to the CAS in parallel. Concurrent backend
-// I/O is bounded process-wide by the BoundedBackend wrapper; each cas.Write
-// call below acquires a slot on the global I/O semaphore.
+// uploadFilesToCas uploads files to the CAS in parallel. Each goroutine
+// acquires a slot on the global I/O semaphore *before* opening the local
+// file, so the in-flight FD count never exceeds the configured I/O budget
+// even on directory outputs with thousands of small files. The acquired
+// slot is then carried into cas.Write via the returned context, so the
+// inner BoundedBackend.Set sees the preacquired marker and does not
+// double-count.
 func uploadFilesToCas(ctx context.Context, cas *caching.Cas, fileUploads []fileUpload, progress *worker.ProgressTracker) (int64, error) {
 	logger := console.GetLogger(ctx)
 	var sizeBytes atomic.Int64
@@ -224,6 +229,13 @@ func uploadFilesToCas(ctx context.Context, cas *caching.Cas, fileUploads []fileU
 		localUploadAction := uploadAction
 		go func() {
 			defer wg.Done()
+			ioCtx, release, err := backends.AcquireGlobalIO(ctx)
+			if err != nil {
+				errChan <- err
+				return
+			}
+			defer release()
+
 			logger.Debugf("uploading %s to CAS digest %s", localUploadAction.absolutePath, localUploadAction.digest)
 			file, err := os.Open(localUploadAction.absolutePath)
 			if err != nil {
@@ -237,7 +249,7 @@ func uploadFilesToCas(ctx context.Context, cas *caching.Cas, fileUploads []fileU
 				reader = progress.WrapReader(file)
 			}
 
-			if err := cas.Write(ctx, localUploadAction.digest, reader); err != nil {
+			if err := cas.Write(ioCtx, localUploadAction.digest, reader); err != nil {
 				errChan <- err
 				return
 			}
