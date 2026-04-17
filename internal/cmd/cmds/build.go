@@ -227,7 +227,7 @@ func RunBuild(
 					criticalPath.CacheDuration.Seconds(),
 				)
 			}
-			logger.Debugf("Critical path: %s", strings.Join(criticalPathLabels, " -> "))
+			logger.Infof("Critical path: %s", strings.Join(criticalPathLabels, " -> "))
 		} else {
 			logger.Infof(
 				"Elapsed time: %.3fs",
