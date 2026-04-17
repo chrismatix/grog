@@ -67,12 +67,52 @@ func SetGlobalIOConcurrency(cap int) {
 	globalIOSem.Store(semaphore.NewWeighted(int64(cap)))
 }
 
-// acquireGlobalIO blocks until a slot is available on the global semaphore
-// or ctx is cancelled. It returns a release func; the func is a no-op when
-// the semaphore is unset.
-func acquireGlobalIO(ctx context.Context) (func(), error) {
+// preacquiredKey marks a context as already holding a global I/O slot, so
+// BoundedBackend operations called with that context skip their own
+// Acquire. This lets handlers that need to gate non-backend resources
+// (e.g. local file descriptors) under the same budget as the backend call
+// avoid the double-count that would otherwise deadlock once `cap`
+// goroutines each held one slot and waited for a second.
+type preacquiredKey struct{}
+
+// AcquireGlobalIO blocks until a slot is available on the process-wide I/O
+// semaphore or ctx is cancelled. It returns a context marked as holding the
+// slot — pass it to subsequent backend calls to prevent the BoundedBackend
+// wrapper from acquiring a second slot — and an idempotent release func.
+// When the global semaphore is unset (e.g. tests that bypass
+// GetCacheBackend) the release is a no-op and ctx is returned unchanged.
+func AcquireGlobalIO(ctx context.Context) (context.Context, func(), error) {
 	sem := globalIOSem.Load()
 	if sem == nil {
+		return ctx, func() {}, nil
+	}
+	if hasPreacquiredSlot(ctx) {
+		// Caller already holds a slot; don't double-acquire.
+		return ctx, func() {}, nil
+	}
+	if err := sem.Acquire(ctx, 1); err != nil {
+		return ctx, nil, err
+	}
+	var released atomic.Bool
+	release := func() {
+		if released.CompareAndSwap(false, true) {
+			sem.Release(1)
+		}
+	}
+	return context.WithValue(ctx, preacquiredKey{}, true), release, nil
+}
+
+func hasPreacquiredSlot(ctx context.Context) bool {
+	v, _ := ctx.Value(preacquiredKey{}).(bool)
+	return v
+}
+
+// acquireForBackend is the internal Acquire used by BoundedBackend
+// operations. It honours a preacquired-slot marker on ctx so callers that
+// already hold a slot via AcquireGlobalIO don't deadlock here.
+func acquireForBackend(ctx context.Context) (func(), error) {
+	sem := globalIOSem.Load()
+	if sem == nil || hasPreacquiredSlot(ctx) {
 		return func() {}, nil
 	}
 	if err := sem.Acquire(ctx, 1); err != nil {
@@ -110,7 +150,7 @@ func (b *BoundedBackend) TypeName() string {
 }
 
 func (b *BoundedBackend) Get(ctx context.Context, path, key string) (io.ReadCloser, error) {
-	release, err := acquireGlobalIO(ctx)
+	release, err := acquireForBackend(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +163,7 @@ func (b *BoundedBackend) Get(ctx context.Context, path, key string) (io.ReadClos
 }
 
 func (b *BoundedBackend) Set(ctx context.Context, path, key string, content io.Reader) error {
-	release, err := acquireGlobalIO(ctx)
+	release, err := acquireForBackend(ctx)
 	if err != nil {
 		return err
 	}
@@ -131,21 +171,21 @@ func (b *BoundedBackend) Set(ctx context.Context, path, key string, content io.R
 	return b.inner.Set(ctx, path, key, content)
 }
 
+// BeginWrite is intentionally NOT bounded. Staged writes are long-lived
+// upload sessions (the dockerproxy registry holds them across the
+// POST/PATCH/.../PUT boundary, with arbitrary daemon idle time between
+// requests). Holding a global I/O slot for that whole window would let an
+// abandoned or interrupted upload leak slots until every concurrent docker
+// push had blocked the rest of the cache. The bytes that actually move
+// through the staged writer reach the backend asynchronously via a pipe
+// goroutine — the natural rate-limiter there is the caller (dockerd) and
+// the per-session pipe buffer, not this semaphore.
 func (b *BoundedBackend) BeginWrite(ctx context.Context) (StagedWriter, error) {
-	release, err := acquireGlobalIO(ctx)
-	if err != nil {
-		return nil, err
-	}
-	sw, err := b.inner.BeginWrite(ctx)
-	if err != nil {
-		release()
-		return nil, err
-	}
-	return &releasingStagedWriter{StagedWriter: sw, release: release}, nil
+	return b.inner.BeginWrite(ctx)
 }
 
 func (b *BoundedBackend) Delete(ctx context.Context, path, key string) error {
-	release, err := acquireGlobalIO(ctx)
+	release, err := acquireForBackend(ctx)
 	if err != nil {
 		return err
 	}
@@ -154,7 +194,7 @@ func (b *BoundedBackend) Delete(ctx context.Context, path, key string) error {
 }
 
 func (b *BoundedBackend) Exists(ctx context.Context, path, key string) (bool, error) {
-	release, err := acquireGlobalIO(ctx)
+	release, err := acquireForBackend(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -163,7 +203,7 @@ func (b *BoundedBackend) Exists(ctx context.Context, path, key string) (bool, er
 }
 
 func (b *BoundedBackend) Size(ctx context.Context, path, key string) (int64, error) {
-	release, err := acquireGlobalIO(ctx)
+	release, err := acquireForBackend(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -172,7 +212,7 @@ func (b *BoundedBackend) Size(ctx context.Context, path, key string) (int64, err
 }
 
 func (b *BoundedBackend) ListKeys(ctx context.Context, path, suffix string) ([]string, error) {
-	release, err := acquireGlobalIO(ctx)
+	release, err := acquireForBackend(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -191,21 +231,4 @@ func (r *releasingReadCloser) Close() error {
 	err := r.ReadCloser.Close()
 	r.release()
 	return err
-}
-
-// releasingStagedWriter holds the semaphore slot for the lifetime of the
-// streaming write and releases it on Commit or Cancel.
-type releasingStagedWriter struct {
-	StagedWriter
-	release func()
-}
-
-func (w *releasingStagedWriter) Commit(ctx context.Context, path, key string) error {
-	defer w.release()
-	return w.StagedWriter.Commit(ctx, path, key)
-}
-
-func (w *releasingStagedWriter) Cancel(ctx context.Context) error {
-	defer w.release()
-	return w.StagedWriter.Cancel(ctx)
 }

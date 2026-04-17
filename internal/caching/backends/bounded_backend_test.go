@@ -172,42 +172,66 @@ func TestBoundedBackend_GetReleasesOnReaderClose(t *testing.T) {
 	}
 }
 
-func TestBoundedBackend_BeginWriteHoldsSlotUntilCommit(t *testing.T) {
+// TestBoundedBackend_BeginWriteIsNotBounded documents the deliberate carve-
+// out: staged writes (the dockerproxy upload session) bypass the global
+// I/O semaphore, because slots would otherwise leak across the long
+// POST/PATCH/.../PUT lifetime of an interrupted upload.
+func TestBoundedBackend_BeginWriteIsNotBounded(t *testing.T) {
 	const limit = 1
 	withGlobalIOConcurrency(t, limit)
 
 	fake := &fakeBackend{}
 	bb := NewBoundedBackend(fake)
 
-	sw, err := bb.BeginWrite(context.Background())
-	if err != nil {
-		t.Fatalf("BeginWrite: %v", err)
-	}
-
-	// Second BeginWrite must block until the first one commits.
-	done := make(chan struct{})
-	go func() {
-		sw2, err := bb.BeginWrite(context.Background())
-		if err == nil {
-			_ = sw2.Cancel(context.Background())
+	const sessions = 8
+	writers := make([]StagedWriter, 0, sessions)
+	for i := 0; i < sessions; i++ {
+		sw, err := bb.BeginWrite(context.Background())
+		if err != nil {
+			t.Fatalf("BeginWrite %d: %v", i, err)
 		}
-		close(done)
+		writers = append(writers, sw)
+	}
+
+	for _, sw := range writers {
+		if err := sw.Cancel(context.Background()); err != nil {
+			t.Fatalf("Cancel: %v", err)
+		}
+	}
+}
+
+// TestAcquireGlobalIO_PreventsDoubleCount asserts that a backend call made
+// with a context returned from AcquireGlobalIO does not consume a second
+// slot — the property uploadFilesToCas relies on to avoid deadlocking
+// when it gates os.Open under the same budget as the cas.Write that
+// follows.
+func TestAcquireGlobalIO_PreventsDoubleCount(t *testing.T) {
+	const limit = 1
+	withGlobalIOConcurrency(t, limit)
+
+	fake := &fakeBackend{}
+	bb := NewBoundedBackend(fake)
+
+	ctx, release, err := AcquireGlobalIO(context.Background())
+	if err != nil {
+		t.Fatalf("AcquireGlobalIO: %v", err)
+	}
+	defer release()
+
+	// With a 1-slot cap and the slot already held, a naive double-acquire
+	// would deadlock. The preacquired marker on ctx must short-circuit
+	// the inner Acquire.
+	done := make(chan error, 1)
+	go func() {
+		done <- bb.Set(ctx, "p", "k", strings.NewReader("x"))
 	}()
-
 	select {
-	case <-done:
-		t.Fatal("second BeginWrite returned before first commit")
-	case <-time.After(50 * time.Millisecond):
-	}
-
-	if err := sw.Commit(context.Background(), "p", "k"); err != nil {
-		t.Fatalf("Commit: %v", err)
-	}
-
-	select {
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Set: %v", err)
+		}
 	case <-time.After(time.Second):
-		t.Fatal("second BeginWrite did not unblock after commit")
+		t.Fatal("Set deadlocked despite preacquired ctx")
 	}
 }
 
