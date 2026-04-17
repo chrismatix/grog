@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 
 	"grog/internal/caching"
 	"grog/internal/console"
@@ -36,10 +37,11 @@ import (
 // to the target cache (the metadata index that maps input hashes to output hashes).
 // Cleanup() is called on every write plan regardless of outcome to remove staged temp files.
 type CacheWriter struct {
-	targetCache *caching.TargetResultCache
-	ioPool      *worker.TaskWorkerPool[struct{}]
-	asyncWrites bool
-	ioContext   context.Context
+	targetCache  *caching.TargetResultCache
+	ioPool       *worker.TaskWorkerPool[struct{}]
+	asyncWrites  bool
+	ioContext    context.Context
+	pendingCount atomic.Int64
 }
 
 func NewCacheWriter(
@@ -75,7 +77,9 @@ func (c *CacheWriter) PersistPreparedTarget(
 		return c.commit(ctx, targetLabel, preparedTarget, progress, true)
 	}
 
+	c.pendingCount.Add(1)
 	err := c.ioPool.RunFireAndForget(func(ioUpdate worker.StatusFunc) (struct{}, error) {
+		defer c.pendingCount.Add(-1)
 		progress := worker.NewProgressTracker(
 			fmt.Sprintf("%s: writing cache", targetLabel),
 			0,
@@ -87,6 +91,7 @@ func (c *CacheWriter) PersistPreparedTarget(
 		return struct{}{}, nil
 	})
 	if err != nil {
+		c.pendingCount.Add(-1)
 		c.cleanupPlans(ctx, preparedTarget.WritePlans)
 		return err
 	}
@@ -95,6 +100,11 @@ func (c *CacheWriter) PersistPreparedTarget(
 
 func (c *CacheWriter) Wait() {
 	c.ioPool.WaitForCompletion()
+}
+
+// HasPendingWrites reports whether any async cache writes are still in flight.
+func (c *CacheWriter) HasPendingWrites() bool {
+	return c.pendingCount.Load() > 0
 }
 
 func (c *CacheWriter) commit(

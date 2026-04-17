@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -84,6 +85,23 @@ func RunBuild(
 	loadOutputsMode config.LoadOutputsMode,
 	commandOverride ...string,
 ) {
+	RunBuildAndAfter(ctx, logger, targetPatterns, graph, testFilter, streamLogs, loadOutputsMode, nil, commandOverride...)
+}
+
+// RunBuildAndAfter runs the build, then — on build success — invokes
+// afterBuildSuccess in parallel with any in-flight async cache writes.
+// afterBuildSuccess=nil is equivalent to RunBuild.
+func RunBuildAndAfter(
+	ctx context.Context,
+	logger *console.Logger,
+	targetPatterns []label.TargetPattern,
+	graph *dag.DirectedTargetGraph,
+	testFilter selection.TargetTypeSelection,
+	streamLogs bool,
+	loadOutputsMode config.LoadOutputsMode,
+	afterBuildSuccess func() error,
+	commandOverride ...string,
+) {
 	startTime := time.Now()
 
 	// Determine command name for tracing
@@ -147,7 +165,10 @@ func RunBuild(
 	taintCache := caching.NewTaintCache(cache)
 	registry := output.NewRegistry(ctx, cas)
 
-	// Only lock the workspace once necessary, i.e., before we start building
+	// Only lock the workspace once necessary, i.e., before we start building.
+	// releaseWorkspaceLock is invoked explicitly before afterBuildSuccess so a
+	// user binary that itself shells out to grog doesn't deadlock on the lock.
+	releaseWorkspaceLock := func() {}
 	if config.Global.SkipWorkspaceLock {
 		logger.Warn("Skipping workspace lock. Concurrent grog executions may corrupt the cache or workspace state.")
 	} else {
@@ -155,11 +176,15 @@ func RunBuild(
 		if err := locker.Lock(ctx); err != nil {
 			logger.Fatalf("could not acquire workspace lock: %v", err)
 		}
-		defer func() {
-			if err := locker.Unlock(); err != nil {
-				logger.Fatalf("failed to release workspace lock: %v", err)
-			}
-		}()
+		var unlockOnce sync.Once
+		releaseWorkspaceLock = func() {
+			unlockOnce.Do(func() {
+				if err := locker.Unlock(); err != nil {
+					logger.Errorf("failed to release workspace lock: %v", err)
+				}
+			})
+		}
+		defer releaseWorkspaceLock()
 	}
 
 	executor := execution.NewExecutor(
@@ -172,7 +197,38 @@ func RunBuild(
 		config.Global.EnableCache,
 		loadOutputsMode,
 	)
+	if afterBuildSuccess != nil {
+		executor.DeferAsyncWait()
+	}
 	completionMap, executionErr := executor.Execute(ctx)
+
+	goal := "Build"
+	if testFilter == selection.TestOnly {
+		goal = "Test"
+	} else if testFilter == selection.AllTargets {
+		goal = "Build and test"
+	}
+
+	// Print the build summary once, up front — it doubles as the signal that
+	// the build finished before any callback output appears.
+	buildOK := buildSucceeded(executionErr, completionMap)
+	if buildOK {
+		successCount, cacheHits := completionMap.TargetSuccessCount()
+		logger.Infof("%s completed successfully. %s completed (%d cache hits).",
+			goal,
+			console.FCountTargets(successCount),
+			cacheHits)
+	}
+
+	// Run the callback (e.g. `grog run` binaries) in parallel with any
+	// outstanding async cache writes.
+	var afterBuildErr error
+	if afterBuildSuccess != nil && buildOK {
+		releaseWorkspaceLock()
+		afterBuildErr = afterBuildSuccess()
+	}
+
+	executor.WaitForAsyncWrites(ctx)
 
 	// Write trace (synchronous — Parquet writes are fast for local FS,
 	// and we need to ensure the write completes before the process exits)
@@ -245,14 +301,6 @@ func RunBuild(
 		logger.Errorf("execution failed: %s", executionErr)
 	}
 
-	// small helper for logging
-	goal := "Build"
-	if testFilter == selection.TestOnly {
-		goal = "Test"
-	} else if testFilter == selection.AllTargets {
-		goal = "Build and test"
-	}
-
 	executionErrors := completionMap.GetErrors()
 	successCount, cacheHits := completionMap.TargetSuccessCount()
 
@@ -290,12 +338,22 @@ func RunBuild(
 		os.Exit(1)
 	}
 
-	if executionErr == nil {
-		logger.Infof("%s completed successfully. %s completed (%d cache hits).",
-			goal,
-			console.FCountTargets(successCount),
-			cacheHits)
-	} else {
+	if executionErr != nil {
 		os.Exit(1)
 	}
+
+	if afterBuildErr != nil {
+		logger.Fatalf("%v", afterBuildErr)
+	}
+}
+
+// buildSucceeded reports whether it is safe to run a dependent post-build step.
+func buildSucceeded(executionErr error, completionMap dag.CompletionMap) bool {
+	if executionErr != nil {
+		return false
+	}
+	if completionMap == nil {
+		return false
+	}
+	return len(completionMap.GetErrors()) == 0
 }

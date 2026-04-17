@@ -47,6 +47,8 @@ type Executor struct {
 	coordinator      *PoolCoordinator
 	cacheWriter      *CacheWriter
 	asyncWaitTime    time.Duration
+	deferAsyncWait   bool
+	asyncDrained     bool
 }
 
 func NewExecutor(
@@ -150,17 +152,43 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	walker := dag.NewWalker(e.graph, walkCallback, e.failFast)
 	completionMap, err := walker.Walk(ctx)
 
-	// Wait for I/O pool to drain before returning, but only if the build
-	// was not interrupted.  Async cache writes use a non-cancellable context
-	// so they can outlive the build, but we must not block an interrupted
-	// shutdown waiting for slow remote uploads to finish.
-	if ctx.Err() == nil {
-		waitStart := time.Now()
-		e.cacheWriter.Wait()
-		e.asyncWaitTime = time.Since(waitStart)
+	// Drain the I/O pool before returning, but only if the build was not
+	// interrupted and the caller hasn't opted to wait itself. Async cache
+	// writes use a non-cancellable context so they can outlive the build,
+	// but we must not block an interrupted shutdown on slow remote uploads.
+	if ctx.Err() == nil && !e.deferAsyncWait {
+		e.drainAsyncWrites()
 	}
 
 	return completionMap, err
+}
+
+// DeferAsyncWait opts out of the implicit cache-write wait in Execute so the
+// caller can run other work in parallel with uploads, then call
+// WaitForAsyncWrites when ready.
+func (e *Executor) DeferAsyncWait() {
+	e.deferAsyncWait = true
+}
+
+// WaitForAsyncWrites blocks until all outstanding async cache writes complete,
+// recording the elapsed time as AsyncWaitTime. Idempotent — safe to call
+// whether or not Execute already waited. Logs a status line when writes are
+// still in flight so the user understands the wait.
+func (e *Executor) WaitForAsyncWrites(ctx context.Context) {
+	if e.asyncDrained || e.cacheWriter == nil || ctx.Err() != nil {
+		return
+	}
+	if e.cacheWriter.HasPendingWrites() {
+		console.GetLogger(ctx).Infof("Waiting for cache writes to finish in the background...")
+	}
+	e.drainAsyncWrites()
+}
+
+func (e *Executor) drainAsyncWrites() {
+	waitStart := time.Now()
+	e.cacheWriter.Wait()
+	e.asyncWaitTime = time.Since(waitStart)
+	e.asyncDrained = true
 }
 
 // AsyncWaitTime returns the wall-clock time spent waiting for the async I/O
