@@ -1,0 +1,24 @@
+name: changes repos
+repo: changes
+cases:
+  - name: changes_dirty_repo
+    setup_command: ../../scripts/setup_changes_repo.sh dirty
+    temp_dir: true
+    grog_args:
+      - changes
+      - --since=HEAD
+      - --dependents=transitive
+  - name: changes_git_repo
+    setup_command: ../../scripts/setup_changes_repo.sh git
+    temp_dir: true
+    grog_args:
+      - changes
+      - --since=HEAD~1
+      - --dependents=transitive
+  - name: changes_jj_repo
+    setup_command: ../../scripts/setup_changes_repo.sh jj
+    temp_dir: true
+    grog_args:
+      - changes
+      - --since=@-
+      - --dependents=transitive

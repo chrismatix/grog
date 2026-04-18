@@ -9,7 +9,7 @@ Available Commands:
   clean           Removes all cached artifacts.
   completion      Generate the autocompletion script for the specified shell
   deps            Lists (transitive) dependencies of a target.
-  explain-changes Renders the chain of targets affected by changes since a git ref as a tree.
+  explain-changes Renders the chain of targets affected by changes since a revision as a tree.
   graph           Outputs the target dependency graph.
   help            Help about any command
   info            Prints information about the grog cli and workspace.

@@ -6,14 +6,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/sergi/go-diff/diffmatchpatch"
 	"gopkg.in/yaml.v3"
-
-	"reflect"
 )
 
 var updateAll = flag.Bool("update-all", false, "update all fixture files")
@@ -69,6 +68,8 @@ type TestStep struct {
 	GrogArgs     []string `yaml:"grog_args"`
 	EnvVars      []string `yaml:"env_vars"`
 	ExpectFail   bool     `yaml:"expect_fail"`
+	// Whether to run this test step against a temporary repo directory.
+	TempDir bool `yaml:"temp_dir"`
 	// Some tests have machine-specific outputs which makes
 	// fixture checking difficult.
 	SkipFixture bool `yaml:"skip_fixture"`
@@ -145,9 +146,21 @@ func TestCliScenarios(t *testing.T) {
 
 			testCaseNames := make(map[string]bool)
 			for _, tc := range tt.Cases {
+				repoPath := tt.Repo
+				cleanupFilePath, err := repoCleanupFilePath(tt.Repo)
+				if err != nil {
+					t.Fatalf("could not get cleanup file path for repo %s: %v", tt.Repo, err)
+				}
+				setupEnvVars := []string{"GROGTEST_CLEANUP_FILE=" + cleanupFilePath}
+				if tc.TempDir {
+					repoPath = t.TempDir()
+					setupEnvVars = append(setupEnvVars, "GROGTEST_TEMP_DIR="+repoPath)
+				}
+
 				// Run the setup command if it is defined
 				if tc.SetupCommand != "" {
-					output, err := runSetupCommand(tc.SetupCommand, tt.Repo)
+					output, err := runSetupCommand(tc.SetupCommand, tt.Repo, setupEnvVars)
+					registerCleanupFile(t, cleanupFilePath)
 					if err != nil {
 						t.Fatalf(
 							"could not run setup command %s on repo %s: %v\nCommand output:\n%s",
@@ -170,7 +183,8 @@ func TestCliScenarios(t *testing.T) {
 				testCaseNames[tc.Name] = true
 
 				t.Run(tc.Name, func(t *testing.T) {
-					output, err := runBinary(tc.GrogArgs, tt.Repo, tc.EnvVars, coverDir)
+
+					output, err := runBinary(tc.GrogArgs, repoPath, tc.EnvVars, coverDir)
 
 					if err != nil && !tc.ExpectFail {
 						fmt.Printf("Command output: %s\n", output)
@@ -225,7 +239,7 @@ func TestMain(m *testing.M) {
 }
 
 func runBinary(args []string, repoPath string, extraEnvVars []string, coverDir string) ([]byte, error) {
-	repoPath = filepath.Join("./integration/test_repos", repoPath)
+	repoPath = resolveRepoPath(repoPath)
 
 	// Debug print the command invocation
 	fmt.Printf("Running command: %s %v in directory: %s\n", binaryPath, args, repoPath)
@@ -250,13 +264,64 @@ func runBinary(args []string, repoPath string, extraEnvVars []string, coverDir s
 	return cmd.CombinedOutput()
 }
 
-func runSetupCommand(command string, repoPath string) ([]byte, error) {
-	repoPath = filepath.Join("./integration/test_repos", repoPath)
+func runSetupCommand(command string, repoPath string, extraEnvVars []string) ([]byte, error) {
+	repoPath = resolveRepoPath(repoPath)
 	fmt.Printf("Running setup command: %s in directory: %s\n", command, repoPath)
 
 	cmd := exec.Command("sh", "-c", command)
+	cmd.Env = append(os.Environ(), extraEnvVars...)
 	cmd.Dir = repoPath
 	return cmd.CombinedOutput()
+}
+
+func resolveRepoPath(repoPath string) string {
+	if filepath.IsAbs(repoPath) {
+		return repoPath
+	}
+	return filepath.Join("./integration/test_repos", repoPath)
+}
+
+func repoCleanupFilePath(repoPath string) (string, error) {
+	repoDirectory, err := filepath.Abs(resolveRepoPath(repoPath))
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(repoDirectory, ".grog-test-cleanup"), nil
+}
+
+func registerCleanupFile(t *testing.T, cleanupFilePath string) {
+	t.Helper()
+
+	cleanupFileContents, err := os.ReadFile(cleanupFilePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return
+		}
+		t.Fatalf("could not read cleanup file %s: %v", cleanupFilePath, err)
+	}
+
+	var directoriesToRemove []string
+	for _, line := range strings.Split(string(cleanupFileContents), "\n") {
+		directoryToRemove := strings.TrimSpace(line)
+		if directoryToRemove == "" {
+			continue
+		}
+		directoriesToRemove = append(directoriesToRemove, directoryToRemove)
+	}
+	if len(directoriesToRemove) == 0 {
+		return
+	}
+
+	t.Cleanup(func() {
+		for _, directoryToRemove := range directoriesToRemove {
+			if err := os.RemoveAll(directoryToRemove); err != nil {
+				t.Errorf("could not remove cleanup directory %s: %v", directoryToRemove, err)
+			}
+		}
+		if err := os.Remove(cleanupFilePath); err != nil && !os.IsNotExist(err) {
+			t.Errorf("could not remove cleanup file %s: %v", cleanupFilePath, err)
+		}
+	})
 }
 
 func getCoverDir() (string, error) {

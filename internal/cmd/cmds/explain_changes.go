@@ -26,8 +26,8 @@ var explainChangesOptions struct {
 
 var ExplainChangesCmd = &cobra.Command{
 	Use:   "explain-changes",
-	Short: "Renders the chain of targets affected by changes since a git ref as a tree.",
-	Long: `Shows, as a tree, how file changes since a given git ref propagate through the dependency graph.
+	Short: "Renders the chain of targets affected by changes since a revision as a tree.",
+	Long: `Shows, as a tree, how file changes since a given Git ref or Jujutsu revision propagate through the dependency graph.
 
 By default the tree is rooted on the leaf consumers of the change — i.e. the top-level targets
 (binaries, tests, etc.) that ultimately depend on the changed code — and walks back through their
@@ -352,7 +352,7 @@ func AddExplainChangesCmd(rootCmd *cobra.Command) {
 		&explainChangesOptions.since,
 		"since",
 		"",
-		"Git ref (commit or branch) to compare against")
+		"Git ref or Jujutsu revision to compare against")
 
 	ExplainChangesCmd.Flags().BoolVar(
 		&explainChangesOptions.showFiles,

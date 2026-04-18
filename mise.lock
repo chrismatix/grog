@@ -219,6 +219,45 @@ checksum = "sha256:bd42e3ebc8cb4ececb86941983baaf1dc221bbb04d838e94ce63b49cc91e0
 url = "https://github.com/golangci/golangci-lint/releases/download/v2.12.2/golangci-lint-2.12.2-windows-amd64.zip"
 provenance = "github-attestations"
 
+[[tools.jj]]
+version = "0.43.0"
+backend = "aqua:jj-vcs/jj"
+
+[tools.jj."platforms.linux-arm64"]
+checksum = "sha256:289197b6bec60b4e57d47260624b617716f737eb02cdfd9155791b2576aa5862"
+url = "https://github.com/jj-vcs/jj/releases/download/v0.43.0/jj-v0.43.0-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/jj-vcs/jj/releases/assets/463825313"
+
+[tools.jj."platforms.linux-arm64-musl"]
+checksum = "sha256:289197b6bec60b4e57d47260624b617716f737eb02cdfd9155791b2576aa5862"
+url = "https://github.com/jj-vcs/jj/releases/download/v0.43.0/jj-v0.43.0-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/jj-vcs/jj/releases/assets/463825313"
+
+[tools.jj."platforms.linux-x64"]
+checksum = "sha256:59e5588583ac82b623239929368c65b90735931c0f26b5a16c1f04d5bb97643d"
+url = "https://github.com/jj-vcs/jj/releases/download/v0.43.0/jj-v0.43.0-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/jj-vcs/jj/releases/assets/463825498"
+
+[tools.jj."platforms.linux-x64-musl"]
+checksum = "sha256:59e5588583ac82b623239929368c65b90735931c0f26b5a16c1f04d5bb97643d"
+url = "https://github.com/jj-vcs/jj/releases/download/v0.43.0/jj-v0.43.0-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/jj-vcs/jj/releases/assets/463825498"
+
+[tools.jj."platforms.macos-arm64"]
+checksum = "sha256:84336bbe5673a36ccc6395c494021ba632794da078eb8c8c513a60f8e1cc3083"
+url = "https://github.com/jj-vcs/jj/releases/download/v0.43.0/jj-v0.43.0-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/jj-vcs/jj/releases/assets/463826329"
+
+[tools.jj."platforms.macos-x64"]
+checksum = "sha256:f1a7fec046b816132318c07a9c096680f7aae78b008709c7166a57efd9c579ec"
+url = "https://github.com/jj-vcs/jj/releases/download/v0.43.0/jj-v0.43.0-x86_64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/jj-vcs/jj/releases/assets/463825063"
+
+[tools.jj."platforms.windows-x64"]
+checksum = "sha256:582f63e55310eaa397782fcb528c3feff5b943a4e2db70666d105972a381f80e"
+url = "https://github.com/jj-vcs/jj/releases/download/v0.43.0/jj-v0.43.0-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/jj-vcs/jj/releases/assets/463827027"
+
 [[tools.make]]
 version = "4.4.1"
 backend = "conda:make"

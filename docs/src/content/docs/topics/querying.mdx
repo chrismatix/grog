@@ -223,17 +223,16 @@ This command is particularly helpful when you want to understand which parts of 
 ## grog changes
 
 ```shell
-grog changes [target-pattern] [--since=<commit>] [--dependents=none|direct|transitive] [--target-type=<type>]
+grog changes --since=<revision> [--dependents=none|transitive] [--target-type=<type>]
 ```
 
-Identifies targets whose inputs have changed since a specific commit. This is extremely useful for CI pipelines where you only want to build what's changed.
+Identifies targets whose inputs have changed since a Git ref or Jujutsu revision. This is extremely useful for CI pipelines where you only want to build what's changed. In a Git working copy, uncommitted and untracked changes are included as well.
 
 **Parameters:**
 
-- `--since`: The git commit to compare against (defaults to HEAD~1)
+- `--since`: The required Git ref or Jujutsu revision to compare against
 - `--dependents`: Controls whether to include targets that depend on changed targets
   - `none`: Only include directly changed targets (default)
-  - `direct`: Include changed targets and their direct dependents
   - `transitive`: Include changed targets and all their dependents (direct and indirect)
 - `--target-type`: Filter targets by type (all, test, no_test, bin_output)
   - `all`: Include all targets (default)
@@ -244,14 +243,11 @@ Identifies targets whose inputs have changed since a specific commit. This is ex
 **Examples:**
 
 ```shell
-# Find all targets that changed in the current commit
-grog changes
-
-# Find all targets that changed since a specific commit
+# Find all targets that changed since a specific Git ref
 grog changes --since=origin/main
 
-# Find all targets that changed in a specific package since a specific commit
-grog changes //services/api/... --since=origin/main
+# Find all targets changed in the current Jujutsu change
+grog changes --since=@-
 
 # Find all targets affected by changes (including dependents)
 grog changes --since=origin/main --dependents=transitive
