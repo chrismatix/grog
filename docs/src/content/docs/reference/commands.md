@@ -197,7 +197,7 @@ Lists targets whose inputs have been modified since a given commit.
 
 ### Synopsis
 
-Identifies targets that need to be rebuilt due to changes in their input files since a specified git commit.
+Identifies targets that need to be rebuilt due to changes in their input files since a specified Git commit or Jujutsu revision.
 Can optionally include transitive dependents of changed targets to find all affected targets.
 
 ```text
@@ -209,7 +209,7 @@ grog changes [flags]
 ```text
   grog changes --since=HEAD~1                      # Show targets changed in the last commit
   grog changes --since=main --dependents=transitive  # Show targets changed since main branch, including dependents
-  grog changes --since=v1.0.0 --target-type=test     # Show only test targets changed since git tag v1.0.0
+  grog changes --since=v1.0.0 --target-type=test     # Show only test targets changed since Git tag v1.0.0
 ```
 
 ### Options
@@ -217,7 +217,7 @@ grog changes [flags]
 ```text
       --dependents string    Whether to include dependents of changed targets (none or transitive) (default "none")
   -h, --help                 help for changes
-      --since string         Git ref (commit or branch) to compare against
+      --since string         Git ref or Jujutsu revision to compare against
       --target-type string   Filter targets by type (all, test, no_test, bin_output) (default "all")
 ```
 
