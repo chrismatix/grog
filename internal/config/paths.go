@@ -1,7 +1,6 @@
 package config
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,15 +9,18 @@ import (
 	"github.com/fatih/color"
 )
 
-// GetWorkspaceCachePrefix returns name of the cache directory for the current repo.
-// Like Bazel we hash the repo path and use that as directory within $GROG_ROOT
-// Unlike Bazel we only use the first 16 characters of the hash and add a readable portion
-// to make it easier to identify.
+// GetWorkspaceCachePrefix returns the name of the cache directory for the
+// current repo. By default the prefix is derived from the workspace directory's
+// basename, which keeps the cache namespace stable across different absolute
+// paths of the same repo (e.g. ephemeral CI runners).
+// Setting the workspace_name option overrides this to isolate workspaces that
+// would otherwise share a basename (for example two forks both checked out
+// under a directory called "myrepo").
 func GetWorkspaceCachePrefix(workspaceDir string) string {
-	repoHash := fmt.Sprintf("%x", sha256.Sum256([]byte(workspaceDir)))[:16]
-
-	workspaceName := filepath.Base(workspaceDir)
-	return fmt.Sprintf("%s-%s", repoHash, workspaceName)
+	if Global.WorkspaceName != "" {
+		return Global.WorkspaceName
+	}
+	return filepath.Base(workspaceDir)
 }
 
 // MustFindWorkspaceRoot searches for the repository root by looking for "grog.toml"

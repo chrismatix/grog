@@ -10,6 +10,7 @@ Find below a complete example of a grog configuration file:
 # Workspace Settings
 root = "/home/grace/grog_data"
 requires_grog = ">=0.15.0"
+# workspace_name = "org-myrepo" # optional — defaults to the workspace directory's basename
 
 # Execution Settings
 fail_fast = true # Exit immediately when encountering an issue
@@ -65,6 +66,7 @@ For instance, to set or override the `fail_fast` option set `GROG_FAIL_FAST=fals
 ## Configuration Variables Explained
 
 - **root**: The base directory where Grog stores its internal files. Defaults to `~/.grog`.
+- **workspace_name**: Optional identifier used as the cache namespace under `root` and as the workspace prefix for remote caches (when `shared_cache = false`) and for Docker registry image names. Defaults to the workspace directory's basename, which keeps the cache stable across different checkout paths of the same repo (e.g. ephemeral CI runners). Set this to disambiguate workspaces that would otherwise collide on basename alone (e.g. two forks both checked out under `myrepo`).
 - **requires_grog**: A [semver](https://semver.org/) range that the running
   Grog binary must satisfy. If the version is outside of this range Grog exits with
   an error.

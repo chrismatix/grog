@@ -18,6 +18,13 @@ const (
 type WorkspaceConfig struct {
 	Root          string `mapstructure:"root"`
 	WorkspaceRoot string `mapstructure:"workspace_root"`
+	// WorkspaceName optionally overrides the cache prefix used to namespace
+	// the workspace under $GROG_ROOT and (when shared_cache is disabled) on
+	// remote cache backends. By default the prefix is the workspace
+	// directory's basename, which stays stable across different checkout
+	// paths of the same repo. Set this to disambiguate workspaces that would
+	// otherwise collide on basename alone.
+	WorkspaceName string `mapstructure:"workspace_name"`
 
 	// Execution
 	FailFast    bool   `mapstructure:"fail_fast"`
