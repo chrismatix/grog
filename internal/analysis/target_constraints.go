@@ -43,8 +43,8 @@ func CheckTargetConstraints(logger *console.Logger, nodeMap model.BuildNodeMap) 
 			errs = append(errs, fmt.Errorf("target %s is a test target but has no command", target.Label))
 		}
 
-		if len(target.Inputs) == 0 && len(target.Dependencies) == 0 && len(target.OutputChecks) == 0 {
-			logger.Warnf("target %s has no inputs, dependencies or output checks causing it to run only once", target.Label)
+		if len(target.Inputs) == 0 && len(target.Dependencies) == 0 && len(target.OutputChecks) == 0 && len(target.Fingerprint) == 0 {
+			logger.Warnf("target %s has no inputs, dependencies, output checks or fingerprint causing it to run only once", target.Label)
 		}
 	}
 

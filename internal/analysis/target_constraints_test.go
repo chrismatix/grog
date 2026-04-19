@@ -76,6 +76,17 @@ func TestCheckPathConstraints(t *testing.T) {
 			expectErrorCount:   0,
 		},
 		{
+			name: "target with only a fingerprint does not generate a warning",
+			targetMap: model.BuildNodeMap{
+				label.TL("", "target1"): &model.Target{
+					Label:       label.TL("", "target1"),
+					Fingerprint: map[string]string{"version": "1.0.0"},
+				},
+			},
+			expectWarningCount: 0,
+			expectErrorCount:   0,
+		},
+		{
 			name: "target inputs include an absolute path",
 			targetMap: model.BuildNodeMap{
 				label.TL("", "target1"): &model.Target{
