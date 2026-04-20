@@ -81,9 +81,8 @@ type StagedWriter interface {
 }
 
 // GetCacheBackend constructs the configured cache backend and wraps it with
-// the global I/O concurrency limiter. All backend access in production goes
-// through this function, so every Get/Set/BeginWrite shares the same
-// process-wide semaphore configured via SetGlobalIOConcurrency.
+// the global I/O concurrency limiter, so every Get/Set across the process
+// shares the same semaphore configured via SetGlobalIOConcurrency.
 func GetCacheBackend(
 	ctx context.Context,
 	cacheConfig config.CacheConfig,
@@ -96,10 +95,9 @@ func GetCacheBackend(
 	return NewBoundedBackend(inner), nil
 }
 
-// ensureGlobalIOInit initialises the process-wide I/O semaphore from
-// config.Global on first invocation. Subsequent calls are no-ops, so the
-// first GetCacheBackend caller fixes the cap for the whole process.
-// A non-positive config value falls back to DefaultIOConcurrency().
+// ensureGlobalIOInit initialises the I/O semaphore from config.Global on
+// first call; later calls are no-ops. A non-positive config value falls
+// back to DefaultIOConcurrency.
 var globalIOOnce sync.Once
 
 func ensureGlobalIOInit() {
