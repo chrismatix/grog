@@ -238,6 +238,11 @@ func runBinary(args []string, repoPath string, extraEnvVars []string, coverDir s
 	// so that the coverage report is written to the correct location
 	cmd.Env = append(os.Environ(), "GOCOVERDIR="+coverDir)
 	cmd.Env = append(cmd.Env, "GROG_DISABLE_NON_DETERMINISTIC_LOGGING=true")
+	// Give each test table its own GROG_ROOT so parallel scenarios don't
+	// share the (now flat) target cache and clobber each other via `grog
+	// clean`. coverDir is stable per test table, so cases within a table
+	// continue to share cache state as they did before.
+	cmd.Env = append(cmd.Env, "GROG_ROOT="+filepath.Join(coverDir, "grog_root"))
 	for _, envVar := range extraEnvVars {
 		cmd.Env = append(cmd.Env, envVar)
 	}
