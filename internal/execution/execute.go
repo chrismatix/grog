@@ -36,7 +36,7 @@ func (e *CommandError) Error() string {
 
 type Executor struct {
 	targetCache      *caching.TargetResultCache
-	taintCache       *caching.TaintCache
+	taintStore       *caching.TaintStore
 	registry         *output.Registry
 	graph            *dag.DirectedTargetGraph
 	failFast         bool
@@ -53,7 +53,7 @@ type Executor struct {
 
 func NewExecutor(
 	targetCache *caching.TargetResultCache,
-	taintCache *caching.TaintCache,
+	taintStore *caching.TaintStore,
 	registry *output.Registry,
 	graph *dag.DirectedTargetGraph,
 	failFast bool,
@@ -63,7 +63,7 @@ func NewExecutor(
 ) *Executor {
 	return &Executor{
 		targetCache:      targetCache,
-		taintCache:       taintCache,
+		taintStore:       taintStore,
 		registry:         registry,
 		graph:            graph,
 		failFast:         failFast,
@@ -296,7 +296,7 @@ func (e *Executor) getTaskFunc(
 		}
 
 		// Check if the target is tainted
-		isTainted, taintedErr := e.taintCache.IsTainted(ctx, target.Label)
+		isTainted, taintedErr := e.taintStore.IsTainted(ctx, target.Label)
 		if taintedErr != nil {
 			logger.Errorf("Failed to check if target %s is tainted: %v", target.Label, taintedErr)
 		}
@@ -449,7 +449,7 @@ func (e *Executor) executeTarget(
 
 	if isTainted {
 		go func() {
-			err = e.taintCache.Clear(ctx, target.Label)
+			err = e.taintStore.Clear(ctx, target.Label)
 			if err != nil {
 				logger.Errorf("Failed to remove taint from target %s: %v", target.Label, err)
 			}

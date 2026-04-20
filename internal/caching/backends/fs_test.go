@@ -21,13 +21,13 @@ func TestFileSystemCache_SetGetExistsDelete(t *testing.T) {
 	}{
 		{
 			name:    "simple key",
-			path:    "taint",
+			path:    "target",
 			key:     "target",
 			content: "content-1",
 		},
 		{
-			name:    "label key with path separators",
-			path:    "taint",
+			name:    "key with path separators",
+			path:    "target",
 			key:     "//dbt/container:clickhouse-dbt-arm64",
 			content: "content-2",
 		},
@@ -37,7 +37,6 @@ func TestFileSystemCache_SetGetExistsDelete(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			fileSystemCache := &FileSystemCache{
 				workspaceCacheDir: t.TempDir(),
-				workspaceTaintDir: t.TempDir(),
 				sharedCasDir:      t.TempDir(),
 			}
 
@@ -91,11 +90,9 @@ func TestFileSystemCache_SetGetExistsDelete(t *testing.T) {
 
 func TestFileSystemCacheBuildFilePath(t *testing.T) {
 	workspaceCacheDir := filepath.Join(t.TempDir(), "workspace-cache")
-	workspaceTaintDir := filepath.Join(t.TempDir(), "workspace-taint")
 	sharedCasDir := filepath.Join(t.TempDir(), "shared-cas")
 	cache := &FileSystemCache{
 		workspaceCacheDir: workspaceCacheDir,
-		workspaceTaintDir: workspaceTaintDir,
 		sharedCasDir:      sharedCasDir,
 	}
 
@@ -117,12 +114,6 @@ func TestFileSystemCacheBuildFilePath(t *testing.T) {
 			key:  "def456",
 			want: filepath.Join(sharedCasDir, "def456"),
 		},
-		{
-			name: "taint path writes under the workspace-local taint directory",
-			path: "taint",
-			key:  "//foo:bar",
-			want: filepath.Join(workspaceTaintDir, "//foo:bar"),
-		},
 	}
 
 	for _, testCase := range tests {
@@ -138,7 +129,6 @@ func TestFileSystemCacheBuildFilePath(t *testing.T) {
 func TestFileSystemCacheSetForCasDoesNotDoubleNestCasDirectory(t *testing.T) {
 	cache := &FileSystemCache{
 		workspaceCacheDir: filepath.Join(t.TempDir(), "workspace-cache"),
-		workspaceTaintDir: filepath.Join(t.TempDir(), "workspace-taint"),
 		sharedCasDir:      filepath.Join(t.TempDir(), "shared-cas"),
 	}
 
@@ -186,7 +176,6 @@ func TestFileSystemCache_BeginWriteCommit(t *testing.T) {
 	sharedCasDir := t.TempDir()
 	cache := &FileSystemCache{
 		workspaceCacheDir: t.TempDir(),
-		workspaceTaintDir: t.TempDir(),
 		sharedCasDir:      sharedCasDir,
 	}
 
@@ -234,7 +223,6 @@ func TestFileSystemCache_BeginWriteCancel(t *testing.T) {
 	sharedCasDir := t.TempDir()
 	cache := &FileSystemCache{
 		workspaceCacheDir: t.TempDir(),
-		workspaceTaintDir: t.TempDir(),
 		sharedCasDir:      sharedCasDir,
 	}
 
@@ -278,7 +266,6 @@ func TestFileSystemCache_BeginWriteListKeysFiltersStaging(t *testing.T) {
 	sharedCasDir := t.TempDir()
 	cache := &FileSystemCache{
 		workspaceCacheDir: t.TempDir(),
-		workspaceTaintDir: t.TempDir(),
 		sharedCasDir:      sharedCasDir,
 	}
 
@@ -323,7 +310,6 @@ func TestFileSystemCache_BeginWriteCommitErrorOnDoubleCommit(t *testing.T) {
 	ctx := context.Background()
 	cache := &FileSystemCache{
 		workspaceCacheDir: t.TempDir(),
-		workspaceTaintDir: t.TempDir(),
 		sharedCasDir:      t.TempDir(),
 	}
 
