@@ -11,8 +11,8 @@ import (
 	"time"
 )
 
-// fakeBackend is a minimal CacheBackend whose Set/Get block until released,
-// so the test can observe how many concurrent operations are in flight.
+// fakeBackend is a minimal CacheBackend that records peak in-flight
+// concurrency so tests can observe what the wrapper bounds.
 type fakeBackend struct {
 	inFlight  atomic.Int32
 	maxSeen   atomic.Int32
@@ -81,8 +81,7 @@ func (w *fakeStagedWriter) Cancel(ctx context.Context) error {
 	return nil
 }
 
-// withGlobalIOConcurrency installs a temporary cap and restores the prior
-// state when the test finishes.
+// withGlobalIOConcurrency installs a temporary cap, restored at test end.
 func withGlobalIOConcurrency(t *testing.T, cap int) {
 	t.Helper()
 	prev := globalIOSem.Load()
@@ -172,10 +171,9 @@ func TestBoundedBackend_GetReleasesOnReaderClose(t *testing.T) {
 	}
 }
 
-// TestBoundedBackend_BeginWriteIsNotBounded documents the deliberate carve-
-// out: staged writes (the dockerproxy upload session) bypass the global
-// I/O semaphore, because slots would otherwise leak across the long
-// POST/PATCH/.../PUT lifetime of an interrupted upload.
+// TestBoundedBackend_BeginWriteIsNotBounded documents the carve-out:
+// staged writes bypass the global I/O semaphore, since slots would
+// otherwise leak across the long lifetime of an interrupted upload.
 func TestBoundedBackend_BeginWriteIsNotBounded(t *testing.T) {
 	const limit = 1
 	withGlobalIOConcurrency(t, limit)
@@ -201,10 +199,8 @@ func TestBoundedBackend_BeginWriteIsNotBounded(t *testing.T) {
 }
 
 // TestAcquireGlobalIO_PreventsDoubleCount asserts that a backend call made
-// with a context returned from AcquireGlobalIO does not consume a second
-// slot — the property uploadFilesToCas relies on to avoid deadlocking
-// when it gates os.Open under the same budget as the cas.Write that
-// follows.
+// with a context from AcquireGlobalIO does not consume a second slot — the
+// property uploadFilesToCas relies on to avoid deadlock.
 func TestAcquireGlobalIO_PreventsDoubleCount(t *testing.T) {
 	const limit = 1
 	withGlobalIOConcurrency(t, limit)
@@ -219,8 +215,7 @@ func TestAcquireGlobalIO_PreventsDoubleCount(t *testing.T) {
 	defer release()
 
 	// With a 1-slot cap and the slot already held, a naive double-acquire
-	// would deadlock. The preacquired marker on ctx must short-circuit
-	// the inner Acquire.
+	// would deadlock; the preacquired marker must short-circuit it.
 	done := make(chan error, 1)
 	go func() {
 		done <- bb.Set(ctx, "p", "k", strings.NewReader("x"))
@@ -238,9 +233,9 @@ func TestAcquireGlobalIO_PreventsDoubleCount(t *testing.T) {
 func TestBoundedBackend_PassthroughWhenSemDisabled(t *testing.T) {
 	withGlobalIOConcurrency(t, 0) // disabled
 
-	// Hold each Set in flight long enough for goroutines to genuinely
-	// overlap; without a sleep the scheduler may serialise short calls and
-	// hide the fact that no semaphore is in play.
+	// Hold each Set in flight long enough for goroutines to overlap;
+	// without a sleep the scheduler may serialise short calls and hide
+	// the absence of bounding.
 	fake := &fakeBackend{enterDur: 10 * time.Millisecond}
 	bb := NewBoundedBackend(fake)
 

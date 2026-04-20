@@ -211,12 +211,10 @@ func (d *DirectoryOutputHandler) Write(
 }
 
 // uploadFilesToCas uploads files to the CAS in parallel. Each goroutine
-// acquires a slot on the global I/O semaphore *before* opening the local
-// file, so the in-flight FD count never exceeds the configured I/O budget
-// even on directory outputs with thousands of small files. The acquired
-// slot is then carried into cas.Write via the returned context, so the
-// inner BoundedBackend.Set sees the preacquired marker and does not
-// double-count.
+// acquires a global I/O slot *before* os.Open, so in-flight FDs stay
+// within the I/O budget even on directories with thousands of files. The
+// slot is carried into cas.Write via ioCtx so BoundedBackend.Set skips
+// its own Acquire and avoids a double-count.
 func uploadFilesToCas(ctx context.Context, cas *caching.Cas, fileUploads []fileUpload, progress *worker.ProgressTracker) (int64, error) {
 	logger := console.GetLogger(ctx)
 	var sizeBytes atomic.Int64
@@ -519,9 +517,8 @@ func (d *DirectoryOutputHandler) Load(
 		return fmt.Errorf("failed to create directory %s: %w", dirPath, err)
 	}
 
-	// WaitGroup to wait for all goroutines to finish. Concurrent backend
-	// I/O is bounded process-wide by the BoundedBackend wrapper; each
-	// downloadFile call below acquires a slot on the global I/O semaphore.
+	// Concurrent CAS reads are bounded process-wide by the BoundedBackend
+	// wrapper inside cas.Load.
 	var waitGroup sync.WaitGroup
 	errChan := make(chan error, len(tree.Children))
 	// Recursively load the directory structure
