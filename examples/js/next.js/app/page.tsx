@@ -1,7 +1,7 @@
-import { colors } from '@monorepo/theme';
-import Header from './components/Header';
-import Footer from './components/Footer';
-import { isNotEmpty } from '@monorepo/utils';
+import { colors } from "@monorepo/theme";
+import Header from "./components/Header";
+import Footer from "./components/Footer";
+import { isNotEmpty } from "@monorepo/utils";
 
 export default function Home() {
   // Example of using the utility function
@@ -14,7 +14,10 @@ export default function Home() {
         <Header />
 
         <div className="mt-8 p-6 rounded-lg bg-primary-50 border border-primary-200">
-          <h2 className="text-xl font-bold mb-4" style={{ color: colors.primary[700] }}>
+          <h2
+            className="text-xl font-bold mb-4"
+            style={{ color: colors.primary[700] }}
+          >
             Monorepo Features
           </h2>
           <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">

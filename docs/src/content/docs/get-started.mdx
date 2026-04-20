@@ -27,6 +27,7 @@ brew tap chrismatix/grog
 brew install grog
 
 # Or download the binary
+
 curl -L https://grog.build/latest/grog-darwin-arm64 -o /usr/local/bin/grog
 chmod +x /usr/local/bin/grog
 
@@ -143,32 +144,51 @@ Grog provides a wide array of build file formats:
 ```make
 
 # @grog
+
 # inputs:
-#   - frontend/src/**/*.{js,ts,jsx,tsx}
-#   - frontend/package.json
+
+# - frontend/src/\*_/_.{js,ts,jsx,tsx}
+
+# - frontend/package.json
+
 # outputs:
-#   - dir::frontend/dist
+
+# - dir::frontend/dist
+
 build_ui:
-  npm run build:ui
+npm run build:ui
 
 # @grog
+
 # inputs:
-#   - backend/**/*.go
+
+# - backend/\*_/_.go
+
 # outputs:
-#   - backend/bin/app
+
+# - backend/bin/app
+
 compile_backend:
-  go build -o backend/bin/app ./backend
+go build -o backend/bin/app ./backend
 
 # @grog
+
 # dependencies:
-#   - :build_ui
-#   - :compile_backend
+
+# - :build_ui
+
+# - :compile_backend
+
 # inputs:
-#   - Dockerfile
+
+# - Dockerfile
+
 # outputs:
-#   - docker::myapp:latest
+
+# - docker::myapp:latest
+
 build_image:
-  docker build --file Dockerfile --tag myapp:latest .
+docker build --file Dockerfile --tag myapp:latest .
 
 ````
 

@@ -48,11 +48,13 @@ grog run //scripts:format -- --check
 Grog scans your workspace for executable files that match the naming convention `*.grog.sh` or `*.grog.py` and treats each match as a runnable target.
 
 <Aside>
-  Files that do not follow the `.grog.sh`/`.grog.py` naming convention will not be discovered automatically, but can
-  still be run with `grog run path/to/script` as long as they include a `# @grog` metadata block.
+  Files that do not follow the `.grog.sh`/`.grog.py` naming convention will not
+  be discovered automatically, but can still be run with `grog run
+  path/to/script` as long as they include a `# @grog` metadata block.
 </Aside>
 
 You can run a script from any directory with either a relative or absolute path using `grog run`. Grog will:
+
 1. Build the script target including its dependencies.
 2. Execute the file using `sh` (`.py` files need a shebang to specify the interpreter).
 

@@ -1,11 +1,13 @@
-import React from 'react';
-import Image from 'next/image';
-import { Button, Link } from '@monorepo/ui-components';
-import { isValidUrl } from '@monorepo/utils';
+import React from "react";
+import Image from "next/image";
+import { Button, Link } from "@monorepo/ui-components";
+import { isValidUrl } from "@monorepo/utils";
 
 export const Header: React.FC = () => {
-  const deployUrl = "https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app";
-  const docsUrl = "https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app";
+  const deployUrl =
+    "https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app";
+  const docsUrl =
+    "https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app";
 
   // Example of using the utility function
   console.log(`Deploy URL is valid: ${isValidUrl(deployUrl)}`);
@@ -22,9 +24,7 @@ export const Header: React.FC = () => {
       />
 
       <div className="flex gap-4 items-center flex-col sm:flex-row">
-        <Link
-          href={deployUrl}
-        >
+        <Link href={deployUrl}>
           <Image
             className="dark:invert mr-2"
             src="/vercel.svg"
@@ -36,9 +36,7 @@ export const Header: React.FC = () => {
         </Link>
 
         <Button variant="secondary">
-          <Link href={docsUrl}>
-            Read our docs
-          </Link>
+          <Link href={docsUrl}>Read our docs</Link>
         </Button>
       </div>
     </header>

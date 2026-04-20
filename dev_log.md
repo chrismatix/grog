@@ -24,7 +24,6 @@ This in turn means that Grog can now check if something needs to be loaded into 
 Interestingly, enough the final state of the code base is cleaner and easier to reason about than before.
 To be honest, I was a bit afraid that after all those months core parts of Grog had started to "rot" meaning that the code would not be understandable to me anymore and I would have a hard time refactoring it.
 
-
 ## 07-05-2025
 
 Skipped a few days of writing even though I got lots of small things done.

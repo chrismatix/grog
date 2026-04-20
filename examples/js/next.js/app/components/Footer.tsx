@@ -1,14 +1,14 @@
-import React from 'react';
-import Image from 'next/image';
-import { Link } from '@monorepo/ui-components';
-import { formatDate } from '@monorepo/utils';
+import React from "react";
+import Image from "next/image";
+import { Link } from "@monorepo/ui-components";
+import { formatDate } from "@monorepo/utils";
 
 export const Footer: React.FC = () => {
   // Example of using the utility function
-  const currentDate = formatDate(new Date(), 'en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
+  const currentDate = formatDate(new Date(), "en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
   });
 
   return (

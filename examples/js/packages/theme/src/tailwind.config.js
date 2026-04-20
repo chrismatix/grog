@@ -1,4 +1,4 @@
-const { colors, fontSizes, spacing, breakpoints } = require('./theme');
+const { colors, fontSizes, spacing, breakpoints } = require("./theme");
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
@@ -15,11 +15,11 @@ module.exports = {
         md: breakpoints.md,
         lg: breakpoints.lg,
         xl: breakpoints.xl,
-        '2xl': breakpoints['2xl'],
+        "2xl": breakpoints["2xl"],
       },
       fontFamily: {
-        sans: ['var(--font-geist-sans)'],
-        mono: ['var(--font-geist-mono)'],
+        sans: ["var(--font-geist-sans)"],
+        mono: ["var(--font-geist-mono)"],
       },
     },
   },

@@ -5,6 +5,7 @@
 - target_c produces "output_3.txt" from "output_2.txt"
 
 Test procedure:
+
 - We first produce all outputs
 - Delete output_1.txt
 - Run all builds with load_outputs=minimal -> nothing should be loaded

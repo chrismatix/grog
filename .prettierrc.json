@@ -1,1 +1,7 @@
-{}
+{
+  "overrides": [
+    {
+      "files": ["**/*.{js,jsx,ts,tsx,css,scss,less,html,json,md,yaml,yml}"]
+    }
+  ]
+}

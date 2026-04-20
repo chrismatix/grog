@@ -50,19 +50,16 @@ This monorepo uses npm/yarn workspaces to enable local package resolution. The r
 
 ```json
 {
-  "workspaces": [
-    "packages/*",
-    "next.js"
-  ]
+  "workspaces": ["packages/*", "next.js"]
 }
 ```
 
 This configuration allows packages to reference each other using the `@monorepo` namespace without having to publish them to a registry. For example, in the Next.js application:
 
 ```tsx
-import { Button } from '@monorepo/ui-components';
-import { isValidEmail } from '@monorepo/utils';
-import { colors } from '@monorepo/theme';
+import { Button } from "@monorepo/ui-components";
+import { isValidEmail } from "@monorepo/utils";
+import { colors } from "@monorepo/theme";
 ```
 
 When you run `npm install` or `yarn install` at the root of the monorepo, the package manager creates symlinks in the `node_modules` directory that point to the local packages, enabling seamless imports.
