@@ -22,6 +22,11 @@ const fsStagingDirName = ".staging"
 // FileSystemCache implements the CacheBackend interface using the file system for storage
 type FileSystemCache struct {
 	workspaceCacheDir string
+	// workspaceTaintDir scopes taint entries per-checkout. Taint is local
+	// control state ("rebuild this target next time") keyed only by label,
+	// so it must not share the flat cache dir where repos with the same
+	// GROG_ROOT would otherwise see each other's taints.
+	workspaceTaintDir string
 	sharedCasDir      string
 }
 
@@ -32,6 +37,7 @@ func (fsc *FileSystemCache) TypeName() string {
 // NewFileSystemCache creates a new cache using the configured cache directory
 func NewFileSystemCache(ctx context.Context) (*FileSystemCache, error) {
 	workspaceCacheDir := config.Global.GetWorkspaceCacheDirectory()
+	workspaceTaintDir := filepath.Join(config.Global.GetWorkspaceRootDir(), "taint")
 	sharedCasDir := config.Global.GetCasDirectory()
 
 	// Ensure the root directory exists
@@ -45,6 +51,7 @@ func NewFileSystemCache(ctx context.Context) (*FileSystemCache, error) {
 	console.GetLogger(ctx).Tracef("Instantiated fs cache at: %s", workspaceCacheDir)
 	return &FileSystemCache{
 		workspaceCacheDir: workspaceCacheDir,
+		workspaceTaintDir: workspaceTaintDir,
 		sharedCasDir:      sharedCasDir,
 	}, nil
 }
@@ -56,8 +63,11 @@ func (fsc *FileSystemCache) buildFilePath(path, key string) string {
 }
 
 func (fsc *FileSystemCache) getDir(path string) string {
-	if path == "cas" {
+	switch path {
+	case "cas":
 		return fsc.sharedCasDir
+	case "taint":
+		return fsc.workspaceTaintDir
 	}
 	return filepath.Join(fsc.workspaceCacheDir, path)
 }
