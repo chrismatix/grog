@@ -43,7 +43,7 @@ func TestGetWorkspaceCacheDirectory_Namespaced(t *testing.T) {
 	Global = WorkspaceConfig{
 		Root:          "/grog",
 		WorkspaceRoot: "/tmp/a/myrepo",
-		WorkspaceName: "team-myrepo",
+		CacheNamespace: "team-myrepo",
 	}
 	t.Cleanup(func() { Global = prev })
 
@@ -56,13 +56,13 @@ func TestGetWorkspaceCacheDirectory_Namespaced(t *testing.T) {
 
 func TestGetWorkspaceRootDir_StaysPathIsolated(t *testing.T) {
 	// The workspace root dir (logs, lockfile) must stay path-unique even
-	// when WorkspaceName is set — otherwise parallel checkouts could
+	// when CacheNamespace is set — otherwise parallel checkouts could
 	// deadlock on the same lockfile.
 	prev := Global
 	Global = WorkspaceConfig{
 		Root:          "/grog",
 		WorkspaceRoot: "/tmp/a/myrepo",
-		WorkspaceName: "team-myrepo",
+		CacheNamespace: "team-myrepo",
 	}
 	t.Cleanup(func() { Global = prev })
 

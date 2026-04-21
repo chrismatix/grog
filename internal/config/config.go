@@ -18,13 +18,13 @@ const (
 type WorkspaceConfig struct {
 	Root          string `mapstructure:"root"`
 	WorkspaceRoot string `mapstructure:"workspace_root"`
-	// WorkspaceName optionally namespaces the target cache under $GROG_ROOT.
+	// CacheNamespace optionally namespaces the target cache under $GROG_ROOT.
 	// By default the target cache is flat (shared across all workspaces and
 	// all checkouts) because cache keys include a complete hash of their
 	// inputs, so collisions are not possible. Set this to isolate the cache
 	// — e.g. to keep different projects' caches from mingling on the same
 	// machine.
-	WorkspaceName string `mapstructure:"workspace_name"`
+	CacheNamespace string `mapstructure:"cache_namespace"`
 
 	// Execution
 	FailFast    bool   `mapstructure:"fail_fast"`
@@ -107,11 +107,11 @@ func (w WorkspaceConfig) GetWorkspaceRootDir() string {
 // GetWorkspaceCacheDirectory returns the directory that stores the target
 // cache. It is flat under $GROG_ROOT by default so that the same repo
 // checked out at different absolute paths (e.g. ephemeral CI runners) shares
-// cache hits. When WorkspaceName is set the cache is namespaced under that
+// cache hits. When CacheNamespace is set the cache is namespaced under that
 // name.
 func (w WorkspaceConfig) GetWorkspaceCacheDirectory() string {
-	if w.WorkspaceName != "" {
-		return filepath.Join(w.Root, w.WorkspaceName, "cache")
+	if w.CacheNamespace != "" {
+		return filepath.Join(w.Root, w.CacheNamespace, "cache")
 	}
 	return filepath.Join(w.Root, "cache")
 }
