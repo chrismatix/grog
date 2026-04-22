@@ -56,11 +56,15 @@ LD_FLAGS = -ldflags "\
 	-X 'main.commit=$(COMMIT)' \
 	-X 'main.buildDate=$(DATE)'"
 
+HOST_GOOS ?= $(shell go env GOOS)
+HOST_EXE_EXT := $(if $(filter windows,$(HOST_GOOS)),.exe)
+RELEASE_EXE_EXT := $(if $(filter windows,$(GOOS)),.exe)
+
 build: gen-proto
-	@go build -o dist/grog $(LD_FLAGS)
+	@go build -o dist/grog$(HOST_EXE_EXT) $(LD_FLAGS)
 
 build-with-coverage:
-	@go build -cover -o dist/grog $(LD_FLAGS)
+	@go build -cover -o dist/grog$(HOST_EXE_EXT) $(LD_FLAGS)
 
 release-pkl:
 	echo $(VERSION)
@@ -72,8 +76,8 @@ release-pkl:
 release-build: gen-proto
 	@echo "Building for $(GOOS)/$(GOARCH)"
 	@mkdir -p dist
-	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(LD_FLAGS) -o dist/grog-$(GOOS)-$(GOARCH)
-	@cd dist && shasum -a 256 grog-$(GOOS)-$(GOARCH) > grog-$(GOOS)-$(GOARCH).sha256
+	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -trimpath $(LD_FLAGS) -o dist/grog-$(GOOS)-$(GOARCH)$(RELEASE_EXE_EXT)
+	@cd dist && shasum -a 256 grog-$(GOOS)-$(GOARCH)$(RELEASE_EXE_EXT) > grog-$(GOOS)-$(GOARCH)$(RELEASE_EXE_EXT).sha256
 
 gen-proto:
 	@protoc \
@@ -91,7 +95,7 @@ run:
 	@go run main.go $(MAKECMDGOALS)
 
 run-repo: build
-	@cd integration/test_repos/$(path) && ../../dist/grog $(MAKECMDGOALS)
+	@cd integration/test_repos/$(path) && ../../dist/grog$(HOST_EXE_EXT) $(MAKECMDGOALS)
 
 gen-docs: # Re-generate cli docs
 	cd docs && go run gen_docs.go

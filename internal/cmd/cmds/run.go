@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sync"
 
 	"github.com/spf13/cobra"
@@ -23,6 +24,7 @@ import (
 	"grog/internal/model"
 	"grog/internal/output"
 	"grog/internal/selection"
+	"grog/internal/shell"
 	"grog/internal/worker"
 )
 
@@ -275,7 +277,10 @@ func runTargetBinaries(ctx context.Context, logger *console.Logger, runTargets [
 	// For each target, create a new Cmd and run it in a goroutine.
 	runs := make([]binaryRun, 0, len(runTargets))
 	for _, runTarget := range runTargets {
-		cmd := newBinaryRunCommand(ctx, runTarget, userCommandArgs)
+		cmd, err := newBinaryRunCommand(ctx, runTarget, userCommandArgs)
+		if err != nil {
+			return err
+		}
 		if runOptions.inPackage {
 			logger.Infof("Running %s -> %s with args %s in package directory", runTarget.Label, runTarget.BinOutput.Identifier, userCommandArgs)
 		} else {
@@ -291,6 +296,9 @@ func runTargetBinaries(ctx context.Context, logger *console.Logger, runTargets [
 		go func(run binaryRun) {
 			defer wg.Done()
 			if err := run.cmd.Run(); err != nil {
+				if ctx.Err() != nil {
+					err = errors.New("signal: killed")
+				}
 				errCh <- fmt.Errorf("failed to run %s: %w", run.target.Label, err)
 				cancel()
 			}
@@ -312,11 +320,20 @@ func runTargetBinaries(ctx context.Context, logger *console.Logger, runTargets [
 	return fmt.Errorf("multiple binaries failed: %w", errors.Join(errs...))
 }
 
-func newBinaryRunCommand(ctx context.Context, runTarget *model.Target, userCommandArgs []string) *exec.Cmd {
+func newBinaryRunCommand(ctx context.Context, runTarget *model.Target, userCommandArgs []string) (*exec.Cmd, error) {
 	binOutputPath := config.GetPathAbsoluteToWorkspaceRoot(
 		filepath.Join(runTarget.Label.Package, runTarget.BinOutput.Identifier),
 	)
-	runCommand := exec.CommandContext(ctx, binOutputPath, userCommandArgs...)
+	var runCommand *exec.Cmd
+	if runtime.GOOS == "windows" {
+		shellPath, err := shell.LookupPOSIXShell()
+		if err != nil {
+			return nil, err
+		}
+		runCommand = exec.CommandContext(ctx, shellPath, append([]string{"-c", `exec "$@"`, "grog-run", binOutputPath}, userCommandArgs...)...)
+	} else {
+		runCommand = exec.CommandContext(ctx, binOutputPath, userCommandArgs...)
+	}
 	runCommand.Env = execution.GetExtendedTargetEnv(ctx, runTarget)
 	runCommand.Stdout = os.Stdout
 	runCommand.Stderr = os.Stderr
@@ -325,5 +342,5 @@ func newBinaryRunCommand(ctx context.Context, runTarget *model.Target, userComma
 		packagePath := config.GetPathAbsoluteToWorkspaceRoot(runTarget.Label.Package)
 		runCommand.Dir = packagePath
 	}
-	return runCommand
+	return runCommand, nil
 }

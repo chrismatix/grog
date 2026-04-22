@@ -91,7 +91,7 @@ func TestAzureCache_Get(t *testing.T) {
 
 	// Set up test data
 	testData := []byte("test data")
-	mockClient.objects["prefix/workspace/path/key"] = testData
+	mockClient.objects["prefix/workspace/path/"+encodeCacheKey("sha256:deadbeef")] = testData
 
 	cache, err := NewAzureCacheWithClient(ctx, config.AzureCacheConfig{
 		Container: "test-container",
@@ -103,7 +103,7 @@ func TestAzureCache_Get(t *testing.T) {
 	cache.workspacePrefix = "workspace"
 
 	// Test Get
-	reader, err := cache.Get(ctx, "path", "key")
+	reader, err := cache.Get(ctx, "path", "sha256:deadbeef")
 	assert.NoError(t, err)
 
 	data, err := io.ReadAll(reader)
@@ -130,11 +130,11 @@ func TestAzureCache_Set(t *testing.T) {
 
 	// Test Set
 	testData := []byte("test data")
-	err = cache.Set(ctx, "path", "key", bytes.NewReader(testData))
+	err = cache.Set(ctx, "path", "sha256:deadbeef", bytes.NewReader(testData))
 	assert.NoError(t, err)
 
 	// Verify data was stored correctly
-	assert.Equal(t, testData, mockClient.objects["prefix/workspace/path/key"])
+	assert.Equal(t, testData, mockClient.objects["prefix/workspace/path/"+encodeCacheKey("sha256:deadbeef")])
 }
 
 func TestAzureCache_Delete(t *testing.T) {
@@ -142,7 +142,7 @@ func TestAzureCache_Delete(t *testing.T) {
 	mockClient := newMockAzureBlobClient()
 
 	// Set up test data
-	mockClient.objects["prefix/workspace/path/key"] = []byte("test data")
+	mockClient.objects["prefix/workspace/path/"+encodeCacheKey("sha256:deadbeef")] = []byte("test data")
 
 	cache, err := NewAzureCacheWithClient(ctx, config.AzureCacheConfig{
 		Container: "test-container",
@@ -154,11 +154,11 @@ func TestAzureCache_Delete(t *testing.T) {
 	cache.workspacePrefix = "workspace"
 
 	// Test Delete
-	err = cache.Delete(ctx, "path", "key")
+	err = cache.Delete(ctx, "path", "sha256:deadbeef")
 	assert.NoError(t, err)
 
 	// Verify object was deleted
-	_, ok := mockClient.objects["prefix/workspace/path/key"]
+	_, ok := mockClient.objects["prefix/workspace/path/"+encodeCacheKey("sha256:deadbeef")]
 	assert.False(t, ok)
 
 	// Test Delete with non-existent key
@@ -171,7 +171,7 @@ func TestAzureCache_Exists(t *testing.T) {
 	mockClient := newMockAzureBlobClient()
 
 	// Set up test data
-	mockClient.objects["prefix/workspace/path/key"] = []byte("test data")
+	mockClient.objects["prefix/workspace/path/"+encodeCacheKey("sha256:deadbeef")] = []byte("test data")
 
 	cache, err := NewAzureCacheWithClient(ctx, config.AzureCacheConfig{
 		Container: "test-container",
@@ -183,7 +183,7 @@ func TestAzureCache_Exists(t *testing.T) {
 	cache.workspacePrefix = "workspace"
 
 	// Test Exists with existing key
-	exists, err := cache.Exists(ctx, "path", "key")
+	exists, err := cache.Exists(ctx, "path", "sha256:deadbeef")
 	assert.NoError(t, err)
 	assert.True(t, exists)
 

@@ -91,8 +91,7 @@ func (gcs *GCSCache) fullPrefix() string {
 
 // buildPath constructs the full GCS path for a cached item.
 func (gcs *GCSCache) buildPath(path, key string) string {
-	parts := []string{gcs.fullPrefix(), strings.Trim(path, "/"), strings.Trim(key, "/")}
-	return strings.Join(parts, "/")
+	return joinObjectPath(gcs.fullPrefix(), path, physicalCacheKey(key))
 }
 
 // Get retrieves a cached file from GCS.
@@ -287,9 +286,13 @@ func (gcs *GCSCache) ListKeys(ctx context.Context, path string, suffix string) (
 		if err != nil {
 			return nil, err
 		}
-		key := strings.TrimPrefix(attrs.Name, fullPath)
-		if suffix == "" || strings.HasSuffix(key, suffix) {
-			keys = append(keys, key)
+		physicalKey := strings.TrimPrefix(attrs.Name, fullPath)
+		logicalKey, decodeErr := decodeCacheKey(physicalKey)
+		if decodeErr != nil {
+			return nil, decodeErr
+		}
+		if suffix == "" || strings.HasSuffix(logicalKey, suffix) {
+			keys = append(keys, logicalKey)
 		}
 	}
 	return keys, nil

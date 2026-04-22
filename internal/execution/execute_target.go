@@ -10,6 +10,7 @@ import (
 	"grog/internal/console"
 	"grog/internal/logs"
 	"grog/internal/model"
+	"grog/internal/shell"
 	"io"
 	"os"
 	"os/exec"
@@ -89,7 +90,12 @@ func runTargetCommand(
 		return nil, err
 	}
 
-	cmd := exec.CommandContext(ctx, "sh", "-c", templatedCommand)
+	shellPath, err := shell.LookupPOSIXShell()
+	if err != nil {
+		return nil, err
+	}
+
+	cmd := exec.CommandContext(ctx, shellPath, "-c", templatedCommand)
 	cmd.WaitDelay = 1 * time.Second // cancellation grace time
 
 	// Attach env variables to the existing environment

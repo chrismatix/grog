@@ -1,5 +1,6 @@
 name: Docker Tar Outputs
 repo: docker_output
+requires_docker: true
 cases:
   - name: creates_docker_tar_output
     grog_args:

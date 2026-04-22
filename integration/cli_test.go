@@ -10,17 +10,32 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
-	"reflect"
+	"grog/internal/shell"
+
+	"github.com/sergi/go-diff/diffmatchpatch"
+	"gopkg.in/yaml.v3"
 )
 
 var updateAll = flag.Bool("update-all", false, "update all fixture files")
 var update = flag.String("update", "", "update only the specified fixture file")
 
-var binaryName = "dist/grog"
+var binaryName = grogBinaryName()
 
 var binaryPath = ""
+
+var dockerAvailableOnce sync.Once
+var dockerAvailableCached bool
+
+func isDockerAvailable() bool {
+	dockerAvailableOnce.Do(func() {
+		_, err := exec.LookPath("docker")
+		dockerAvailableCached = err == nil
+	})
+	return dockerAvailableCached
+}
 
 func fixturePath(t *testing.T, testName string) string {
 	_, filename, _, ok := runtime.Caller(0)
@@ -56,6 +71,8 @@ type TestTable struct {
 	RequiresCredentials bool `yaml:"requires_credentials"`
 	// Whether to skip the clean step
 	SkipClean bool `yaml:"skip_clean"`
+	// Only run this test when docker is available on PATH.
+	RequiresDocker bool `yaml:"requires_docker"`
 }
 
 // TestStep defines a single test step
@@ -108,6 +125,11 @@ func TestCliScenarios(t *testing.T) {
 	for _, tt := range testTables {
 		if tt.RequiresCredentials {
 			if os.Getenv("REQUIRES_CREDENTIALS") == "" {
+				continue
+			}
+		}
+		if tt.RequiresDocker {
+			if !isDockerAvailable() {
 				continue
 			}
 		}
@@ -258,9 +280,72 @@ func runSetupCommand(command string, repoPath string) ([]byte, error) {
 	repoPath = filepath.Join("./integration/test_repos", repoPath)
 	fmt.Printf("Running setup command: %s in directory: %s\n", command, repoPath)
 
-	cmd := exec.Command("sh", "-c", command)
+	shellPath, err := shell.LookupPOSIXShell()
+	if err != nil {
+		return nil, err
+	}
+
+	cmd := exec.Command(shellPath, "-c", command)
+	cmd.Env = append(os.Environ(), extraEnvVars...)
 	cmd.Dir = repoPath
 	return cmd.CombinedOutput()
+}
+
+func grogBinaryName() string {
+	if runtime.GOOS == "windows" {
+		return "dist/grog.exe"
+	}
+	return "dist/grog"
+}
+
+func resolveRepoPath(repoPath string) string {
+	if filepath.IsAbs(repoPath) {
+		return repoPath
+	}
+	return filepath.Join("./integration/test_repos", repoPath)
+}
+
+func repoCleanupFilePath(repoPath string) (string, error) {
+	repoDirectory, err := filepath.Abs(resolveRepoPath(repoPath))
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(repoDirectory, ".grog-test-cleanup"), nil
+}
+
+func registerCleanupFile(t *testing.T, cleanupFilePath string) {
+	t.Helper()
+
+	cleanupFileContents, err := os.ReadFile(cleanupFilePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return
+		}
+		t.Fatalf("could not read cleanup file %s: %v", cleanupFilePath, err)
+	}
+
+	var directoriesToRemove []string
+	for _, line := range strings.Split(string(cleanupFileContents), "\n") {
+		directoryToRemove := strings.TrimSpace(line)
+		if directoryToRemove == "" {
+			continue
+		}
+		directoriesToRemove = append(directoriesToRemove, directoryToRemove)
+	}
+	if len(directoriesToRemove) == 0 {
+		return
+	}
+
+	t.Cleanup(func() {
+		for _, directoryToRemove := range directoriesToRemove {
+			if err := os.RemoveAll(directoryToRemove); err != nil {
+				t.Errorf("could not remove cleanup directory %s: %v", directoryToRemove, err)
+			}
+		}
+		if err := os.Remove(cleanupFilePath); err != nil && !os.IsNotExist(err) {
+			t.Errorf("could not remove cleanup file %s: %v", cleanupFilePath, err)
+		}
+	})
 }
 
 func getCoverDir() (string, error) {

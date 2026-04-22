@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/apple/pkl-go/pkl"
@@ -33,8 +34,12 @@ func (pl *PklLoader) getEvaluator(ctx context.Context) (pkl.Evaluator, error) {
 		var err error
 
 		if hasPklProjectFile() {
+			projectURL, urlErr := pklFileURL(config.Global.WorkspaceRoot)
+			if urlErr != nil {
+				return nil, urlErr
+			}
 			evaluator, err = pkl.NewProjectEvaluator(ctx,
-				&url.URL{Scheme: "file", Path: config.Global.WorkspaceRoot},
+				projectURL,
 				pkl.PreconfiguredOptions,
 				withEnv(map[string]string{
 					"GROG_OS":       config.Global.OS,
@@ -65,6 +70,26 @@ func (pl *PklLoader) getEvaluator(ctx context.Context) (pkl.Evaluator, error) {
 func hasPklProjectFile() bool {
 	_, err := os.Stat(filepath.Join(config.Global.WorkspaceRoot, "PklProject"))
 	return !errors.Is(err, os.ErrNotExist)
+}
+
+func pklFileURL(filePath string) (*url.URL, error) {
+	absolutePath, err := filepath.Abs(filePath)
+	if err != nil {
+		return nil, err
+	}
+	slashPath := filepath.ToSlash(absolutePath)
+	if filepath.VolumeName(absolutePath) != "" && !strings.HasPrefix(slashPath, "/") {
+		slashPath = "/" + slashPath
+	}
+	return &url.URL{Scheme: "file", Path: slashPath}, nil
+}
+
+func pklFileSource(filePath string) (*pkl.ModuleSource, error) {
+	fileURL, err := pklFileURL(filePath)
+	if err != nil {
+		return nil, err
+	}
+	return &pkl.ModuleSource{Uri: fileURL}, nil
 }
 
 // withEnv adds or overrides environment variables for the `env:` resource reader.
@@ -100,7 +125,12 @@ func (pl *PklLoader) Load(ctx context.Context, filePath string) (PackageDTO, boo
 				evalErr = fmt.Errorf("panic occurred while evaluating module: %v", r)
 			}
 		}()
-		evalErr = evaluator.EvaluateModule(ctx, pkl.FileSource(filePath), &pkg)
+		source, sourceErr := pklFileSource(filePath)
+		if sourceErr != nil {
+			evalErr = sourceErr
+			return
+		}
+		evalErr = evaluator.EvaluateModule(ctx, source, &pkg)
 	}()
 
 	if evalErr != nil {

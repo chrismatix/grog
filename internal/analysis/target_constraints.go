@@ -123,7 +123,7 @@ func resolveDependencyTarget(
 // and do not point outside the package
 func checkInputPathsRelative(target *model.Target) (errs []error) {
 	for _, input := range target.Inputs {
-		if path.IsAbs(input) {
+		if isAbsolutePath(input) {
 			errs = append(errs, fmt.Errorf(
 				"input %s for target %s is not relative",
 				input,
@@ -146,6 +146,10 @@ func checkInputPathsRelative(target *model.Target) (errs []error) {
 
 const relativePrefix = ".." + string(filepath.Separator)
 
+func isAbsolutePath(value string) bool {
+	return path.IsAbs(value) || filepath.IsAbs(filepath.FromSlash(value))
+}
+
 func pathTriesToEscape(relPath string) bool {
 	cleanedPath := filepath.Clean(relPath)
 	return strings.HasPrefix(cleanedPath, relativePrefix) || cleanedPath == ".."
@@ -155,7 +159,7 @@ func checkOutputsAreWithinRepository(target *model.Target) (errs []error) {
 	workspaceRoot := config.Global.WorkspaceRoot
 
 	for _, output := range target.FileOutputs() {
-		if path.IsAbs(output) {
+		if isAbsolutePath(output) {
 			errs = append(errs, fmt.Errorf(
 				"output %s for target %s is not relative",
 				output,
@@ -189,7 +193,11 @@ func checkOutputsAreWithinRepository(target *model.Target) (errs []error) {
 // remains within the workspace root. The relative path may start with "..", but once resolved,
 // it must still be inside the workspace.
 func isWithinWorkspace(absWorkspace, packagePath, relPath string) (bool, error) {
-	absOutput, err := filepath.Abs(filepath.Join(absWorkspace, packagePath, relPath))
+	absWorkspace, err := filepath.Abs(absWorkspace)
+	if err != nil {
+		return false, err
+	}
+	absOutput, err := filepath.Abs(filepath.Join(absWorkspace, filepath.FromSlash(packagePath), filepath.FromSlash(relPath)))
 	if err != nil {
 		return false, err
 	}

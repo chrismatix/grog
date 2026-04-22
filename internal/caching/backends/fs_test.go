@@ -62,14 +62,15 @@ func TestFileSystemCache_SetGetExistsDelete(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Get returned error: %v", err)
 			}
-			defer reader.Close()
-
 			contentBytes, err := io.ReadAll(reader)
 			if err != nil {
 				t.Fatalf("failed reading cached content: %v", err)
 			}
 			if string(contentBytes) != testCase.content {
 				t.Fatalf("expected %q, got %q", testCase.content, string(contentBytes))
+			}
+			if err := reader.Close(); err != nil {
+				t.Fatalf("failed closing cached content: %v", err)
 			}
 
 			err = fileSystemCache.Delete(contextBackground, testCase.path, testCase.key)
@@ -139,7 +140,7 @@ func TestFileSystemCacheSetForCasDoesNotDoubleNestCasDirectory(t *testing.T) {
 		t.Fatalf("Set failed: %v", err)
 	}
 
-	filePath := filepath.Join(cache.sharedCasDir, digest)
+	filePath := filepath.Join(cache.sharedCasDir, encodeCacheKey(digest))
 	fileBytes, err := os.ReadFile(filePath)
 	if err != nil {
 		t.Fatalf("failed to read cached file at %q: %v", filePath, err)
@@ -148,7 +149,7 @@ func TestFileSystemCacheSetForCasDoesNotDoubleNestCasDirectory(t *testing.T) {
 		t.Fatalf("unexpected file content: got %q, want %q", string(fileBytes), content)
 	}
 
-	doubleNestedPath := filepath.Join(cache.sharedCasDir, "cas", digest)
+	doubleNestedPath := filepath.Join(cache.sharedCasDir, "cas", encodeCacheKey(digest))
 	if _, err := os.Stat(doubleNestedPath); !os.IsNotExist(err) {
 		t.Fatalf("expected no file at %q, got err=%v", doubleNestedPath, err)
 	}
@@ -301,6 +302,57 @@ func TestFileSystemCache_BeginWriteListKeysFiltersStaging(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("ListKeys missing committed entry; got %v", keys)
+	}
+}
+
+func TestFileSystemCacheListKeysReturnsLogicalKeys(t *testing.T) {
+	ctx := context.Background()
+	cache := &FileSystemCache{
+		workspaceCacheDir: t.TempDir(),
+		sharedCasDir:      t.TempDir(),
+	}
+
+	testCases := []struct {
+		name   string
+		key    string
+		suffix string
+	}{
+		{
+			name:   "unsafe digest key",
+			key:    "sha256:committed",
+			suffix: "",
+		},
+		{
+			name:   "unsafe parquet suffix key",
+			key:    "trace:name.parquet",
+			suffix: ".parquet",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if err := cache.Set(ctx, "cas", testCase.key, strings.NewReader("ok")); err != nil {
+				t.Fatalf("Set: %v", err)
+			}
+
+			keys, err := cache.ListKeys(ctx, "cas", testCase.suffix)
+			if err != nil {
+				t.Fatalf("ListKeys: %v", err)
+			}
+
+			var found bool
+			for _, key := range keys {
+				if strings.HasPrefix(key, encodedKeyPrefix) {
+					t.Fatalf("ListKeys returned physical key %q; got %v", key, keys)
+				}
+				if key == testCase.key {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("ListKeys missing logical key %q; got %v", testCase.key, keys)
+			}
+		})
 	}
 }
 

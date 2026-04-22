@@ -12,6 +12,9 @@ import (
 )
 
 func TestInterruptHandling(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("os.Process.Signal does not support SIGINT on Windows")
+	}
 	// Get the path to the test repository
 	repoPath := filepath.Join("./test_repos", "sleep")
 	// Get the directory of the current file
@@ -83,6 +86,9 @@ func TestInterruptHandling(t *testing.T) {
 // TestDoubleInterruptForceExit verifies that a second SIGINT force-exits the
 // process even if the first signal's graceful shutdown would otherwise block.
 func TestDoubleInterruptForceExit(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("os.Process.Signal does not support SIGINT on Windows")
+	}
 	repoPath := filepath.Join("./test_repos", "sleep")
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
@@ -143,6 +149,9 @@ func TestDoubleInterruptForceExit(t *testing.T) {
 // terminal is restored, so the second Ctrl-C generates a real SIGINT.  The
 // signal handler should catch it and cancel the root context.
 func TestDoubleInterruptForceExitWithTTY(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("go-expect TTY console is unsupported on Windows")
+	}
 	console, err := expect.NewConsole()
 	if err != nil {
 		t.Fatalf("could not create console: %v", err)
@@ -211,6 +220,9 @@ func TestDoubleInterruptForceExitWithTTY(t *testing.T) {
 }
 
 func TestInterruptHandlingWithTTY(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("go-expect TTY console is unsupported on Windows")
+	}
 	// Create a virtual TTY console
 	console, err := expect.NewConsole()
 	if err != nil {

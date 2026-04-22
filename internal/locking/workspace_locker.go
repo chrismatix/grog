@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -98,18 +97,6 @@ func (wl *WorkspaceLocker) Lock(ctx context.Context) error {
 // Unlock releases the workspace lock.
 func (wl *WorkspaceLocker) Unlock() error {
 	return os.Remove(wl.lockFilePath)
-}
-
-func processRunning(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	p, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	err = p.Signal(syscall.Signal(0))
-	return err == nil || errors.Is(err, syscall.EPERM)
 }
 
 func buildLockFileContents(processID int, commandArguments []string) string {

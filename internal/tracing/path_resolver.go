@@ -1,6 +1,8 @@
 package tracing
 
 import (
+	"path/filepath"
+
 	"grog/internal/config"
 )
 
@@ -17,7 +19,7 @@ type PathResolver struct {
 
 // NewPathResolver creates a PathResolver that points at the local filesystem cache.
 func NewPathResolver() *PathResolver {
-	cacheDir := config.Global.GetWorkspaceCacheDirectory()
+	cacheDir := filepath.ToSlash(config.Global.GetWorkspaceCacheDirectory())
 	return &PathResolver{
 		buildsBase: cacheDir + "/traces/builds",
 		spansBase:  cacheDir + "/traces/spans",

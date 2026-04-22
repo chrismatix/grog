@@ -19,6 +19,7 @@ type TargetLabel struct {
 // and relative labels (":target") for the current packagePath.
 // I.e. "path", ":target" -> "//path:target"
 func ParseTargetLabel(packagePath, label string) (TargetLabel, error) {
+	packagePath = normalizePackagePath(packagePath)
 	if strings.HasPrefix(label, ":") {
 		if packagePath == "." {
 			// For the root package we omit the "."
@@ -44,14 +45,14 @@ func ParseTargetLabel(packagePath, label string) (TargetLabel, error) {
 	var pkg, name string
 	if !ok {
 		// Shorthand: infer target name from the last element of the package path.
-		pkg = body
+		pkg = normalizePackagePath(body)
 		if pkg == "" {
 			return TargetLabel{}, fmt.Errorf("invalid shorthand label %q: package path is empty", label)
 		}
 		parts := strings.Split(pkg, "/")
 		name = parts[len(parts)-1]
 	} else {
-		pkg = before
+		pkg = normalizePackagePath(before)
 		name = after
 		if name == "" {
 			return TargetLabel{}, fmt.Errorf("invalid label %q: target name is empty", label)
@@ -62,6 +63,13 @@ func ParseTargetLabel(packagePath, label string) (TargetLabel, error) {
 		return TargetLabel{}, err
 	}
 	return TargetLabel{Package: pkg, Name: name}, nil
+}
+
+func normalizePackagePath(packagePath string) string {
+	if packagePath == "." {
+		return ""
+	}
+	return strings.ReplaceAll(packagePath, "\\", "/")
 }
 
 func validateName(name string) error {
@@ -91,12 +99,13 @@ func TL(packagePath, label string) TargetLabel {
 
 // String returns the canonical form "//pkg:target".
 func (t TargetLabel) String() string {
-	return "//" + t.Package + ":" + t.Name
+	return "//" + normalizePackagePath(t.Package) + ":" + t.Name
 }
 
 // CanBeShortened returns true if the //foo/bar:bar -> //foo/bar shorthand can be used for this label.
 func (t TargetLabel) CanBeShortened() bool {
-	packageDir := strings.Split(t.Package, "/")[len(strings.Split(t.Package, "/"))-1]
+	packageParts := strings.Split(normalizePackagePath(t.Package), "/")
+	packageDir := packageParts[len(packageParts)-1]
 	return t.Name == packageDir
 }
 

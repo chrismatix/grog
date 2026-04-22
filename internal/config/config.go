@@ -147,7 +147,7 @@ func (w WorkspaceConfig) GetCurrentPackage() (string, error) {
 		return "", nil
 	}
 
-	return rel, nil
+	return filepath.ToSlash(rel), nil
 }
 
 func (w WorkspaceConfig) GetPlatform() string {

@@ -50,12 +50,18 @@ cases:
       - list
       - --target-type=bin_output
       - //...
+    env_vars:
+      - "GROG_OS=linux"
+      - "GROG_ARCH=amd64"
 
   - name: starlark_list_tagged_targets
     grog_args:
       - list
       - --tag=starlark-dto
       - //...
+    env_vars:
+      - "GROG_OS=linux"
+      - "GROG_ARCH=amd64"
 
   - name: starlark_graph_dto_attributes
     grog_args:
@@ -63,3 +69,6 @@ cases:
       - -o
       - json
       - //attrs:dto_all
+    env_vars:
+      - "GROG_OS=linux"
+      - "GROG_ARCH=amd64"

@@ -343,7 +343,7 @@ func normalizePackagePath(path string) string {
 	if path == "." {
 		return ""
 	}
-	return path
+	return strings.ReplaceAll(path, "\\", "/")
 }
 
 func formatTargetCompletion(absoluteLabel string, targetName string, isRelativeTarget bool) string {

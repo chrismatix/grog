@@ -52,7 +52,7 @@ func NewFileSystemCache(ctx context.Context) (*FileSystemCache, error) {
 // buildFilePath constructs the full file path for a cached item
 func (fsc *FileSystemCache) buildFilePath(path, key string) string {
 	dir := fsc.getDir(path)
-	return filepath.Join(dir, key)
+	return filepath.Join(dir, physicalCacheKey(key))
 }
 
 func (fsc *FileSystemCache) getDir(path string) string {
@@ -265,12 +265,17 @@ func (fsc *FileSystemCache) ListKeys(ctx context.Context, path string, suffix st
 			}
 			return nil
 		}
-		rel, relErr := filepath.Rel(dir, filePath)
+		relativePath, relErr := filepath.Rel(dir, filePath)
 		if relErr != nil {
 			return relErr
 		}
-		if suffix == "" || strings.HasSuffix(rel, suffix) {
-			keys = append(keys, rel)
+		physicalKey := filepath.ToSlash(relativePath)
+		logicalKey, decodeErr := decodeCacheKey(physicalKey)
+		if decodeErr != nil {
+			return decodeErr
+		}
+		if suffix == "" || strings.HasSuffix(logicalKey, suffix) {
+			keys = append(keys, logicalKey)
 		}
 		return nil
 	})

@@ -26,6 +26,9 @@ jobs:
           - goos: darwin
             goarch: arm64
             runner: macos-latest
+          - goos: windows
+            goarch: amd64
+            runner: windows-latest
     runs-on: ${{ matrix.runner }}
 
     steps:
@@ -46,6 +49,25 @@ jobs:
       - name: Install protoc (macOS)
         if: matrix.goos == 'darwin'
         run: brew install protobuf
+
+      - name: Set up MSYS2 MinGW (Windows)
+        if: matrix.goos == 'windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          path-type: inherit
+          install: >-
+            make
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-protobuf
+
+      - name: Add MSYS2 tools to PATH (Windows)
+        if: matrix.goos == 'windows'
+        shell: pwsh
+        run: |
+          "C:\msys64\ucrt64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "C:\msys64\usr\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Install Go dependencies
         run: |

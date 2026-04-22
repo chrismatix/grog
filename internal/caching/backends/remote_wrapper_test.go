@@ -533,7 +533,14 @@ func TestRemoteWrapper_BeginWriteFansOut(t *testing.T) {
 	}
 
 	// fs side: the bytes should be at the final cache key.
-	gotFS, err := io.ReadAll(must(fs.Get(ctx, "cas", "sha256:cafe")))
+	reader, err := fs.Get(ctx, "cas", "sha256:cafe")
+	if err != nil {
+		t.Fatalf("get fs: %v", err)
+	}
+	gotFS, err := io.ReadAll(reader)
+	if closeErr := reader.Close(); closeErr != nil {
+		t.Fatalf("close fs reader: %v", closeErr)
+	}
 	if err != nil {
 		t.Fatalf("read fs: %v", err)
 	}
@@ -605,11 +612,4 @@ type beginWriteAwareMock struct {
 
 func (m *beginWriteAwareMock) BeginWrite(_ context.Context) (StagedWriter, error) {
 	return m.writer, nil
-}
-
-func must[T any](v T, err error) T {
-	if err != nil {
-		panic(err)
-	}
-	return v
 }

@@ -262,8 +262,7 @@ func (s *S3Cache) fullPrefix() string {
 
 // buildPath constructs the full S3 path for a cached item.
 func (s *S3Cache) buildPath(path, key string) string {
-	parts := []string{s.fullPrefix(), strings.Trim(path, "/"), strings.Trim(key, "/")}
-	return strings.Join(parts, "/")
+	return joinObjectPath(s.fullPrefix(), path, physicalCacheKey(key))
 }
 
 // Get retrieves a cached file from S3.
@@ -447,9 +446,13 @@ func (sc *S3Cache) ListKeys(ctx context.Context, path string, suffix string) ([]
 			return nil, err
 		}
 		for _, obj := range page.Contents {
-			key := strings.TrimPrefix(*obj.Key, fullPath)
-			if suffix == "" || strings.HasSuffix(key, suffix) {
-				keys = append(keys, key)
+			physicalKey := strings.TrimPrefix(*obj.Key, fullPath)
+			logicalKey, decodeErr := decodeCacheKey(physicalKey)
+			if decodeErr != nil {
+				return nil, decodeErr
+			}
+			if suffix == "" || strings.HasSuffix(logicalKey, suffix) {
+				keys = append(keys, logicalKey)
 			}
 		}
 	}

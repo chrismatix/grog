@@ -42,3 +42,58 @@ jobs:
 
       - name: Build and test
         run: make test
+
+  windows-amd64:
+    runs-on: windows-latest
+
+    permissions:
+      contents: "read"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: "0"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Set up MSYS2 MinGW
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          path-type: inherit
+          install: >-
+            git
+            make
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-jj
+            mingw-w64-ucrt-x86_64-protobuf
+
+      - name: Add MSYS2 tools to PATH
+        shell: pwsh
+        run: |
+          "C:\msys64\ucrt64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "C:\msys64\usr\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install pkl
+        shell: pwsh
+        run: |
+          curl.exe -L -o C:\msys64\ucrt64\bin\pkl.exe https://github.com/apple/pkl/releases/download/0.28.2/pkl-windows-amd64.exe
+          pkl --version
+
+      - name: Install Go dependencies
+        shell: pwsh
+        run: |
+          go mod tidy
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+
+      - name: Test and build
+        shell: pwsh
+        run: |
+          $env:CGO_ENABLED = "1"
+          go test ./internal/...
+          make build-with-coverage

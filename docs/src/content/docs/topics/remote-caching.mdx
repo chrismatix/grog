@@ -17,6 +17,8 @@ When using a remote cache grog will effectively use the remote file system as a 
 This means that local outputs are first cached locally and then on the cloud.
 Likewise, when checking the cache grog will fall back to the remote cache if there is no local copy
 
+Cache object names use the same portable layout for local and remote backends. Keys with characters `* " / \ < > : | ?` will be encoded before storage.
+
 **Note:** Grog does not take garbage collect your cache files in any way so even though storage is relatively cheap it can be good practice to set up a mechanism for monitoring its size.
 
 ## Google Cloud Storage (GCS)
