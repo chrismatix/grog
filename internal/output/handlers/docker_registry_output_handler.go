@@ -425,7 +425,7 @@ var layerPhaseLabels = []struct {
 //
 // Example output with five layers:
 //
-//	"(3 pushing, 1 preparing, 1 cached)"
+//	"3 pushing, 1 preparing, 1 cached"
 //
 // States are grouped in a fixed order so the line stays readable as layers
 // transition. Unknown daemon states are appended in alphabetical order.
@@ -463,5 +463,5 @@ func formatPhaseSummary(layerStates map[string]string) string {
 	if len(parts) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("(%s)", strings.Join(parts, ", "))
+	return strings.Join(parts, ", ")
 }
