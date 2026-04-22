@@ -10,6 +10,7 @@ Find below a complete example of a grog configuration file:
 # Workspace Settings
 root = "/home/grace/grog_data"
 requires_grog = ">=0.15.0"
+# cache_namespace = "org-myrepo" # optional — opt-in target cache namespace
 
 # Execution Settings
 fail_fast = true # Exit immediately when encountering an issue
@@ -65,6 +66,7 @@ For instance, to set or override the `fail_fast` option set `GROG_FAIL_FAST=fals
 ## Configuration Variables Explained
 
 - **root**: The base directory where Grog stores its internal files. Defaults to `~/.grog`.
+- **cache_namespace**: Optional namespace for the target cache under `root`. The target cache is flat by default (stored at `$GROG_ROOT/cache/`) so that the same repo checked out at different absolute paths (e.g. ephemeral CI runners) shares cache hits — this is safe because cache keys already hash their complete inputs. Setting `cache_namespace` moves the cache to `$GROG_ROOT/<cache_namespace>/cache/` to isolate it from other projects on the same machine. Logs and the workspace lockfile remain keyed by the absolute workspace path regardless, so parallel grog invocations in different checkouts never conflict.
 - **requires_grog**: A [semver](https://semver.org/) range that the running
   Grog binary must satisfy. If the version is outside of this range Grog exits with
   an error.

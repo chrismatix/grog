@@ -162,7 +162,7 @@ func RunBuildAndAfter(
 	}
 	targetCache := caching.NewTargetResultCache(cache)
 	cas := caching.NewCas(cache)
-	taintCache := caching.NewTaintCache(cache)
+	taintCache := caching.NewTaintStore()
 	registry := output.NewRegistry(ctx, cas)
 
 	// Only lock the workspace once necessary, i.e., before we start building.

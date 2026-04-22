@@ -21,13 +21,13 @@ func TestFileSystemCache_SetGetExistsDelete(t *testing.T) {
 	}{
 		{
 			name:    "simple key",
-			path:    "taint",
+			path:    "target",
 			key:     "target",
 			content: "content-1",
 		},
 		{
-			name:    "label key with path separators",
-			path:    "taint",
+			name:    "key with path separators",
+			path:    "target",
 			key:     "//dbt/container:clickhouse-dbt-arm64",
 			content: "content-2",
 		},
