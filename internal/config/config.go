@@ -52,6 +52,12 @@ type WorkspaceConfig struct {
 	// NumIOWorkers sets the number of I/O workers used for async cache writes.
 	// Only relevant when AsyncCacheWrites is true. Defaults to 3 * num_workers.
 	NumIOWorkers int `mapstructure:"num_io_workers"`
+	// IncludeHidden controls whether the package loader descends into hidden
+	// files and directories (names starting with a dot, e.g. ".github"). By
+	// default these are skipped, matching the behavior of most code tools.
+	// Set to true to allow BUILD files and source inputs inside dot-directories
+	// to be discovered.
+	IncludeHidden bool `mapstructure:"include_hidden"`
 
 	// Logging
 	LogLevel      string `mapstructure:"log_level"`
