@@ -24,6 +24,7 @@ func LoadPackages(ctx context.Context, startDir string) ([]*model.Package, error
 	fileListQueue := make(chan *gocodewalker.File, 100)
 
 	fileWalker := gocodewalker.NewParallelFileWalker([]string{startDir}, fileListQueue)
+	fileWalker.IncludeHidden = config.Global.IncludeHidden
 	go fileWalker.Start()
 
 	packageLoader := NewPackageLoader(logger)
