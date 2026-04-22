@@ -9,28 +9,20 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"sync"
 	"sync/atomic"
 
 	"grog/internal/caching"
+	"grog/internal/caching/backends"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/model"
 	"grog/internal/proto/gen"
 	"grog/internal/worker"
 
-	"golang.org/x/sync/semaphore"
 	"google.golang.org/protobuf/proto"
 )
-
-// maxConcurrentCASOps limits the number of concurrent CAS file I/O operations
-// (uploads and downloads) to prevent thread exhaustion when directory outputs
-// contain many files. Each CAS operation may pin an OS thread (e.g. blocking
-// on S3 HTTP calls), so unbounded concurrency can exceed Go's 10,000-thread
-// limit in workspaces with many targets and large directory outputs.
-var maxConcurrentCASOps = int64(runtime.NumCPU() * 4)
 
 // DirectoryOutputHandler handles directory outputs by turning them into a merkle tree
 // whose definition and file contents are stored in the CAS.
@@ -218,12 +210,15 @@ func (d *DirectoryOutputHandler) Write(
 	}, nil
 }
 
-// uploadFilesToCas uploads files to the CAS with bounded concurrency.
+// uploadFilesToCas uploads files to the CAS in parallel. Each goroutine
+// acquires a global I/O slot *before* os.Open, so in-flight FDs stay
+// within the I/O budget even on directories with thousands of files. The
+// slot is carried into cas.Write via ioCtx so BoundedBackend.Set skips
+// its own Acquire and avoids a double-count.
 func uploadFilesToCas(ctx context.Context, cas *caching.Cas, fileUploads []fileUpload, progress *worker.ProgressTracker) (int64, error) {
 	logger := console.GetLogger(ctx)
 	var sizeBytes atomic.Int64
 
-	sem := semaphore.NewWeighted(maxConcurrentCASOps)
 	var wg sync.WaitGroup
 	errChan := make(chan error, len(fileUploads))
 
@@ -232,11 +227,12 @@ func uploadFilesToCas(ctx context.Context, cas *caching.Cas, fileUploads []fileU
 		localUploadAction := uploadAction
 		go func() {
 			defer wg.Done()
-			if err := sem.Acquire(ctx, 1); err != nil {
+			ioCtx, release, err := backends.AcquireGlobalIO(ctx)
+			if err != nil {
 				errChan <- err
 				return
 			}
-			defer sem.Release(1)
+			defer release()
 
 			logger.Debugf("uploading %s to CAS digest %s", localUploadAction.absolutePath, localUploadAction.digest)
 			file, err := os.Open(localUploadAction.absolutePath)
@@ -251,7 +247,7 @@ func uploadFilesToCas(ctx context.Context, cas *caching.Cas, fileUploads []fileU
 				reader = progress.WrapReader(file)
 			}
 
-			if err := cas.Write(ctx, localUploadAction.digest, reader); err != nil {
+			if err := cas.Write(ioCtx, localUploadAction.digest, reader); err != nil {
 				errChan <- err
 				return
 			}
@@ -521,12 +517,12 @@ func (d *DirectoryOutputHandler) Load(
 		return fmt.Errorf("failed to create directory %s: %w", dirPath, err)
 	}
 
-	// WaitGroup to wait for all goroutines to finish
+	// Concurrent CAS reads are bounded process-wide by the BoundedBackend
+	// wrapper inside cas.Load.
 	var waitGroup sync.WaitGroup
-	sem := semaphore.NewWeighted(maxConcurrentCASOps)
 	errChan := make(chan error, len(tree.Children))
 	// Recursively load the directory structure
-	if err := d.loadDirectoryRecursive(ctx, dirPath, tree.Root, childrenMap, progress, &waitGroup, sem, errChan); err != nil {
+	if err := d.loadDirectoryRecursive(ctx, dirPath, tree.Root, childrenMap, progress, &waitGroup, errChan); err != nil {
 		return fmt.Errorf("failed to load directory structure: %w", err)
 	}
 
@@ -554,7 +550,6 @@ func (d *DirectoryOutputHandler) loadDirectoryRecursive(
 	childrenMap map[string]*gen.Directory,
 	progress *worker.ProgressTracker,
 	waitGroup *sync.WaitGroup,
-	sem *semaphore.Weighted,
 	errChan chan error,
 ) error {
 	// Create all files
@@ -565,12 +560,6 @@ func (d *DirectoryOutputHandler) loadDirectoryRecursive(
 		// Fetch file contents from CAS
 		go func(filePath string, digest string) {
 			defer waitGroup.Done()
-			if err := sem.Acquire(ctx, 1); err != nil {
-				errChan <- err
-				return
-			}
-			defer sem.Release(1)
-
 			console.GetLogger(ctx).Debugf("loading file for directory output %s from digest %s", filePath, digest)
 			err := d.downloadFile(ctx, digest, filePath, fileNode.IsExecutable, progress)
 			if err != nil {
@@ -595,7 +584,7 @@ func (d *DirectoryOutputHandler) loadDirectoryRecursive(
 		}
 
 		// Recursively load the subdirectory
-		if err := d.loadDirectoryRecursive(ctx, subDirPath, childDir, childrenMap, progress, waitGroup, sem, errChan); err != nil {
+		if err := d.loadDirectoryRecursive(ctx, subDirPath, childDir, childrenMap, progress, waitGroup, errChan); err != nil {
 			return err
 		}
 	}

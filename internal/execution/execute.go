@@ -77,9 +77,9 @@ func NewExecutor(
 // Execute executes the targets in the given graph and returns the completion map
 func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	numWorkers := config.Global.NumWorkers
-	numIOWorkers := config.Global.NumIOWorkers
-	if numIOWorkers < 1 {
-		numIOWorkers = numWorkers * 3
+	numAsyncWriters := config.Global.NumAsyncWriters
+	if numAsyncWriters < 1 {
+		numAsyncWriters = numWorkers * 3
 	}
 	stdLogger := console.GetLogger(ctx)
 
@@ -111,7 +111,7 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	// Add the TestLogger to the context
 	ctx = context.WithValue(ctx, console.TestLoggerKey{}, testLogger)
 
-	coordinator := NewPoolCoordinator(stdLogger, numWorkers, numIOWorkers, sendMsg, selectedNodeCount)
+	coordinator := NewPoolCoordinator(stdLogger, numWorkers, numAsyncWriters, sendMsg, selectedNodeCount)
 	coordinator.StartTaskWorkers(ctx)
 	defer coordinator.Shutdown()
 	e.coordinator = coordinator

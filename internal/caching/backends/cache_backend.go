@@ -4,6 +4,7 @@ import (
 	"context"
 	"grog/internal/config"
 	"io"
+	"sync"
 )
 
 // CacheBackend represents an interface for a file system-based cache.
@@ -79,7 +80,37 @@ type StagedWriter interface {
 	Cancel(ctx context.Context) error
 }
 
+// GetCacheBackend constructs the configured cache backend and wraps it with
+// the global I/O concurrency limiter, so every Get/Set across the process
+// shares the same semaphore configured via SetGlobalIOConcurrency.
 func GetCacheBackend(
+	ctx context.Context,
+	cacheConfig config.CacheConfig,
+) (CacheBackend, error) {
+	ensureGlobalIOInit()
+	inner, err := buildBackend(ctx, cacheConfig)
+	if err != nil {
+		return nil, err
+	}
+	return NewBoundedBackend(inner), nil
+}
+
+// ensureGlobalIOInit initialises the I/O semaphore from config.Global on
+// first call; later calls are no-ops. A non-positive config value falls
+// back to DefaultIOConcurrency.
+var globalIOOnce sync.Once
+
+func ensureGlobalIOInit() {
+	globalIOOnce.Do(func() {
+		cap := config.Global.NumIOWorkers
+		if cap < 1 {
+			cap = DefaultIOConcurrency()
+		}
+		SetGlobalIOConcurrency(cap)
+	})
+}
+
+func buildBackend(
 	ctx context.Context,
 	cacheConfig config.CacheConfig,
 ) (CacheBackend, error) {
