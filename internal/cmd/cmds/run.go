@@ -11,8 +11,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"grog/internal/caching"
-	"grog/internal/caching/backends"
 	"grog/internal/completions"
 	"grog/internal/config"
 	"grog/internal/console"
@@ -21,7 +19,6 @@ import (
 	"grog/internal/label"
 	"grog/internal/loading"
 	"grog/internal/model"
-	"grog/internal/output"
 	"grog/internal/selection"
 	"grog/internal/worker"
 )
@@ -138,9 +135,9 @@ func buildAndRunTargets(ctx context.Context, logger *console.Logger, graph *dag.
 		targetPatterns = append(targetPatterns, pattern)
 	}
 
-	afterBuildSuccess := func() error {
+	afterBuildSuccess := func(executor *execution.Executor) error {
 		for _, runTarget := range runTargets {
-			loadDependencyOutputsIfNeeded(ctx, logger, graph, runTarget)
+			loadDependencyOutputsIfNeeded(ctx, logger, executor, runTarget)
 		}
 		return runTargetBinaries(ctx, logger, runTargets, userCommandArgs)
 	}
@@ -158,30 +155,10 @@ func buildAndRunTargets(ctx context.Context, logger *console.Logger, graph *dag.
 	)
 }
 
-func loadDependencyOutputsIfNeeded(ctx context.Context, logger *console.Logger, graph *dag.DirectedTargetGraph, runTarget *model.Target) {
+func loadDependencyOutputsIfNeeded(ctx context.Context, logger *console.Logger, executor *execution.Executor, runTarget *model.Target) {
 	if config.Global.GetLoadOutputsMode() != config.LoadOutputsMinimal {
 		return
 	}
-
-	cache, err := backends.GetCacheBackend(ctx, config.Global.Cache)
-	if err != nil {
-		logger.Fatalf("could not instantiate cache: %v", err)
-	}
-	targetCache := caching.NewTargetResultCache(cache)
-	cas := caching.NewCas(cache)
-	taintCache := caching.NewTaintStore()
-	registry := output.NewRegistry(ctx, cas)
-
-	executor := execution.NewExecutor(
-		targetCache,
-		taintCache,
-		registry,
-		graph,
-		config.Global.FailFast,
-		config.Global.StreamLogs,
-		config.Global.EnableCache,
-		config.Global.GetLoadOutputsMode(),
-	)
 	logger.Infof("Loading outputs of direct dependencies due to load_outputs=minimal")
 	if err := executor.LoadDependencyOutputs(ctx, runTarget, func(_ worker.StatusUpdate) {}); err != nil {
 		logger.Fatalf("could not load dependencies: %v", err)
