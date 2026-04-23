@@ -71,6 +71,10 @@ func NewExecutor(
 		loadOutputsMode:  loadOutputsMode,
 		targetHasher:     hashing.NewTargetHasher(graph),
 		streamLogsToggle: console.NewStreamLogsToggle(streamLogs),
+		// Default to a synchronous cache writer so methods like
+		// LoadDependencyOutputs work without a full Execute() setup. Execute()
+		// replaces this with an async-capable writer wired to the I/O pool.
+		cacheWriter: NewCacheWriter(targetCache, nil, false, context.Background()),
 	}
 }
 
