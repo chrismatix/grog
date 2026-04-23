@@ -99,7 +99,7 @@ func RunBuildAndAfter(
 	testFilter selection.TargetTypeSelection,
 	streamLogs bool,
 	loadOutputsMode config.LoadOutputsMode,
-	afterBuildSuccess func() error,
+	afterBuildSuccess func(*execution.Executor) error,
 	commandOverride ...string,
 ) {
 	startTime := time.Now()
@@ -225,7 +225,7 @@ func RunBuildAndAfter(
 	var afterBuildErr error
 	if afterBuildSuccess != nil && buildOK {
 		releaseWorkspaceLock()
-		afterBuildErr = afterBuildSuccess()
+		afterBuildErr = afterBuildSuccess(executor)
 	}
 
 	executor.WaitForAsyncWrites(ctx)

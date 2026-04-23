@@ -13,7 +13,7 @@ func TestFormatPhaseSummary_SingleLayer(t *testing.T) {
 	got := formatPhaseSummary(map[string]string{
 		"layer-1": "Pushing",
 	})
-	want := "(1 pushing)"
+	want := "1 pushing"
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
@@ -32,7 +32,7 @@ func TestFormatPhaseSummary_OrderIsStable(t *testing.T) {
 		"l5": "Waiting",
 	}
 	got := formatPhaseSummary(states)
-	want := "(2 pushing, 1 preparing, 1 waiting, 1 pushed)"
+	want := "2 pushing, 1 preparing, 1 waiting, 1 pushed"
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
@@ -46,7 +46,7 @@ func TestFormatPhaseSummary_UnknownPhase(t *testing.T) {
 		"l1": "Pushing",
 		"l2": "Surprise!",
 	})
-	want := "(1 pushing, 1 surprise!)"
+	want := "1 pushing, 1 surprise!"
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
@@ -63,7 +63,7 @@ func TestFormatPhaseSummary_PluralizationOfLayerAlreadyExists(t *testing.T) {
 		"l2": "Layer already exists",
 		"l3": "Layer already exists",
 	})
-	want := "(3 cached)"
+	want := "3 cached"
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
@@ -79,7 +79,7 @@ func TestFormatPhaseSummary_PullStateLabels(t *testing.T) {
 		"l3": "Extracting",
 		"l4": "Pull complete",
 	})
-	want := "(1 downloading, 1 extracting, 1 downloaded, 1 pulled)"
+	want := "1 downloading, 1 extracting, 1 downloaded, 1 pulled"
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
