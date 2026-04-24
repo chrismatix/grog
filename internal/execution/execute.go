@@ -113,7 +113,12 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 
 	coordinator := NewPoolCoordinator(stdLogger, numWorkers, numIOWorkers, sendMsg, selectedNodeCount)
 	coordinator.StartTaskWorkers(ctx)
-	defer coordinator.Shutdown()
+	// The task pool is only used during the DAG walk below; shutting it down
+	// here (LIFO after the walker returns) is safe. The I/O pool, however,
+	// must stay alive until drainAsyncWrites runs — callers that set
+	// DeferAsyncWait (e.g. `grog run` with load_outputs=minimal) may submit
+	// further cache writes from post-build work after Execute returns.
+	defer coordinator.TaskPool().Shutdown()
 	e.coordinator = coordinator
 
 	ioContext := context.WithoutCancel(ctx)
@@ -158,6 +163,9 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	// but we must not block an interrupted shutdown on slow remote uploads.
 	if ctx.Err() == nil && !e.deferAsyncWait {
 		e.drainAsyncWrites()
+	} else if ctx.Err() != nil {
+		// Build was interrupted — release I/O workers so the process can exit.
+		coordinator.IOPool().Shutdown()
 	}
 
 	return completionMap, err
@@ -187,6 +195,10 @@ func (e *Executor) WaitForAsyncWrites(ctx context.Context) {
 func (e *Executor) drainAsyncWrites() {
 	waitStart := time.Now()
 	e.cacheWriter.Wait()
+	// All pending writes are done — release the I/O workers. Shutdown is
+	// idempotent, so calling this again from a subsequent WaitForAsyncWrites
+	// is harmless.
+	e.coordinator.IOPool().Shutdown()
 	e.asyncWaitTime = time.Since(waitStart)
 	e.asyncDrained = true
 }
