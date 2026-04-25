@@ -230,6 +230,13 @@ func RunBuildAndAfter(
 
 	executor.WaitForAsyncWrites(ctx)
 
+	// Close output handlers (notably the loopback docker registry) only after
+	// async writes have drained. Closing earlier would tear the proxy down
+	// while the docker daemon is still streaming layers to it.
+	if err := registry.Close(); err != nil {
+		logger.Warnf("failed to close output registry: %v", err)
+	}
+
 	// Write trace (synchronous — Parquet writes are fast for local FS,
 	// and we need to ensure the write completes before the process exits)
 	if traceCollector != nil && completionMap != nil {
