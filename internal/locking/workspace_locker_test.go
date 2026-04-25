@@ -43,6 +43,30 @@ func TestWorkspaceLockerBasic(t *testing.T) {
 	}
 }
 
+func TestWorkspaceLockerCreatesParentDir(t *testing.T) {
+	root := t.TempDir()
+	config.Global.Root = root
+	config.Global.WorkspaceRoot = root
+	dir := config.Global.GetWorkspaceRootDir()
+	if dir == root {
+		t.Skip("workspace root dir matches grog root; nothing to create")
+	}
+	if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected workspace prefix dir to not exist, got: %v", err)
+	}
+
+	locker := NewWorkspaceLocker()
+	if err := locker.Lock(context.Background()); err != nil {
+		t.Fatalf("lock failed: %v", err)
+	}
+	t.Cleanup(func() { _ = locker.Unlock() })
+
+	lockPath := filepath.Join(dir, "lockfile")
+	if _, err := os.Stat(lockPath); err != nil {
+		t.Fatalf("expected lock file: %v", err)
+	}
+}
+
 func TestWorkspaceLockerWaitsAndReleases(t *testing.T) {
 	lockPath := setupTestWorkspace(t)
 
