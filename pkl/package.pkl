@@ -22,16 +22,10 @@ class Target {
   tags: Listing<String>(isDistinct)
   platforms: Listing<String>(isDistinct)?
 
-  // Scheduling
-  // Name of a concurrency group. Targets sharing a group compete for the
+  // Name of a concurrency group. Targets sharing a group are gated by the
   // group's capacity (default 1 = fully serialized). Group capacity can be
   // tuned in grog.toml [concurrency_groups].
   concurrency_group: String?
-  // How much concurrency this target takes up while running. Defaults to 1.
-  // Always counts against num_workers; if concurrency_group is set, also
-  // counts against the group's capacity. Must satisfy weight <= num_workers
-  // and (when in a group) weight <= that group's capacity.
-  weight: Int(this >= 1)?
 }
 
 default_platforms: Listing<String>(isDistinct)?

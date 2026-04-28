@@ -147,7 +147,7 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 
 		queuedAt := time.Now()
 		// taskFunc will be run in the worker pool, gated by the scheduler on
-		// num_workers slots (weight) and any concurrency group membership.
+		// any concurrency group membership.
 		taskFunc := e.getTaskFunc(ctx, target, binTools, outputIdentifiers, queuedAt)
 		return e.scheduler.Schedule(ctx, target, taskFunc)
 	}

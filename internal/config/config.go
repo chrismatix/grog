@@ -47,9 +47,9 @@ type WorkspaceConfig struct {
 	NumIOWorkers int `mapstructure:"num_io_workers"`
 
 	// ConcurrencyGroups maps a concurrency group name to its capacity (the
-	// max sum of target weights that can run in parallel within the group).
-	// Groups referenced by a target but missing from this map default to
-	// capacity 1 (fully serialized).
+	// max number of group members that can run in parallel). Groups
+	// referenced by a target but missing from this map default to capacity
+	// 1 (fully serialized).
 	ConcurrencyGroups map[string]int `mapstructure:"concurrency_groups"`
 
 	// Logging

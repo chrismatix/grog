@@ -41,10 +41,6 @@ type Target struct {
 	// in. Targets sharing a group compete for the group's capacity (default 1
 	// means fully serialized). Group capacities are configured in grog.toml.
 	ConcurrencyGroup string `json:"concurrency_group,omitempty"`
-	// Weight is how many worker slots this target occupies while running.
-	// Counts against num_workers, and against its concurrency group's capacity
-	// when set. Defaults to 1.
-	Weight int `json:"weight,omitempty"`
 
 	// UnresolvedInputs are the inputs as specified by the user (no glob resolving)
 	UnresolvedInputs []string `json:"-"`

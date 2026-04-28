@@ -13,15 +13,10 @@ import (
 	"grog/internal/worker"
 )
 
-// Scheduler gates target execution on two resources:
-//   - a global slot pool of num_workers, held for the target's Weight
-//   - an optional named concurrency group, capacity from grog.toml
-//     [concurrency_groups] (default 1), also held for the target's Weight
-//
-// Weights are validated at load time so a target cannot request more than
-// either capacity can ever provide. The group permit is acquired BEFORE the
-// slot permits to avoid a wide target holding N slots while blocked on a
-// contended group.
+// Scheduler gates target execution on optional named concurrency groups.
+// Targets sharing a group compete for that group's capacity (default 1,
+// fully serialized; tunable via grog.toml [concurrency_groups]). The
+// global num_workers cap is enforced by the underlying TaskWorkerPool.
 type Scheduler struct {
 	pool     *worker.TaskWorkerPool[dag.CacheResult]
 	groupsMu sync.Mutex
@@ -35,31 +30,27 @@ func NewScheduler(pool *worker.TaskWorkerPool[dag.CacheResult]) *Scheduler {
 	}
 }
 
-// Schedule runs task once the target's concurrency resources are available.
-// The pool itself enforces num_workers; Schedule layers group-level
-// serialization on top.
+// Schedule runs task once the target's concurrency group permit is held.
+// Acquiring the group permit before submitting to the pool prevents a
+// queued group-bound task from occupying a worker slot while waiting on
+// a contended group.
 func (s *Scheduler) Schedule(
 	ctx context.Context,
 	target *model.Target,
 	task worker.TaskFunc[dag.CacheResult],
 ) (dag.CacheResult, error) {
-	weight := target.Weight
-	if weight < 1 {
-		weight = 1
-	}
-
 	if target.ConcurrencyGroup != "" {
 		group := s.groupFor(target.ConcurrencyGroup)
-		if err := group.Acquire(ctx, int64(weight)); err != nil {
+		if err := group.Acquire(ctx, 1); err != nil {
 			return dag.CacheMiss, fmt.Errorf(
 				"acquiring concurrency group %q for target %s: %w",
 				target.ConcurrencyGroup, target.Label, err,
 			)
 		}
-		defer group.Release(int64(weight))
+		defer group.Release(1)
 	}
 
-	return s.pool.RunWeighted(task, weight)
+	return s.pool.Run(task)
 }
 
 func (s *Scheduler) groupFor(name string) *semaphore.Weighted {

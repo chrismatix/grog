@@ -35,11 +35,11 @@ async_cache_writes = true # default
 # num_io_workers = 12 # defaults to 3 * num_workers
 
 # Concurrency Groups
-# Optional. Cap how many weight-units can run concurrently for each named
-# group. Targets that set concurrency_group = "<name>" will be gated by this
-# setting. Groups referenced but not listed here default to capacity 1 (i.e.
-# fully serialized), so the common "serialize these targets" case needs no
-# config at all.
+# Optional. Cap how many members of a named group can run concurrently.
+# Targets that set concurrency_group = "<name>" will be gated by this
+# setting. Groups referenced but not listed here default to capacity 1
+# (i.e. fully serialized), so the common "serialize these targets" case
+# needs no config at all.
 # [concurrency_groups]
 # docker = 1
 # integration_tests = 2
@@ -96,11 +96,9 @@ For instance, to set or override the `fail_fast` option set `GROG_FAIL_FAST=fals
 
 ### Concurrency Groups
 
-`[concurrency_groups]` is a table mapping group name → capacity. A target joins a group by setting `concurrency_group = "<name>"` in its `BUILD.pkl` (or equivalent). Members compete for the group's capacity — if the sum of running members' weights would exceed it, new members wait.
+`[concurrency_groups]` is a table mapping group name → capacity. A target joins a group by setting `concurrency_group = "<name>"` in its `BUILD.pkl` (or equivalent). At most `capacity` members of a group run concurrently — additional members wait.
 
-- A target's `weight` (default `1`) is charged against both `num_workers` and its group's capacity.
-- Groups not listed in `[concurrency_groups]` default to capacity `1` — in other words, naming a group is enough to serialize those targets, with no further config needed.
-- `weight > num_workers` or `weight > group capacity` is rejected at load time.
+Groups not listed in `[concurrency_groups]` default to capacity `1` — in other words, naming a group is enough to serialize those targets, with no further config needed.
 
 Typical uses: limiting concurrent docker builds (`docker = 1`), capping shared-DB integration tests (`integration_tests = 2`), or reserving headroom on a machine with a fixed resource like a GPU.
 
