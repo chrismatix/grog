@@ -36,7 +36,7 @@ func (e *CommandError) Error() string {
 
 type Executor struct {
 	targetCache      *caching.TargetResultCache
-	taintCache       *caching.TaintCache
+	taintStore       *caching.TaintStore
 	registry         *output.Registry
 	graph            *dag.DirectedTargetGraph
 	failFast         bool
@@ -54,7 +54,7 @@ type Executor struct {
 
 func NewExecutor(
 	targetCache *caching.TargetResultCache,
-	taintCache *caching.TaintCache,
+	taintStore *caching.TaintStore,
 	registry *output.Registry,
 	graph *dag.DirectedTargetGraph,
 	failFast bool,
@@ -64,7 +64,7 @@ func NewExecutor(
 ) *Executor {
 	return &Executor{
 		targetCache:      targetCache,
-		taintCache:       taintCache,
+		taintStore:       taintStore,
 		registry:         registry,
 		graph:            graph,
 		failFast:         failFast,
@@ -114,7 +114,12 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 
 	coordinator := NewPoolCoordinator(stdLogger, numWorkers, numIOWorkers, sendMsg, selectedNodeCount)
 	coordinator.StartTaskWorkers(ctx)
-	defer coordinator.Shutdown()
+	// The task pool is only used during the DAG walk below; shutting it down
+	// here (LIFO after the walker returns) is safe. The I/O pool, however,
+	// must stay alive until drainAsyncWrites runs — callers that set
+	// DeferAsyncWait (e.g. `grog run` with load_outputs=minimal) may submit
+	// further cache writes from post-build work after Execute returns.
+	defer coordinator.TaskPool().Shutdown()
 	e.coordinator = coordinator
 	e.scheduler = NewScheduler(coordinator.TaskPool())
 
@@ -161,6 +166,9 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	// but we must not block an interrupted shutdown on slow remote uploads.
 	if ctx.Err() == nil && !e.deferAsyncWait {
 		e.drainAsyncWrites()
+	} else if ctx.Err() != nil {
+		// Build was interrupted — release I/O workers so the process can exit.
+		coordinator.IOPool().Shutdown()
 	}
 
 	return completionMap, err
@@ -190,6 +198,10 @@ func (e *Executor) WaitForAsyncWrites(ctx context.Context) {
 func (e *Executor) drainAsyncWrites() {
 	waitStart := time.Now()
 	e.cacheWriter.Wait()
+	// All pending writes are done — release the I/O workers. Shutdown is
+	// idempotent, so calling this again from a subsequent WaitForAsyncWrites
+	// is harmless.
+	e.coordinator.IOPool().Shutdown()
 	e.asyncWaitTime = time.Since(waitStart)
 	e.asyncDrained = true
 }
@@ -299,7 +311,7 @@ func (e *Executor) getTaskFunc(
 		}
 
 		// Check if the target is tainted
-		isTainted, taintedErr := e.taintCache.IsTainted(ctx, target.Label)
+		isTainted, taintedErr := e.taintStore.IsTainted(ctx, target.Label)
 		if taintedErr != nil {
 			logger.Errorf("Failed to check if target %s is tainted: %v", target.Label, taintedErr)
 		}
@@ -452,7 +464,7 @@ func (e *Executor) executeTarget(
 
 	if isTainted {
 		go func() {
-			err = e.taintCache.Clear(ctx, target.Label)
+			err = e.taintStore.Clear(ctx, target.Label)
 			if err != nil {
 				logger.Errorf("Failed to remove taint from target %s: %v", target.Label, err)
 			}

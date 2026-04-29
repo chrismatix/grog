@@ -37,10 +37,14 @@ func (wl *WorkspaceLocker) Lock(ctx context.Context) error {
 	lockData := []byte(buildLockFileContents(os.Getpid(), os.Args))
 	waitPrinted := false
 
+	if err := os.MkdirAll(filepath.Dir(wl.lockFilePath), 0755); err != nil {
+		return fmt.Errorf("could not create workspace lock directory: %w", err)
+	}
+
 	for {
 		logger.Debugf("Attempting to acquire workspace lock at %s", wl.lockFilePath)
 		file, err := os.OpenFile(wl.lockFilePath, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0644)
-		if err == nil || errors.Is(err, os.ErrNotExist) {
+		if err == nil {
 			_, writeErr := file.Write(lockData)
 			file.Close()
 			if writeErr != nil {

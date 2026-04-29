@@ -2,6 +2,7 @@ package output
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"grog/internal/caching"
 	"grog/internal/config"
@@ -12,6 +13,7 @@ import (
 	"grog/internal/output/handlers"
 	"grog/internal/proto/gen"
 	"grog/internal/worker"
+	"io"
 	"runtime"
 	"slices"
 	"sync"
@@ -70,6 +72,27 @@ func NewRegistry(
 		r.Register(handlers.NewDockerOutputHandler(ctx, cas))
 	}
 	return r
+}
+
+// Close releases resources held by output handlers (notably the in-process
+// loopback Docker registry). Must be called only after all async cache writes
+// have drained — otherwise an in-flight `docker push` may race the proxy
+// shutdown and fail with "connection refused".
+func (r *Registry) Close() error {
+	r.handlerMutex.RLock()
+	defer r.handlerMutex.RUnlock()
+
+	var errs []error
+	for _, h := range r.handlers {
+		closer, ok := h.(io.Closer)
+		if !ok {
+			continue
+		}
+		if err := closer.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // Register adds a new output handler to the registry

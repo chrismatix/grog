@@ -13,26 +13,30 @@ var CleanCmd = &cobra.Command{
 	Use:   "clean",
 	Short: "Removes all cached artifacts.",
 	Long: `Removes cached artifacts from the workspace or the entire grog cache.
-By default, only the workspace-specific cache is cleaned. Use the --expunge flag to remove all cached artifacts.`,
-	Example: `  grog clean            # Clean the workspace cache
+By default, the target cache and the workspace's logs/lockfile are cleaned. Since the target cache is shared across checkouts of the same repo, running clean affects other workspaces pointing at the same GROG_ROOT. Use the --expunge flag to remove every grog cache directory (CAS included).`,
+	Example: `  grog clean            # Clean the target cache and this checkout's logs
   grog clean --expunge   # Clean the entire grog cache`,
 	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		_, logger := console.SetupCommand()
 
-		var dirToClear string
+		var dirsToClear []string
 		if expunge {
-			dirToClear = config.Global.Root
+			dirsToClear = []string{config.Global.Root}
 		} else {
-			dirToClear = config.Global.GetWorkspaceRootDir()
+			dirsToClear = []string{
+				config.Global.GetWorkspaceRootDir(),
+				config.Global.GetWorkspaceCacheDirectory(),
+			}
 		}
 
-		if err := os.RemoveAll(dirToClear); err != nil {
-			logger.Fatalf("Clean failed: %v", err)
-		}
-
-		if err := os.MkdirAll(dirToClear, 0755); err != nil {
-			logger.Fatalf("Clean succeeded but failed to recreate the directory: %v", err)
+		for _, dir := range dirsToClear {
+			if err := os.RemoveAll(dir); err != nil {
+				logger.Fatalf("Clean failed: %v", err)
+			}
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				logger.Fatalf("Clean succeeded but failed to recreate the directory: %v", err)
+			}
 		}
 
 		if expunge {

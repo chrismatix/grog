@@ -10,13 +10,16 @@ import (
 	"github.com/fatih/color"
 )
 
-// GetWorkspaceCachePrefix returns name of the cache directory for the current repo.
-// Like Bazel we hash the repo path and use that as directory within $GROG_ROOT
-// Unlike Bazel we only use the first 16 characters of the hash and add a readable portion
-// to make it easier to identify.
+// GetWorkspaceCachePrefix returns the per-checkout prefix used for workspace
+// ephemera (logs, workspace lock) and for remote cache paths when
+// shared_cache is disabled. It combines a SHA-256 hash of the absolute
+// workspace path with the directory basename so that concurrent grog
+// invocations in different checkouts of the same repo cannot clobber each
+// other's logs or deadlock on the same lock file. The target cache itself is
+// not prefixed with this value — it lives directly under $GROG_ROOT and is
+// shared across checkouts (see WorkspaceConfig.GetWorkspaceCacheDirectory).
 func GetWorkspaceCachePrefix(workspaceDir string) string {
 	repoHash := fmt.Sprintf("%x", sha256.Sum256([]byte(workspaceDir)))[:16]
-
 	workspaceName := filepath.Base(workspaceDir)
 	return fmt.Sprintf("%s-%s", repoHash, workspaceName)
 }

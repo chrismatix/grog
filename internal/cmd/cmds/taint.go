@@ -2,7 +2,6 @@ package cmds
 
 import (
 	"grog/internal/caching"
-	"grog/internal/caching/backends"
 	"grog/internal/completions"
 	"grog/internal/config"
 	"grog/internal/console"
@@ -45,12 +44,7 @@ This is useful when you want to force a rebuild of specific targets.`,
 
 		selectedNodes := graph.GetSelectedNodes()
 
-		// Initialize cache
-		cache, err := backends.GetCacheBackend(ctx, config.Global.Cache)
-		if err != nil {
-			logger.Fatalf("could not instantiate cache: %v", err)
-		}
-		taintCache := caching.NewTaintCache(cache)
+		taintStore := caching.NewTaintStore()
 
 		taintedCount := 0
 		for _, node := range selectedNodes {
@@ -59,7 +53,7 @@ This is useful when you want to force a rebuild of specific targets.`,
 				continue
 			}
 
-			err = taintCache.Taint(ctx, target.Label)
+			err := taintStore.Taint(ctx, target.Label)
 			if err != nil {
 				logger.Errorf("Failed to taint target %s: %v", target.Label, err)
 				continue

@@ -18,6 +18,13 @@ const (
 type WorkspaceConfig struct {
 	Root          string `mapstructure:"root"`
 	WorkspaceRoot string `mapstructure:"workspace_root"`
+	// CacheNamespace optionally namespaces the target cache under $GROG_ROOT.
+	// By default the target cache is flat (shared across all workspaces and
+	// all checkouts) because cache keys include a complete hash of their
+	// inputs, so collisions are not possible. Set this to isolate the cache
+	// — e.g. to keep different projects' caches from mingling on the same
+	// machine.
+	CacheNamespace string `mapstructure:"cache_namespace"`
 
 	// Execution
 	FailFast    bool   `mapstructure:"fail_fast"`
@@ -45,6 +52,12 @@ type WorkspaceConfig struct {
 	// NumIOWorkers sets the number of I/O workers used for async cache writes.
 	// Only relevant when AsyncCacheWrites is true. Defaults to 3 * num_workers.
 	NumIOWorkers int `mapstructure:"num_io_workers"`
+	// IncludeHidden controls whether the package loader descends into hidden
+	// files and directories (names starting with a dot, e.g. ".github"). By
+	// default these are skipped, matching the behavior of most code tools.
+	// Set to true to allow BUILD files and source inputs inside dot-directories
+	// to be discovered.
+	IncludeHidden bool `mapstructure:"include_hidden"`
 
 	// ConcurrencyGroups maps a concurrency group name to its capacity (the
 	// max number of group members that can run in parallel). Groups
@@ -94,15 +107,25 @@ type WorkspaceConfig struct {
 
 var Global WorkspaceConfig
 
-// GetWorkspaceRootDir is the directory under the $GROG_ROOT that hosts the cache
-// and all other behind-the-scenes files
+// GetWorkspaceRootDir is the directory under $GROG_ROOT that hosts
+// per-checkout ephemeral files (logs, workspace lock). The prefix is derived
+// from the absolute workspace path so that concurrent grog invocations in
+// different checkouts of the same repo do not conflict.
 func (w WorkspaceConfig) GetWorkspaceRootDir() string {
 	workspaceDir := Global.WorkspaceRoot
 	return filepath.Join(w.Root, GetWorkspaceCachePrefix(workspaceDir))
 }
 
+// GetWorkspaceCacheDirectory returns the directory that stores the target
+// cache. It is flat under $GROG_ROOT by default so that the same repo
+// checked out at different absolute paths (e.g. ephemeral CI runners) shares
+// cache hits. When CacheNamespace is set the cache is namespaced under that
+// name.
 func (w WorkspaceConfig) GetWorkspaceCacheDirectory() string {
-	return filepath.Join(w.GetWorkspaceRootDir(), "cache")
+	if w.CacheNamespace != "" {
+		return filepath.Join(w.Root, w.CacheNamespace, "cache")
+	}
+	return filepath.Join(w.Root, "cache")
 }
 
 // GetCasDirectory returns the directory under $GROG_ROOT that hosts the shared CAS.

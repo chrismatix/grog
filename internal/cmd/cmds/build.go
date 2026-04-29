@@ -99,7 +99,7 @@ func RunBuildAndAfter(
 	testFilter selection.TargetTypeSelection,
 	streamLogs bool,
 	loadOutputsMode config.LoadOutputsMode,
-	afterBuildSuccess func() error,
+	afterBuildSuccess func(*execution.Executor) error,
 	commandOverride ...string,
 ) {
 	startTime := time.Now()
@@ -162,7 +162,7 @@ func RunBuildAndAfter(
 	}
 	targetCache := caching.NewTargetResultCache(cache)
 	cas := caching.NewCas(cache)
-	taintCache := caching.NewTaintCache(cache)
+	taintCache := caching.NewTaintStore()
 	registry := output.NewRegistry(ctx, cas)
 
 	// Only lock the workspace once necessary, i.e., before we start building.
@@ -225,10 +225,17 @@ func RunBuildAndAfter(
 	var afterBuildErr error
 	if afterBuildSuccess != nil && buildOK {
 		releaseWorkspaceLock()
-		afterBuildErr = afterBuildSuccess()
+		afterBuildErr = afterBuildSuccess(executor)
 	}
 
 	executor.WaitForAsyncWrites(ctx)
+
+	// Close output handlers (notably the loopback docker registry) only after
+	// async writes have drained. Closing earlier would tear the proxy down
+	// while the docker daemon is still streaming layers to it.
+	if err := registry.Close(); err != nil {
+		logger.Warnf("failed to close output registry: %v", err)
+	}
 
 	// Write trace (synchronous — Parquet writes are fast for local FS,
 	// and we need to ensure the write completes before the process exits)

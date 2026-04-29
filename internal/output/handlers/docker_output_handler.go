@@ -293,6 +293,17 @@ func (d *dockerImageWritePlan) Execute(ctx context.Context, tracker *worker.Prog
 	return nil
 }
 
+// Close shuts down the in-process loopback registry, if one was started.
+// Must be called only after all async cache writes that push through the
+// proxy have drained — otherwise the daemon's mid-push HTTP requests will
+// fail with "connection refused" once the listener is torn down.
+func (d *DockerOutputHandler) Close() error {
+	if d.proxy == nil {
+		return nil
+	}
+	return d.proxy.Close()
+}
+
 func (d *dockerImageWritePlan) Cleanup(ctx context.Context) error {
 	if _, err := d.dockerClient.ImageRemove(ctx, d.loopbackRef, image.RemoveOptions{}); err != nil && !errdefs.IsNotFound(err) {
 		console.GetLogger(ctx).Warnf("failed to remove loopback tag %q: %v", d.loopbackRef, err)
