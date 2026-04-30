@@ -20,6 +20,7 @@ type TargetDTO struct {
 	Platforms            []string          `json:"platforms,omitempty" yaml:"platforms,omitempty" pkl:"platforms" starlark:"platforms"`
 	EnvironmentVariables map[string]string `json:"environment_variables,omitempty" yaml:"environment_variables,omitempty" pkl:"environment_variables" starlark:"environment_variables"`
 	Timeout              string            `json:"timeout,omitempty" yaml:"timeout,omitempty" pkl:"timeout" starlark:"timeout"`
+	Environment          string            `json:"environment,omitempty" yaml:"environment,omitempty" pkl:"environment" starlark:"environment"`
 }
 
 type AliasDTO struct {

@@ -187,6 +187,7 @@ func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *st
 	var platforms *starlark.List
 	var envVars *starlark.Dict
 	var timeout string
+	var environment string
 
 	// Parse keyword arguments
 	if err := starlark.UnpackArgs("target", args, kwargs,
@@ -203,6 +204,7 @@ func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *st
 		"platforms?", &platforms,
 		"environment_variables?", &envVars,
 		"timeout?", &timeout,
+		"environment?", &environment,
 	); err != nil {
 		return nil, err
 	}
@@ -301,6 +303,11 @@ func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *st
 	// Set timeout
 	if timeout != "" {
 		target.Timeout = timeout
+	}
+
+	// Set environment
+	if environment != "" {
+		target.Environment = environment
 	}
 
 	c.targets = append(c.targets, target)

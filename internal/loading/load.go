@@ -131,6 +131,9 @@ func mergePackages(from *model.Package, into *model.Package) error {
 	if into.Aliases == nil {
 		into.Aliases = make(map[label.TargetLabel]*model.Alias)
 	}
+	if into.Environments == nil {
+		into.Environments = make(map[label.TargetLabel]*model.Environment)
+	}
 
 	for fromTargetLabel, fromTarget := range from.Targets {
 		if intoTarget, exists := into.Targets[fromTargetLabel]; exists {
@@ -147,6 +150,19 @@ func mergePackages(from *model.Package, into *model.Package) error {
 			return fmt.Errorf("duplicate alias label: %s (defined in %s and as target in %s)", fromAliasLabel, fromAlias.SourceFilePath, intoTarget.SourceFilePath)
 		}
 		into.Aliases[fromAliasLabel] = fromAlias
+	}
+
+	for fromEnvLabel, fromEnv := range from.Environments {
+		if intoEnv, exists := into.Environments[fromEnvLabel]; exists {
+			return fmt.Errorf("duplicate environment label: %s (defined in %s and %s)", fromEnvLabel, intoEnv.SourceFilePath, fromEnv.SourceFilePath)
+		}
+		if _, exists := into.Targets[fromEnvLabel]; exists {
+			return fmt.Errorf("duplicate label: environment %s conflicts with a target", fromEnvLabel)
+		}
+		if _, exists := into.Aliases[fromEnvLabel]; exists {
+			return fmt.Errorf("duplicate label: environment %s conflicts with an alias", fromEnvLabel)
+		}
+		into.Environments[fromEnvLabel] = fromEnv
 	}
 
 	return nil

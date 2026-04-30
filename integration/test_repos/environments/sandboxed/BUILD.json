@@ -1,0 +1,22 @@
+{
+  "targets": [
+    {
+      "name": "build-image",
+      "command": "echo 'image built'"
+    },
+    {
+      "name": "compile",
+      "command": "echo \"GROG_SANDBOXED=$GROG_SANDBOXED\" > verify.txt && echo compiled > output.txt",
+      "outputs": ["output.txt", "verify.txt"],
+      "environment": ":docker-env"
+    }
+  ],
+  "environments": [
+    {
+      "name": "docker-env",
+      "type": "docker",
+      "dependencies": [":build-image"],
+      "docker_image": "alpine:latest"
+    }
+  ]
+}

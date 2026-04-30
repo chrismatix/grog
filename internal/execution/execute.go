@@ -411,7 +411,7 @@ func (e *Executor) executeTarget(
 	if target.Command != "" {
 		update(worker.Status(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis())))
 		logger.Debugf("running target %s: %s", target.Label, target.CommandEllipsis())
-		err = executeTarget(ctx, target, binToolPaths, outputIdentifiers, e.streamLogsToggle.Enabled())
+		err = executeTarget(ctx, target, binToolPaths, outputIdentifiers, e.streamLogsToggle.Enabled(), e.resolveEnvironment(target))
 	} else {
 		logger.Debugf("skipped target %s due to no command", target.Label)
 	}
@@ -608,6 +608,22 @@ func (e *Executor) LoadDependencyOutputs(
 		}
 	}
 
+	return nil
+}
+
+// resolveEnvironment looks up the Environment for a target from the build graph.
+// Returns nil if the target does not reference an environment.
+func (e *Executor) resolveEnvironment(target *model.Target) *model.Environment {
+	if target.Environment == nil {
+		return nil
+	}
+	node, ok := e.graph.GetNodes()[*target.Environment]
+	if !ok {
+		return nil
+	}
+	if env, ok := node.(*model.Environment); ok {
+		return env
+	}
 	return nil
 }
 

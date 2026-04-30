@@ -1,0 +1,5 @@
+INFO: 3 packages loaded, 4 targets configured.
+WARN: target //local:hello has no inputs, dependencies or output checks causing it to run only once
+WARN: target //sandboxed:build-image has no inputs, dependencies or output checks causing it to run only once
+INFO: Selected 1 target.
+INFO: Build completed successfully. 1 target completed (0 cache hits).
