@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 
 export interface LinkProps {
   href: string;
@@ -12,9 +12,9 @@ export interface LinkProps {
 export const Link: React.FC<LinkProps> = ({
   href,
   children,
-  className = '',
-  target = '_blank',
-  rel = 'noopener noreferrer',
+  className = "",
+  target = "_blank",
+  rel = "noopener noreferrer",
   icon,
 }) => {
   return (

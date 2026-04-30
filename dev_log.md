@@ -17,13 +17,12 @@ If the global lock file changes, all packages that depend on it will be rebuilt.
 Bazel/Pants do it differently and have the target depend only on the **outputs** of its dependencies.
 
 (Un)fortunately, this was the type of change where you start pulling on the yarn thread and a lot of things come undone so it turned into a large multi-day refactoring effort.
-For instance, I realized that Bazel's use of a content adressable storage (CAS) was a pretty neat idea, because it also allows one to quite naturally store directories as Merkle trees.
+For instance, I realized that Bazel's use of a content addressable storage (CAS) was a pretty neat idea, because it also allows one to quite naturally store directories as Merkle trees.
 Previously, Grog had just tar gz'd directories to turn them into files, but with this approach you can actually reliably hash directories!
 This in turn means that Grog can now check if something needs to be loaded into the local repository before actually loading it.
 
 Interestingly, enough the final state of the code base is cleaner and easier to reason about than before.
 To be honest, I was a bit afraid that after all those months core parts of Grog had started to "rot" meaning that the code would not be understandable to me anymore and I would have a hard time refactoring it.
-
 
 ## 07-05-2025
 
@@ -108,7 +107,7 @@ targets:
 ```
 
 - bin tools are very much how it works in Bazel. A single binary that you can cache between targets.
-- bin-path tools on the other hand are a pratical grog thing where we only run the install command if the binary is not found on the path.
+- bin-path tools on the other hand are a practical grog thing where we only run the install command if the binary is not found on the path.
 
 ## 27-04-2025
 

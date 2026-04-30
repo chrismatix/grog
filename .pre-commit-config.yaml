@@ -7,7 +7,7 @@ repos:
       - id: end-of-file-fixer
         exclude: ^integration/fixtures/
       - id: check-added-large-files
-        args: [ "--maxkb=2000" ]
+        args: ["--maxkb=2000"]
       - id: trailing-whitespace
         exclude: ^integration/fixtures/
       - id: check-merge-conflict
@@ -23,8 +23,8 @@ repos:
     hooks:
       - id: prettier
         name: Prettier
-        entry: npx prettier@3.5.3 --write
+        entry: npx prettier@3.8.3 --write
         language: node
         exclude: ^integration/fixtures/
-        types: [ javascript,ts,css,scss,less,html,json,markdown,yaml ]
+        types: [javascript, ts, css, scss, less, html, json, markdown, yaml]
         files: \.(js|jsx|ts|tsx|css|scss|less|html|json|md|ya?ml)$

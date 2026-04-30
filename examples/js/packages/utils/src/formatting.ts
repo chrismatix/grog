@@ -7,11 +7,11 @@
  */
 export function formatCurrency(
   value: number,
-  currency: string = 'USD',
-  locale: string = 'en-US'
+  currency: string = "USD",
+  locale: string = "en-US",
 ): string {
   return new Intl.NumberFormat(locale, {
-    style: 'currency',
+    style: "currency",
     currency,
   }).format(value);
 }
@@ -25,12 +25,12 @@ export function formatCurrency(
  */
 export function formatDate(
   date: Date | number,
-  locale: string = 'en-US',
+  locale: string = "en-US",
   options: Intl.DateTimeFormatOptions = {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  }
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  },
 ): string {
   return new Intl.DateTimeFormat(locale, options).format(date);
 }

@@ -2,8 +2,8 @@ services:
   jaeger:
     image: jaegertracing/jaeger:2.17.0
     ports:
-      - "${JAEGER_UI_PORT:-16686}:16686"   # UI
-      - "${JAEGER_OTLP_PORT:-4318}:4318"   # OTLP HTTP
+      - "${JAEGER_UI_PORT:-16686}:16686" # UI
+      - "${JAEGER_OTLP_PORT:-4318}:4318" # OTLP HTTP
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
 
@@ -14,7 +14,7 @@ services:
       - ./tempo.yml:/etc/tempo.yml:ro
     ports:
       - "${TEMPO_OTLP_PORT:-4320}:4318" # OTLP HTTP (remapped to avoid conflict with Jaeger)
-      - "${TEMPO_API_PORT:-3200}:3200"  # Tempo API
+      - "${TEMPO_API_PORT:-3200}:3200" # Tempo API
 
   loki:
     image: grafana/loki:3.4.2

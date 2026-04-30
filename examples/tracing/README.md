@@ -63,10 +63,10 @@ grog traces export --format=jsonl >> /tmp/grog-traces.jsonl
 
 4. Open the UIs:
 
-| Service | URL |
-|---------|-----|
-| Jaeger | http://localhost:16686 |
-| Grafana (Tempo + Loki) | http://localhost:3300 |
+| Service                | URL                    |
+| ---------------------- | ---------------------- |
+| Jaeger                 | http://localhost:16686 |
+| Grafana (Tempo + Loki) | http://localhost:3300  |
 
 In Jaeger, search for service `grog` to find build traces.
 
@@ -83,13 +83,13 @@ inside the **Tracing Example** folder. After running `sh ./seed.sh`, it shows:
 
 ## Services
 
-| Container | Port | Purpose |
-|-----------|------|---------|
-| jaeger | 16686 (UI), 4318 (OTLP HTTP) | Trace visualization |
-| tempo | 4320 (OTLP HTTP), 3200 (API) | Trace storage for Grafana |
-| loki | 3100 | Log aggregation |
-| promtail | - | Tails JSONL log file into Loki |
-| grafana | 3300 | Dashboards for Tempo and Loki |
+| Container | Port                         | Purpose                        |
+| --------- | ---------------------------- | ------------------------------ |
+| jaeger    | 16686 (UI), 4318 (OTLP HTTP) | Trace visualization            |
+| tempo     | 4320 (OTLP HTTP), 3200 (API) | Trace storage for Grafana      |
+| loki      | 3100                         | Log aggregation                |
+| promtail  | -                            | Tails JSONL log file into Loki |
+| grafana   | 3300                         | Dashboards for Tempo and Loki  |
 
 The published host ports are configurable via `JAEGER_UI_PORT`,
 `JAEGER_OTLP_PORT`, `TEMPO_OTLP_PORT`, `TEMPO_API_PORT`, `LOKI_PORT`, and

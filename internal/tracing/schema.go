@@ -29,8 +29,8 @@ type SpanRow struct {
 	Package               string `parquet:"package" json:"package"`
 	ChangeHash            string `parquet:"change_hash" json:"change_hash"`
 	OutputHash            string `parquet:"output_hash" json:"output_hash"`
-	Status                string `parquet:"status" json:"status"`                 // SUCCESS, FAILURE, CANCELLED
-	CacheResult           string `parquet:"cache_result" json:"cache_result"`     // CACHE_HIT, CACHE_MISS, CACHE_SKIP
+	Status                string `parquet:"status" json:"status"`             // SUCCESS, FAILURE, CANCELLED
+	CacheResult           string `parquet:"cache_result" json:"cache_result"` // CACHE_HIT, CACHE_MISS, CACHE_SKIP
 	Command               string `parquet:"command" json:"command"`
 	ExitCode              int32  `parquet:"exit_code" json:"exit_code"`
 	IsTest                bool   `parquet:"is_test" json:"is_test"`

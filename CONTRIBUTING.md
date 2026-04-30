@@ -11,7 +11,6 @@ When opening a Pull Request, check that:
 - The branch name follows our convention
 - Commits are squashed and follow our conventions
 
-
 ## Module Overview
 
 At a high level Grog execution can be split into three phases, `loading`, `analysis`, and `execution`.
@@ -32,7 +31,6 @@ The remaining modules can be summarized as follows:
 - `maps`: Hosts a `mutex_map` (a map where each key has its own mutex).
 - `output`: Deals with storing the users outputs in its various backends.
 - `selection`: Collection of rules for selecting Grog targets according to
-
 
 ## Release Flow
 
