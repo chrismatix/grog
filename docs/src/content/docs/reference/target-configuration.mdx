@@ -33,6 +33,7 @@ Grog uses this information to ensure incremental, cached, and parallel builds.
 | `bin_output`            | `Output`                 | Specifically identifies a binary output from the target                |
 | `timeout`               | `string`                 | Maximum time allowed for the target command to run                    |
 | `environment_variables` | `Record<string, string>` | Additional environment variables set when running the target           |
+| `concurrency_group`     | `string`                 | Name of a concurrency group. Members compete for the group's capacity (default `1` = serialized) |
 
 <Aside type="note">
   Targets with names ending in `test` are automatically treated as test targets.
@@ -164,3 +165,17 @@ Key-value pairs of environment variables that will be set for this target during
 The maximum time the target's command is allowed to run. If the command exceeds this duration, the build or test fails with a timeout error.
 
 Durations are expressed using Go's duration syntax, e.g. `30s`, `5m`.
+
+### concurrency_group
+
+Optional name of a concurrency group. At most `capacity` members of a group run concurrently; additional members wait. Unconfigured groups default to capacity `1` — declaring `concurrency_group = "docker"` on two docker-build targets is enough to serialize them, without any `grog.toml` change.
+
+Group capacities are configured workspace-wide in `grog.toml` under `[concurrency_groups]` (see [Configuration → Concurrency Groups](/reference/configuration/#concurrency-groups)). Use groups for shared external resources — a single docker daemon, a test database, a GPU, a bound port — where the contention is not expressible as a target dependency.
+
+```pkl
+new Target {
+  name = "image"
+  concurrency_group = "docker"
+  command = "docker build -t myapp ."
+}
+```

@@ -45,6 +45,7 @@ type Executor struct {
 	targetHasher     *hashing.TargetHasher
 	streamLogsToggle *console.StreamLogsToggle
 	coordinator      *PoolCoordinator
+	scheduler        *Scheduler
 	cacheWriter      *CacheWriter
 	asyncWaitTime    time.Duration
 	deferAsyncWait   bool
@@ -120,6 +121,7 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	// further cache writes from post-build work after Execute returns.
 	defer coordinator.TaskPool().Shutdown()
 	e.coordinator = coordinator
+	e.scheduler = NewScheduler(coordinator.TaskPool())
 
 	ioContext := context.WithoutCancel(ctx)
 	coordinator.StartIOWorkers(ioContext)
@@ -149,9 +151,10 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 		}
 
 		queuedAt := time.Now()
-		// taskFunc will be run in the worker pool
+		// taskFunc will be run in the worker pool, gated by the scheduler on
+		// any concurrency group membership.
 		taskFunc := e.getTaskFunc(ctx, target, binTools, outputIdentifiers, queuedAt)
-		return coordinator.TaskPool().Run(taskFunc)
+		return e.scheduler.Schedule(ctx, target, taskFunc)
 	}
 
 	walker := dag.NewWalker(e.graph, walkCallback, e.failFast)

@@ -21,6 +21,11 @@ class Target {
   // Target Filtering
   tags: Listing<String>(isDistinct)
   platforms: Listing<String>(isDistinct)?
+
+  // Name of a concurrency group. Targets sharing a group are gated by the
+  // group's capacity (default 1 = fully serialized). Group capacity can be
+  // tuned in grog.toml [concurrency_groups].
+  concurrency_group: String?
 }
 
 default_platforms: Listing<String>(isDistinct)?
