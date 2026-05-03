@@ -1,0 +1,8 @@
+targets:
+  - name: build
+    command: |
+      cat src/source.txt > out.txt
+    inputs:
+      - src/source.txt
+    outputs:
+      - out.txt

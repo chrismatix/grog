@@ -1,0 +1,3 @@
+aliases:
+  - name: default
+    actual: //web-client/desktop:build

@@ -1,0 +1,26 @@
+name: alias caching
+repo: alias_caching
+cases:
+  # Initial build via alias populates the cache for the underlying target.
+  - name: alias_caching_initial_build_via_alias
+    grog_args:
+      - build
+      - //:default
+
+  # Re-running the alias must hit the cache for the underlying target —
+  # selecting a target through an alias should not change its cache key.
+  # Regression coverage for #133.
+  # Expected: 1 target completed (1 cache hits).
+  - name: alias_caching_rebuild_via_alias
+    grog_args:
+      - build
+      - //:default
+
+  # Building the underlying target directly must also hit the cache that
+  # the alias just populated — confirms the alias and the direct label
+  # share the same cache key.
+  # Expected: 1 target completed (1 cache hits).
+  - name: alias_caching_rebuild_via_direct_label
+    grog_args:
+      - build
+      - //web-client/desktop:build
