@@ -210,6 +210,104 @@ func TestSelectTargetsForBuild(t *testing.T) {
 			t.Errorf("Expected 0 platform-skipped targets, got %d", skipped)
 		}
 	})
+	t.Run("platform tag matching", func(t *testing.T) {
+		defer func() { config.Global.PlatformTags = nil }()
+
+		graph := dag.NewDirectedGraph()
+
+		// tagOnlyTarget is gated solely by a custom platform tag.
+		tagOnlyTarget := &model.Target{
+			Label: label.TargetLabel{
+				Name:    "tag_only",
+				Package: "pkg",
+			},
+			Tags:      []string{testTag},
+			Platforms: []string{"qa-runner"},
+		}
+		// mixedTarget lists both an os/arch and a custom tag.
+		mixedTarget := &model.Target{
+			Label: label.TargetLabel{
+				Name:    "mixed",
+				Package: "pkg",
+			},
+			Tags:      []string{testTag},
+			Platforms: []string{"linux/arm64", "qa-runner"},
+		}
+
+		graph.AddNode(tagOnlyTarget)
+		graph.AddNode(mixedTarget)
+
+		selector := New([]label.TargetPattern{pattern}, []string{testTag}, []string{}, NonTestOnly)
+
+		// Without any platform tag enabled, both should be skipped on darwin/amd64.
+		config.Global.PlatformTags = nil
+		selected, skipped, err := selector.SelectTargetsForBuild(graph)
+		if err != nil {
+			t.Fatalf("SelectTargetsForBuild returned unexpected error: %v", err)
+		}
+		if selected != 0 {
+			t.Errorf("Expected 0 selected, got %d", selected)
+		}
+		if skipped != 2 {
+			t.Errorf("Expected 2 platform-skipped, got %d", skipped)
+		}
+
+		// Reset selection state.
+		tagOnlyTarget.IsSelected = false
+		mixedTarget.IsSelected = false
+
+		// With the tag enabled, both should be selected.
+		config.Global.PlatformTags = []string{"qa-runner"}
+		selected, skipped, err = selector.SelectTargetsForBuild(graph)
+		if err != nil {
+			t.Fatalf("SelectTargetsForBuild returned unexpected error: %v", err)
+		}
+		if selected != 2 {
+			t.Errorf("Expected 2 selected with platform tag, got %d", selected)
+		}
+		if skipped != 0 {
+			t.Errorf("Expected 0 skipped with platform tag, got %d", skipped)
+		}
+	})
+
+	t.Run("dependency platform tag mismatch error mentions active tags", func(t *testing.T) {
+		defer func() { config.Global.PlatformTags = nil }()
+
+		graph := dag.NewDirectedGraph()
+
+		root := &model.Target{
+			Label: label.TargetLabel{
+				Name:    "tag_root",
+				Package: "pkg",
+			},
+			Tags: []string{testTag},
+		}
+		dep := &model.Target{
+			Label: label.TargetLabel{
+				Name:    "tag_dep",
+				Package: "pkg",
+			},
+			Tags:      []string{testTag},
+			Platforms: []string{"qa-runner"},
+		}
+
+		graph.AddNode(root)
+		graph.AddNode(dep)
+		if err := graph.AddEdge(dep, root); err != nil {
+			t.Fatalf("Unexpected error adding edge: %v", err)
+		}
+
+		config.Global.PlatformTags = []string{"other-tag"}
+		selector := New([]label.TargetPattern{pattern}, []string{testTag}, []string{}, NonTestOnly)
+		_, _, err := selector.SelectTargetsForBuild(graph)
+		if err == nil {
+			t.Fatal("Expected error due to dependency platform mismatch, but got nil")
+		}
+		if !strings.Contains(err.Error(), "active platform tags") {
+			t.Errorf("Expected error to surface active platform tags, got: %v", err)
+		}
+	})
+
 	t.Run("filtering by exclude tags", func(t *testing.T) {
 		graph := dag.NewDirectedGraph()
 

@@ -125,6 +125,10 @@ func init() {
 	RootCmd.PersistentFlags().String("platform", "", "Force a specific platform in the form os/arch")
 	err = viper.BindPFlag("platform", RootCmd.PersistentFlags().Lookup("platform"))
 
+	// platform_tag
+	RootCmd.PersistentFlags().StringSlice("platform-tag", []string{}, "Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.")
+	err = viper.BindPFlag("platform_tag", RootCmd.PersistentFlags().Lookup("platform-tag"))
+
 	// stream_logs
 	RootCmd.PersistentFlags().Bool("stream-logs", false, "Forward all target build/test logs to stdout/-err")
 	err = viper.BindPFlag("stream_logs", RootCmd.PersistentFlags().Lookup("stream-logs"))

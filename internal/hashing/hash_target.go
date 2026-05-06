@@ -42,6 +42,10 @@ func hashTargetDefinition(target model.Target, dependencyHashes []string) (strin
 	// the target has a multiplatform-cache tag
 	if !target.IsMultiplatformCache() {
 		_, err = hasher.WriteString(config.Global.GetPlatform())
+		if len(config.Global.PlatformTags) > 0 {
+			tags := slices.Clone(config.Global.PlatformTags)
+			_, err = hasher.WriteString(sorted(tags))
+		}
 	}
 
 	// Include the docker backend in the hash for targets with docker outputs

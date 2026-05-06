@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/apple/pkl-go/pkl"
@@ -34,9 +35,10 @@ func (pl *PklLoader) getEvaluator(ctx context.Context) (pkl.Evaluator, error) {
 				&url.URL{Scheme: "file", Path: config.Global.WorkspaceRoot},
 				pkl.PreconfiguredOptions,
 				withEnv(map[string]string{
-					"GROG_OS":       config.Global.OS,
-					"GROG_ARCH":     config.Global.Arch,
-					"GROG_PLATFORM": config.Global.GetPlatform(),
+					"GROG_OS":            config.Global.OS,
+					"GROG_ARCH":          config.Global.Arch,
+					"GROG_PLATFORM":      config.Global.GetPlatform(),
+					"GROG_PLATFORM_TAGS": strings.Join(config.Global.PlatformTags, ","),
 				}),
 				withEnv(config.Global.EnvironmentVariables),
 			)
@@ -44,9 +46,10 @@ func (pl *PklLoader) getEvaluator(ctx context.Context) (pkl.Evaluator, error) {
 			pl.evaluator, pl.evaluatorErr = pkl.NewEvaluator(ctx,
 				pkl.PreconfiguredOptions,
 				withEnv(map[string]string{
-					"GROG_OS":       config.Global.OS,
-					"GROG_ARCH":     config.Global.Arch,
-					"GROG_PLATFORM": config.Global.GetPlatform(),
+					"GROG_OS":            config.Global.OS,
+					"GROG_ARCH":          config.Global.Arch,
+					"GROG_PLATFORM":      config.Global.GetPlatform(),
+					"GROG_PLATFORM_TAGS": strings.Join(config.Global.PlatformTags, ","),
 				}),
 				withEnv(config.Global.EnvironmentVariables),
 			)
