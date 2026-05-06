@@ -73,6 +73,66 @@ This allows you to define all platform variants in a single build file, but only
 There may be scenarios where you want to skip platform selectors.
 To do so, pass the `--all-platforms`, (shorthand: `-a`) flag to build and querying commands.
 
+## Platform Tags
+
+Beyond the auto-detected `os/arch` identifier, grog supports user-defined **platform tags**: free-form strings
+that a host explicitly opts into via configuration. They behave like an additional host platform for matching
+purposes — useful when runners share the same `os/arch` but differ in some capability (e.g. a GPU host, an
+internal-only build box, or a CI runner with privileged credentials).
+
+### Defining and matching
+
+Add a custom tag to a target's `platforms` list. A target with a tag-only `platforms` list is also valid.
+
+```yaml
+targets:
+  - name: gpu_train
+    command: python train.py
+    platforms:
+      - linux/amd64        # auto-detected platform identifier
+      - gpu-runner         # custom platform tag
+    inputs:
+      - train.py
+    outputs:
+      - model.pt
+
+  - name: secrets_publish
+    command: ./publish.sh
+    # Only ever runs on hosts that opt into the "release" tag.
+    platforms:
+      - release
+    inputs:
+      - publish.sh
+```
+
+`gpu_train` will run on any `linux/amd64` host **or** on any host with the `gpu-runner` platform tag enabled.
+`secrets_publish` runs only on hosts that explicitly enable the `release` tag.
+
+### Enabling tags on the host
+
+Platform tags are off by default and have to be set explicitly. There are three ways to enable them:
+
+```toml
+# grog.toml
+platform_tag = ["gpu-runner"]
+```
+
+```bash
+# Environment
+export GROG_PLATFORM_TAG=gpu-runner,release
+
+# CLI (repeatable)
+grog build //... --platform-tag=gpu-runner --platform-tag=release
+```
+
+<Aside type="caution">
+  Platform tags participate in the cache key — a target built with `--platform-tag=gpu-runner` caches
+  separately from the same target built without it. Targets tagged `multiplatform-cache` opt out of this
+  separation (just as they do for `os/arch`).
+</Aside>
+
+Inside target commands, the active tags are also exposed as `GROG_PLATFORM_TAGS` (comma-joined).
+
 ### Handling Dependencies with Platform Selectors
 
 When a target depends on a platform-specific target, Grog enforces platform compatibility:

@@ -57,12 +57,13 @@ func (sl StarlarkLoader) Load(ctx context.Context, filePath string) (PackageDTO,
 		"target":        starlark.NewBuiltin("target", collector.targetBuiltin),
 		"alias":         starlark.NewBuiltin("alias", collector.aliasBuiltin),
 		"environment":   starlark.NewBuiltin("environment", collector.environmentBuiltin),
-		"GROG_OS":       starlark.String(config.Global.OS),
-		"GROG_ARCH":     starlark.String(config.Global.Arch),
-		"GROG_PLATFORM": starlark.String(config.Global.GetPlatform()),
-		"json":          json.Module,
-		"math":          math.Module,
-		"time":          time.Module,
+		"GROG_OS":            starlark.String(config.Global.OS),
+		"GROG_ARCH":          starlark.String(config.Global.Arch),
+		"GROG_PLATFORM":      starlark.String(config.Global.GetPlatform()),
+		"GROG_PLATFORM_TAGS": platformTagsStarlarkList(),
+		"json":               json.Module,
+		"math":               math.Module,
+		"time":               time.Module,
 	}
 
 	// Add environment variables to predeclared
@@ -139,12 +140,13 @@ func (sl StarlarkLoader) loadModule(thread *starlark.Thread, module string, curr
 		"target":        starlark.NewBuiltin("target", collector.targetBuiltin),
 		"alias":         starlark.NewBuiltin("alias", collector.aliasBuiltin),
 		"environment":   starlark.NewBuiltin("environment", collector.environmentBuiltin),
-		"GROG_OS":       starlark.String(config.Global.OS),
-		"GROG_ARCH":     starlark.String(config.Global.Arch),
-		"GROG_PLATFORM": starlark.String(config.Global.GetPlatform()),
-		"json":          json.Module,
-		"math":          math.Module,
-		"time":          time.Module,
+		"GROG_OS":            starlark.String(config.Global.OS),
+		"GROG_ARCH":          starlark.String(config.Global.Arch),
+		"GROG_PLATFORM":      starlark.String(config.Global.GetPlatform()),
+		"GROG_PLATFORM_TAGS": platformTagsStarlarkList(),
+		"json":               json.Module,
+		"math":               math.Module,
+		"time":               time.Module,
 	}
 
 	// Add environment variables
@@ -364,6 +366,16 @@ func (c *starlarkPackageCollector) environmentBuiltin(thread *starlark.Thread, f
 }
 
 // Helper functions to convert Starlark types to Go types
+
+func platformTagsStarlarkList() *starlark.List {
+	values := make([]starlark.Value, 0, len(config.Global.PlatformTags))
+	for _, tag := range config.Global.PlatformTags {
+		values = append(values, starlark.String(tag))
+	}
+	list := starlark.NewList(values)
+	list.Freeze()
+	return list
+}
 
 func starlarkListToStringSlice(list *starlark.List) ([]string, error) {
 	result := make([]string, 0, list.Len())

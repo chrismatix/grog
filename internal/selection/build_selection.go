@@ -62,6 +62,10 @@ func (s *Selector) selectAllAncestorsForBuild(
 		nextChain := append(append([]string{}, depChain...), ancestor.GetLabel().String())
 		if !nodeMatchesPlatform(ancestor) {
 			depChainStr := strings.Join(nextChain[1:], " -> ")
+			if len(config.Global.PlatformTags) > 0 {
+				return fmt.Errorf("could not select node %s because it depends on %s, which does not match the platform %s (active platform tags: %v)",
+					depChain[0], depChainStr, config.Global.GetPlatform(), config.Global.PlatformTags)
+			}
 			return fmt.Errorf("could not select node %s because it depends on %s, which does not match the platform %s",
 				depChain[0], depChainStr, config.Global.GetPlatform())
 		}
