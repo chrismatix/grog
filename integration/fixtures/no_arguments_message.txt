@@ -37,6 +37,7 @@ Flags:
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
