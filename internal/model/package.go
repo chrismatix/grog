@@ -11,8 +11,9 @@ type Package struct {
 	// Record the path to this package relative to the workspace root
 	Path string
 
-	Targets map[label.TargetLabel]*Target `json:"targets"`
-	Aliases map[label.TargetLabel]*Alias  `json:"aliases"`
+	Targets      map[label.TargetLabel]*Target      `json:"targets"`
+	Aliases      map[label.TargetLabel]*Alias        `json:"aliases"`
+	Environments map[label.TargetLabel]*Environment  `json:"environments"`
 }
 
 func (p *Package) GetTargets() []*Target {
@@ -21,4 +22,8 @@ func (p *Package) GetTargets() []*Target {
 
 func (p *Package) GetAliases() []*Alias {
 	return slices.Collect(maps.Values(p.Aliases))
+}
+
+func (p *Package) GetEnvironments() []*Environment {
+	return slices.Collect(maps.Values(p.Environments))
 }

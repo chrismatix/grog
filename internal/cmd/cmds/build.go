@@ -187,6 +187,13 @@ func RunBuildAndAfter(
 		defer releaseWorkspaceLock()
 	}
 
+	// Check if any selected target uses a Docker environment
+	if execution.HasDockerTargets(graph) {
+		if err := execution.CheckDockerAvailable(); err != nil {
+			logger.Fatalf("%v", err)
+		}
+	}
+
 	executor := execution.NewExecutor(
 		targetCache,
 		taintCache,

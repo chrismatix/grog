@@ -5,14 +5,9 @@ description: Run targets inside Docker containers for consistency and cross-plat
 
 import { Aside, TabItem, Tabs } from "@astrojs/starlight/components";
 
-Grog plans to support running build commands in isolated Docker environments.
-This will allow you
-
-<Aside type="caution">
-  This feature is not ready yet. The docs instead reflect the planned
-  implementation in the spirit of Documentation-driven Development. So let us
-  know what you think!
-</Aside>
+Grog supports running build commands in isolated Docker environments.
+This allows you to execute targets inside containers for reproducibility,
+cross-platform builds, and isolation from the host system.
 
 ## Environment Config
 
@@ -23,30 +18,110 @@ You can define a docker environment like so:
   <TabItem label="YAML">
     ```yaml
     targets:
+      - name: build-image
+        command: docker build -t arm64-builder .
+        outputs:
+          - "docker://arm64-builder"
+
       - name: foo
-        # ...
+        command: make build
+        environment: ":arm64"
 
     environments:
       - name: arm64
         type: docker
         dependencies:
-          - arm64-image
+          - ":build-image"
         docker_image: arm64-builder
-        defaults:
-          mount_dependencies: transitive # or: none, direct
-          mount_dependency_inputs: true # whether to also mount the input files of dependencies
+    ```
+  </TabItem>
+  <TabItem label="Starlark">
+    ```python
+    target(
+        name = "build-image",
+        command = "docker build -t arm64-builder .",
+        outputs = ["docker://arm64-builder"],
+    )
+
+    target(
+        name = "foo",
+        command = "make build",
+        environment = ":arm64",
+    )
+
+    environment(
+        name = "arm64",
+        type = "docker",
+        dependencies = [":build-image"],
+        docker_image = "arm64-builder",
+    )
+    ```
+  </TabItem>
+  <TabItem label="Pkl">
+    ```pkl
+    targets {
+      new {
+        name = "build-image"
+        command = "docker build -t arm64-builder ."
+        outputs { "docker://arm64-builder" }
+      }
+      new {
+        name = "foo"
+        command = "make build"
+        environment = ":arm64"
+      }
+    }
+
+    environments {
+      new {
+        name = "arm64"
+        type = "docker"
+        dependencies { ":build-image" }
+        docker_image = "arm64-builder"
+      }
+    }
     ```
   </TabItem>
 </Tabs>
 
 Let's go over the fields of an environment configuration:
 
-- `name`: This defines the environments label which works the same way as for [targets](/reference/labels).
-- `dependencies`: Environments do not define any build steps. Instead, you can use `dependencies` to define which targets need to build for this environment to function.
-- `docker_image`: This is the tag of the image that will be used in docker environments. Typically one of the environments dependencies would build this image tag, but you can provide any image you want here.
-- `defaults`: Defines execution defaults for an environment. Details tbd.
-
+- `name`: This defines the environment's label which works the same way as for [targets](/reference/labels).
+- `type`: The environment type. Currently only `docker` is supported.
+- `dependencies`: Environments do not define any build steps. Instead, you can use `dependencies` to define which targets need to build for this environment to function. For example, a target that builds the Docker image.
+- `docker_image`: The tag of the image that will be used for Docker execution. Typically one of the environment's dependencies would build this image tag, but you can provide any image you want here.
 
 ## Using an environment
 
-TBD
+To run a target inside an environment, set the `environment` field on the target to reference the environment label:
+
+```yaml
+targets:
+  - name: foo
+    command: make build
+    environment: ":arm64"
+```
+
+When a target references an environment:
+
+1. The environment and all its dependencies are built first (e.g. the Docker image is built).
+2. The target's command runs inside `docker run` with the specified image.
+3. The workspace root is bind-mounted into the container at `/workspace`.
+4. The working directory inside the container matches the target's package path.
+5. All `GROG_*` environment variables are available, with `GROG_WORKSPACE_ROOT` pointing to `/workspace` and `GROG_SANDBOXED=true`.
+6. Outputs written by the command land on the host filesystem via the bind mount, so caching works as normal.
+
+<Aside type="note">
+  Docker must be available on the host machine. Grog checks for Docker availability
+  before execution begins when any selected target uses an environment.
+</Aside>
+
+## How it works
+
+Environments are first-class nodes in the build graph. When you reference an environment from a target, grog:
+
+- Adds an implicit dependency edge from the target to the environment node.
+- The environment node's own dependencies (like image-building targets) are resolved through the normal DAG.
+- At execution time, the target's command is wrapped in `docker run` instead of running directly on the host.
+
+This means environments integrate naturally with the existing build graph, caching, and parallel execution. Targets without an environment continue to run on the host as before.
