@@ -86,9 +86,14 @@ func TestTransitiveOutputsShellFunctionEmptyWhenNil(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	// Function should still be defined
+	// Function should still be defined with a no-op body (POSIX-valid)
 	if !strings.Contains(command, "transitive_outputs()") {
 		t.Errorf("expected transitive_outputs function to be defined, got:\n%s", command)
+	}
+	// The empty body must contain ":" (no-op) so sh/dash don't reject it
+	// as a syntax error (empty function bodies are invalid in POSIX shell).
+	if !strings.Contains(command, ":") {
+		t.Errorf("expected empty transitive_outputs function body to contain ':' no-op, got:\n%s", command)
 	}
 }
 
@@ -150,8 +155,8 @@ func TestTransitiveOutputsByTagShellFunctionErrorsOnUnknownTag(t *testing.T) {
 }
 
 // TestTransitiveOutputsByTagShellFunctionRendersWhenNoTaggedOutputs verifies
-// that when there are no transitive tagged outputs, the function still renders
-// with only the error fallback.
+// that when there are no transitive tagged outputs, the function renders with
+// a no-op body instead of a case statement.
 func TestTransitiveOutputsByTagShellFunctionRendersWhenNoTaggedOutputs(t *testing.T) {
 	original := config.Global.DisableDefaultShellFlags
 	config.Global.DisableDefaultShellFlags = true
@@ -166,5 +171,9 @@ func TestTransitiveOutputsByTagShellFunctionRendersWhenNoTaggedOutputs(t *testin
 
 	if !strings.Contains(command, "transitive_outputs_by_tag") {
 		t.Errorf("expected transitive_outputs_by_tag function to be defined even with nil map, got:\n%s", command)
+	}
+	// With no tagged outputs the function body should be ":" not a case statement
+	if strings.Contains(command, "Error: unknown tag") {
+		t.Errorf("expected no error handler when there are no tagged outputs, got:\n%s", command)
 	}
 }

@@ -1,11 +1,11 @@
 ---
 title: Script Functions
-description: Use helper functions like $(bin) and $(output) inside your target commands to reference dependency outputs reliably.
+description: Use helper functions like $(bin), $(output), $(transitive_outputs), and $(transitive_outputs_by_tag) inside your target commands to reference dependency outputs reliably.
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
 
-Grog injects a couple of helper shell functions into every target command and output check.
+Grog injects several helper shell functions into every target command and output check.
 These helpers let you reference dependency outputs without hard-coding file paths or worrying about where the target is executed from.
 
 ## $(bin)
@@ -123,6 +123,125 @@ targets {
     }
     command = """
     docker run --rm $(output //containers:backend_image 0)
+    """
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
+
+## $(transitive_outputs)
+
+`$(transitive_outputs)` returns newline-separated output paths from **all** transitive dependencies—not just direct ones.
+This is useful when a target needs to aggregate outputs from its full ancestor graph without knowing the exact dependency tree at authoring time.
+
+When there are no transitive dependencies (or none of them produce outputs), the function silently returns nothing.
+
+<Tabs>
+  <TabItem label="YAML">
+
+```yaml
+- name: bundle_all
+  dependencies:
+    - //libs:core
+  command: |
+    # Collect every output produced by any transitive dependency
+    for artifact in $(transitive_outputs); do
+      cp "$artifact" bundle/
+    done
+  outputs:
+    - dir::bundle
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```Pkl
+targets {
+  new {
+    name = "bundle_all"
+    dependencies {
+      "//libs:core"
+    }
+    command = """
+    # Collect every output produced by any transitive dependency
+    for artifact in $(transitive_outputs); do
+      cp "$artifact" bundle/
+    done
+    """
+    outputs {
+      "dir::bundle"
+    }
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
+
+## $(transitive_outputs_by_tag)
+
+`$(transitive_outputs_by_tag <tag>)` returns newline-separated output paths from transitive dependencies that carry a specific [tag](/reference/target-configuration/#tags).
+This lets you select a subset of ancestor outputs based on a convention you define with tags, rather than listing every dependency label by hand.
+
+If no transitive dependency carries the requested tag, the function exits with an error to make the misconfiguration obvious.
+When there are no transitive tagged outputs at all (the target has no transitive deps with tags), the function silently returns nothing.
+
+<Tabs>
+  <TabItem label="YAML">
+
+```yaml
+# A library target that tags its outputs for downstream discovery
+- name: my_lib
+  tags:
+    - find-links
+  command: |
+    python -m build --wheel --outdir dist/
+  outputs:
+    - dir::dist
+
+# A downstream target that collects all find-links directories
+# from the full transitive dependency graph
+- name: install
+  dependencies:
+    - //libs:my_lib
+  command: |
+    FIND_LINKS=""
+    for dir in $(transitive_outputs_by_tag find-links); do
+      FIND_LINKS="$FIND_LINKS --find-links $dir"
+    done
+    pip install $FIND_LINKS my-package
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```Pkl
+targets {
+  new {
+    name = "my_lib"
+    tags {
+      "find-links"
+    }
+    command = """
+    python -m build --wheel --outdir dist/
+    """
+    outputs {
+      "dir::dist"
+    }
+  }
+  new {
+    name = "install"
+    dependencies {
+      "//libs:my_lib"
+    }
+    command = """
+    FIND_LINKS=""
+    for dir in $(transitive_outputs_by_tag find-links); do
+      FIND_LINKS="$FIND_LINKS --find-links $dir"
+    done
+    pip install $FIND_LINKS my-package
     """
   }
 }
