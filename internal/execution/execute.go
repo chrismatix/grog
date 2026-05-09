@@ -140,6 +140,8 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 		}
 
 		outputIdentifiers := e.getDependencyOutputIdentifiers(target)
+		transitiveOutputs := e.getTransitiveOutputs(target)
+		taggedOutputs := e.getTransitiveOutputsByTag(target)
 
 		hashStart := time.Now()
 		err = e.targetHasher.SetTargetChangeHash(target)
@@ -150,7 +152,7 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 
 		queuedAt := time.Now()
 		// taskFunc will be run in the worker pool
-		taskFunc := e.getTaskFunc(ctx, target, binTools, outputIdentifiers, queuedAt)
+		taskFunc := e.getTaskFunc(ctx, target, binTools, outputIdentifiers, transitiveOutputs, taggedOutputs, queuedAt)
 		return coordinator.TaskPool().Run(taskFunc)
 	}
 
@@ -260,6 +262,62 @@ func (e *Executor) getDependencyOutputIdentifiers(target *model.Target) OutputId
 	return outputIdentifiers
 }
 
+// getTransitiveOutputs walks the full ancestor graph of the given target and
+// returns a deduplicated list of all output identifiers produced by every
+// transitive dependency, regardless of tags.
+func (e *Executor) getTransitiveOutputs(target *model.Target) []string {
+	ancestors := e.graph.GetAncestors(target)
+	var result []string
+	seen := make(map[string]bool)
+
+	for _, ancestor := range ancestors {
+		ancestorTarget, ok := ancestor.(*model.Target)
+		if !ok {
+			continue
+		}
+		for _, out := range getTargetOutputIdentifiers(ancestorTarget) {
+			if !seen[out] {
+				seen[out] = true
+				result = append(result, out)
+			}
+		}
+	}
+	return result
+}
+
+// getTransitiveOutputsByTag walks the full ancestor graph of the given target,
+// collects outputs from ancestors that carry at least one tag, and returns
+// them bucketed by tag. Outputs are deduplicated per tag. Ancestors without
+// tags or without outputs are silently skipped.
+func (e *Executor) getTransitiveOutputsByTag(target *model.Target) TransitiveTaggedOutputs {
+	ancestors := e.graph.GetAncestors(target)
+	result := make(TransitiveTaggedOutputs)
+	seen := make(map[string]map[string]bool) // tag → set of output identifiers
+
+	for _, ancestor := range ancestors {
+		ancestorTarget, ok := ancestor.(*model.Target)
+		if !ok {
+			continue
+		}
+		outputs := getTargetOutputIdentifiers(ancestorTarget)
+		if len(outputs) == 0 {
+			continue
+		}
+		for _, tag := range ancestorTarget.Tags {
+			if seen[tag] == nil {
+				seen[tag] = make(map[string]bool)
+			}
+			for _, out := range outputs {
+				if !seen[tag][out] {
+					seen[tag][out] = true
+					result[tag] = append(result[tag], out)
+				}
+			}
+		}
+	}
+	return result
+}
+
 func getTargetOutputIdentifiers(target *model.Target) []string {
 	var identifiers []string
 	for _, targetOutput := range target.AllOutputs() {
@@ -281,6 +339,8 @@ func (e *Executor) getTaskFunc(
 	target *model.Target,
 	binToolPaths BinToolMap,
 	outputIdentifiers OutputIdentifierMap,
+	transitiveOutputs []string,
+	taggedOutputs TransitiveTaggedOutputs,
 	queuedAt time.Time,
 ) worker.TaskFunc[dag.CacheResult] {
 	return func(update worker.StatusFunc) (dag.CacheResult, error) {
@@ -376,7 +436,7 @@ func (e *Executor) getTaskFunc(
 			target.DepLoadTime = time.Since(depLoadStart)
 		}
 
-		return e.executeTarget(ctx, target, binToolPaths, outputIdentifiers, update, isTainted)
+		return e.executeTarget(ctx, target, binToolPaths, outputIdentifiers, transitiveOutputs, taggedOutputs, update, isTainted)
 	}
 }
 
@@ -401,6 +461,8 @@ func (e *Executor) executeTarget(
 	target *model.Target,
 	binToolPaths BinToolMap,
 	outputIdentifiers OutputIdentifierMap,
+	transitiveOutputs []string,
+	taggedOutputs TransitiveTaggedOutputs,
 	update worker.StatusFunc,
 	isTainted bool,
 ) (dag.CacheResult, error) {
@@ -411,7 +473,7 @@ func (e *Executor) executeTarget(
 	if target.Command != "" {
 		update(worker.Status(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis())))
 		logger.Debugf("running target %s: %s", target.Label, target.CommandEllipsis())
-		err = executeTarget(ctx, target, binToolPaths, outputIdentifiers, e.streamLogsToggle.Enabled())
+		err = executeTarget(ctx, target, binToolPaths, outputIdentifiers, transitiveOutputs, taggedOutputs, e.streamLogsToggle.Enabled())
 	} else {
 		logger.Debugf("skipped target %s due to no command", target.Label)
 	}
@@ -564,9 +626,11 @@ func (e *Executor) LoadDependencyOutputs(
 			}
 
 			outputIdentifiers := e.getDependencyOutputIdentifiers(localDep)
+			transitiveOutputs := e.getTransitiveOutputs(localDep)
+			taggedOutputs := e.getTransitiveOutputsByTag(localDep)
 
 			update(worker.Status(fmt.Sprintf("%s: re-running dependency %s (load_outputs_mode=minimal).", target.Label, localDep.Label)))
-			_, executionErr := e.executeTarget(ctx, localDep, binTools, outputIdentifiers, update, false)
+			_, executionErr := e.executeTarget(ctx, localDep, binTools, outputIdentifiers, transitiveOutputs, taggedOutputs, update, false)
 			if executionErr != nil {
 				return executionErr
 			}

@@ -30,4 +30,29 @@ output() {
     esac
 }
 
+# $(transitive_outputs) returns newline-separated output paths from all
+# transitive dependencies.
+transitive_outputs() {
+    {{- range .TransitiveOutputs }}
+    echo "{{.}}"
+    {{- end }}
+}
+
+# $(transitive_outputs_by_tag find-links) returns newline-separated output
+# paths from all transitive dependencies that carry the given tag.
+transitive_outputs_by_tag() {
+    tag="$1"
+
+    case "$tag" in
+    {{- range $tag, $outputs := .TransitiveTaggedOutputs }}
+        "{{$tag}}")
+            {{- range $outputs }}
+            echo "{{.}}"
+            {{- end }}
+            ;;
+    {{- end }}
+    *) echo "Error: unknown tag '$tag'. No transitive dependencies carry this tag." >&2; exit 1 ;;
+    esac
+}
+
 {{ .UserCommand }}
