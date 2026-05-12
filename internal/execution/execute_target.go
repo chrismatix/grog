@@ -23,9 +23,11 @@ var binTemplate string
 
 // templateData is the data expected by the run_sh.sh.tmpl
 type templateData struct {
-	BinToolMap          BinToolMap
-	OutputIdentifierMap OutputIdentifierMap
-	UserCommand         string
+	BinToolMap              BinToolMap
+	OutputIdentifierMap     OutputIdentifierMap
+	TransitiveOutputs       []string
+	TransitiveTaggedOutputs TransitiveTaggedOutputs
+	UserCommand             string
 }
 
 // BinToolMap Maps target label to tool a binary path
@@ -38,11 +40,19 @@ type BinToolMap map[string]string
 // outputs as the final element if present.
 type OutputIdentifierMap map[string][]string
 
+// TransitiveTaggedOutputs maps a tag name to the deduplicated list of output
+// identifiers from all transitive ancestors that carry that tag. This enables
+// shell commands to query outputs by semantic role (e.g. "find-links") rather
+// than by individual target labels.
+type TransitiveTaggedOutputs map[string][]string
+
 func executeTarget(
 	ctx context.Context,
 	target *model.Target,
 	binToolPaths BinToolMap,
 	outputIdentifiers OutputIdentifierMap,
+	transitiveOutputs []string,
+	taggedOutputs TransitiveTaggedOutputs,
 	streamLogs bool,
 ) error {
 	if target.Timeout > 0 {
@@ -51,7 +61,7 @@ func executeTarget(
 		defer cancel()
 	}
 
-	cmdOut, err := runTargetCommand(ctx, target, binToolPaths, outputIdentifiers, target.Command, streamLogs)
+	cmdOut, err := runTargetCommand(ctx, target, binToolPaths, outputIdentifiers, transitiveOutputs, taggedOutputs, target.Command, streamLogs)
 
 	if err != nil {
 		if ctx.Err() != nil {
@@ -81,11 +91,13 @@ func runTargetCommand(
 	target *model.Target,
 	binToolPaths BinToolMap,
 	outputIdentifiers OutputIdentifierMap,
+	transitiveOutputs []string,
+	taggedOutputs TransitiveTaggedOutputs,
 	command string,
 	streamLogs bool,
 ) ([]byte, error) {
 	executionPath := config.GetPathAbsoluteToWorkspaceRoot(target.Label.Package)
-	templatedCommand, err := getCommand(binToolPaths, outputIdentifiers, command)
+	templatedCommand, err := getCommand(binToolPaths, outputIdentifiers, transitiveOutputs, taggedOutputs, command)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +174,7 @@ func GetExtendedTargetEnv(ctx context.Context, target *model.Target) []string {
 	)
 }
 
-func getCommand(toolMap BinToolMap, outputMap OutputIdentifierMap, command string) (string, error) {
+func getCommand(toolMap BinToolMap, outputMap OutputIdentifierMap, transitiveOutputs []string, taggedOutputs TransitiveTaggedOutputs, command string) (string, error) {
 	tmpl, err := template.New("binCommand").Parse(binTemplate)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse run template: %w", err)
@@ -174,9 +186,11 @@ func getCommand(toolMap BinToolMap, outputMap OutputIdentifierMap, command strin
 	}
 
 	data := templateData{
-		BinToolMap:          toolMap,
-		OutputIdentifierMap: outputMap,
-		UserCommand:         userCommand,
+		BinToolMap:              toolMap,
+		OutputIdentifierMap:     outputMap,
+		TransitiveOutputs:       transitiveOutputs,
+		TransitiveTaggedOutputs: taggedOutputs,
+		UserCommand:             userCommand,
 	}
 
 	var buf bytes.Buffer
