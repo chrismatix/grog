@@ -20,11 +20,17 @@ func nodeMatchesPlatform(node model.BuildNode) bool {
 		return true
 	}
 
-	if !slices.Contains(target.Platforms, config.Global.GetPlatform()) {
-		return false
+	if slices.Contains(target.Platforms, config.Global.GetPlatform()) {
+		return true
 	}
 
-	return true
+	for _, tag := range config.Global.PlatformTags {
+		if slices.Contains(target.Platforms, tag) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func TargetMatchesTypeSelection(target *model.Target, targetType TargetTypeSelection) bool {

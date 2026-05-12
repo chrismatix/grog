@@ -71,6 +71,11 @@ type WorkspaceConfig struct {
 
 	// Matching
 	AllPlatforms bool `mapstructure:"all_platforms"`
+	// PlatformTags are user-defined platform identifiers the host opts into.
+	// They behave like an additional host platform for target matching: a target
+	// whose `platforms` list contains a tag also enabled here will match,
+	// regardless of the host's auto-detected os/arch.
+	PlatformTags []string `mapstructure:"platform_tag"`
 
 	// Caching
 	EnableCache bool        `mapstructure:"enable_cache"`

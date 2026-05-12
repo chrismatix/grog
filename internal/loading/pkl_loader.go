@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/apple/pkl-go/pkl"
@@ -17,8 +18,9 @@ import (
 
 // PklLoader implements the Loader interface for pkl files.
 type PklLoader struct {
-	evaluator   pkl.Evaluator
-	evaluatorMu sync.Mutex
+	evaluator     pkl.Evaluator
+	evaluatorErr  error
+	evaluatorOnce sync.Once
 }
 
 func (pl *PklLoader) Matches(fileName string) bool {
@@ -26,40 +28,34 @@ func (pl *PklLoader) Matches(fileName string) bool {
 }
 
 // getEvaluator lazily loads and caches the evaluator.
-// Caller must hold evaluatorMu.
 func (pl *PklLoader) getEvaluator(ctx context.Context) (pkl.Evaluator, error) {
-	if pl.evaluator == nil {
-		var evaluator pkl.Evaluator
-		var err error
-
+	pl.evaluatorOnce.Do(func() {
 		if hasPklProjectFile() {
-			evaluator, err = pkl.NewProjectEvaluator(ctx,
+			pl.evaluator, pl.evaluatorErr = pkl.NewProjectEvaluator(ctx,
 				&url.URL{Scheme: "file", Path: config.Global.WorkspaceRoot},
 				pkl.PreconfiguredOptions,
 				withEnv(map[string]string{
-					"GROG_OS":       config.Global.OS,
-					"GROG_ARCH":     config.Global.Arch,
-					"GROG_PLATFORM": config.Global.GetPlatform(),
+					"GROG_OS":            config.Global.OS,
+					"GROG_ARCH":          config.Global.Arch,
+					"GROG_PLATFORM":      config.Global.GetPlatform(),
+					"GROG_PLATFORM_TAGS": strings.Join(config.Global.PlatformTags, ","),
 				}),
 				withEnv(config.Global.EnvironmentVariables),
 			)
 		} else {
-			evaluator, err = pkl.NewEvaluator(ctx,
+			pl.evaluator, pl.evaluatorErr = pkl.NewEvaluator(ctx,
 				pkl.PreconfiguredOptions,
 				withEnv(map[string]string{
-					"GROG_OS":       config.Global.OS,
-					"GROG_ARCH":     config.Global.Arch,
-					"GROG_PLATFORM": config.Global.GetPlatform(),
+					"GROG_OS":            config.Global.OS,
+					"GROG_ARCH":          config.Global.Arch,
+					"GROG_PLATFORM":      config.Global.GetPlatform(),
+					"GROG_PLATFORM_TAGS": strings.Join(config.Global.PlatformTags, ","),
 				}),
 				withEnv(config.Global.EnvironmentVariables),
 			)
 		}
-		if err != nil {
-			return nil, err
-		}
-		pl.evaluator = evaluator
-	}
-	return pl.evaluator, nil
+	})
+	return pl.evaluator, pl.evaluatorErr
 }
 
 func hasPklProjectFile() bool {
@@ -81,9 +77,6 @@ func withEnv(envVars map[string]string) func(*pkl.EvaluatorOptions) {
 // Load reads the file at the specified filePath and unmarshals its content into a model.Package.
 func (pl *PklLoader) Load(ctx context.Context, filePath string) (PackageDTO, bool, error) {
 	var pkg PackageDTO
-
-	pl.evaluatorMu.Lock()
-	defer pl.evaluatorMu.Unlock()
 
 	evaluator, err := pl.getEvaluator(ctx)
 	if err != nil {

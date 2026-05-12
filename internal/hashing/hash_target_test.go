@@ -80,6 +80,72 @@ func TestHashTargetDefinition_DockerBackendDoesNotAffectNonDockerTargets(t *test
 	}
 }
 
+func TestHashTargetDefinition_PlatformTagsAffectHash(t *testing.T) {
+	target := model.Target{
+		Label:   label.TL("pkg", "target"),
+		Command: "echo hi",
+	}
+
+	defer func() { config.Global.PlatformTags = nil }()
+
+	config.Global.PlatformTags = nil
+	hashEmpty, err := hashTargetDefinition(target, nil)
+	if err != nil {
+		t.Fatalf("hashTargetDefinition returned error: %v", err)
+	}
+
+	config.Global.PlatformTags = []string{"qa-runner"}
+	hashWithTag, err := hashTargetDefinition(target, nil)
+	if err != nil {
+		t.Fatalf("hashTargetDefinition returned error: %v", err)
+	}
+
+	if hashEmpty == hashWithTag {
+		t.Fatalf("expected hash to change when platform tags differ: %s", hashWithTag)
+	}
+
+	// Tag order should not matter.
+	config.Global.PlatformTags = []string{"a", "b"}
+	hashAB, err := hashTargetDefinition(target, nil)
+	if err != nil {
+		t.Fatalf("hashTargetDefinition returned error: %v", err)
+	}
+	config.Global.PlatformTags = []string{"b", "a"}
+	hashBA, err := hashTargetDefinition(target, nil)
+	if err != nil {
+		t.Fatalf("hashTargetDefinition returned error: %v", err)
+	}
+	if hashAB != hashBA {
+		t.Fatalf("expected platform tag order to be irrelevant for hashing: %s vs %s", hashAB, hashBA)
+	}
+}
+
+func TestHashTargetDefinition_PlatformTagsIgnoredForMultiplatformCache(t *testing.T) {
+	target := model.Target{
+		Label:   label.TL("pkg", "target"),
+		Command: "echo hi",
+		Tags:    []string{model.TagMultiplatformCache},
+	}
+
+	defer func() { config.Global.PlatformTags = nil }()
+
+	config.Global.PlatformTags = nil
+	hashEmpty, err := hashTargetDefinition(target, nil)
+	if err != nil {
+		t.Fatalf("hashTargetDefinition returned error: %v", err)
+	}
+
+	config.Global.PlatformTags = []string{"qa-runner"}
+	hashWithTag, err := hashTargetDefinition(target, nil)
+	if err != nil {
+		t.Fatalf("hashTargetDefinition returned error: %v", err)
+	}
+
+	if hashEmpty != hashWithTag {
+		t.Fatalf("expected multiplatform-cache target hash to be stable across platform tags: %s vs %s", hashEmpty, hashWithTag)
+	}
+}
+
 func TestHashTargetDefinition_IgnoresUnrelatedFields(t *testing.T) {
 	base := model.Target{
 		Label:       label.TL("pkg", "target"),

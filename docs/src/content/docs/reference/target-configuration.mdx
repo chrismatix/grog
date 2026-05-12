@@ -60,6 +60,7 @@ Grog also injects the following environment variables into the target's environm
 | `GROG_OS`       | The grog binary's target operating system. E.g. `linux`.            |
 | `GROG_ARCH`     | The grog binary's target architecture. E.g. `amd64`.                |
 | `GROG_PLATFORM` | The grog binary's target platform. E.g. `linux/amd64`.              |
+| `GROG_PLATFORM_TAGS` | Comma-joined list of active custom platform tags. E.g. `gpu-runner,release`. Empty when none are set. |
 | `GROG_PACKAGE`  | The path to the package directory. E.g. `path/to/package`.          |
 | `GROG_GIT_HASH` | The output of `git rev-parse HEAD`. Useful for tagging artifacts.   |
 
@@ -114,13 +115,16 @@ Other targets that must be built before this one, specified as labels. Labels ca
 
 ### platforms
 
-A list of platform identifiers (`os/arch`) that restrict where this target can be executed.
+A list of platform identifiers that restrict where this target can be executed.
+Each entry is either an `os/arch` identifier (e.g. `linux/amd64`) or a custom
+**platform tag** (e.g. `gpu-runner`) that the host explicitly opts into.
 This is particularly useful for multi-platform builds (see [docs](/topics/multi-platform-builds)).
 
 When a target has platform constraints defined:
 
-1. Grog checks the current host's platform identifier (for example, `linux/amd64`)
-2. Targets that don't match the current platform are skipped
+1. Grog checks the current host's platform identifier (for example, `linux/amd64`) and any
+   active platform tags configured via `platform_tag` / `GROG_PLATFORM_TAG` / `--platform-tag`.
+2. Targets that don't match either are skipped.
 
 ### tags
 

@@ -24,7 +24,7 @@ var RootCmd = &cobra.Command{
 	// PersistentPreRunE runs before any subcommand's Run, after flags are parsed.
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if cmd.Flags().Changed("help") || cmd.Flags().Changed("version") ||
-			cmd.Name() == "help" || cmd.Name() == "completion" {
+			cmd.Name() == "help" || isCompletionCmd(cmd) {
 			return nil
 		}
 
@@ -50,6 +50,17 @@ var RootCmd = &cobra.Command{
 		}
 		return nil
 	},
+}
+
+// isCompletionCmd reports whether cmd is the `completion` command or one of
+// its subcommands (bash, zsh, fish, powershell).
+func isCompletionCmd(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		if c.Name() == "completion" {
+			return true
+		}
+	}
+	return false
 }
 
 // Stamp sets the data for the version command
@@ -113,6 +124,10 @@ func init() {
 	// platform
 	RootCmd.PersistentFlags().String("platform", "", "Force a specific platform in the form os/arch")
 	err = viper.BindPFlag("platform", RootCmd.PersistentFlags().Lookup("platform"))
+
+	// platform_tag
+	RootCmd.PersistentFlags().StringSlice("platform-tag", []string{}, "Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.")
+	err = viper.BindPFlag("platform_tag", RootCmd.PersistentFlags().Lookup("platform-tag"))
 
 	// stream_logs
 	RootCmd.PersistentFlags().Bool("stream-logs", false, "Forward all target build/test logs to stdout/-err")
