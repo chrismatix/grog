@@ -59,7 +59,7 @@ type TaskWorkerPool[T any] struct {
 	nextTaskId     int
 	completedTasks int
 
-	workerIdOffset int   // offset applied to worker IDs in taskState keys
+	workerIdOffset int    // offset applied to worker IDs in taskState keys
 	onStateChange  func() // if set, called instead of sending messages directly
 
 	activeJobs sync.WaitGroup

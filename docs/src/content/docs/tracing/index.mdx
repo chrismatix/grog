@@ -10,7 +10,10 @@ Grog can record execution traces for every build, test, and run invocation. Trac
 Traces are stored as [Parquet](https://parquet.apache.org/) files using the same [remote caching](/topics/remote-caching/) backends (local filesystem, S3, or GCS) and can be queried from the terminal or exported for use in dashboards like Grafana, Datadog, or Jaeger.
 
 <Aside>
-Trace **writing** (during builds) is pure Go and has no extra dependencies. Trace **querying** (`grog traces list`, `show`, `stats`, `export`, `prune`) uses the embedded [DuckDB](https://duckdb.org/) engine to run SQL queries directly against the Parquet files.
+  Trace **writing** (during builds) is pure Go and has no extra dependencies.
+  Trace **querying** (`grog traces list`, `show`, `stats`, `export`, `prune`)
+  uses the embedded [DuckDB](https://duckdb.org/) engine to run SQL queries
+  directly against the Parquet files.
 </Aside>
 
 ## Enabling traces
@@ -35,7 +38,9 @@ prefix = "grog-traces"
 ```
 
 <Aside>
-Trace writing is fully asynchronous and fire-and-forget. It will never slow down your builds. If a trace write fails, a warning is logged but the build result is unaffected.
+  Trace writing is fully asynchronous and fire-and-forget. It will never slow
+  down your builds. If a trace write fails, a warning is logged but the build
+  result is unaffected.
 </Aside>
 
 ## What traces capture
@@ -43,6 +48,7 @@ Trace writing is fully asynchronous and fire-and-forget. It will never slow down
 Each trace records a complete picture of a single build invocation:
 
 **Build-level metadata:**
+
 - Trace ID, timestamp, and total duration
 - Git commit and branch
 - Grog version and platform
@@ -51,6 +57,7 @@ Each trace records a complete picture of a single build invocation:
 - Critical path timing
 
 **Per-target span data:**
+
 - Label, status (success/failure/cancelled), and cache result (hit/miss/skip)
 - 8 phase-level timing breakdowns for bottleneck analysis
 
@@ -63,18 +70,19 @@ Cache miss: |-- queue --|-- hash --|-- cache_check --|-- command --|-- output_wr
 Cache hit:  |-- queue --|-- hash --|-- cache_check --|-- output_load --|
 ```
 
-| Phase | What it measures |
-|-------|-----------------|
-| **queue** | Time waiting in the worker pool before starting |
-| **hash** | Time computing the target's ChangeHash from inputs |
-| **cache_check** | Time checking target cache, output checks, and taint status |
-| **command** | Time running the actual shell command |
-| **output_write** | Time writing outputs and computing the OutputHash |
-| **output_load** | Time loading cached outputs (cache hit path) |
-| **cache_write** | Time persisting the TargetResult to cache |
-| **dep_load** | Time loading dependency outputs (`load_outputs=minimal` only) |
+| Phase            | What it measures                                              |
+| ---------------- | ------------------------------------------------------------- |
+| **queue**        | Time waiting in the worker pool before starting               |
+| **hash**         | Time computing the target's ChangeHash from inputs            |
+| **cache_check**  | Time checking target cache, output checks, and taint status   |
+| **command**      | Time running the actual shell command                         |
+| **output_write** | Time writing outputs and computing the OutputHash             |
+| **output_load**  | Time loading cached outputs (cache hit path)                  |
+| **cache_write**  | Time persisting the TargetResult to cache                     |
+| **dep_load**     | Time loading dependency outputs (`load_outputs=minimal` only) |
 
 This granularity lets you answer questions like:
+
 - Which targets are the slowest to build?
 - Is my worker pool saturated (high queue wait)?
 - Are cache operations a bottleneck (high output_load or cache_write)?
@@ -154,6 +162,7 @@ grog traces export --format=jsonl --since 2026-03-01 --output traces.jsonl
 ```
 
 JSONL files can be:
+
 - Uploaded to S3 and queried with AWS Athena
 - Loaded into BigQuery for analysis
 - Ingested by Grafana Loki
@@ -174,12 +183,14 @@ grog traces export --format=otel --output traces-otel.json
 ```
 
 This maps each build to an OTLP trace with the build as the root span and each target as a child span, including all phase timing as span attributes. Compatible with:
+
 - **Grafana Tempo** — Waterfall visualization of parallel target execution
 - **Jaeger** — Trace search and comparison
 - **Datadog APM** — Build performance monitoring
 
 <Aside>
-The OTLP export produces structured JSON without requiring the OpenTelemetry SDK as a dependency.
+  The OTLP export produces structured JSON without requiring the OpenTelemetry
+  SDK as a dependency.
 </Aside>
 
 ### CI workflow example
@@ -233,11 +244,11 @@ There is no index file. DuckDB queries Parquet files directly via glob patterns.
 
 ## Configuration reference
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `traces.enabled` | bool | `false` | Enable trace collection |
-| `traces.backend` | string | _(uses cache backend)_ | Override storage backend (`"s3"` or `"gcs"`) |
-| `traces.gcs.bucket` | string | | GCS bucket for trace storage |
-| `traces.gcs.prefix` | string | `/` | Prefix within the GCS bucket |
-| `traces.s3.bucket` | string | | S3 bucket for trace storage |
-| `traces.s3.prefix` | string | `/` | Prefix within the S3 bucket |
+| Option              | Type   | Default                | Description                                  |
+| ------------------- | ------ | ---------------------- | -------------------------------------------- |
+| `traces.enabled`    | bool   | `false`                | Enable trace collection                      |
+| `traces.backend`    | string | _(uses cache backend)_ | Override storage backend (`"s3"` or `"gcs"`) |
+| `traces.gcs.bucket` | string |                        | GCS bucket for trace storage                 |
+| `traces.gcs.prefix` | string | `/`                    | Prefix within the GCS bucket                 |
+| `traces.s3.bucket`  | string |                        | S3 bucket for trace storage                  |
+| `traces.s3.prefix`  | string | `/`                    | Prefix within the S3 bucket                  |

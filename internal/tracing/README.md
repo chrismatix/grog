@@ -38,16 +38,16 @@ Defined as Go structs in `schema.go` with `parquet` struct tags:
 
 Each `TargetSpan` captures granular phase durations (in milliseconds):
 
-| Phase | Field | Description |
-|-------|-------|-------------|
-| Queue wait | `queue_wait_millis` | Time waiting in worker pool before execution |
-| Hashing | `hash_duration_millis` | Time computing the target's ChangeHash |
-| Cache check | `cache_check_millis` | Time checking cache + output checks + taint |
-| Command | `command_duration_millis` | Shell command execution time |
-| Output write | `output_write_millis` | Time writing outputs to cache |
-| Output load | `output_load_millis` | Time loading cached outputs (cache hit) |
-| Cache write | `cache_write_millis` | Time persisting TargetResult |
-| Dep load | `dep_load_millis` | Time loading dependency outputs (minimal mode) |
+| Phase        | Field                     | Description                                    |
+| ------------ | ------------------------- | ---------------------------------------------- |
+| Queue wait   | `queue_wait_millis`       | Time waiting in worker pool before execution   |
+| Hashing      | `hash_duration_millis`    | Time computing the target's ChangeHash         |
+| Cache check  | `cache_check_millis`      | Time checking cache + output checks + taint    |
+| Command      | `command_duration_millis` | Shell command execution time                   |
+| Output write | `output_write_millis`     | Time writing outputs to cache                  |
+| Output load  | `output_load_millis`      | Time loading cached outputs (cache hit)        |
+| Cache write  | `cache_write_millis`      | Time persisting TargetResult                   |
+| Dep load     | `dep_load_millis`         | Time loading dependency outputs (minimal mode) |
 
 These timings are recorded by instrumentation in `internal/execution/execute.go` and stored as transient fields on `model.Target`.
 

@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Release tag to update formula for'
+        description: "Release tag to update formula for"
         required: true
         type: string
 

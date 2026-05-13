@@ -1,0 +1,10 @@
+integration/fixtures/
+
+# dependencies
+node_modules/
+
+# build outputs
+dist/
+build/
+out/
+coverage/

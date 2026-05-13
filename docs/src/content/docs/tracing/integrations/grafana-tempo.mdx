@@ -20,7 +20,10 @@ curl -X POST http://tempo:4318/v1/traces \
 ```
 
 <Aside>
-The OTLP export maps each build to a root span with child spans for every target. Span attributes include all phase timing fields (`grog.command_duration_ms`, `grog.queue_wait_ms`, etc.) so you can filter and search by them in the Tempo UI.
+  The OTLP export maps each build to a root span with child spans for every
+  target. Span attributes include all phase timing fields
+  (`grog.command_duration_ms`, `grog.queue_wait_ms`, etc.) so you can filter and
+  search by them in the Tempo UI.
 </Aside>
 
 ## What you get

@@ -23,12 +23,7 @@ features:
     details: Declare inputs, outputs, and dependencies in simple BUILD files.
 ---
 
-import {
-  Card,
-  CardGrid,
-  Steps,
-  LinkCard,
-} from "@astrojs/starlight/components";
+import { Card, CardGrid, Steps, LinkCard } from "@astrojs/starlight/components";
 import demoVideo from "../../assets/vhs/demo.webm";
 
 ## What is Grog?
@@ -40,19 +35,21 @@ Grog coordinates the commands you already use and runs only what changed in para
 <Steps>
   <ol>
     <li>
-      <strong>Describe targets.</strong> Declare commands, inputs, outputs, and dependencies in BUILD files.
+      <strong>Describe targets.</strong> Declare commands, inputs, outputs, and
+      dependencies in BUILD files.
     </li>
     <li>
-      <strong>Run a build.</strong> Grog schedules the graph, runs tasks in parallel, and caches results.
+      <strong>Run a build.</strong> Grog schedules the graph, runs tasks in
+      parallel, and caches results.
     </li>
     <li>
-      <strong>Rerun faster.</strong> Only targets affected by a change execute again.
+      <strong>Rerun faster.</strong> Only targets affected by a change execute
+      again.
     </li>
   </ol>
 </Steps>
 
 ## Grog in motion
-
 
 <video src={demoVideo} width="800" autoplay loop muted playsinline>
   <track kind="captions" />
@@ -72,7 +69,8 @@ Grog coordinates the commands you already use and runs only what changed in para
     Cache artifacts locally or share them with your team through cloud storage.
   </Card>
   <Card title="Simple config" icon="open-book">
-    Sane defaults with readable [BUILD](/build-configuration/) files and even [Makefiles](/build-configuration/#makefile-integration).
+    Sane defaults with readable [BUILD](/build-configuration/) files and even
+    [Makefiles](/build-configuration/#makefile-integration).
   </Card>
 </CardGrid>
 

@@ -2,13 +2,11 @@ package cmds
 
 import (
 	"fmt"
-	"github.com/charmbracelet/lipgloss"
 	"grog/internal/console"
 	"sort"
 
-	"github.com/TyphonHill/go-mermaid/diagrams/flowchart"
-	"github.com/charmbracelet/lipgloss/tree"
-	"github.com/spf13/cobra"
+	"github.com/charmbracelet/lipgloss"
+
 	"grog/internal/analysis"
 	"grog/internal/completions"
 	"grog/internal/config"
@@ -18,6 +16,10 @@ import (
 	"grog/internal/model"
 	"grog/internal/selection"
 	"path/filepath"
+
+	"github.com/TyphonHill/go-mermaid/diagrams/flowchart"
+	"github.com/charmbracelet/lipgloss/tree"
+	"github.com/spf13/cobra"
 )
 
 var graphOptions struct {
@@ -85,17 +87,18 @@ Supports tree, JSON, and Mermaid diagram output formats. By default, only direct
 
 		subgraph := graph.GetSelectedSubgraph()
 
-		if graphOptions.output == "mermaid" {
+		switch graphOptions.output {
+		case "mermaid":
 			printMermaidDiagram(subgraph)
-		} else if graphOptions.output == "tree" {
+		case "tree":
 			printTree(subgraph)
-		} else if graphOptions.output == "json" {
+		case "json":
 			jsonData, err := subgraph.MarshalJSON()
 			if err != nil {
 				logger.Fatalf("could not marshal graph to json: %v", err)
 			}
 			fmt.Println(string(jsonData))
-		} else {
+		default:
 			logger.Fatalf("unknown output format: %s", graphOptions.output)
 		}
 	},

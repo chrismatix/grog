@@ -203,9 +203,10 @@ func RunBuildAndAfter(
 	completionMap, executionErr := executor.Execute(ctx)
 
 	goal := "Build"
-	if testFilter == selection.TestOnly {
+	switch testFilter {
+	case selection.TestOnly:
 		goal = "Test"
-	} else if testFilter == selection.AllTargets {
+	case selection.AllTargets:
 		goal = "Build and test"
 	}
 

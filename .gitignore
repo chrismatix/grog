@@ -8,6 +8,7 @@ result
 # The grog binary
 dist/
 coverdata/
+.grog-test-cleanup
 
 ### Go template
 # If you prefer the allow list template instead of the deny list, see community template:
