@@ -84,6 +84,12 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	stdLogger := console.GetLogger(ctx)
 
 	ctx = console.WithStreamLogsToggle(ctx, e.streamLogsToggle)
+
+	// Include extra args in target hashes so that different "--" flags bust the cache
+	if extraArgs := ExtraArgsFromContext(ctx); len(extraArgs) > 0 {
+		e.targetHasher.SetExtraArgs(extraArgs)
+	}
+
 	ctx, program, sendMsg := console.StartTaskUI(ctx)
 	defer func(p *tea.Program) {
 		err := p.ReleaseTerminal()

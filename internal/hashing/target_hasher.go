@@ -12,6 +12,9 @@ type TargetHasher struct {
 	// Ensure that we are only ever hashing one target at a time
 	// to prevent race conditions
 	targetMutexMap *maps.MutexMap
+	// extraArgs are additional command-line arguments (from "--") that affect
+	// the target command and must be included in the cache hash.
+	extraArgs []string
 }
 
 func NewTargetHasher(graph *dag.DirectedTargetGraph) *TargetHasher {
@@ -19,6 +22,12 @@ func NewTargetHasher(graph *dag.DirectedTargetGraph) *TargetHasher {
 		graph:          graph,
 		targetMutexMap: maps.NewMutexMap(),
 	}
+}
+
+// SetExtraArgs configures additional command-line arguments that will be
+// included in every target's definition hash.
+func (t *TargetHasher) SetExtraArgs(args []string) {
+	t.extraArgs = args
 }
 
 // SetTargetChangeHash computes and sets the target change hash
@@ -49,7 +58,7 @@ func (t *TargetHasher) SetTargetChangeHash(target *model.Target) error {
 		dependencyHashes[index] = targetDependency.OutputHash
 	}
 
-	changeHash, err := GetTargetChangeHash(*target, dependencyHashes)
+	changeHash, err := GetTargetChangeHash(*target, dependencyHashes, t.extraArgs)
 	if err != nil {
 		return err
 	}
