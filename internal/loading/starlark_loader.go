@@ -189,6 +189,7 @@ func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *st
 	var platforms *starlark.List
 	var envVars *starlark.Dict
 	var timeout string
+	var concurrencyGroup string
 
 	// Parse keyword arguments
 	if err := starlark.UnpackArgs("target", args, kwargs,
@@ -205,6 +206,7 @@ func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *st
 		"platforms?", &platforms,
 		"environment_variables?", &envVars,
 		"timeout?", &timeout,
+		"concurrency_group?", &concurrencyGroup,
 	); err != nil {
 		return nil, err
 	}
@@ -303,6 +305,10 @@ func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *st
 	// Set timeout
 	if timeout != "" {
 		target.Timeout = timeout
+	}
+
+	if concurrencyGroup != "" {
+		target.ConcurrencyGroup = concurrencyGroup
 	}
 
 	c.targets = append(c.targets, target)

@@ -59,6 +59,12 @@ type WorkspaceConfig struct {
 	// to be discovered.
 	IncludeHidden bool `mapstructure:"include_hidden"`
 
+	// ConcurrencyGroups maps a concurrency group name to its capacity (the
+	// max number of group members that can run in parallel). Groups
+	// referenced by a target but missing from this map default to capacity
+	// 1 (fully serialized).
+	ConcurrencyGroups map[string]int `mapstructure:"concurrency_groups"`
+
 	// Logging
 	LogLevel      string `mapstructure:"log_level"`
 	LogOutputPath string `mapstructure:"log_output_path"`
