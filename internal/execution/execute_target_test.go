@@ -1,10 +1,14 @@
 package execution
 
 import (
+	"context"
+	"os"
 	"strings"
 	"testing"
 
 	"grog/internal/config"
+	"grog/internal/label"
+	"grog/internal/model"
 )
 
 func TestGetCommandAddsDefaultShellFlags(t *testing.T) {
@@ -175,5 +179,103 @@ func TestTransitiveOutputsByTagShellFunctionRendersWhenNoTaggedOutputs(t *testin
 	// With no tagged outputs the function body should be ":" not a case statement
 	if strings.Contains(command, "Error: unknown tag") {
 		t.Errorf("expected no error handler when there are no tagged outputs, got:\n%s", command)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Extra args context tests
+// ---------------------------------------------------------------------------
+
+func TestWithExtraArgsRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	args := []string{"-k", "test_foo", "-x"}
+
+	ctx = WithExtraArgs(ctx, args)
+	got := ExtraArgsFromContext(ctx)
+
+	if len(got) != 3 || got[0] != "-k" || got[1] != "test_foo" || got[2] != "-x" {
+		t.Fatalf("expected [-k test_foo -x], got %v", got)
+	}
+}
+
+func TestExtraArgsFromContextReturnsNilWhenUnset(t *testing.T) {
+	ctx := context.Background()
+	got := ExtraArgsFromContext(ctx)
+
+	if got != nil {
+		t.Fatalf("expected nil, got %v", got)
+	}
+}
+
+// TestRunTargetCommandForwardsExtraArgs verifies that extra args stored in the
+// context are forwarded as shell positional parameters ($@) to the target
+// command.
+func TestRunTargetCommandForwardsExtraArgs(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	prev := config.Global
+	config.Global = config.WorkspaceConfig{
+		WorkspaceRoot:            tmpDir,
+		DisableDefaultShellFlags: true,
+	}
+	t.Cleanup(func() { config.Global = prev })
+
+	// Create required directories for the target's package and log output
+	os.MkdirAll(tmpDir+"/pkg", 0755)
+	os.MkdirAll(tmpDir+"/logs/pkg", 0755)
+
+	target := &model.Target{
+		Label: label.TargetLabel{Package: "pkg", Name: "test"},
+	}
+
+	ctx := context.Background()
+	ctx = WithExtraArgs(ctx, []string{"-k", "test_foo", "-x"})
+
+	// The command uses $@ which should expand to the extra args
+	output, err := runTargetCommand(ctx, target, nil, nil, nil, nil, `echo "ARGS:$@"`, false)
+	if err != nil {
+		t.Fatalf("expected no error, got %v\noutput: %s", err, string(output))
+	}
+
+	out := string(output)
+	if !strings.Contains(out, "ARGS:-k test_foo -x") {
+		t.Errorf("expected $@ to expand to extra args, got: %s", out)
+	}
+}
+
+// TestRunTargetCommandWithoutExtraArgs verifies that $@ expands to empty when
+// no extra args are set in the context.
+func TestRunTargetCommandWithoutExtraArgs(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	prev := config.Global
+	config.Global = config.WorkspaceConfig{
+		WorkspaceRoot:            tmpDir,
+		DisableDefaultShellFlags: true,
+	}
+	t.Cleanup(func() { config.Global = prev })
+
+	os.MkdirAll(tmpDir+"/pkg", 0755)
+	os.MkdirAll(tmpDir+"/logs/pkg", 0755)
+
+	target := &model.Target{
+		Label: label.TargetLabel{Package: "pkg", Name: "test"},
+	}
+
+	ctx := context.Background()
+
+	output, err := runTargetCommand(ctx, target, nil, nil, nil, nil, `echo "ARGS:$@"`, false)
+	if err != nil {
+		t.Fatalf("expected no error, got %v\noutput: %s", err, string(output))
+	}
+
+	out := string(output)
+	if !strings.Contains(out, "ARGS:") {
+		t.Errorf("expected ARGS: prefix in output, got: %s", out)
+	}
+	// $@ should be empty, so output should be exactly "ARGS:"
+	trimmed := strings.TrimSpace(out)
+	if trimmed != "ARGS:" {
+		t.Errorf("expected $@ to be empty (output 'ARGS:'), got: %q", trimmed)
 	}
 }

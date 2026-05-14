@@ -15,14 +15,14 @@ func TestHashTargetDefinition_FingerprintAffectsHash(t *testing.T) {
 		Fingerprint: map[string]string{"version": "1.0.0"},
 	}
 
-	hashWithV1, err := hashTargetDefinition(target, nil)
+	hashWithV1, err := hashTargetDefinition(target, nil, nil)
 	if err != nil {
 		t.Fatalf("hashTargetDefinition returned error: %v", err)
 	}
 
 	target.Fingerprint["version"] = "1.0.1"
 
-	hashWithV101, err := hashTargetDefinition(target, nil)
+	hashWithV101, err := hashTargetDefinition(target, nil, nil)
 	if err != nil {
 		t.Fatalf("hashTargetDefinition returned error: %v", err)
 	}
@@ -40,13 +40,13 @@ func TestHashTargetDefinition_DockerBackendAffectsHashForDockerTargets(t *testin
 	}
 
 	config.Global.Docker.Backend = config.DockerBackendFS
-	hashFS, err := hashTargetDefinition(dockerTarget, nil)
+	hashFS, err := hashTargetDefinition(dockerTarget, nil, nil)
 	if err != nil {
 		t.Fatalf("hashTargetDefinition returned error: %v", err)
 	}
 
 	config.Global.Docker.Backend = config.DockerBackendRegistry
-	hashRegistry, err := hashTargetDefinition(dockerTarget, nil)
+	hashRegistry, err := hashTargetDefinition(dockerTarget, nil, nil)
 	if err != nil {
 		t.Fatalf("hashTargetDefinition returned error: %v", err)
 	}
@@ -64,13 +64,13 @@ func TestHashTargetDefinition_DockerBackendDoesNotAffectNonDockerTargets(t *test
 	}
 
 	config.Global.Docker.Backend = config.DockerBackendFS
-	hashFS, err := hashTargetDefinition(target, nil)
+	hashFS, err := hashTargetDefinition(target, nil, nil)
 	if err != nil {
 		t.Fatalf("hashTargetDefinition returned error: %v", err)
 	}
 
 	config.Global.Docker.Backend = config.DockerBackendRegistry
-	hashRegistry, err := hashTargetDefinition(target, nil)
+	hashRegistry, err := hashTargetDefinition(target, nil, nil)
 	if err != nil {
 		t.Fatalf("hashTargetDefinition returned error: %v", err)
 	}
@@ -89,13 +89,13 @@ func TestHashTargetDefinition_PlatformTagsAffectHash(t *testing.T) {
 	defer func() { config.Global.PlatformTags = nil }()
 
 	config.Global.PlatformTags = nil
-	hashEmpty, err := hashTargetDefinition(target, nil)
+	hashEmpty, err := hashTargetDefinition(target, nil, nil)
 	if err != nil {
 		t.Fatalf("hashTargetDefinition returned error: %v", err)
 	}
 
 	config.Global.PlatformTags = []string{"qa-runner"}
-	hashWithTag, err := hashTargetDefinition(target, nil)
+	hashWithTag, err := hashTargetDefinition(target, nil, nil)
 	if err != nil {
 		t.Fatalf("hashTargetDefinition returned error: %v", err)
 	}
@@ -106,12 +106,12 @@ func TestHashTargetDefinition_PlatformTagsAffectHash(t *testing.T) {
 
 	// Tag order should not matter.
 	config.Global.PlatformTags = []string{"a", "b"}
-	hashAB, err := hashTargetDefinition(target, nil)
+	hashAB, err := hashTargetDefinition(target, nil, nil)
 	if err != nil {
 		t.Fatalf("hashTargetDefinition returned error: %v", err)
 	}
 	config.Global.PlatformTags = []string{"b", "a"}
-	hashBA, err := hashTargetDefinition(target, nil)
+	hashBA, err := hashTargetDefinition(target, nil, nil)
 	if err != nil {
 		t.Fatalf("hashTargetDefinition returned error: %v", err)
 	}
@@ -130,13 +130,13 @@ func TestHashTargetDefinition_PlatformTagsIgnoredForMultiplatformCache(t *testin
 	defer func() { config.Global.PlatformTags = nil }()
 
 	config.Global.PlatformTags = nil
-	hashEmpty, err := hashTargetDefinition(target, nil)
+	hashEmpty, err := hashTargetDefinition(target, nil, nil)
 	if err != nil {
 		t.Fatalf("hashTargetDefinition returned error: %v", err)
 	}
 
 	config.Global.PlatformTags = []string{"qa-runner"}
-	hashWithTag, err := hashTargetDefinition(target, nil)
+	hashWithTag, err := hashTargetDefinition(target, nil, nil)
 	if err != nil {
 		t.Fatalf("hashTargetDefinition returned error: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestHashTargetDefinition_IgnoresUnrelatedFields(t *testing.T) {
 		Fingerprint: map[string]string{"version": "1.0.0"},
 	}
 
-	hashBase, err := hashTargetDefinition(base, nil)
+	hashBase, err := hashTargetDefinition(base, nil, nil)
 	if err != nil {
 		t.Fatalf("hashTargetDefinition returned error: %v", err)
 	}
@@ -161,12 +161,43 @@ func TestHashTargetDefinition_IgnoresUnrelatedFields(t *testing.T) {
 	modified := base
 	modified.Tags = append(modified.Tags, "new-tag")
 
-	hashWithTags, err := hashTargetDefinition(modified, nil)
+	hashWithTags, err := hashTargetDefinition(modified, nil, nil)
 	if err != nil {
 		t.Fatalf("hashTargetDefinition returned error: %v", err)
 	}
 
 	if hashBase != hashWithTags {
 		t.Fatalf("expected hash to remain stable when unrelated fields change: %s vs %s", hashBase, hashWithTags)
+	}
+}
+
+func TestHashTargetDefinition_ExtraArgsAffectHash(t *testing.T) {
+	target := model.Target{
+		Label:   label.TL("pkg", "test"),
+		Command: "pytest $@",
+	}
+
+	hashNoArgs, err := hashTargetDefinition(target, nil, nil)
+	if err != nil {
+		t.Fatalf("hashTargetDefinition returned error: %v", err)
+	}
+
+	hashWithArgs, err := hashTargetDefinition(target, nil, []string{"-k", "test_foo"})
+	if err != nil {
+		t.Fatalf("hashTargetDefinition returned error: %v", err)
+	}
+
+	if hashNoArgs == hashWithArgs {
+		t.Fatalf("expected different hashes when extra args are provided, got same: %s", hashNoArgs)
+	}
+
+	// Different extra args should produce different hashes
+	hashWithOtherArgs, err := hashTargetDefinition(target, nil, []string{"-k", "test_bar"})
+	if err != nil {
+		t.Fatalf("hashTargetDefinition returned error: %v", err)
+	}
+
+	if hashWithArgs == hashWithOtherArgs {
+		t.Fatalf("expected different hashes for different extra args, got same: %s", hashWithArgs)
 	}
 }

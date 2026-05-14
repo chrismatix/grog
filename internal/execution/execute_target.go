@@ -30,6 +30,24 @@ type templateData struct {
 	UserCommand             string
 }
 
+// extraArgsKey is the context key for extra command arguments passed via "--"
+// on the grog test command line. These are forwarded to the target's shell
+// command as positional parameters ($@).
+type extraArgsKey struct{}
+
+// WithExtraArgs returns a child context carrying extra command-line arguments
+// that will be forwarded to every target command as shell positional parameters.
+func WithExtraArgs(ctx context.Context, args []string) context.Context {
+	return context.WithValue(ctx, extraArgsKey{}, args)
+}
+
+// ExtraArgsFromContext returns the extra command-line arguments stored in ctx,
+// or nil if none are set.
+func ExtraArgsFromContext(ctx context.Context) []string {
+	args, _ := ctx.Value(extraArgsKey{}).([]string)
+	return args
+}
+
 // BinToolMap Maps target label to tool a binary path
 type BinToolMap map[string]string
 
@@ -102,7 +120,15 @@ func runTargetCommand(
 		return nil, err
 	}
 
-	cmd := exec.CommandContext(ctx, "sh", "-c", templatedCommand)
+	// Build shell arguments. When extra args are present (from "grog test
+	// //target -- -k foo"), they are passed as positional parameters to the
+	// shell so that $@ expands to them inside the target command.
+	shellArgs := []string{"-c", templatedCommand}
+	if extraArgs := ExtraArgsFromContext(ctx); len(extraArgs) > 0 {
+		shellArgs = append(shellArgs, "--")
+		shellArgs = append(shellArgs, extraArgs...)
+	}
+	cmd := exec.CommandContext(ctx, "sh", shellArgs...)
 	cmd.WaitDelay = 1 * time.Second // cancellation grace time
 
 	// Attach env variables to the existing environment

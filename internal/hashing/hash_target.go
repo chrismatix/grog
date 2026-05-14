@@ -10,8 +10,8 @@ import (
 
 // GetTargetChangeHash computes the hash that tells us if a target has changed.
 // dependencyHashes are the change hashes of the direct dependencies
-func GetTargetChangeHash(target model.Target, dependencyHashes []string) (string, error) {
-	targetDefinitionHash, err := hashTargetDefinition(target, dependencyHashes)
+func GetTargetChangeHash(target model.Target, dependencyHashes []string, extraArgs []string) (string, error) {
+	targetDefinitionHash, err := hashTargetDefinition(target, dependencyHashes, extraArgs)
 	if err != nil {
 		return "", err
 	}
@@ -28,7 +28,7 @@ func GetTargetChangeHash(target model.Target, dependencyHashes []string) (string
 }
 
 // hashTargetDefinition computes the configured hash of a single file.
-func hashTargetDefinition(target model.Target, dependencyHashes []string) (string, error) {
+func hashTargetDefinition(target model.Target, dependencyHashes []string, extraArgs []string) (string, error) {
 	hasher := GetHasher()
 
 	_, err := hasher.WriteString(target.Label.String())
@@ -37,6 +37,12 @@ func hashTargetDefinition(target model.Target, dependencyHashes []string) (strin
 	_, err = hasher.WriteString(sorted(target.OutputDefinitions()))
 	_, err = hasher.WriteString(sorted(dependencyHashes))
 	_, err = hasher.WriteString(sortedKeyValue(target.Fingerprint))
+
+	// Include extra command-line arguments (e.g. from "grog test -- -k foo")
+	// so that different invocations with different flags bust the cache.
+	if len(extraArgs) > 0 {
+		_, err = hasher.WriteString(strings.Join(extraArgs, "\x00"))
+	}
 
 	// By default, target hashes are separate between platforms unless
 	// the target has a multiplatform-cache tag
