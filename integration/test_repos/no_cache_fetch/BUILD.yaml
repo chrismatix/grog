@@ -1,0 +1,11 @@
+targets:
+  - name: nofetch
+    inputs: ["lockfile.txt"]
+    outputs: ["built.txt"]
+    command: "cp lockfile.txt built.txt"
+    tags: ["no-cache-fetch"]
+
+  - name: cached
+    inputs: ["lockfile.txt"]
+    outputs: ["cached_out.txt"]
+    command: "cp lockfile.txt cached_out.txt"

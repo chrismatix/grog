@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"grog/internal/caching/cachectx"
 	"grog/internal/console"
 )
 
@@ -50,6 +51,11 @@ func (rw *RemoteWrapper) Get(ctx context.Context, path, key string) (io.ReadClos
 		return reader, nil
 	}
 
+	if cachectx.IsSkipRemoteFetch(ctx) {
+		logger.Tracef("Local cache miss for path: %s, key: %s; remote fetch skipped by request", path, key)
+		return nil, err
+	}
+
 	logger.Tracef("Local cache miss for path: %s, key: %s; trying remote cache", path, key)
 	// File not found locally, try the remote cache
 	remoteReader, err := rw.remote.Get(ctx, path, key)
@@ -69,7 +75,12 @@ func (rw *RemoteWrapper) Get(ctx context.Context, path, key string) (io.ReadClos
 
 // Set stores a file in both the local file system cache and the remote cache concurrently.
 func (rw *RemoteWrapper) Set(ctx context.Context, path, key string, content io.Reader) error {
-	console.GetLogger(ctx).Tracef("Remote wrapper writing path: %s, key: %s", path, key)
+	logger := console.GetLogger(ctx)
+	logger.Tracef("Remote wrapper writing path: %s, key: %s", path, key)
+	if cachectx.IsSkipRemoteUpload(ctx) {
+		logger.Tracef("Remote upload skipped by request for path: %s, key: %s", path, key)
+		return rw.fs.Set(ctx, path, key, content)
+	}
 	// Create pipes for the two cache destinations
 	fsRead, fsWrite := io.Pipe()
 	remoteRead, remoteWrite := io.Pipe()
@@ -182,6 +193,11 @@ func (rw *RemoteWrapper) Exists(ctx context.Context, path string, key string) (b
 		return true, nil
 	}
 
+	if cachectx.IsSkipRemoteFetch(ctx) {
+		logger.Tracef("Remote existence check skipped by request for path: %s, key: %s", path, key)
+		return false, nil
+	}
+
 	logger.Tracef("Remote wrapper checking remote existence for path: %s, key: %s", path, key)
 	// Check if the file exists in the remote cache
 	return rw.remote.Exists(ctx, path, key)
@@ -197,8 +213,12 @@ func (rw *RemoteWrapper) ListKeys(ctx context.Context, path string, suffix strin
 // filesystem cache; if the file is not yet cached locally, the wrapper asks
 // the remote backend (which uses a metadata-only call like S3 HeadObject).
 func (rw *RemoteWrapper) Size(ctx context.Context, path, key string) (int64, error) {
-	if size, err := rw.fs.Size(ctx, path, key); err == nil {
+	size, err := rw.fs.Size(ctx, path, key)
+	if err == nil {
 		return size, nil
+	}
+	if cachectx.IsSkipRemoteFetch(ctx) {
+		return 0, err
 	}
 	return rw.remote.Size(ctx, path, key)
 }
@@ -208,6 +228,10 @@ func (rw *RemoteWrapper) Size(ctx context.Context, path, key string) (int64, err
 // to keep memory usage flat. Each side has its own staged writer; Commit
 // promotes both, Cancel discards both.
 func (rw *RemoteWrapper) BeginWrite(ctx context.Context) (StagedWriter, error) {
+	if cachectx.IsSkipRemoteUpload(ctx) {
+		console.GetLogger(ctx).Tracef("Remote staged write skipped by request; using local fs only")
+		return rw.fs.BeginWrite(ctx)
+	}
 	fsStaged, err := rw.fs.BeginWrite(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("fs begin write: %w", err)

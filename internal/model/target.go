@@ -14,6 +14,8 @@ var _ BuildNode = &Target{}
 
 const (
 	TagNoCache            = "no-cache"
+	TagNoCacheFetch       = "no-cache-fetch"
+	TagNoRemoteCache      = "no-remote-cache"
 	TagMultiplatformCache = "multiplatform-cache"
 	TagTestOnly           = "testonly"
 )
@@ -90,6 +92,21 @@ func (t *Target) HasTag(tagName string) bool {
 
 func (t *Target) SkipsCache() bool {
 	return t.HasTag(TagNoCache)
+}
+
+// NoCacheFetch reports whether this target should never materialize outputs
+// from the CAS. The action result is still consulted (locally only); the
+// target is treated as cached only if the declared outputs are already
+// present on disk with matching digests. Otherwise the target re-runs.
+func (t *Target) NoCacheFetch() bool {
+	return t.HasTag(TagNoCacheFetch)
+}
+
+// NoRemoteCache reports whether this target should bypass the remote cache
+// backend in both directions: reads fall back to local FS only (no
+// remote-miss fallback), and writes are not fanned out to remote.
+func (t *Target) NoRemoteCache() bool {
+	return t.HasTag(TagNoRemoteCache)
 }
 
 func (t *Target) IsMultiplatformCache() bool {

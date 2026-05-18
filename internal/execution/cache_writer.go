@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 
 	"grog/internal/caching"
+	"grog/internal/caching/cachectx"
 	"grog/internal/console"
 	"grog/internal/output"
 	"grog/internal/output/handlers"
@@ -77,6 +78,11 @@ func (c *CacheWriter) PersistPreparedTarget(
 		return c.commit(ctx, targetLabel, preparedTarget, progress, true)
 	}
 
+	// The async I/O pool runs with its own long-lived context, so per-target
+	// cache flags attached to the caller's ctx (no-remote-cache) would not
+	// propagate. Capture them here and re-apply inside the worker closure.
+	skipRemoteUpload := cachectx.IsSkipRemoteUpload(ctx)
+
 	c.pendingCount.Add(1)
 	err := c.ioPool.RunFireAndForget(func(ioUpdate worker.StatusFunc) (struct{}, error) {
 		defer c.pendingCount.Add(-1)
@@ -85,8 +91,12 @@ func (c *CacheWriter) PersistPreparedTarget(
 			0,
 			ioUpdate,
 		)
-		if commitErr := c.commit(c.ioContext, targetLabel, preparedTarget, progress, false); commitErr != nil {
-			console.GetLogger(c.ioContext).Warnf("async cache write error for %s (non-fatal): %v", targetLabel, commitErr)
+		ioCtx := c.ioContext
+		if skipRemoteUpload {
+			ioCtx = cachectx.WithSkipRemoteUpload(ioCtx)
+		}
+		if commitErr := c.commit(ioCtx, targetLabel, preparedTarget, progress, false); commitErr != nil {
+			console.GetLogger(ioCtx).Warnf("async cache write error for %s (non-fatal): %v", targetLabel, commitErr)
 		}
 		return struct{}{}, nil
 	})
