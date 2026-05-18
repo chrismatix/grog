@@ -1,0 +1,45 @@
+name: no-cache-fetch
+repo: no_cache_fetch
+cases:
+  # Initial build: target executes and populates both the action cache and CAS.
+  - name: no_cache_fetch_initial_build
+    grog_args:
+      - build
+      - :nofetch
+
+  # Second build with the output still on disk: file_output_handler's on-disk
+  # fast-path detects the hash match and reports a cache hit without ever
+  # asking the CAS for the bytes.
+  - name: no_cache_fetch_disk_hit
+    grog_args:
+      - build
+      - :nofetch
+
+  # Wipe the output from the workspace. The action cache entry is still
+  # present, and the CAS still has a copy of the bytes — but the
+  # no-cache-fetch tag must prevent grog from materializing it.
+  - name: no_cache_fetch_remove_output
+    setup_command: "rm built.txt"
+
+  # Re-build: with no-cache-fetch, grog re-runs the command instead of
+  # restoring from the cache, so we expect 0 cache hits.
+  - name: no_cache_fetch_rerun_after_delete
+    grog_args:
+      - build
+      - :nofetch
+
+  # Control: an untagged target restores from the local CAS after its output
+  # is deleted, so we expect a cache hit. This proves the previous step's
+  # 0-hit outcome is specific to no-cache-fetch.
+  - name: no_cache_fetch_control_initial_build
+    grog_args:
+      - build
+      - :cached
+
+  - name: no_cache_fetch_control_remove_output
+    setup_command: "rm cached_out.txt"
+
+  - name: no_cache_fetch_control_restored_from_cas
+    grog_args:
+      - build
+      - :cached

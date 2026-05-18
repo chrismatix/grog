@@ -9,8 +9,11 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"grog/internal/caching/cachectx"
 )
 
 // mockCacheBackend is a mock implementation of the CacheBackend interface for testing.
@@ -612,4 +615,176 @@ func must[T any](v T, err error) T {
 		panic(err)
 	}
 	return v
+}
+
+func TestRemoteWrapper_SkipRemoteFetch(t *testing.T) {
+	path := "test/path"
+	key := "test_key"
+	content := "test content"
+
+	newRemote := func(t *testing.T, called *atomic.Bool) *mockCacheBackend {
+		t.Helper()
+		return &mockCacheBackend{
+			getFunc: func(ctx context.Context, _, _ string) (io.ReadCloser, error) {
+				called.Store(true)
+				return io.NopCloser(strings.NewReader(content)), nil
+			},
+			existsFunc: func(ctx context.Context, _, _ string) (bool, error) {
+				called.Store(true)
+				return true, nil
+			},
+			sizeFunc: func(ctx context.Context, _, _ string) (int64, error) {
+				called.Store(true)
+				return int64(len(content)), nil
+			},
+		}
+	}
+
+	t.Run("Get returns local hit without consulting remote", func(t *testing.T) {
+		fs := &FileSystemCache{workspaceCacheDir: t.TempDir()}
+		if err := fs.Set(context.Background(), path, key, strings.NewReader(content)); err != nil {
+			t.Fatalf("seed fs: %v", err)
+		}
+		var remoteCalled atomic.Bool
+		rw := NewRemoteWrapper(fs, newRemote(t, &remoteCalled))
+
+		reader, err := rw.Get(cachectx.WithSkipRemoteFetch(context.Background()), path, key)
+		if err != nil {
+			t.Fatalf("Get failed: %v", err)
+		}
+		defer reader.Close()
+		if remoteCalled.Load() {
+			t.Fatal("remote backend was called despite SkipRemoteFetch")
+		}
+	})
+
+	t.Run("Get returns the local error on miss instead of falling through", func(t *testing.T) {
+		fs := &FileSystemCache{workspaceCacheDir: t.TempDir()}
+		var remoteCalled atomic.Bool
+		rw := NewRemoteWrapper(fs, newRemote(t, &remoteCalled))
+
+		_, err := rw.Get(cachectx.WithSkipRemoteFetch(context.Background()), path, key)
+		if err == nil {
+			t.Fatal("expected error on local miss")
+		}
+		if remoteCalled.Load() {
+			t.Fatal("remote backend was called despite SkipRemoteFetch")
+		}
+	})
+
+	t.Run("Exists returns false on local miss without consulting remote", func(t *testing.T) {
+		fs := &FileSystemCache{workspaceCacheDir: t.TempDir()}
+		var remoteCalled atomic.Bool
+		rw := NewRemoteWrapper(fs, newRemote(t, &remoteCalled))
+
+		exists, err := rw.Exists(cachectx.WithSkipRemoteFetch(context.Background()), path, key)
+		if err != nil {
+			t.Fatalf("Exists failed: %v", err)
+		}
+		if exists {
+			t.Fatal("expected exists=false on local miss with SkipRemoteFetch")
+		}
+		if remoteCalled.Load() {
+			t.Fatal("remote backend was called despite SkipRemoteFetch")
+		}
+	})
+
+	t.Run("Size returns the local error on miss without consulting remote", func(t *testing.T) {
+		fs := &FileSystemCache{workspaceCacheDir: t.TempDir()}
+		var remoteCalled atomic.Bool
+		rw := NewRemoteWrapper(fs, newRemote(t, &remoteCalled))
+
+		_, err := rw.Size(cachectx.WithSkipRemoteFetch(context.Background()), path, key)
+		if err == nil {
+			t.Fatal("expected error on local miss")
+		}
+		if remoteCalled.Load() {
+			t.Fatal("remote backend was called despite SkipRemoteFetch")
+		}
+	})
+}
+
+func TestRemoteWrapper_SkipRemoteUpload(t *testing.T) {
+	path := "test/path"
+	key := "test_key"
+	content := "test content"
+
+	t.Run("Set writes locally and skips remote", func(t *testing.T) {
+		fs := &FileSystemCache{workspaceCacheDir: t.TempDir()}
+		var remoteCalled atomic.Bool
+		remote := &mockCacheBackend{
+			setFunc: func(_ context.Context, _, _ string, _ io.Reader) error {
+				remoteCalled.Store(true)
+				return nil
+			},
+		}
+		rw := NewRemoteWrapper(fs, remote)
+
+		err := rw.Set(cachectx.WithSkipRemoteUpload(context.Background()), path, key, strings.NewReader(content))
+		if err != nil {
+			t.Fatalf("Set failed: %v", err)
+		}
+		if remoteCalled.Load() {
+			t.Fatal("remote backend Set was called despite SkipRemoteUpload")
+		}
+
+		// And the local FS has the bytes.
+		reader, err := fs.Get(context.Background(), path, key)
+		if err != nil {
+			t.Fatalf("local Get failed: %v", err)
+		}
+		defer reader.Close()
+		got, _ := io.ReadAll(reader)
+		if string(got) != content {
+			t.Errorf("local content mismatch: got %q want %q", got, content)
+		}
+	})
+
+	t.Run("BeginWrite returns a fs-only writer when upload is skipped", func(t *testing.T) {
+		fs := &FileSystemCache{workspaceCacheDir: t.TempDir()}
+		var remoteBeginCalled atomic.Bool
+		remote := &beginWriteAwareMock{
+			mockCacheBackend: &mockCacheBackend{},
+			// If this is ever returned we know we fanned out.
+			writer: nil,
+		}
+		// Wrap BeginWrite to detect any call.
+		rw := NewRemoteWrapper(fs, recordingBeginWrite{beginWriteAwareMock: remote, called: &remoteBeginCalled})
+
+		writer, err := rw.BeginWrite(cachectx.WithSkipRemoteUpload(context.Background()))
+		if err != nil {
+			t.Fatalf("BeginWrite failed: %v", err)
+		}
+		if _, err := io.WriteString(writer, content); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		if err := writer.Commit(context.Background(), path, key); err != nil {
+			t.Fatalf("commit: %v", err)
+		}
+		if remoteBeginCalled.Load() {
+			t.Fatal("remote BeginWrite was called despite SkipRemoteUpload")
+		}
+
+		reader, err := fs.Get(context.Background(), path, key)
+		if err != nil {
+			t.Fatalf("local Get failed: %v", err)
+		}
+		defer reader.Close()
+		got, _ := io.ReadAll(reader)
+		if string(got) != content {
+			t.Errorf("local content mismatch: got %q want %q", got, content)
+		}
+	})
+}
+
+// recordingBeginWrite flips an atomic flag when BeginWrite is called. Used to
+// assert that the skip-upload path bypasses the remote backend entirely.
+type recordingBeginWrite struct {
+	*beginWriteAwareMock
+	called *atomic.Bool
+}
+
+func (r recordingBeginWrite) BeginWrite(ctx context.Context) (StagedWriter, error) {
+	r.called.Store(true)
+	return r.beginWriteAwareMock.BeginWrite(ctx)
 }

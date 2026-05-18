@@ -1,0 +1,33 @@
+name: no-remote-cache
+repo: no_remote_cache
+requires_credentials: true
+cases:
+  # Both builds populate the local FS cache. The control (:shared) also fans
+  # out to GCS; the tagged target (:local) must not.
+  - name: no_remote_cache_initial_build_shared
+    grog_args:
+      - build
+      - :shared
+
+  - name: no_remote_cache_initial_build_local
+    grog_args:
+      - build
+      - :local
+
+  # grog clean wipes only the local FS cache. Anything still in GCS remains.
+  - name: no_remote_cache_clean_local
+    grog_args:
+      - clean
+
+  # :shared can be restored from GCS — one cache hit.
+  - name: no_remote_cache_restore_shared_from_gcs
+    grog_args:
+      - build
+      - :shared
+
+  # :local was never pushed to GCS, and the no-remote-cache tag also blocks
+  # the remote read fallback, so it must re-execute — zero cache hits.
+  - name: no_remote_cache_local_reexecutes
+    grog_args:
+      - build
+      - :local

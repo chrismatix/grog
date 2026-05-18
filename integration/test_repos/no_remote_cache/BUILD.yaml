@@ -1,0 +1,11 @@
+targets:
+  - name: local
+    inputs: ["lockfile.txt"]
+    outputs: ["local_out.txt"]
+    command: "cp lockfile.txt local_out.txt"
+    tags: ["no-remote-cache"]
+
+  - name: shared
+    inputs: ["lockfile.txt"]
+    outputs: ["shared_out.txt"]
+    command: "cp lockfile.txt shared_out.txt"

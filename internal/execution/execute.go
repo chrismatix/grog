@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"grog/internal/caching"
+	"grog/internal/caching/cachectx"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/dag"
@@ -357,6 +358,17 @@ func (e *Executor) getTaskFunc(
 		target.StartTime = startTime
 		target.QueueWait = startTime.Sub(queuedAt)
 
+		// Per-target cache-context flags driven by reserved tags. These flow
+		// through every cache backend / CAS call made for this target.
+		if target.NoCacheFetch() {
+			ctx = cachectx.WithSkipRemoteFetch(ctx)
+			ctx = cachectx.WithSkipCASFetch(ctx)
+		}
+		if target.NoRemoteCache() {
+			ctx = cachectx.WithSkipRemoteFetch(ctx)
+			ctx = cachectx.WithSkipRemoteUpload(ctx)
+		}
+
 		logger := console.GetLogger(ctx)
 		update(worker.Status(fmt.Sprintf("%s: checking cache.", target.Label)))
 
@@ -414,7 +426,11 @@ func (e *Executor) getTaskFunc(
 			target.CacheTime += target.OutputLoadTime
 			if loadingErr != nil {
 				// Don't return so that we instead break out and continue executing the target
-				logger.Errorf("%s re-running due to output loading failure: %v", target.Label, loadingErr)
+				if errors.Is(loadingErr, caching.ErrCASFetchSkipped) {
+					logger.Debugf("%s: re-running because outputs are not on disk and no-cache-fetch is set", target.Label)
+				} else {
+					logger.Errorf("%s re-running due to output loading failure: %v", target.Label, loadingErr)
+				}
 			} else {
 				if target.IsTest() {
 					executionTime := time.Since(startTime).Seconds()

@@ -181,6 +181,15 @@ If it's not, the command installs it.
 - Allows using system-provided tools without rebuilding them
 - Simplifies integration with existing toolchains
 
+<Aside type="tip">
+  If the artifact you want to skip is *also* an output that grog can hash on
+  disk (for example `node_modules/.modules.yaml` next to a `pnpm-lock.yaml`
+  input), consider the [`no-cache-fetch`](/reference/target-configuration#tags)
+  tag instead. Grog uses the on-disk hash as the cache hit signal and re-runs
+  the command if the outputs aren't already in place — without you having to
+  hand-maintain `expected_output` values.
+</Aside>
+
 <Aside type="caution">
   While output checks are convenient, they reduce build reproducibility since
   they rely on inspecting the state of your platform superficially. Consider
