@@ -1,0 +1,11 @@
+# Per-workspace grog config. The defaults are fine for this example.
+#
+# Uncomment to enable a remote cache so CI / teammates can pull
+# already-built rust artifacts instead of rebuilding them:
+#
+# [cache]
+# backend = "gcs"
+#
+# [cache.gcs]
+# bucket = "your-grog-cache"
+# prefix = "/rust_monorepo"

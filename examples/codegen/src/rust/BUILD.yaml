@@ -1,0 +1,27 @@
+targets:
+  - name: rust
+    inputs:
+      - "src/**/*.rs"
+      - "build.rs"
+      - "Cargo.toml"
+    # The build.rs invokes prost-build on ../protobuf/person.proto.
+    # We depend on //src/protobuf:codegen so that any schema change
+    # invalidates the rust target the same way it invalidates the
+    # go and python targets.
+    dependencies:
+      - //src/protobuf:codegen
+    command: |
+      cargo build --release
+      mkdir -p bin
+      cp target/release/rust_consumer bin/rust_consumer
+    outputs:
+      - bin/rust_consumer
+
+  - name: rust_test
+    inputs:
+      - "src/**/*.rs"
+      - "build.rs"
+      - "Cargo.toml"
+    dependencies:
+      - //src/protobuf:codegen
+    command: cargo test

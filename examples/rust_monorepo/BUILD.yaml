@@ -1,0 +1,26 @@
+targets:
+  # Tracks the workspace manifest + lockfile. Crates depend on this so that
+  # a Cargo.lock bump invalidates every crate's cached build/test/clippy.
+  - name: workspace
+    inputs:
+      - "Cargo.toml"
+      - "Cargo.lock"
+    outputs:
+      - "Cargo.lock"
+
+  # Fan-out: run every crate's build target in parallel.
+  - name: build_all
+    dependencies:
+      - //crates/format:build
+      - //crates/greet:build
+      - //crates/cli:build
+      - //crates/server:build
+
+  # Use `grog test //...` to run all crate test targets.
+
+  - name: lint_all
+    dependencies:
+      - //crates/format:clippy
+      - //crates/greet:clippy
+      - //crates/cli:clippy
+      - //crates/server:clippy

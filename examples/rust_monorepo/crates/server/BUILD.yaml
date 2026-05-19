@@ -1,0 +1,25 @@
+targets:
+  - name: build
+    inputs:
+      - "src/**/*.rs"
+      - "Cargo.toml"
+    dependencies:
+      - //:workspace
+      - //crates/format:build
+      - //crates/greet:build
+    command: |
+      cargo build -p server --release
+      mkdir -p bin
+      cp ../../target/release/server bin/server
+    outputs:
+      - bin/server
+
+  - name: clippy
+    inputs:
+      - "src/**/*.rs"
+      - "Cargo.toml"
+    dependencies:
+      - //:workspace
+      - //crates/format:build
+      - //crates/greet:build
+    command: cargo clippy -p server --all-targets -- -D warnings
