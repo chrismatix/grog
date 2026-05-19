@@ -55,15 +55,7 @@ grog build //...     # builds everything in the workspace
 grog test //...      # runs all test targets
 ```
 
-Run it again — every target is a cache hit:
-
-```bash
-$ grog build //...
-✓ //crates/format:build      (cached)
-✓ //crates/greet:build       (cached)
-✓ //crates/cli:build         (cached)
-✓ //crates/server:build      (cached)
-```
+Run it again — every target is a cache hit.
 
 Touch only the cli's source — observe that the leaf libraries stay cached:
 
