@@ -1,0 +1,5 @@
+environment_variables_file = "env.vars"
+
+[environment_variables]
+INLINE_VAR = "from_toml"
+SHARED_VAR = "from_toml"

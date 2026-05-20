@@ -31,6 +31,11 @@ log_level = "info"
 # Environment Variables
 environment_variables = { FOO = "bar" }
 
+# Environment Variables File
+# Load variables from a dotenv-style file (path relative to workspace root).
+# Inline environment_variables above take precedence over file-loaded values.
+# environment_variables_file = "environment-variables.local"
+
 # Cache Settings
 enable_cache = true # default
 async_cache_writes = true # default
@@ -87,6 +92,7 @@ For instance, to set or override the `fail_fast` option set `GROG_FAIL_FAST=fals
 - **stream_logs**: When `true`, Grog will stream build and test logs to stdout. Defaults to `false`.
 - **disable_default_shell_flags**: When `false` (default), Grog prepends `set -eu` to target commands before execution to fail fast on unset variables and errors. Set to `true` to opt out.
 - **environment_variables**: Key-value pairs that will be set for all target executions and passed to the Pkl loader.
+- **environment_variables_file**: Path to a dotenv-style file whose variables are loaded into the execution environment. The path is relative to the workspace root (where `grog.toml` lives); absolute paths are also accepted. Variables from the file are loaded first, then inline `environment_variables` from `grog.toml` are merged on top — inline values take precedence. The file format supports `KEY=VALUE`, `KEY="VALUE"`, `KEY='VALUE'`, `export KEY=VALUE`, comments (`#`), and variable expansion (`$VAR` or `${VAR}`).
 - **enable_cache**: Controls whether caching is enabled. Defaults to `true`.
 - **load_outputs**: Determines what outputs are loaded from the cache. Available options are:
   - `all` (default): Load all outputs from the cache.

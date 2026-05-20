@@ -15,6 +15,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"github.com/subosito/gotenv"
 )
 
 var Version string
@@ -295,25 +296,53 @@ func initConfig(cmd *cobra.Command) error {
 
 // Viper always normalizes all configuration keys to be lower-case
 // but users should be able to specify upper case environment_variables
-// So as a workaround we load the section here a second time _if_ there are env vars
+// So as a workaround we load the section here a second time _if_ there are env vars.
+//
+// When environment_variables_file is set, variables are loaded from the file
+// first, then inline environment_variables from grog.toml are merged on top
+// (inline values take precedence over file values).
 func readInEnvironmentVariablesConfig() error {
-	if len(config.Global.EnvironmentVariables) == 0 {
-		// nothing to load
-		return nil
+	merged := make(map[string]string)
+
+	// Phase 1: Load variables from file if configured.
+	if config.Global.EnvironmentVariablesFile != "" {
+		envFilePath := config.Global.EnvironmentVariablesFile
+		if !filepath.IsAbs(envFilePath) {
+			envFilePath = filepath.Join(config.Global.WorkspaceRoot, envFilePath)
+		}
+
+		f, err := os.Open(envFilePath)
+		if err != nil {
+			return fmt.Errorf("failed to open environment_variables_file %q: %w", envFilePath, err)
+		}
+		defer f.Close()
+
+		fileEnv := gotenv.Parse(f)
+		for k, v := range fileEnv {
+			merged[k] = v
+		}
 	}
 
-	raw, err := os.ReadFile(viper.ConfigFileUsed())
-	if err != nil {
-		return err
+	// Phase 2: Load inline environment_variables from grog.toml (preserving case).
+	if len(config.Global.EnvironmentVariables) > 0 {
+		raw, err := os.ReadFile(viper.ConfigFileUsed())
+		if err != nil {
+			return err
+		}
+
+		var helper EnvVarsHelper
+		err = toml.Unmarshal(raw, &helper)
+		if err != nil {
+			return err
+		}
+
+		// Inline values override file-loaded values.
+		for k, v := range helper.EnvironmentVariables {
+			merged[k] = v
+		}
 	}
 
-	var helper EnvVarsHelper
-	err = toml.Unmarshal(raw, &helper)
-	if err != nil {
-		return err
-	}
-
-	config.Global.EnvironmentVariables = helper.EnvironmentVariables
+	config.Global.EnvironmentVariables = merged
 	return nil
 }
 

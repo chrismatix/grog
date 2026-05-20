@@ -33,6 +33,7 @@ require (
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
+	github.com/subosito/gotenv v1.6.0
 	github.com/zeebo/xxh3 v1.1.0
 	go.starlark.net v0.0.0-20260102030733-3fee463870c9
 	go.uber.org/zap v1.27.1
@@ -147,7 +148,6 @@ require (
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/spiffe/go-spiffe/v2 v2.6.0 // indirect
-	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/twpayne/go-geom v1.6.1 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
