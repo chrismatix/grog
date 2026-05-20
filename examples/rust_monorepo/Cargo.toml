@@ -1,0 +1,17 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/format",
+    "crates/greet",
+    "crates/cli",
+    "crates/server",
+]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+license = "MIT"
+
+[profile.release]
+opt-level = 3
+lto = false

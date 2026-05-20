@@ -1,0 +1,14 @@
+[package]
+name = "rust_consumer"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "rust_consumer"
+path = "src/main.rs"
+
+[dependencies]
+prost = "0.13"
+
+[build-dependencies]
+prost-build = "0.13"

@@ -1,0 +1,38 @@
+targets:
+  - name: build
+    inputs:
+      - "src/**/*.rs"
+      - "Cargo.toml"
+    dependencies:
+      - //:workspace
+      - //crates/format:build
+      - //crates/greet:build
+    # cargo writes to the shared workspace target/. We copy the artifact
+    # into the crate's own bin/ so grog can hash it as a declared output
+    # and downstream targets (e.g. a docker image) can consume it.
+    command: |
+      cargo build -p cli --release
+      mkdir -p bin
+      cp ../../target/release/cli bin/cli
+    outputs:
+      - bin/cli
+
+  - name: test
+    inputs:
+      - "src/**/*.rs"
+      - "Cargo.toml"
+    dependencies:
+      - //:workspace
+      - //crates/format:build
+      - //crates/greet:build
+    command: cargo test -p cli
+
+  - name: clippy
+    inputs:
+      - "src/**/*.rs"
+      - "Cargo.toml"
+    dependencies:
+      - //:workspace
+      - //crates/format:build
+      - //crates/greet:build
+    command: cargo clippy -p cli --all-targets -- -D warnings

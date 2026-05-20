@@ -1,0 +1,27 @@
+targets:
+  - name: build
+    inputs:
+      - "src/**/*.rs"
+      - "Cargo.toml"
+    dependencies:
+      - //:workspace
+      - //crates/format:build
+    command: cargo build -p greet --release
+
+  - name: test
+    inputs:
+      - "src/**/*.rs"
+      - "Cargo.toml"
+    dependencies:
+      - //:workspace
+      - //crates/format:build
+    command: cargo test -p greet
+
+  - name: clippy
+    inputs:
+      - "src/**/*.rs"
+      - "Cargo.toml"
+    dependencies:
+      - //:workspace
+      - //crates/format:build
+    command: cargo clippy -p greet --all-targets -- -D warnings
