@@ -1,0 +1,19 @@
+name: environment variables file
+repo: environment_variables_file
+cases:
+  - name: file_env
+    grog_args:
+      - build
+      - :file_env
+  - name: inline_overrides_file
+    grog_args:
+      - build
+      - :inline_overrides_file
+  - name: quoted_env
+    grog_args:
+      - build
+      - :quoted_env
+  - name: starlark_predeclared
+    grog_args:
+      - build
+      - :starlark_predeclared
