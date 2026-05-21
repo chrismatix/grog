@@ -106,7 +106,9 @@ func (w *Walker) Walk(
 	ctx, cancelFunc := context.WithCancel(ctx)
 	w.allCancel = cancelFunc
 
-	// populate info map
+	// Populate nodeInfoMap fully before starting any node: a node started mid-loop
+	// could finish and startNode a dependant not yet in the map, racing this
+	// unlocked write against startNode's locked read.
 	for _, node := range w.graph.nodes {
 		if !node.GetIsSelected() {
 			// skip unselected targets
@@ -126,8 +128,13 @@ func (w *Walker) Walk(
 		w.wait.Add(1)
 		// start all routines
 		go w.nodeRoutine(ctx, node, w.nodeInfoMap[node.GetLabel()])
+	}
 
-		// start all routines with no dependencies immediately
+	// Map is fully populated; now start the no-dependency nodes.
+	for _, node := range w.graph.nodes {
+		if !node.GetIsSelected() {
+			continue
+		}
 		if len(w.graph.inEdges[node.GetLabel()]) == 0 {
 			w.startNode(node)
 		}
