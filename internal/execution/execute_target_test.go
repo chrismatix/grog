@@ -243,6 +243,40 @@ func TestRunTargetCommandForwardsExtraArgs(t *testing.T) {
 	}
 }
 
+// TestRunTargetCommandHandlesLargeScript verifies that a rendered command
+// exceeding the kernel's single-argument limit (MAX_ARG_STRLEN, 128 KB on
+// Linux) still executes. Passing such a script via `sh -c` fails with
+// "argument list too long"; writing it to a file does not.
+func TestRunTargetCommandHandlesLargeScript(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	prev := config.Global
+	config.Global = config.WorkspaceConfig{
+		WorkspaceRoot:            tmpDir,
+		DisableDefaultShellFlags: true,
+	}
+	t.Cleanup(func() { config.Global = prev })
+
+	os.MkdirAll(tmpDir+"/pkg", 0755)
+	os.MkdirAll(tmpDir+"/logs/pkg", 0755)
+
+	target := &model.Target{
+		Label: label.TargetLabel{Package: "pkg", Name: "test"},
+	}
+
+	// A comment far larger than MAX_ARG_STRLEN. As a single `sh -c` argument
+	// this overflows execve; as a script file it runs fine.
+	command := "# " + strings.Repeat("x", 256*1024) + "\necho OK"
+
+	output, err := runTargetCommand(context.Background(), target, nil, nil, nil, nil, command, false)
+	if err != nil {
+		t.Fatalf("expected large script to execute, got %v\noutput: %s", err, string(output))
+	}
+	if !strings.Contains(string(output), "OK") {
+		t.Errorf("expected output to contain OK, got: %s", string(output))
+	}
+}
+
 // TestRunTargetCommandWithoutExtraArgs verifies that $@ expands to empty when
 // no extra args are set in the context.
 func TestRunTargetCommandWithoutExtraArgs(t *testing.T) {
