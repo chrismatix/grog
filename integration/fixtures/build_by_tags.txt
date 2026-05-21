@@ -1,3 +1,6 @@
 INFO: 3 packages loaded, 5 targets configured.
 INFO: Selected 3 targets.
+INFO: //package_1:bar       DONE
+INFO: //package_1:foo       DONE
+INFO: //package_2:package_2 DONE
 INFO: Build completed successfully. 3 targets completed (0 cache hits).

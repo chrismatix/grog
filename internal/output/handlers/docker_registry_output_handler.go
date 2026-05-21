@@ -275,7 +275,6 @@ func (d *DockerRegistryOutputHandler) Load(
 	}
 
 	logger.Debugf("successfully loaded Docker image %s from registry tag %s", localImageName, remoteImageName)
-	logger.Infof("Loaded image %s from registry", localImageName)
 	return nil
 }
 

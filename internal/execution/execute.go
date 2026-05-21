@@ -20,7 +20,6 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/fatih/color"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -100,23 +99,21 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	}(program)
 	defer program.Quit()
 
-	// Get selected nodes and create a TestLogger for them
+	// Get selected nodes and create a ResultLogger covering every selected
+	// target so that build and test completion lines render as one aligned
+	// table.
 	selectedNodes := e.graph.GetSelectedNodes()
 	selectedNodeCount := len(selectedNodes)
 
-	// Create a list of node labels for the TestLogger
 	var targetLabels []string
 	for _, node := range selectedNodes {
-		if target, ok := node.(*model.Target); ok && target.IsTest() {
+		if _, ok := node.(*model.Target); ok {
 			targetLabels = append(targetLabels, node.GetLabel().String())
 		}
 	}
 
-	// Create a TestLogger with the node labels
-	testLogger := console.NewTestLogger(targetLabels, 0) // 0 means use default terminal width
-
-	// Add the TestLogger to the context
-	ctx = context.WithValue(ctx, console.TestLoggerKey{}, testLogger)
+	resultLogger := console.NewResultLogger(targetLabels, 0) // 0 means use default terminal width
+	ctx = context.WithValue(ctx, console.ResultLoggerKey{}, resultLogger)
 
 	coordinator := NewPoolCoordinator(stdLogger, numWorkers, numIOWorkers, sendMsg, selectedNodeCount)
 	coordinator.StartTaskWorkers(ctx)
@@ -167,6 +164,10 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 
 	walker := dag.NewWalker(e.graph, walkCallback, e.failFast)
 	completionMap, err := walker.Walk(ctx)
+
+	// Emit any buffered per-target result lines (deterministic mode only;
+	// otherwise they were streamed as targets completed).
+	resultLogger.Flush(stdLogger)
 
 	// Drain the I/O pool before returning, but only if the build was not
 	// interrupted and the caller hasn't opted to wait itself. Async cache
@@ -398,6 +399,7 @@ func (e *Executor) getTaskFunc(
 				target.OutputHash = targetResult.OutputHash
 				update(worker.Status(fmt.Sprintf("%s: cache hit. skipped loading %s because load_outputs=minimal.", target.Label, console.FCountOutputs(len(target.AllOutputs())))))
 				logger.Debugf("%s: cache hit. skipped loading %s because load_ outputs=minimal", target.Label, console.FCountOutputs(len(target.AllOutputs())))
+				logTargetCached(ctx, logger, target, float64(targetResult.ExecutionDurationMillis)/1000)
 				return dag.CacheHit, nil
 			}
 
@@ -416,15 +418,9 @@ func (e *Executor) getTaskFunc(
 				// Don't return so that we instead break out and continue executing the target
 				logger.Errorf("%s re-running due to output loading failure: %v", target.Label, loadingErr)
 			} else {
-				if target.IsTest() {
-					executionTime := time.Since(startTime).Seconds()
-					if testLogger := console.GetTestLogger(ctx); testLogger != nil {
-						// Log the cached execution time here
-						testLogger.LogTestPassedCached(logger, target.Label.String(), float64(targetResult.ExecutionDurationMillis)/1000)
-					} else {
-						logger.Infof("%s %s (cached) in %.1fs", target.Label, color.New(color.FgGreen).Sprintf("PASSED"), executionTime)
-					}
-				}
+				// Log the cached execution time recorded when the target was
+				// originally built, not the (near-zero) cache-load time.
+				logTargetCached(ctx, logger, target, float64(targetResult.ExecutionDurationMillis)/1000)
 				return dag.CacheHit, nil
 			}
 		}
@@ -465,6 +461,35 @@ func formatTargetResultForDebug(targetResult *gen.TargetResult) string {
 	return string(marshalledResult)
 }
 
+// logTargetBuilt logs a freshly built/passed target, dispatching to the test
+// or build wording based on the target kind.
+func logTargetBuilt(ctx context.Context, logger *console.Logger, target *model.Target, seconds float64) {
+	resultLogger := console.GetResultLogger(ctx)
+	if resultLogger == nil {
+		return
+	}
+	if target.IsTest() {
+		resultLogger.LogTestPassed(logger, target.Label.String(), seconds)
+	} else {
+		resultLogger.LogBuilt(logger, target.Label.String(), seconds)
+	}
+}
+
+// logTargetCached logs a cache-hit target, dispatching to the test or build
+// wording based on the target kind. seconds is the execution time recorded when
+// the target was originally built, not the cache-load time.
+func logTargetCached(ctx context.Context, logger *console.Logger, target *model.Target, seconds float64) {
+	resultLogger := console.GetResultLogger(ctx)
+	if resultLogger == nil {
+		return
+	}
+	if target.IsTest() {
+		resultLogger.LogTestPassedCached(logger, target.Label.String(), seconds)
+	} else {
+		resultLogger.LogBuiltCached(logger, target.Label.String(), seconds)
+	}
+}
+
 func (e *Executor) executeTarget(
 	ctx context.Context,
 	target *model.Target,
@@ -491,13 +516,10 @@ func (e *Executor) executeTarget(
 
 	if err != nil {
 		logger.Debugf("target execution returned error %s: %s", target.Label, err)
-		if target.IsTest() && !errors.Is(err, context.Canceled) {
-			// Test errors we want to log differently
-			// Cancellations should just exit the execution
-			if testLogger := console.GetTestLogger(ctx); testLogger != nil {
-				testLogger.LogTestFailed(logger, target.Label.String(), target.ExecutionTime)
-			} else {
-				logger.Infof("%s %s in %.1fs", target.Label, color.New(color.FgRed).Sprintf("FAILED"), executionTimeSeconds)
+		// Cancellations should just exit the execution without a result line.
+		if !errors.Is(err, context.Canceled) {
+			if resultLogger := console.GetResultLogger(ctx); resultLogger != nil {
+				resultLogger.LogFailed(logger, target.Label.String(), target.ExecutionTime)
 			}
 		}
 		return dag.CacheMiss, err
@@ -508,13 +530,7 @@ func (e *Executor) executeTarget(
 		return dag.CacheMiss, outputCheckErr
 	}
 
-	if target.IsTest() {
-		if testLogger := console.GetTestLogger(ctx); testLogger != nil {
-			testLogger.LogTestPassed(logger, target.Label.String(), executionTimeSeconds)
-		} else {
-			logger.Infof("%s %s in %.1fs", target.Label, color.New(color.FgGreen).Sprintf("PASSED"), executionTimeSeconds)
-		}
-	}
+	logTargetBuilt(ctx, logger, target, executionTimeSeconds)
 
 	// If the target produced a bin output automatically mark it as executable
 	err = markBinOutputExecutable(target)

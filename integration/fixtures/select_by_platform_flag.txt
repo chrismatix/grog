@@ -4,4 +4,7 @@ WARN: target //:os_guard has no inputs, dependencies, output checks or fingerpri
 WARN: target //pkg:foo has no inputs, dependencies, output checks or fingerprint causing it to run only once
 WARN: target //pkg:foo_platform has no inputs, dependencies, output checks or fingerprint causing it to run only once
 INFO: Selected 3 targets (2 targets not matching made-up-os/default-arch host).
+INFO: //:bar      DONE (cached)
+INFO: //:os_guard DONE (cached)
+INFO: //pkg:foo   DONE (cached)
 INFO: Build completed successfully. 3 targets completed (3 cache hits).

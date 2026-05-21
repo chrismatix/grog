@@ -1,3 +1,5 @@
 INFO: 1 package loaded, 2 targets configured.
 INFO: Selected 2 targets.
+INFO: //pkg:build_a DONE
+INFO: //pkg:build_b DONE
 INFO: Build completed successfully. 2 targets completed (0 cache hits).

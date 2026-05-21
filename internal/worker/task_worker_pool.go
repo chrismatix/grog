@@ -11,7 +11,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fatih/color"
-	"go.uber.org/zap/zapcore"
 
 	"grog/internal/config"
 	"grog/internal/console"
@@ -136,7 +135,7 @@ func (twp *TaskWorkerPool[T]) worker(ctx context.Context, workerId int) {
 				if isDebug {
 					taskStatus = fmt.Sprintf("%s (worker %d)", status.Status, workerId)
 				}
-				twp.setTaskState(workerId, StatusUpdate{Status: taskStatus, SubStatus: status.SubStatus, Progress: status.Progress}, zapcore.InfoLevel)
+				twp.setTaskState(workerId, StatusUpdate{Status: taskStatus, SubStatus: status.SubStatus, Progress: status.Progress})
 			})
 
 			if j.result != nil {
@@ -150,11 +149,14 @@ func (twp *TaskWorkerPool[T]) worker(ctx context.Context, workerId int) {
 	}
 }
 
-func (twp *TaskWorkerPool[T]) setTaskState(workerId int, status StatusUpdate, lvl zapcore.Level) {
+func (twp *TaskWorkerPool[T]) setTaskState(workerId int, status StatusUpdate) {
 	twp.mu.Lock()
 
 	if logToStdout() {
-		twp.logger.Logf(lvl, status.Status)
+		// Transient per-target progress (cache checks, output writes, …) is
+		// noise in non-interactive output. Keep it at debug so CI shows only
+		// the per-target completion lines emitted by the ResultLogger.
+		twp.logger.Debugf("%s", status.Status)
 		twp.mu.Unlock()
 		return
 	}

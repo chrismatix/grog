@@ -2,4 +2,6 @@ INFO: 4 packages loaded, 9 targets configured.
 INFO: Selected 2 targets.
 env=from_starlark
 included
+INFO: //attrs:dto_all DONE
+INFO: //attrs:dto_dep DONE
 INFO: Build completed successfully. 2 targets completed (0 cache hits).

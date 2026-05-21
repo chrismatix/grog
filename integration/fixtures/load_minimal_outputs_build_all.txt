@@ -1,4 +1,8 @@
 INFO: 1 package loaded, 4 targets configured.
 WARN: target //:target_a has no inputs, dependencies, output checks or fingerprint causing it to run only once
 INFO: Selected 4 targets.
+INFO: //:runnable_target DONE
+INFO: //:target_a        DONE
+INFO: //:target_b        DONE
+INFO: //:target_c        DONE
 INFO: Build completed successfully. 4 targets completed (0 cache hits).

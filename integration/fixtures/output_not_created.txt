@@ -1,6 +1,7 @@
 INFO: 1 package loaded, 1 target configured.
 WARN: target //:output_not_created has no inputs, dependencies, output checks or fingerprint causing it to run only once
 INFO: Selected 1 target.
+INFO: //:output_not_created DONE
 ERROR: Build failed. 0 targets completed (0 cache hits), 1 failed:
 ---------------------------------
 ERROR: Target //:output_not_created failed: build completed but failed to write outputs to cache for target //:output_not_created:

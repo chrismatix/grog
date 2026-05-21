@@ -1,4 +1,5 @@
 INFO: 4 packages loaded, 9 targets configured.
 INFO: Selected 1 target.
 Building macro_example
+INFO: //macros:macro_example DONE
 INFO: Build completed successfully. 1 target completed (0 cache hits).

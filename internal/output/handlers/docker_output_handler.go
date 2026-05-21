@@ -232,7 +232,6 @@ func (d *DockerOutputHandler) Load(
 	}
 
 	logger.Debugf("successfully loaded Docker image %s from cache", localImageName)
-	logger.Infof("Loaded image %s from cache backend", localImageName)
 	return nil
 }
 

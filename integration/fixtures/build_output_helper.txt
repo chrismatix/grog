@@ -1,4 +1,6 @@
 INFO: 1 package loaded, 2 targets configured.
 WARN: target //:produce_outputs has no inputs, dependencies, output checks or fingerprint causing it to run only once
 INFO: Selected 2 targets.
+INFO: //:produce_outputs DONE
+INFO: //:use_outputs     DONE
 INFO: Build completed successfully. 2 targets completed (0 cache hits).
