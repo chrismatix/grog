@@ -84,6 +84,10 @@ jobs:
         with:
           name: pkl-package
           path: pkl/.out/**/*
+          # pkl writes to the hidden `.out` directory; upload-artifact@v4
+          # excludes hidden files by default, which silently dropped the
+          # package (warning only, so the job still "succeeded").
+          include-hidden-files: true
 
   publish:
     name: Publish release
