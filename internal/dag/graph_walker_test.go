@@ -3,6 +3,7 @@ package dag
 import (
 	"context"
 	"errors"
+	"fmt"
 	"grog/internal/label"
 	"grog/internal/model"
 	"sync"
@@ -358,6 +359,51 @@ func TestWalkerEdgeCases(t *testing.T) {
 			t.Errorf("Expected error, got nil")
 		}
 	})
+}
+
+// Regression test for the populate/start race: a no-dependency node that
+// completes immediately (cache hit) must be able to start its dependant even
+// while the rest of the graph is still being registered. Before the fix, Walk
+// populated nodeInfoMap and started no-dep nodes in a single loop, so a fast
+// node could call startNode on a dependant that was not yet in the map (the
+// start was silently dropped, hanging the walk) and the unlocked map write
+// raced startNode's locked read ("concurrent map read and map write").
+// Run with -race to also catch the data race.
+func TestWalkerNoDepStartsLaterDependant(t *testing.T) {
+	for iter := 0; iter < 200; iter++ {
+		const pairs = 50
+		graph := NewDirectedGraph()
+		for i := 0; i < pairs; i++ {
+			root := GetTarget(fmt.Sprintf("root-%d", i))
+			dep := GetTarget(fmt.Sprintf("dep-%d", i))
+			graph.AddNode(root)
+			graph.AddNode(dep)
+			_ = graph.AddEdge(root, dep) // dep depends on root
+		}
+
+		// Every node is an instant cache hit, maximizing the chance a no-dep
+		// root completes before the populate loop registers its dependant.
+		walkFunc := func(ctx context.Context, node model.BuildNode) (CacheResult, error) {
+			return CacheHit, nil
+		}
+
+		walker := NewWalker(graph, walkFunc, true)
+
+		done := make(chan CompletionMap, 1)
+		go func() {
+			cm, _ := walker.Walk(context.Background())
+			done <- cm
+		}()
+
+		select {
+		case cm := <-done:
+			if len(cm) != pairs*2 {
+				t.Fatalf("iter %d: expected %d completions, got %d", iter, pairs*2, len(cm))
+			}
+		case <-time.After(15 * time.Second):
+			t.Fatalf("iter %d: Walk deadlocked (a dependant was never started)", iter)
+		}
+	}
 }
 
 // Test that when two failing parents share a single child, cancelNode
