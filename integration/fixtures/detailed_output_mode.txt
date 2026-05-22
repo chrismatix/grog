@@ -1,4 +1,5 @@
 INFO: 2 packages loaded, 4 targets configured.
-INFO: Selected 1 target.
+INFO: Selected 2 targets.
+INFO: //bar:bar: done
 INFO: //foo:foo: done
-INFO: Build completed successfully. 1 target completed (0 cache hits).
+INFO: Build completed successfully. 2 targets completed (0 cache hits).

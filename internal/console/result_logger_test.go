@@ -90,6 +90,31 @@ func TestResultLoggerTerseDeterministicBuffersAndSorts(t *testing.T) {
 	}
 }
 
+func TestResultLoggerDetailedDeterministicBuffersAndSorts(t *testing.T) {
+	withConfig(t, "detailed", true) // deterministic: buffered + sorted even in detailed
+	logger, logs := captureLogger()
+
+	rl := NewResultLogger([]string{"//b:b", "//a:a"}, 80)
+	rl.LogBuilt(logger, "//b:b", 9.9)
+	rl.LogBuiltCached(logger, "//a:a", 9.9)
+
+	if logs.Len() != 0 {
+		t.Fatalf("expected detailed lines to buffer until Flush in deterministic mode, got %q", messages(logs))
+	}
+
+	rl.Flush(logger)
+	got := messages(logs)
+	want := []string{
+		"//a:a: done (cached)",
+		"//b:b: done",
+	}
+	for i := range want {
+		if i >= len(got) || got[i] != want[i] {
+			t.Fatalf("got %q, want %q", got, want)
+		}
+	}
+}
+
 func TestResultLoggerDetailedInline(t *testing.T) {
 	withConfig(t, "detailed", false)
 	logger, logs := captureLogger()

@@ -48,9 +48,10 @@ const (
 //     reads as the last step of its own stream.
 //
 // In deterministic logging mode (used by the integration fixtures) the order
-// in which parallel workers finish is not stable, so terse lines are buffered
-// and emitted sorted by label on Flush. Otherwise lines are emitted as soon as
-// each target completes so that long builds stream their progress.
+// in which parallel workers finish is not stable, so completion lines (in
+// either style) are buffered and emitted sorted by label on Flush. Otherwise
+// lines are emitted as soon as each target completes so that long builds stream
+// their progress.
 type ResultLogger struct {
 	maxLabelWidth int
 	terminalWidth int
@@ -85,14 +86,16 @@ func NewResultLogger(targetLabels []string, terminalWidth int) *ResultLogger {
 		maxLabelWidth = maxAllowed
 	}
 
-	detailed := config.Global.GetOutputMode() == config.OutputModeDetailed
 	return &ResultLogger{
 		maxLabelWidth: maxLabelWidth,
 		terminalWidth: terminalWidth,
-		detailed:      detailed,
-		// Buffering only matters for the terse table; detailed lines stream
-		// inline alongside the lifecycle status lines.
-		buffered: config.Global.DisableNonDeterministicLogging && !detailed,
+		detailed:      config.Global.GetOutputMode() == config.OutputModeDetailed,
+		// In deterministic logging mode, buffer and sort completion lines by
+		// label on Flush so concurrent completion order can't make output
+		// flaky. This applies to both styles: the detailed lifecycle stream is
+		// itself suppressed under deterministic logging, leaving only these
+		// completion lines, which would otherwise race.
+		buffered: config.Global.DisableNonDeterministicLogging,
 	}
 }
 
@@ -145,13 +148,14 @@ func (rl *ResultLogger) emit(logger *Logger, label string, kind resultKind, seco
 		cachedSuffix = " (cached)"
 	}
 
+	var line string
 	if rl.detailed {
 		// Inline, matching the "<label>: <action>" lifecycle status lines.
-		logger.Infof("%s: %s%s%s", label, rl.verb(kind), timing, cachedSuffix)
-		return
+		line = fmt.Sprintf("%s: %s%s%s", label, rl.verb(kind), timing, cachedSuffix)
+	} else {
+		line = fmt.Sprintf("%s %s%s%s", rl.formatLabel(label), rl.verb(kind), timing, cachedSuffix)
 	}
 
-	line := fmt.Sprintf("%s %s%s%s", rl.formatLabel(label), rl.verb(kind), timing, cachedSuffix)
 	if rl.buffered {
 		rl.mu.Lock()
 		rl.lines = append(rl.lines, bufferedLine{label: label, text: line})
@@ -162,8 +166,7 @@ func (rl *ResultLogger) emit(logger *Logger, label string, kind resultKind, seco
 }
 
 // Flush emits any buffered lines sorted by label. It is a no-op when lines are
-// streamed (the non-deterministic default, and always in detailed mode). Safe
-// to call more than once.
+// streamed (the non-deterministic default). Safe to call more than once.
 func (rl *ResultLogger) Flush(logger *Logger) {
 	if rl == nil || !rl.buffered {
 		return
