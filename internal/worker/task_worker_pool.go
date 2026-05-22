@@ -153,10 +153,16 @@ func (twp *TaskWorkerPool[T]) setTaskState(workerId int, status StatusUpdate) {
 	twp.mu.Lock()
 
 	if logToStdout() {
-		// Transient per-target progress (cache checks, output writes, …) is
-		// noise in non-interactive output. Keep it at debug so CI shows only
-		// the per-target completion lines emitted by the ResultLogger.
-		twp.logger.Debugf("%s", status.Status)
+		// In detailed mode, surface discrete lifecycle steps (checking cache,
+		// running, writing outputs, …) at info. Byte/file progress updates
+		// carry a Progress payload and would be repetitive, so keep those at
+		// debug. In terse mode (the default) all transient status is debug and
+		// CI shows only the ResultLogger completion lines.
+		if config.Global.GetOutputMode() == config.OutputModeDetailed && status.Progress == nil {
+			twp.logger.Infof("%s", status.Status)
+		} else {
+			twp.logger.Debugf("%s", status.Status)
+		}
 		twp.mu.Unlock()
 		return
 	}

@@ -23,6 +23,7 @@ Global Flags:
       --fail-fast                     Fail fast on first error
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use

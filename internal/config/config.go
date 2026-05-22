@@ -68,6 +68,10 @@ type WorkspaceConfig struct {
 	// Logging
 	LogLevel      string `mapstructure:"log_level"`
 	LogOutputPath string `mapstructure:"log_output_path"`
+	// OutputMode controls how per-target progress is rendered in
+	// non-interactive output: "terse" (default, one line per target) or
+	// "detailed" (stream each target's lifecycle).
+	OutputMode string `mapstructure:"output_mode"`
 
 	// Matching
 	AllPlatforms bool `mapstructure:"all_platforms"`
@@ -192,6 +196,11 @@ func (w WorkspaceConfig) Validate() error {
 		return err
 	}
 
+	// Validate OutputMode
+	if _, err := ParseOutputMode(w.OutputMode); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -226,6 +235,16 @@ func (w WorkspaceConfig) GetLoadOutputsMode() LoadOutputsMode {
 		// This should never happen because we validate the value in Validate()
 		// But just in case, return the default value
 		return LoadOutputsAll
+	}
+	return mode
+}
+
+func (w WorkspaceConfig) GetOutputMode() OutputMode {
+	mode, err := ParseOutputMode(w.OutputMode)
+	if err != nil {
+		// This should never happen because we validate the value in Validate()
+		// But just in case, return the default value
+		return OutputModeTerse
 	}
 	return mode
 }

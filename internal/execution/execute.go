@@ -359,7 +359,7 @@ func (e *Executor) getTaskFunc(
 		target.QueueWait = startTime.Sub(queuedAt)
 
 		logger := console.GetLogger(ctx)
-		update(worker.Status(fmt.Sprintf("%s: checking cache.", target.Label)))
+		update(worker.Status(fmt.Sprintf("%s: checking cache", target.Label)))
 
 		cacheCheckStart := time.Now()
 		targetResult, err := e.targetCache.Load(ctx, target.ChangeHash)
@@ -397,13 +397,13 @@ func (e *Executor) getTaskFunc(
 			if e.loadOutputsMode == config.LoadOutputsMinimal {
 				// Important: Set the output hash so that descendants can compute their change hashes
 				target.OutputHash = targetResult.OutputHash
-				update(worker.Status(fmt.Sprintf("%s: cache hit. skipped loading %s because load_outputs=minimal.", target.Label, console.FCountOutputs(len(target.AllOutputs())))))
+				update(worker.Status(fmt.Sprintf("%s: cache hit, skipping output load (load_outputs=minimal)", target.Label)))
 				logger.Debugf("%s: cache hit. skipped loading %s because load_ outputs=minimal", target.Label, console.FCountOutputs(len(target.AllOutputs())))
 				logTargetCached(ctx, logger, target, float64(targetResult.ExecutionDurationMillis)/1000)
 				return dag.CacheHit, nil
 			}
 
-			update(worker.Status(fmt.Sprintf("%s: cache hit. loading %s.", target.Label, console.FCountOutputs(len(target.AllOutputs())))))
+			update(worker.Status(fmt.Sprintf("%s: cache hit, loading %s", target.Label, console.FCountOutputs(len(target.AllOutputs())))))
 			progress := worker.NewProgressTracker(
 				fmt.Sprintf("%s: loading %s", target.Label, console.FCountOutputs(len(target.AllOutputs()))),
 				0,
@@ -433,7 +433,7 @@ func (e *Executor) getTaskFunc(
 		}
 
 		if e.loadOutputsMode == config.LoadOutputsMinimal {
-			update(worker.Status(fmt.Sprintf("%s: loading dependency outputs (load_outputs=minimal).", target.Label)))
+			update(worker.Status(fmt.Sprintf("%s: loading dependency outputs (load_outputs=minimal)", target.Label)))
 			depLoadStart := time.Now()
 			if loadDepsErr := e.LoadDependencyOutputs(ctx, target, update); loadDepsErr != nil {
 				return dag.CacheMiss, fmt.Errorf("failed to load dependency outputs for target %s: %w", target.Label, loadDepsErr)
@@ -505,7 +505,7 @@ func (e *Executor) executeTarget(
 	startTime := time.Now()
 	var err error
 	if target.Command != "" {
-		update(worker.Status(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis())))
+		update(worker.Status(fmt.Sprintf("%s: running \"%s\"", target.Label, target.CommandEllipsis())))
 		logger.Debugf("running target %s: %s", target.Label, target.CommandEllipsis())
 		err = executeTarget(ctx, target, binToolPaths, outputIdentifiers, transitiveOutputs, taggedOutputs, e.streamLogsToggle.Enabled())
 	} else {
@@ -530,8 +530,6 @@ func (e *Executor) executeTarget(
 		return dag.CacheMiss, outputCheckErr
 	}
 
-	logTargetBuilt(ctx, logger, target, executionTimeSeconds)
-
 	// If the target produced a bin output automatically mark it as executable
 	err = markBinOutputExecutable(target)
 	if err != nil {
@@ -540,11 +538,15 @@ func (e *Executor) executeTarget(
 
 	// Write outputs to the cache:
 	logger.Debugf("writing outputs for target %s", target.Label)
-	update(worker.Status(fmt.Sprintf("%s complete. writing outputs...", target.Label)))
+	update(worker.Status(fmt.Sprintf("%s: writing outputs", target.Label)))
 	err = e.OnTargetComplete(ctx, target, update)
 	if err != nil {
 		return dag.CacheMiss, fmt.Errorf("build completed but failed to write outputs to cache for target %s:\n%w", target.Label, err)
 	}
+
+	// Log the completion line only once the target is fully done (outputs
+	// written), so the detailed lifecycle reads check → run → write → done.
+	logTargetBuilt(ctx, logger, target, executionTimeSeconds)
 
 	if isTainted {
 		go func() {
@@ -654,7 +656,7 @@ func (e *Executor) LoadDependencyOutputs(
 			transitiveOutputs := e.getTransitiveOutputs(localDep)
 			taggedOutputs := e.getTransitiveOutputsByTag(localDep)
 
-			update(worker.Status(fmt.Sprintf("%s: re-running dependency %s (load_outputs_mode=minimal).", target.Label, localDep.Label)))
+			update(worker.Status(fmt.Sprintf("%s: re-running dependency %s (load_outputs=minimal)", target.Label, localDep.Label)))
 			_, executionErr := e.executeTarget(ctx, localDep, binTools, outputIdentifiers, transitiveOutputs, taggedOutputs, update, false)
 			if executionErr != nil {
 				return executionErr
