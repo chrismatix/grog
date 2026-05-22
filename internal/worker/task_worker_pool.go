@@ -11,7 +11,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fatih/color"
-	"go.uber.org/zap/zapcore"
 
 	"grog/internal/config"
 	"grog/internal/console"
@@ -136,7 +135,7 @@ func (twp *TaskWorkerPool[T]) worker(ctx context.Context, workerId int) {
 				if isDebug {
 					taskStatus = fmt.Sprintf("%s (worker %d)", status.Status, workerId)
 				}
-				twp.setTaskState(workerId, StatusUpdate{Status: taskStatus, SubStatus: status.SubStatus, Progress: status.Progress}, zapcore.InfoLevel)
+				twp.setTaskState(workerId, StatusUpdate{Status: taskStatus, SubStatus: status.SubStatus, Progress: status.Progress})
 			})
 
 			if j.result != nil {
@@ -150,11 +149,20 @@ func (twp *TaskWorkerPool[T]) worker(ctx context.Context, workerId int) {
 	}
 }
 
-func (twp *TaskWorkerPool[T]) setTaskState(workerId int, status StatusUpdate, lvl zapcore.Level) {
+func (twp *TaskWorkerPool[T]) setTaskState(workerId int, status StatusUpdate) {
 	twp.mu.Lock()
 
 	if logToStdout() {
-		twp.logger.Logf(lvl, status.Status)
+		// In detailed mode, surface discrete lifecycle steps (checking cache,
+		// running, writing outputs, …) at info. Byte/file progress updates
+		// carry a Progress payload and would be repetitive, so keep those at
+		// debug. In terse mode (the default) all transient status is debug and
+		// CI shows only the ResultLogger completion lines.
+		if config.Global.GetOutputMode() == config.OutputModeDetailed && status.Progress == nil {
+			twp.logger.Infof("%s", status.Status)
+		} else {
+			twp.logger.Debugf("%s", status.Status)
+		}
 		twp.mu.Unlock()
 		return
 	}

@@ -1,0 +1,13 @@
+name: output mode
+repo: simple_json
+cases:
+  # Detailed mode renders the per-target completion line as "<label>: done".
+  # Building //bar pulls in //foo, so this also covers that completion lines
+  # are buffered and sorted by label under deterministic logging (the
+  # intermediate lifecycle stream is non-deterministic and suppressed in
+  # deterministic test logging, so only the completion lines are asserted here).
+  - name: detailed_output_mode
+    grog_args:
+      - build
+      - //bar
+      - --output-mode=detailed

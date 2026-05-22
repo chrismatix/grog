@@ -1,4 +1,8 @@
 INFO: 2 packages loaded, 4 targets configured.
 WARN: target //pkg:foo has no inputs, dependencies, output checks or fingerprint causing it to run only once
 INFO: Selected 4 targets.
+INFO: //:creates_bin_tool  DONE
+INFO: //:declares_bin_tool DONE
+INFO: //:uses_bin_tool     DONE
+INFO: //pkg:foo            DONE
 INFO: Build completed successfully. 4 targets completed (0 cache hits).

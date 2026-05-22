@@ -20,7 +20,6 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/fatih/color"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -100,23 +99,21 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	}(program)
 	defer program.Quit()
 
-	// Get selected nodes and create a TestLogger for them
+	// Get selected nodes and create a ResultLogger covering every selected
+	// target so that build and test completion lines render as one aligned
+	// table.
 	selectedNodes := e.graph.GetSelectedNodes()
 	selectedNodeCount := len(selectedNodes)
 
-	// Create a list of node labels for the TestLogger
 	var targetLabels []string
 	for _, node := range selectedNodes {
-		if target, ok := node.(*model.Target); ok && target.IsTest() {
+		if _, ok := node.(*model.Target); ok {
 			targetLabels = append(targetLabels, node.GetLabel().String())
 		}
 	}
 
-	// Create a TestLogger with the node labels
-	testLogger := console.NewTestLogger(targetLabels, 0) // 0 means use default terminal width
-
-	// Add the TestLogger to the context
-	ctx = context.WithValue(ctx, console.TestLoggerKey{}, testLogger)
+	resultLogger := console.NewResultLogger(targetLabels, 0) // 0 means use default terminal width
+	ctx = context.WithValue(ctx, console.ResultLoggerKey{}, resultLogger)
 
 	coordinator := NewPoolCoordinator(stdLogger, numWorkers, numIOWorkers, sendMsg, selectedNodeCount)
 	coordinator.StartTaskWorkers(ctx)
@@ -167,6 +164,10 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 
 	walker := dag.NewWalker(e.graph, walkCallback, e.failFast)
 	completionMap, err := walker.Walk(ctx)
+
+	// Emit any buffered per-target result lines (deterministic mode only;
+	// otherwise they were streamed as targets completed).
+	resultLogger.Flush(stdLogger)
 
 	// Drain the I/O pool before returning, but only if the build was not
 	// interrupted and the caller hasn't opted to wait itself. Async cache
@@ -358,7 +359,7 @@ func (e *Executor) getTaskFunc(
 		target.QueueWait = startTime.Sub(queuedAt)
 
 		logger := console.GetLogger(ctx)
-		update(worker.Status(fmt.Sprintf("%s: checking cache.", target.Label)))
+		update(worker.Status(fmt.Sprintf("%s: checking cache", target.Label)))
 
 		cacheCheckStart := time.Now()
 		targetResult, err := e.targetCache.Load(ctx, target.ChangeHash)
@@ -396,12 +397,13 @@ func (e *Executor) getTaskFunc(
 			if e.loadOutputsMode == config.LoadOutputsMinimal {
 				// Important: Set the output hash so that descendants can compute their change hashes
 				target.OutputHash = targetResult.OutputHash
-				update(worker.Status(fmt.Sprintf("%s: cache hit. skipped loading %s because load_outputs=minimal.", target.Label, console.FCountOutputs(len(target.AllOutputs())))))
+				update(worker.Status(fmt.Sprintf("%s: cache hit, skipping output load (load_outputs=minimal)", target.Label)))
 				logger.Debugf("%s: cache hit. skipped loading %s because load_ outputs=minimal", target.Label, console.FCountOutputs(len(target.AllOutputs())))
+				logTargetCached(ctx, logger, target, float64(targetResult.ExecutionDurationMillis)/1000)
 				return dag.CacheHit, nil
 			}
 
-			update(worker.Status(fmt.Sprintf("%s: cache hit. loading %s.", target.Label, console.FCountOutputs(len(target.AllOutputs())))))
+			update(worker.Status(fmt.Sprintf("%s: cache hit, loading %s", target.Label, console.FCountOutputs(len(target.AllOutputs())))))
 			progress := worker.NewProgressTracker(
 				fmt.Sprintf("%s: loading %s", target.Label, console.FCountOutputs(len(target.AllOutputs()))),
 				0,
@@ -416,15 +418,9 @@ func (e *Executor) getTaskFunc(
 				// Don't return so that we instead break out and continue executing the target
 				logger.Errorf("%s re-running due to output loading failure: %v", target.Label, loadingErr)
 			} else {
-				if target.IsTest() {
-					executionTime := time.Since(startTime).Seconds()
-					if testLogger := console.GetTestLogger(ctx); testLogger != nil {
-						// Log the cached execution time here
-						testLogger.LogTestPassedCached(logger, target.Label.String(), float64(targetResult.ExecutionDurationMillis)/1000)
-					} else {
-						logger.Infof("%s %s (cached) in %.1fs", target.Label, color.New(color.FgGreen).Sprintf("PASSED"), executionTime)
-					}
-				}
+				// Log the cached execution time recorded when the target was
+				// originally built, not the (near-zero) cache-load time.
+				logTargetCached(ctx, logger, target, float64(targetResult.ExecutionDurationMillis)/1000)
 				return dag.CacheHit, nil
 			}
 		}
@@ -437,7 +433,7 @@ func (e *Executor) getTaskFunc(
 		}
 
 		if e.loadOutputsMode == config.LoadOutputsMinimal {
-			update(worker.Status(fmt.Sprintf("%s: loading dependency outputs (load_outputs=minimal).", target.Label)))
+			update(worker.Status(fmt.Sprintf("%s: loading dependency outputs (load_outputs=minimal)", target.Label)))
 			depLoadStart := time.Now()
 			if loadDepsErr := e.LoadDependencyOutputs(ctx, target, update); loadDepsErr != nil {
 				return dag.CacheMiss, fmt.Errorf("failed to load dependency outputs for target %s: %w", target.Label, loadDepsErr)
@@ -465,6 +461,35 @@ func formatTargetResultForDebug(targetResult *gen.TargetResult) string {
 	return string(marshalledResult)
 }
 
+// logTargetBuilt logs a freshly built/passed target, dispatching to the test
+// or build wording based on the target kind.
+func logTargetBuilt(ctx context.Context, logger *console.Logger, target *model.Target, seconds float64) {
+	resultLogger := console.GetResultLogger(ctx)
+	if resultLogger == nil {
+		return
+	}
+	if target.IsTest() {
+		resultLogger.LogTestPassed(logger, target.Label.String(), seconds)
+	} else {
+		resultLogger.LogBuilt(logger, target.Label.String(), seconds)
+	}
+}
+
+// logTargetCached logs a cache-hit target, dispatching to the test or build
+// wording based on the target kind. seconds is the execution time recorded when
+// the target was originally built, not the cache-load time.
+func logTargetCached(ctx context.Context, logger *console.Logger, target *model.Target, seconds float64) {
+	resultLogger := console.GetResultLogger(ctx)
+	if resultLogger == nil {
+		return
+	}
+	if target.IsTest() {
+		resultLogger.LogTestPassedCached(logger, target.Label.String(), seconds)
+	} else {
+		resultLogger.LogBuiltCached(logger, target.Label.String(), seconds)
+	}
+}
+
 func (e *Executor) executeTarget(
 	ctx context.Context,
 	target *model.Target,
@@ -480,7 +505,7 @@ func (e *Executor) executeTarget(
 	startTime := time.Now()
 	var err error
 	if target.Command != "" {
-		update(worker.Status(fmt.Sprintf("%s: \"%s\"", target.Label, target.CommandEllipsis())))
+		update(worker.Status(fmt.Sprintf("%s: running \"%s\"", target.Label, target.CommandEllipsis())))
 		logger.Debugf("running target %s: %s", target.Label, target.CommandEllipsis())
 		err = executeTarget(ctx, target, binToolPaths, outputIdentifiers, transitiveOutputs, taggedOutputs, e.streamLogsToggle.Enabled())
 	} else {
@@ -491,13 +516,10 @@ func (e *Executor) executeTarget(
 
 	if err != nil {
 		logger.Debugf("target execution returned error %s: %s", target.Label, err)
-		if target.IsTest() && !errors.Is(err, context.Canceled) {
-			// Test errors we want to log differently
-			// Cancellations should just exit the execution
-			if testLogger := console.GetTestLogger(ctx); testLogger != nil {
-				testLogger.LogTestFailed(logger, target.Label.String(), target.ExecutionTime)
-			} else {
-				logger.Infof("%s %s in %.1fs", target.Label, color.New(color.FgRed).Sprintf("FAILED"), executionTimeSeconds)
+		// Cancellations should just exit the execution without a result line.
+		if !errors.Is(err, context.Canceled) {
+			if resultLogger := console.GetResultLogger(ctx); resultLogger != nil {
+				resultLogger.LogFailed(logger, target.Label.String(), target.ExecutionTime)
 			}
 		}
 		return dag.CacheMiss, err
@@ -508,14 +530,6 @@ func (e *Executor) executeTarget(
 		return dag.CacheMiss, outputCheckErr
 	}
 
-	if target.IsTest() {
-		if testLogger := console.GetTestLogger(ctx); testLogger != nil {
-			testLogger.LogTestPassed(logger, target.Label.String(), executionTimeSeconds)
-		} else {
-			logger.Infof("%s %s in %.1fs", target.Label, color.New(color.FgGreen).Sprintf("PASSED"), executionTimeSeconds)
-		}
-	}
-
 	// If the target produced a bin output automatically mark it as executable
 	err = markBinOutputExecutable(target)
 	if err != nil {
@@ -524,11 +538,15 @@ func (e *Executor) executeTarget(
 
 	// Write outputs to the cache:
 	logger.Debugf("writing outputs for target %s", target.Label)
-	update(worker.Status(fmt.Sprintf("%s complete. writing outputs...", target.Label)))
+	update(worker.Status(fmt.Sprintf("%s: writing outputs", target.Label)))
 	err = e.OnTargetComplete(ctx, target, update)
 	if err != nil {
 		return dag.CacheMiss, fmt.Errorf("build completed but failed to write outputs to cache for target %s:\n%w", target.Label, err)
 	}
+
+	// Log the completion line only once the target is fully done (outputs
+	// written), so the detailed lifecycle reads check → run → write → done.
+	logTargetBuilt(ctx, logger, target, executionTimeSeconds)
 
 	if isTainted {
 		go func() {
@@ -638,7 +656,7 @@ func (e *Executor) LoadDependencyOutputs(
 			transitiveOutputs := e.getTransitiveOutputs(localDep)
 			taggedOutputs := e.getTransitiveOutputsByTag(localDep)
 
-			update(worker.Status(fmt.Sprintf("%s: re-running dependency %s (load_outputs_mode=minimal).", target.Label, localDep.Label)))
+			update(worker.Status(fmt.Sprintf("%s: re-running dependency %s (load_outputs=minimal)", target.Label, localDep.Label)))
 			_, executionErr := e.executeTarget(ctx, localDep, binTools, outputIdentifiers, transitiveOutputs, taggedOutputs, update, false)
 			if executionErr != nil {
 				return executionErr

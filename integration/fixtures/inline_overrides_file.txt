@@ -1,3 +1,4 @@
 INFO: 1 package loaded, 4 targets configured.
 INFO: Selected 1 target.
+INFO: //:inline_overrides_file DONE
 INFO: Build completed successfully. 1 target completed (0 cache hits).
