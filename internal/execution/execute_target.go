@@ -120,14 +120,19 @@ func runTargetCommand(
 		return nil, err
 	}
 
-	// Build shell arguments. When extra args are present (from "grog test
-	// //target -- -k foo"), they are passed as positional parameters to the
-	// shell so that $@ expands to them inside the target command.
-	shellArgs := []string{"-c", templatedCommand}
-	if extraArgs := ExtraArgsFromContext(ctx); len(extraArgs) > 0 {
-		shellArgs = append(shellArgs, "--")
-		shellArgs = append(shellArgs, extraArgs...)
+	// Execute the rendered script as a file rather than `sh -c "<script>"`: a
+	// single argv element is capped at MAX_ARG_STRLEN (128 KB), which the
+	// per-dependency output prelude can exceed ("argument list too long").
+	// `sh` reads the file as data, so it needs no execute bit.
+	scriptPath, cleanup, err := writeCommandScript(templatedCommand)
+	if err != nil {
+		return nil, err
 	}
+	defer cleanup()
+
+	// Extra args (from "grog test //target -- -k foo") follow the script path so
+	// they expand to $@. With a script file $0 is the path, so no placeholder.
+	shellArgs := append([]string{scriptPath}, ExtraArgsFromContext(ctx)...)
 	cmd := exec.CommandContext(ctx, "sh", shellArgs...)
 	cmd.WaitDelay = 1 * time.Second // cancellation grace time
 
@@ -172,6 +177,28 @@ func runTargetCommand(
 		return buffer.Bytes(), cmdErr
 	}
 	return buffer.Bytes(), nil
+}
+
+// writeCommandScript writes the rendered shell script to a temp file and returns
+// its path plus a cleanup func. Running a file avoids the per-argument size limit
+// (MAX_ARG_STRLEN) that large dependency-output preludes can exceed under `sh -c`.
+func writeCommandScript(script string) (string, func(), error) {
+	noop := func() {}
+	f, err := os.CreateTemp("", "grog-cmd-*.sh")
+	if err != nil {
+		return "", noop, fmt.Errorf("failed to create command script file: %w", err)
+	}
+	cleanup := func() { _ = os.Remove(f.Name()) }
+	if _, err := f.WriteString(script); err != nil {
+		_ = f.Close()
+		cleanup()
+		return "", noop, fmt.Errorf("failed to write command script file: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		cleanup()
+		return "", noop, fmt.Errorf("failed to close command script file: %w", err)
+	}
+	return f.Name(), cleanup, nil
 }
 
 func GetExtendedTargetEnv(ctx context.Context, target *model.Target) []string {
