@@ -1,0 +1,10 @@
+targets:
+  - name: image
+    # grog builds the image with the local Docker daemon, then ingests it into
+    # its content-addressed store (CAS). The Terraform provider reads the
+    # resulting manifest digest and pushes it to a registry.
+    command: docker build -t grog-tf-demo:latest .
+    inputs:
+      - Dockerfile
+    outputs:
+      - "docker::grog-tf-demo:latest"
