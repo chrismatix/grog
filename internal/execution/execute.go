@@ -17,6 +17,7 @@ import (
 	"grog/internal/worker"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -49,6 +50,17 @@ type Executor struct {
 	asyncWaitTime    time.Duration
 	deferAsyncWait   bool
 	asyncDrained     bool
+
+	// headless skips the Bubble Tea TUI during Execute. Required when grog is
+	// embedded in a process that owns stdout (e.g. the Terraform provider's
+	// go-plugin gRPC stream); rendering the TUI there corrupts the protocol.
+	headless bool
+
+	// results captures each built/cache-loaded target's TargetResult in memory
+	// so embedders can read structured outputs (manifest digests, hashes)
+	// without a separate cache round-trip. Keyed by target label.
+	results   map[label.TargetLabel]*gen.TargetResult
+	resultsMu sync.Mutex
 }
 
 func NewExecutor(
@@ -71,7 +83,33 @@ func NewExecutor(
 		loadOutputsMode:  loadOutputsMode,
 		targetHasher:     hashing.NewTargetHasher(graph),
 		streamLogsToggle: console.NewStreamLogsToggle(streamLogs),
+		results:          make(map[label.TargetLabel]*gen.TargetResult),
 	}
+}
+
+// SetHeadless disables the interactive TUI during Execute. Embedders that own
+// stdout (e.g. the Terraform provider) must set this before calling Execute.
+func (e *Executor) SetHeadless() {
+	e.headless = true
+}
+
+// recordResult stores a target's TargetResult for in-memory retrieval by
+// embedders. Safe for concurrent use by the walker's parallel callbacks.
+func (e *Executor) recordResult(targetLabel label.TargetLabel, result *gen.TargetResult) {
+	if result == nil {
+		return
+	}
+	e.resultsMu.Lock()
+	e.results[targetLabel] = result
+	e.resultsMu.Unlock()
+}
+
+// ResultFor returns the TargetResult captured for the given label during the
+// most recent Execute, or nil if the target was not built/loaded.
+func (e *Executor) ResultFor(targetLabel label.TargetLabel) *gen.TargetResult {
+	e.resultsMu.Lock()
+	defer e.resultsMu.Unlock()
+	return e.results[targetLabel]
 }
 
 // Execute executes the targets in the given graph and returns the completion map
@@ -90,14 +128,22 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 		e.targetHasher.SetExtraArgs(extraArgs)
 	}
 
-	ctx, program, sendMsg := console.StartTaskUI(ctx)
-	defer func(p *tea.Program) {
-		err := p.ReleaseTerminal()
-		if err != nil {
-			stdLogger.Errorf("error releasing terminal: %v", err)
-		}
-	}(program)
-	defer program.Quit()
+	var sendMsg func(tea.Msg)
+	if e.headless {
+		// Embedded mode: no TUI. Status messages are dropped; structured
+		// progress still flows through the injected logger.
+		sendMsg = func(tea.Msg) {}
+	} else {
+		var program *tea.Program
+		ctx, program, sendMsg = console.StartTaskUI(ctx)
+		defer func(p *tea.Program) {
+			err := p.ReleaseTerminal()
+			if err != nil {
+				stdLogger.Errorf("error releasing terminal: %v", err)
+			}
+		}(program)
+		defer program.Quit()
+	}
 
 	// Get selected nodes and create a ResultLogger covering every selected
 	// target so that build and test completion lines render as one aligned
@@ -399,6 +445,7 @@ func (e *Executor) getTaskFunc(
 				target.OutputHash = targetResult.OutputHash
 				update(worker.Status(fmt.Sprintf("%s: cache hit, skipping output load (load_outputs=minimal)", target.Label)))
 				logger.Debugf("%s: cache hit. skipped loading %s because load_ outputs=minimal", target.Label, console.FCountOutputs(len(target.AllOutputs())))
+				e.recordResult(target.Label, targetResult)
 				logTargetCached(ctx, logger, target, float64(targetResult.ExecutionDurationMillis)/1000)
 				return dag.CacheHit, nil
 			}
@@ -420,6 +467,7 @@ func (e *Executor) getTaskFunc(
 			} else {
 				// Log the cached execution time recorded when the target was
 				// originally built, not the (near-zero) cache-load time.
+				e.recordResult(target.Label, targetResult)
 				logTargetCached(ctx, logger, target, float64(targetResult.ExecutionDurationMillis)/1000)
 				return dag.CacheHit, nil
 			}
@@ -617,6 +665,7 @@ func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, u
 		return fmt.Errorf("prepared target result for %s is nil", target.Label)
 	}
 	targetResult = preparedTarget.TargetResult
+	e.recordResult(target.Label, targetResult)
 
 	target.OutputsLoaded = true
 	target.OutputHash = targetResult.OutputHash

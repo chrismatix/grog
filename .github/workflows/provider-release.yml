@@ -1,0 +1,51 @@
+# Releases terraform-provider-grog to the Terraform Registry.
+#
+# Triggered on tags prefixed "tf-provider/v" so it does not collide with grog's
+# own "v*.*.*" binary releases (see release.yml). Because the provider is a
+# separate Go module inside this monorepo (with `replace grog => ../`),
+# goreleaser runs from the terraform-provider-grog/ directory against a full
+# checkout so the relative replace resolves.
+#
+# NOTE: The Terraform Registry maps one GitHub repository to one provider and
+# keys publishing off the GPG signature configured under your registry account.
+# Publishing from a monorepo subdirectory works, but most teams eventually mirror
+# this directory into a dedicated terraform-provider-grog repo for a cleaner
+# registry integration.
+name: Provider Release
+
+on:
+  push:
+    tags:
+      - "tf-provider/v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Import GPG key
+        uses: crazy-max/ghaction-import-gpg@v6
+        id: import_gpg
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.PASSPHRASE }}
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean
+          workdir: terraform-provider-grog
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}

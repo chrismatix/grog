@@ -16,6 +16,10 @@ type BuildNode interface {
 	GetLabel() label.TargetLabel
 	GetDependencies() []label.TargetLabel
 	Select()
+	// Deselect clears the selection flag. Used by embedders (e.g. the session
+	// API) that reuse a single loaded graph across multiple sequential builds
+	// and must reset selection between them.
+	Deselect()
 	GetIsSelected() bool
 	GetType() NodeType
 }
