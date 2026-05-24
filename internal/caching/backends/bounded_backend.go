@@ -41,9 +41,13 @@ func DefaultIOConcurrency() int {
 // globalIOSem bounds concurrent backend I/O process-wide. Initialised via
 // SetGlobalIOConcurrency before the backend is used; when nil (e.g. tests
 // that bypass GetCacheBackend) BoundedBackend degrades to a passthrough.
+// globalIOCap mirrors the configured capacity so callers that fan out their
+// own goroutines (e.g. directory uploads) can size their concurrency to the
+// same budget via GlobalIOConcurrency.
 var (
 	globalIOSemMu sync.Mutex
 	globalIOSem   atomic.Pointer[semaphore.Weighted]
+	globalIOCap   atomic.Int64
 )
 
 // SetGlobalIOConcurrency installs (or replaces) the process-wide I/O
@@ -53,52 +57,28 @@ func SetGlobalIOConcurrency(cap int) {
 	defer globalIOSemMu.Unlock()
 	if cap <= 0 {
 		globalIOSem.Store(nil)
+		globalIOCap.Store(0)
 		return
 	}
 	globalIOSem.Store(semaphore.NewWeighted(int64(cap)))
+	globalIOCap.Store(int64(cap))
 }
 
-// preacquiredKey marks a context as already holding a global I/O slot.
-// BoundedBackend ops called with that context skip their own Acquire,
-// avoiding the double-count that would deadlock once `cap` goroutines
-// each held one slot and waited for a second.
-type preacquiredKey struct{}
-
-// AcquireGlobalIO blocks for a slot on the process-wide I/O semaphore (or
-// returns ctx.Err()). The returned context is marked as holding the slot;
-// pass it to subsequent backend calls to suppress a second Acquire. The
-// release is idempotent, and a no-op when the semaphore is unset.
-func AcquireGlobalIO(ctx context.Context) (context.Context, func(), error) {
-	sem := globalIOSem.Load()
-	if sem == nil {
-		return ctx, func() {}, nil
+// GlobalIOConcurrency reports the configured process-wide I/O cap, falling
+// back to DefaultIOConcurrency when the limit is unset. Use it to bound a
+// goroutine fan-out that performs backend I/O so the fan-out can't open more
+// resources (e.g. file descriptors) than the backend will service at once.
+func GlobalIOConcurrency() int {
+	if c := globalIOCap.Load(); c > 0 {
+		return int(c)
 	}
-	if hasPreacquiredSlot(ctx) {
-		return ctx, func() {}, nil
-	}
-	if err := sem.Acquire(ctx, 1); err != nil {
-		return ctx, nil, err
-	}
-	var released atomic.Bool
-	release := func() {
-		if released.CompareAndSwap(false, true) {
-			sem.Release(1)
-		}
-	}
-	return context.WithValue(ctx, preacquiredKey{}, true), release, nil
+	return DefaultIOConcurrency()
 }
 
-func hasPreacquiredSlot(ctx context.Context) bool {
-	v, _ := ctx.Value(preacquiredKey{}).(bool)
-	return v
-}
-
-// acquireForBackend is the internal Acquire used by BoundedBackend ops. It
-// honours the preacquired marker so callers that already hold a slot via
-// AcquireGlobalIO don't deadlock here.
+// acquireForBackend is the internal Acquire used by BoundedBackend ops.
 func acquireForBackend(ctx context.Context) (func(), error) {
 	sem := globalIOSem.Load()
-	if sem == nil || hasPreacquiredSlot(ctx) {
+	if sem == nil {
 		return func() {}, nil
 	}
 	if err := sem.Acquire(ctx, 1); err != nil {

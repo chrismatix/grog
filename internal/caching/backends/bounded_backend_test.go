@@ -84,11 +84,13 @@ func (w *fakeStagedWriter) Cancel(ctx context.Context) error {
 // withGlobalIOConcurrency installs a temporary cap, restored at test end.
 func withGlobalIOConcurrency(t *testing.T, cap int) {
 	t.Helper()
-	prev := globalIOSem.Load()
+	prevSem := globalIOSem.Load()
+	prevCap := globalIOCap.Load()
 	t.Cleanup(func() {
 		globalIOSemMu.Lock()
 		defer globalIOSemMu.Unlock()
-		globalIOSem.Store(prev)
+		globalIOSem.Store(prevSem)
+		globalIOCap.Store(prevCap)
 	})
 	SetGlobalIOConcurrency(cap)
 }
@@ -198,35 +200,21 @@ func TestBoundedBackend_BeginWriteIsNotBounded(t *testing.T) {
 	}
 }
 
-// TestAcquireGlobalIO_PreventsDoubleCount asserts that a backend call made
-// with a context from AcquireGlobalIO does not consume a second slot — the
-// property uploadFilesToCas relies on to avoid deadlock.
-func TestAcquireGlobalIO_PreventsDoubleCount(t *testing.T) {
-	const limit = 1
+// TestGlobalIOConcurrency_ReportsConfiguredCap asserts the accessor that
+// callers fanning out their own goroutines (e.g. directory uploads) use to
+// size their concurrency: it returns the configured cap, and falls back to
+// the default when the limit is disabled.
+func TestGlobalIOConcurrency_ReportsConfiguredCap(t *testing.T) {
+	const limit = 7
 	withGlobalIOConcurrency(t, limit)
-
-	fake := &fakeBackend{}
-	bb := NewBoundedBackend(fake)
-
-	ctx, release, err := AcquireGlobalIO(context.Background())
-	if err != nil {
-		t.Fatalf("AcquireGlobalIO: %v", err)
+	if got := GlobalIOConcurrency(); got != limit {
+		t.Fatalf("GlobalIOConcurrency() = %d, want %d", got, limit)
 	}
-	defer release()
 
-	// With a 1-slot cap and the slot already held, a naive double-acquire
-	// would deadlock; the preacquired marker must short-circuit it.
-	done := make(chan error, 1)
-	go func() {
-		done <- bb.Set(ctx, "p", "k", strings.NewReader("x"))
-	}()
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatalf("Set: %v", err)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("Set deadlocked despite preacquired ctx")
+	withGlobalIOConcurrency(t, 0) // disabled
+	if got := GlobalIOConcurrency(); got != DefaultIOConcurrency() {
+		t.Fatalf("GlobalIOConcurrency() with limit disabled = %d, want default %d",
+			got, DefaultIOConcurrency())
 	}
 }
 

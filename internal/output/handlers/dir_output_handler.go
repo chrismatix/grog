@@ -21,6 +21,7 @@ import (
 	"grog/internal/proto/gen"
 	"grog/internal/worker"
 
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -210,35 +211,25 @@ func (d *DirectoryOutputHandler) Write(
 	}, nil
 }
 
-// uploadFilesToCas uploads files to the CAS in parallel. Each goroutine
-// acquires a global I/O slot *before* os.Open, so in-flight FDs stay
-// within the I/O budget even on directories with thousands of files. The
-// slot is carried into cas.Write via ioCtx so BoundedBackend.Set skips
-// its own Acquire and avoids a double-count.
+// uploadFilesToCas uploads files to the CAS in parallel, bounding the fan-out
+// to the global I/O budget. os.Open runs only once a goroutine is admitted, so
+// a directory with thousands of files can't exhaust the process FD limit while
+// goroutines wait for a backend slot. The bytes themselves stay bounded inside
+// cas.Write by the same global semaphore.
 func uploadFilesToCas(ctx context.Context, cas *caching.Cas, fileUploads []fileUpload, progress *worker.ProgressTracker) (int64, error) {
 	logger := console.GetLogger(ctx)
 	var sizeBytes atomic.Int64
 
-	var wg sync.WaitGroup
-	errChan := make(chan error, len(fileUploads))
+	group, ctx := errgroup.WithContext(ctx)
+	group.SetLimit(backends.GlobalIOConcurrency())
 
 	for _, uploadAction := range fileUploads {
-		wg.Add(1)
 		localUploadAction := uploadAction
-		go func() {
-			defer wg.Done()
-			ioCtx, release, err := backends.AcquireGlobalIO(ctx)
-			if err != nil {
-				errChan <- err
-				return
-			}
-			defer release()
-
+		group.Go(func() error {
 			logger.Debugf("uploading %s to CAS digest %s", localUploadAction.absolutePath, localUploadAction.digest)
 			file, err := os.Open(localUploadAction.absolutePath)
 			if err != nil {
-				errChan <- err
-				return
+				return err
 			}
 			defer file.Close()
 
@@ -247,23 +238,16 @@ func uploadFilesToCas(ctx context.Context, cas *caching.Cas, fileUploads []fileU
 				reader = progress.WrapReader(file)
 			}
 
-			if err := cas.Write(ioCtx, localUploadAction.digest, reader); err != nil {
-				errChan <- err
-				return
+			if err := cas.Write(ctx, localUploadAction.digest, reader); err != nil {
+				return err
 			}
 			sizeBytes.Add(localUploadAction.sizeBytes)
-		}()
+			return nil
+		})
 	}
 
-	go func() {
-		wg.Wait()
-		close(errChan)
-	}()
-
-	for err := range errChan {
-		if err != nil {
-			return 0, err
-		}
+	if err := group.Wait(); err != nil {
+		return 0, err
 	}
 
 	return sizeBytes.Load(), nil
