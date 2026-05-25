@@ -134,8 +134,36 @@ There are a few reserved tags that alter the way grog treats a target:
 | Tag Name            | Effect                                                                                                                                                |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | no-cache            | Outputs will neither be stored in nor loaded from the cache backend.                                                                                  |
+| no-cache-fetch      | The target is treated as cached only if its declared outputs are already on disk with matching digests. If they are not, grog re-runs the command instead of materializing the outputs from the CAS. Writes (local + remote) continue normally. See the [pnpm install pattern](#use-case-no-cache-fetch) below. |
+| no-remote-cache     | The remote cache backend is never touched for this target — in either direction. Reads fall back to the local FS only; writes never fan out to remote. The local cache continues to work as usual. Combine with `no-cache-fetch` to keep a target's cache state fully on-host. |
 | multiplatform-cache | By default grog separates target caches by the host platform. Adding this tag causes grog to store the outputs at the same cache key across platforms |
 | testonly            | Marks a target as test-only. Non-test, non-`testonly` targets may not depend on `testonly` targets (test targets may); `grog check`/`grog build`/`grog test` fail if this is violated. |
+
+#### Use case: `no-cache-fetch`
+
+The motivating example is `pnpm install`. The lockfile is a normal input, but the
+generated `node_modules/.modules.yaml` is *host-sensitive* — its hash depends on
+local state like the pnpm store path. Putting it through the CAS would let a
+build on machine A "restore" a `.modules.yaml` that machine B would never
+actually produce, leaving `node_modules/` in an inconsistent state.
+
+With `no-cache-fetch`, the target behaves like this:
+
+```yaml
+targets:
+  - name: install
+    command: "pnpm install"
+    inputs: ["pnpm-lock.yaml", "package.json"]
+    outputs: [".modules.yaml"]
+    tags: ["no-cache-fetch"]
+```
+
+- First run: command executes, action result + CAS entries are written normally.
+- Re-run with `.modules.yaml` still present and matching: cache hit, command
+  does not re-run.
+- Re-run after `.modules.yaml` has been deleted (or has drifted): grog re-runs
+  `pnpm install` rather than restoring the file from the CAS, so pnpm gets to
+  re-resolve `node_modules/` against the host's actual pnpm store.
 
 ### fingerprint
 

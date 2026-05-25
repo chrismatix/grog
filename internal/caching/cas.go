@@ -3,11 +3,20 @@ package caching
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"sync"
 
 	"grog/internal/caching/backends"
+	"grog/internal/caching/cachectx"
 )
+
+// ErrCASFetchSkipped is returned by Cas.Load / Cas.LoadBytes when the caller
+// has attached cachectx.WithSkipCASFetch to the context. It signals to output
+// handlers that they must not materialize the output from the CAS, which
+// triggers a re-run of the target (the intended behavior of the
+// `no-cache-fetch` tag).
+var ErrCASFetchSkipped = errors.New("cas fetch skipped: no-cache-fetch is set")
 
 // Cas is a content-addressable store.
 // That is: Every record is identified by its digest
@@ -67,11 +76,17 @@ func (c *Cas) BeginWrite(ctx context.Context) (StagedWriter, error) {
 
 // Load loads the content for a given digest
 func (c *Cas) Load(ctx context.Context, digest string) (io.ReadCloser, error) {
+	if cachectx.IsSkipCASFetch(ctx) {
+		return nil, ErrCASFetchSkipped
+	}
 	return c.backend.Get(ctx, "cas", digest)
 }
 
 // LoadBytes loads the content for a given digest directly into a byte slice
 func (c *Cas) LoadBytes(ctx context.Context, digest string) ([]byte, error) {
+	if cachectx.IsSkipCASFetch(ctx) {
+		return nil, ErrCASFetchSkipped
+	}
 	reader, err := c.backend.Get(ctx, "cas", digest)
 	if err != nil {
 		return nil, err
