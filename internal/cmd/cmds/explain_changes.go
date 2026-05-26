@@ -141,7 +141,7 @@ func printFileRootedTree(fileToTargets map[string][]*model.Target, graph *dag.Di
 
 	for _, f := range files {
 		root := tree.New().Root(displayPath(f))
-		applyRootStyle(root)
+		applyRootStyle(root, downEnumerator)
 
 		targets := fileToTargets[f]
 		sort.Slice(targets, func(i, j int) bool {
@@ -174,7 +174,7 @@ func printTargetRootedTree(fileToTargets map[string][]*model.Target, graph *dag.
 
 	for _, t := range roots {
 		subtree := buildDependentTree(t, graph)
-		applyRootStyle(subtree)
+		applyRootStyle(subtree, downEnumerator)
 		fmt.Println(subtree)
 	}
 }
@@ -261,7 +261,7 @@ func printConsumerRootedTree(
 
 	for _, r := range roots {
 		t := buildUpstreamTree(r, graph, affected, targetToFiles, showFiles)
-		applyRootStyle(t)
+		applyRootStyle(t, upEnumerator)
 		fmt.Println(t)
 	}
 }
@@ -299,16 +299,41 @@ func buildUpstreamTree(
 	return t
 }
 
+// upEnumerator and downEnumerator replace the dash in the standard rounded
+// connector with an arrow pointing in the direction of change propagation:
+//
+//   - up   (╰─↑ / ├─↑): consumer-rooted view — change flows UP from each child
+//     line to its parent (cause is below, effect is above).
+//   - down (╰─↓ / ├─↓): files-first view — change flows DOWN from each parent
+//     to its children (cause is above, effect is below).
+//
+// Both keep the standard 3-char width so they align with lipgloss's default
+// 3-char indenter without further configuration.
+func upEnumerator(c tree.Children, i int) string {
+	if i == c.Length()-1 {
+		return "╰─↑"
+	}
+	return "├─↑"
+}
+
+func downEnumerator(c tree.Children, i int) string {
+	if i == c.Length()-1 {
+		return "╰─↓"
+	}
+	return "├─↓"
+}
+
 // applyRootStyle matches the coloring used by `grog graph` at its top level so
-// the two tree views feel consistent.
-func applyRootStyle(t *tree.Tree) {
+// the two tree views feel consistent, and installs the supplied enumerator —
+// lipgloss propagates the top-level enumerator to nested sub-trees.
+func applyRootStyle(t *tree.Tree, enum tree.Enumerator) {
 	enumeratorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("63")).MarginRight(1)
 	rootStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("35"))
 	itemStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("212"))
 	t.RootStyle(rootStyle).
 		ItemStyle(itemStyle).
 		EnumeratorStyle(enumeratorStyle).
-		Enumerator(tree.RoundedEnumerator)
+		Enumerator(enum)
 }
 
 // displayPath renders an absolute file path relative to the workspace root for
