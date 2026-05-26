@@ -2,25 +2,26 @@ Usage:
   grog [command]
 
 Available Commands:
-  build          Loads the user configuration and executes build targets.
-  build-and-test Loads the user configuration and executes build and test targets.
-  changes        Lists targets whose inputs have been modified since a given commit.
-  check          Loads the build graph and runs basic consistency checks.
-  clean          Removes all cached artifacts.
-  completion     Generate the autocompletion script for the specified shell
-  deps           Lists (transitive) dependencies of a target.
-  graph          Outputs the target dependency graph.
-  help           Help about any command
-  info           Prints information about the grog cli and workspace.
-  list           Lists targets by pattern.
-  logs           Print the latest log file for the given target.
-  owners         Lists targets that own the specified files as inputs.
-  rdeps          Lists (transitive) dependants (reverse dependencies) of a target.
-  run            Builds and runs one or more targets' binary outputs.
-  taint          Taints targets by pattern to force execution regardless of cache status.
-  test           Loads the user configuration and executes test targets.
-  traces         View and manage build execution traces.
-  version        Print the version info.
+  build           Loads the user configuration and executes build targets.
+  build-and-test  Loads the user configuration and executes build and test targets.
+  changes         Lists targets whose inputs have been modified since a given commit.
+  check           Loads the build graph and runs basic consistency checks.
+  clean           Removes all cached artifacts.
+  completion      Generate the autocompletion script for the specified shell
+  deps            Lists (transitive) dependencies of a target.
+  explain-changes Renders the chain of targets affected by changes since a git ref as a tree.
+  graph           Outputs the target dependency graph.
+  help            Help about any command
+  info            Prints information about the grog cli and workspace.
+  list            Lists targets by pattern.
+  logs            Print the latest log file for the given target.
+  owners          Lists targets that own the specified files as inputs.
+  rdeps           Lists (transitive) dependants (reverse dependencies) of a target.
+  run             Builds and runs one or more targets' binary outputs.
+  taint           Taints targets by pattern to force execution regardless of cache status.
+  test            Loads the user configuration and executes test targets.
+  traces          View and manage build execution traces.
+  version         Print the version info.
 
 Flags:
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
@@ -44,6 +45,5 @@ Flags:
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
   -v, --verbose count                 Set verbosity level (-v, -vv)
-      --version                       version for grog
 
 Use "grog [command] --help" for more information about a command.
