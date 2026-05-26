@@ -1,30 +1,22 @@
 fail_fast: false
 
 repos:
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+  - repo: builtin
     hooks:
       - id: end-of-file-fixer
-        exclude: ^integration/fixtures/
+        # all formatted files are excluded as oxfmt prefers inserting new line in empty toml files
+        exclude: ^integration/fixtures/|.*\.(go|md|mdx|toml|ya?ml|jsx?|mjs|cjs|tsx?|jsonc?|css|star|pkl|sh)$
       - id: check-added-large-files
-        args: [ "--maxkb=2000" ]
+        args: ["--maxkb=2000"]
       - id: trailing-whitespace
         exclude: ^integration/fixtures/
       - id: check-merge-conflict
-
-  # Allows for comments in json files
-  - repo: https://gitlab.com/bmares/check-json5
-    rev: v1.0.0
-    hooks:
+      # Allows for comments in json files
       - id: check-json5
 
-  # Prettier: Primarily for markdown formatting
   - repo: local
     hooks:
-      - id: prettier
-        name: Prettier
-        entry: npx prettier@3.5.3 --write
-        language: node
-        exclude: ^integration/fixtures/
-        types: [ javascript,ts,css,scss,less,html,json,markdown,yaml ]
-        files: \.(js|jsx|ts|tsx|css|scss|less|html|json|md|ya?ml)$
+      - id: treefmt
+        name: treefmt
+        entry: treefmt
+        language: system

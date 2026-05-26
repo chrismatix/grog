@@ -61,25 +61,23 @@ Reference for the `grog` CLI.
 
 ### See also
 
-* [`grog build`](#grog-build) - Loads the user configuration and executes build targets.
-* [`grog build-and-test`](#grog-build-and-test) - Loads the user configuration and executes build and test targets.
-* [`grog changes`](#grog-changes) - Lists targets whose inputs have been modified since a given commit.
-* [`grog check`](#grog-check) - Loads the build graph and runs basic consistency checks.
-* [`grog clean`](#grog-clean) - Removes all cached artifacts.
-* [`grog deps`](#grog-deps) - Lists (transitive) dependencies of a target.
-* [`grog graph`](#grog-graph) - Outputs the target dependency graph.
-* [`grog info`](#grog-info) - Prints information about the grog cli and workspace.
-* [`grog list`](#grog-list) - Lists targets by pattern.
-* [`grog logs`](#grog-logs) - Print the latest log file for the given target.
-* [`grog owners`](#grog-owners) - Lists targets that own the specified files as inputs.
-* [`grog rdeps`](#grog-rdeps) - Lists (transitive) dependants (reverse dependencies) of a target.
-* [`grog run`](#grog-run) - Builds and runs one or more targets' binary outputs.
-* [`grog taint`](#grog-taint) - Taints targets by pattern to force execution regardless of cache status.
-* [`grog test`](#grog-test) - Loads the user configuration and executes test targets.
-* [`grog traces`](#grog-traces) - View and manage build execution traces.
-* [`grog version`](#grog-version) - Print the version info.
-
-
+- [`grog build`](#grog-build) - Loads the user configuration and executes build targets.
+- [`grog build-and-test`](#grog-build-and-test) - Loads the user configuration and executes build and test targets.
+- [`grog changes`](#grog-changes) - Lists targets whose inputs have been modified since a given commit.
+- [`grog check`](#grog-check) - Loads the build graph and runs basic consistency checks.
+- [`grog clean`](#grog-clean) - Removes all cached artifacts.
+- [`grog deps`](#grog-deps) - Lists (transitive) dependencies of a target.
+- [`grog graph`](#grog-graph) - Outputs the target dependency graph.
+- [`grog info`](#grog-info) - Prints information about the grog cli and workspace.
+- [`grog list`](#grog-list) - Lists targets by pattern.
+- [`grog logs`](#grog-logs) - Print the latest log file for the given target.
+- [`grog owners`](#grog-owners) - Lists targets that own the specified files as inputs.
+- [`grog rdeps`](#grog-rdeps) - Lists (transitive) dependants (reverse dependencies) of a target.
+- [`grog run`](#grog-run) - Builds and runs one or more targets' binary outputs.
+- [`grog taint`](#grog-taint) - Taints targets by pattern to force execution regardless of cache status.
+- [`grog test`](#grog-test) - Loads the user configuration and executes test targets.
+- [`grog traces`](#grog-traces) - View and manage build execution traces.
+- [`grog version`](#grog-version) - Print the version info.
 
 ---
 
@@ -134,9 +132,7 @@ grog build [flags]
 
 ### See also
 
-* [`grog`](#grog)
-
-
+- [`grog`](#grog)
 
 ---
 
@@ -191,9 +187,7 @@ grog build-and-test [flags]
 
 ### See also
 
-* [`grog`](#grog)
-
-
+- [`grog`](#grog)
 
 ---
 
@@ -252,9 +246,7 @@ grog changes [flags]
 
 ### See also
 
-* [`grog`](#grog)
-
-
+- [`grog`](#grog)
 
 ---
 
@@ -307,9 +299,7 @@ grog check [flags]
 
 ### See also
 
-* [`grog`](#grog)
-
-
+- [`grog`](#grog)
 
 ---
 
@@ -365,9 +355,7 @@ grog clean [flags]
 
 ### See also
 
-* [`grog`](#grog)
-
-
+- [`grog`](#grog)
 
 ---
 
@@ -426,9 +414,7 @@ grog deps [flags]
 
 ### See also
 
-* [`grog`](#grog)
-
-
+- [`grog`](#grog)
 
 ---
 
@@ -488,9 +474,7 @@ grog graph [flags]
 
 ### See also
 
-* [`grog`](#grog)
-
-
+- [`grog`](#grog)
 
 ---
 
@@ -544,9 +528,7 @@ grog info [flags]
 
 ### See also
 
-* [`grog`](#grog)
-
-
+- [`grog`](#grog)
 
 ---
 
@@ -603,9 +585,7 @@ grog list [flags]
 
 ### See also
 
-* [`grog`](#grog)
-
-
+- [`grog`](#grog)
 
 ---
 
@@ -661,9 +641,7 @@ grog logs [flags]
 
 ### See also
 
-* [`grog`](#grog)
-
-
+- [`grog`](#grog)
 
 ---
 
@@ -718,9 +696,7 @@ grog owners [flags]
 
 ### See also
 
-* [`grog`](#grog)
-
-
+- [`grog`](#grog)
 
 ---
 
@@ -779,9 +755,7 @@ grog rdeps [flags]
 
 ### See also
 
-* [`grog`](#grog)
-
-
+- [`grog`](#grog)
 
 ---
 
@@ -838,9 +812,7 @@ grog run [flags]
 
 ### See also
 
-* [`grog`](#grog)
-
-
+- [`grog`](#grog)
 
 ---
 
@@ -897,9 +869,7 @@ grog taint [flags]
 
 ### See also
 
-* [`grog`](#grog)
-
-
+- [`grog`](#grog)
 
 ---
 
@@ -954,9 +924,7 @@ grog test [flags]
 
 ### See also
 
-* [`grog`](#grog)
-
-
+- [`grog`](#grog)
 
 ---
 
@@ -999,15 +967,13 @@ View, analyze, and export build execution traces for performance analysis and da
 
 ### See also
 
-* [`grog`](#grog)
-* [`grog traces export`](#grog-traces-export) - Export traces for dashboard integration.
-* [`grog traces list`](#grog-traces-list) - List recent build traces.
-* [`grog traces prune`](#grog-traces-prune) - Delete traces older than a specified duration.
-* [`grog traces pull`](#grog-traces-pull) - Download remote traces to local cache for querying.
-* [`grog traces show`](#grog-traces-show) - Show details of a specific trace.
-* [`grog traces stats`](#grog-traces-stats) - Show aggregate statistics across recent traces.
-
-
+- [`grog`](#grog)
+- [`grog traces export`](#grog-traces-export) - Export traces for dashboard integration.
+- [`grog traces list`](#grog-traces-list) - List recent build traces.
+- [`grog traces prune`](#grog-traces-prune) - Delete traces older than a specified duration.
+- [`grog traces pull`](#grog-traces-pull) - Download remote traces to local cache for querying.
+- [`grog traces show`](#grog-traces-show) - Show details of a specific trace.
+- [`grog traces stats`](#grog-traces-stats) - Show aggregate statistics across recent traces.
 
 ---
 
@@ -1061,9 +1027,7 @@ grog traces export [flags]
 
 ### See also
 
-* [`grog traces`](#grog-traces) - View and manage build execution traces.
-
-
+- [`grog traces`](#grog-traces) - View and manage build execution traces.
 
 ---
 
@@ -1119,9 +1083,7 @@ grog traces list [flags]
 
 ### See also
 
-* [`grog traces`](#grog-traces) - View and manage build execution traces.
-
-
+- [`grog traces`](#grog-traces) - View and manage build execution traces.
 
 ---
 
@@ -1172,9 +1134,7 @@ grog traces prune [flags]
 
 ### See also
 
-* [`grog traces`](#grog-traces) - View and manage build execution traces.
-
-
+- [`grog traces`](#grog-traces) - View and manage build execution traces.
 
 ---
 
@@ -1223,9 +1183,7 @@ grog traces pull [flags]
 
 ### See also
 
-* [`grog traces`](#grog-traces) - View and manage build execution traces.
-
-
+- [`grog traces`](#grog-traces) - View and manage build execution traces.
 
 ---
 
@@ -1277,9 +1235,7 @@ grog traces show <trace-id> [flags]
 
 ### See also
 
-* [`grog traces`](#grog-traces) - View and manage build execution traces.
-
-
+- [`grog traces`](#grog-traces) - View and manage build execution traces.
 
 ---
 
@@ -1335,9 +1291,7 @@ grog traces stats [flags]
 
 ### See also
 
-* [`grog traces`](#grog-traces) - View and manage build execution traces.
-
-
+- [`grog traces`](#grog-traces) - View and manage build execution traces.
 
 ---
 
@@ -1390,8 +1344,6 @@ grog version [flags]
 
 ### See also
 
-* [`grog`](#grog)
-
-
+- [`grog`](#grog)
 
 ###### Auto generated by spf13/cobra

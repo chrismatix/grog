@@ -12,7 +12,8 @@ For example, you might want to build binaries or docker images that run both on 
 Grog has one built-in solution for this: platform selectors.
 
 <Aside>
-  We are also actively working on build virtualization via docker which will allow you to build for multiple platforms. Stay tuned!
+  We are also actively working on build virtualization via docker which will allow you to build for
+  multiple platforms. Stay tuned!
 </Aside>
 
 ## Platform Selectors
@@ -89,8 +90,8 @@ targets:
   - name: gpu_train
     command: python train.py
     platforms:
-      - linux/amd64        # auto-detected platform identifier
-      - gpu-runner         # custom platform tag
+      - linux/amd64 # auto-detected platform identifier
+      - gpu-runner # custom platform tag
     inputs:
       - train.py
     outputs:
@@ -126,9 +127,9 @@ grog build //... --platform-tag=gpu-runner --platform-tag=release
 ```
 
 <Aside type="caution">
-  Platform tags participate in the cache key — a target built with `--platform-tag=gpu-runner` caches
-  separately from the same target built without it. Targets tagged `multiplatform-cache` opt out of this
-  separation (just as they do for `os/arch`).
+  Platform tags participate in the cache key — a target built with `--platform-tag=gpu-runner`
+  caches separately from the same target built without it. Targets tagged `multiplatform-cache` opt
+  out of this separation (just as they do for `os/arch`).
 </Aside>
 
 Inside target commands, the active tags are also exposed as `GROG_PLATFORM_TAGS` (comma-joined).
@@ -159,7 +160,6 @@ targets:
 If you try to build `package_linux` on a non-Linux platform, Grog will fail with an error because the dependency `linux_binary` cannot be built on the current platform.
 
 <Aside type="caution">
-  When using platform selectors with dependencies, ensure that dependent targets
-  have compatible platform selectors. Otherwise, Grog will fail when it can't
-  build a required dependency.
+  When using platform selectors with dependencies, ensure that dependent targets have compatible
+  platform selectors. Otherwise, Grog will fail when it can't build a required dependency.
 </Aside>

@@ -19,26 +19,25 @@ Grog uses this information to ensure incremental, cached, and parallel builds.
 
 ## Fields Reference
 
-| Field                   | Type                     | Description                                                            |
-|-------------------------|--------------------------|------------------------------------------------------------------------|
-| `name`                  | `string`                 | Unique identifier for the target within its package                    |
-| `command`               | `string`                 | Shell command or script to execute in the target's package directory   |
-| `inputs`                | `string[]`               | File paths or glob patterns that, when changed, will trigger a rebuild |
-| `exclude_inputs`        | `string[]`               | File paths or glob patterns to exclude from inputs                     |
-| `outputs`               | `string[]`               | Files or directories produced by the target                            |
-| `dependencies`          | `label[]`                | Labels of other targets that must be built before this one             |
-| `platforms`             | `string[]`               | Specific platform identifiers where this target can run (e.g. `linux/amd64`) |
-| `tags`                  | `string[]`               | Metadata tags that affect target behavior (e.g., "no-cache", "testonly") |
-| `fingerprint`           | `Record<string, string>` | Extra identity inputs used to invalidate the target's cache entry      |
-| `bin_output`            | `Output`                 | Specifically identifies a binary output from the target                |
-| `timeout`               | `string`                 | Maximum time allowed for the target command to run                    |
-| `environment_variables` | `Record<string, string>` | Additional environment variables set when running the target           |
+| Field                   | Type                     | Description                                                                                      |
+| ----------------------- | ------------------------ | ------------------------------------------------------------------------------------------------ |
+| `name`                  | `string`                 | Unique identifier for the target within its package                                              |
+| `command`               | `string`                 | Shell command or script to execute in the target's package directory                             |
+| `inputs`                | `string[]`               | File paths or glob patterns that, when changed, will trigger a rebuild                           |
+| `exclude_inputs`        | `string[]`               | File paths or glob patterns to exclude from inputs                                               |
+| `outputs`               | `string[]`               | Files or directories produced by the target                                                      |
+| `dependencies`          | `label[]`                | Labels of other targets that must be built before this one                                       |
+| `platforms`             | `string[]`               | Specific platform identifiers where this target can run (e.g. `linux/amd64`)                     |
+| `tags`                  | `string[]`               | Metadata tags that affect target behavior (e.g., "no-cache", "testonly")                         |
+| `fingerprint`           | `Record<string, string>` | Extra identity inputs used to invalidate the target's cache entry                                |
+| `bin_output`            | `Output`                 | Specifically identifies a binary output from the target                                          |
+| `timeout`               | `string`                 | Maximum time allowed for the target command to run                                               |
+| `environment_variables` | `Record<string, string>` | Additional environment variables set when running the target                                     |
 | `concurrency_group`     | `string`                 | Name of a concurrency group. Members compete for the group's capacity (default `1` = serialized) |
 
 <Aside type="note">
-  Targets with names ending in `test` are automatically treated as test targets.
-  They will be executed with `grog test` but not with `grog build` unless
-  explicitly requested.
+  Targets with names ending in `test` are automatically treated as test targets. They will be
+  executed with `grog test` but not with `grog build` unless explicitly requested.
 </Aside>
 
 ## Field Details
@@ -54,15 +53,15 @@ The command is optional which can be useful, for instance, when defining executa
 
 Grog also injects the following environment variables into the target's environment:
 
-| Variable Name   | Description                                                         |
-| --------------- | ------------------------------------------------------------------- |
-| `GROG_TARGET`   | The full label of the target. E.g. `//path/to/package:target_name`) |
-| `GROG_OS`       | The grog binary's target operating system. E.g. `linux`.            |
-| `GROG_ARCH`     | The grog binary's target architecture. E.g. `amd64`.                |
-| `GROG_PLATFORM` | The grog binary's target platform. E.g. `linux/amd64`.              |
+| Variable Name        | Description                                                                                           |
+| -------------------- | ----------------------------------------------------------------------------------------------------- |
+| `GROG_TARGET`        | The full label of the target. E.g. `//path/to/package:target_name`)                                   |
+| `GROG_OS`            | The grog binary's target operating system. E.g. `linux`.                                              |
+| `GROG_ARCH`          | The grog binary's target architecture. E.g. `amd64`.                                                  |
+| `GROG_PLATFORM`      | The grog binary's target platform. E.g. `linux/amd64`.                                                |
 | `GROG_PLATFORM_TAGS` | Comma-joined list of active custom platform tags. E.g. `gpu-runner,release`. Empty when none are set. |
-| `GROG_PACKAGE`  | The path to the package directory. E.g. `path/to/package`.          |
-| `GROG_GIT_HASH` | The output of `git rev-parse HEAD`. Useful for tagging artifacts.   |
+| `GROG_PACKAGE`       | The path to the package directory. E.g. `path/to/package`.                                            |
+| `GROG_GIT_HASH`      | The output of `git rev-parse HEAD`. Useful for tagging artifacts.                                     |
 
 ### inputs
 
@@ -76,10 +75,9 @@ Common glob patterns:
 - `go.mod` - A specific file
 
 <Aside type="caution">
-  If your input glob matches some of your output files, Grog will always
-  re-build the target. Therefore, it is important to declare all outputs (Grog
-  will warn if there is an overlap) and to avoid using globs that match your
-  output files.
+  If your input glob matches some of your output files, Grog will always re-build the target.
+  Therefore, it is important to declare all outputs (Grog will warn if there is an overlap) and to
+  avoid using globs that match your output files.
 </Aside>
 
 ### exclude_inputs
@@ -92,8 +90,8 @@ Examples:
 - If `inputs` includes all files in a directory but you want to exclude specific files, you can list them in `exclude_inputs`
 
 <Aside type="note">
-  The exclusion happens after all input patterns are resolved, so you can
-  exclude specific files that were matched by glob patterns.
+  The exclusion happens after all input patterns are resolved, so you can exclude specific files
+  that were matched by glob patterns.
 </Aside>
 
 ### outputs
@@ -131,10 +129,10 @@ When a target has platform constraints defined:
 Tags is a list of unique strings that can be used to group and query targets.
 There are a few reserved tags that alter the way grog treats a target:
 
-| Tag Name            | Effect                                                                                                                                                |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| no-cache            | Outputs will neither be stored in nor loaded from the cache backend.                                                                                  |
-| multiplatform-cache | By default grog separates target caches by the host platform. Adding this tag causes grog to store the outputs at the same cache key across platforms |
+| Tag Name            | Effect                                                                                                                                                                                 |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| no-cache            | Outputs will neither be stored in nor loaded from the cache backend.                                                                                                                   |
+| multiplatform-cache | By default grog separates target caches by the host platform. Adding this tag causes grog to store the outputs at the same cache key across platforms                                  |
 | testonly            | Marks a target as test-only. Non-test, non-`testonly` targets may not depend on `testonly` targets (test targets may); `grog check`/`grog build`/`grog test` fail if this is violated. |
 
 ### fingerprint

@@ -15,14 +15,14 @@ This repository demonstrates how to do simple code generation with Grog.
 
 ## Targets
 
-| Target                                | What it does                                              |
-| ------------------------------------- | --------------------------------------------------------- |
-| `//src/protobuf:codegen`              | Runs `protoc` to produce `.go` + `.py` stubs              |
-| `//src/protobuf:codegen_pip`          | Repackages the Python stubs for pip consumption           |
-| `//src/go:go`                         | Builds the Go consumer binary                             |
-| `//src/python:python_test`            | Runs the Python consumer's pytest suite                   |
-| `//src/rust:rust`                     | Builds the Rust consumer binary (prost via `build.rs`)    |
-| `//src/rust:rust_test`                | Runs the Rust consumer's `cargo test`                     |
+| Target                       | What it does                                           |
+| ---------------------------- | ------------------------------------------------------ |
+| `//src/protobuf:codegen`     | Runs `protoc` to produce `.go` + `.py` stubs           |
+| `//src/protobuf:codegen_pip` | Repackages the Python stubs for pip consumption        |
+| `//src/go:go`                | Builds the Go consumer binary                          |
+| `//src/python:python_test`   | Runs the Python consumer's pytest suite                |
+| `//src/rust:rust`            | Builds the Rust consumer binary (prost via `build.rs`) |
+| `//src/rust:rust_test`       | Runs the Rust consumer's `cargo test`                  |
 
 ## Why this matters
 

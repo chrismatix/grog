@@ -8,8 +8,8 @@ TAG2=$2
 REPO_URL=https://github.com/chrismatix/grog
 
 if [ -z "$TAG1" ] || [ -z "$TAG2" ] || [ -z "$REPO_URL" ]; then
-  echo "Usage: $0 <tag1> <tag2>"
-  exit 1
+	echo "Usage: $0 <tag1> <tag2>"
+	exit 1
 fi
 
 git log --pretty=format:"- [\`%h\`]($REPO_URL/commit/%H) %s" "${TAG1}..${TAG2}"

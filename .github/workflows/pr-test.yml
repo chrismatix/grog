@@ -32,7 +32,6 @@ jobs:
           sudo apt-get install -y protobuf-compiler
           go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 
-
       - name: Install pkl
         run: |
           curl -L -o pkl-bin 'https://github.com/apple/pkl/releases/download/0.28.2/pkl-linux-amd64'

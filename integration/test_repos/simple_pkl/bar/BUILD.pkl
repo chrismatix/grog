@@ -3,7 +3,8 @@ amends ".../pkl/package.pkl"
 targets {
   new {
     name = "bar"
-    command = "cat source.txt ../foo/output.txt > output.txt && cat source.txt ../foo/output.txt > ../bar_output.txt"
+    command =
+      "cat source.txt ../foo/output.txt > output.txt && cat source.txt ../foo/output.txt > ../bar_output.txt"
     dependencies {
       "//foo"
     }
