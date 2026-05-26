@@ -41,8 +41,8 @@ func TestGetWorkspaceCacheDirectory_FlatByDefault(t *testing.T) {
 func TestGetWorkspaceCacheDirectory_Namespaced(t *testing.T) {
 	prev := Global
 	Global = WorkspaceConfig{
-		Root:          "/grog",
-		WorkspaceRoot: "/tmp/a/myrepo",
+		Root:           "/grog",
+		WorkspaceRoot:  "/tmp/a/myrepo",
 		CacheNamespace: "team-myrepo",
 	}
 	t.Cleanup(func() { Global = prev })
@@ -60,8 +60,8 @@ func TestGetWorkspaceRootDir_StaysPathIsolated(t *testing.T) {
 	// deadlock on the same lockfile.
 	prev := Global
 	Global = WorkspaceConfig{
-		Root:          "/grog",
-		WorkspaceRoot: "/tmp/a/myrepo",
+		Root:           "/grog",
+		WorkspaceRoot:  "/tmp/a/myrepo",
 		CacheNamespace: "team-myrepo",
 	}
 	t.Cleanup(func() { Global = prev })

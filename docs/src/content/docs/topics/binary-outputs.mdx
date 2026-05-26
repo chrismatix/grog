@@ -76,12 +76,13 @@ grog run //tools:api_server //tools:web_dev -- some-arg
 ```
 
 <Aside>
-  Binary outputs are cached just like any other output, which means Grog will
-  avoid rebuilding the tool if nothing has changed, making your builds faster.
+  Binary outputs are cached just like any other output, which means Grog will avoid rebuilding the
+  tool if nothing has changed, making your builds faster.
 </Aside>
 
 <Aside>
-  If your binary output is a script file, remember to add a [shebang](https://en.wikipedia.org/wiki/Shebang_(Unix)) line!
+  If your binary output is a script file, remember to add a
+  [shebang](https://en.wikipedia.org/wiki/Shebang_(Unix)) line!
 </Aside>
 
 ### Defining Build Scripts
@@ -171,8 +172,8 @@ In this example, the `ensure_node` target verifies that `node` is available in t
 If it's not, the command installs it.
 
 <Aside type="caution">
-  Specifying either inputs or outputs will cause the target to be rebuilt
-  whenever inputs change even when the output checks pass.
+  Specifying either inputs or outputs will cause the target to be rebuilt whenever inputs change
+  even when the output checks pass.
 </Aside>
 
 ### Advantages of Output Checks
@@ -182,9 +183,9 @@ If it's not, the command installs it.
 - Simplifies integration with existing toolchains
 
 <Aside type="caution">
-  While output checks are convenient, they reduce build reproducibility since
-  they rely on inspecting the state of your platform superficially. Consider
-  using binary outputs for critical build tools when possible.
+  While output checks are convenient, they reduce build reproducibility since they rely on
+  inspecting the state of your platform superficially. Consider using binary outputs for critical
+  build tools when possible.
 </Aside>
 
 ## Best Practices

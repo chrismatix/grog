@@ -54,9 +54,9 @@ func (sl StarlarkLoader) Load(ctx context.Context, filePath string) (PackageDTO,
 
 	// Create predeclared functions and values
 	predeclared := starlark.StringDict{
-		"target":        starlark.NewBuiltin("target", collector.targetBuiltin),
-		"alias":         starlark.NewBuiltin("alias", collector.aliasBuiltin),
-		"environment":   starlark.NewBuiltin("environment", collector.environmentBuiltin),
+		"target":             starlark.NewBuiltin("target", collector.targetBuiltin),
+		"alias":              starlark.NewBuiltin("alias", collector.aliasBuiltin),
+		"environment":        starlark.NewBuiltin("environment", collector.environmentBuiltin),
 		"GROG_OS":            starlark.String(config.Global.OS),
 		"GROG_ARCH":          starlark.String(config.Global.Arch),
 		"GROG_PLATFORM":      starlark.String(config.Global.GetPlatform()),
@@ -137,9 +137,9 @@ func (sl StarlarkLoader) loadModule(thread *starlark.Thread, module string, curr
 
 	// Create predeclared functions for the loaded module
 	predeclared := starlark.StringDict{
-		"target":        starlark.NewBuiltin("target", collector.targetBuiltin),
-		"alias":         starlark.NewBuiltin("alias", collector.aliasBuiltin),
-		"environment":   starlark.NewBuiltin("environment", collector.environmentBuiltin),
+		"target":             starlark.NewBuiltin("target", collector.targetBuiltin),
+		"alias":              starlark.NewBuiltin("alias", collector.aliasBuiltin),
+		"environment":        starlark.NewBuiltin("environment", collector.environmentBuiltin),
 		"GROG_OS":            starlark.String(config.Global.OS),
 		"GROG_ARCH":          starlark.String(config.Global.Arch),
 		"GROG_PLATFORM":      starlark.String(config.Global.GetPlatform()),

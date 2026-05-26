@@ -1,29 +1,29 @@
-import { colors, fontSizes, spacing, breakpoints, theme } from '../src/theme';
+import { colors, fontSizes, spacing, breakpoints, theme } from "../src/theme";
 
-describe('Theme Configuration', () => {
-  describe('colors', () => {
-    test('has all required color palettes', () => {
-      expect(colors).toHaveProperty('primary');
-      expect(colors).toHaveProperty('secondary');
-      expect(colors).toHaveProperty('success');
-      expect(colors).toHaveProperty('error');
+describe("Theme Configuration", () => {
+  describe("colors", () => {
+    test("has all required color palettes", () => {
+      expect(colors).toHaveProperty("primary");
+      expect(colors).toHaveProperty("secondary");
+      expect(colors).toHaveProperty("success");
+      expect(colors).toHaveProperty("error");
     });
 
-    test('primary palette has all required shades', () => {
-      expect(colors.primary).toHaveProperty('50');
-      expect(colors.primary).toHaveProperty('100');
-      expect(colors.primary).toHaveProperty('200');
-      expect(colors.primary).toHaveProperty('300');
-      expect(colors.primary).toHaveProperty('400');
-      expect(colors.primary).toHaveProperty('500');
-      expect(colors.primary).toHaveProperty('600');
-      expect(colors.primary).toHaveProperty('700');
-      expect(colors.primary).toHaveProperty('800');
-      expect(colors.primary).toHaveProperty('900');
-      expect(colors.primary).toHaveProperty('950');
+    test("primary palette has all required shades", () => {
+      expect(colors.primary).toHaveProperty("50");
+      expect(colors.primary).toHaveProperty("100");
+      expect(colors.primary).toHaveProperty("200");
+      expect(colors.primary).toHaveProperty("300");
+      expect(colors.primary).toHaveProperty("400");
+      expect(colors.primary).toHaveProperty("500");
+      expect(colors.primary).toHaveProperty("600");
+      expect(colors.primary).toHaveProperty("700");
+      expect(colors.primary).toHaveProperty("800");
+      expect(colors.primary).toHaveProperty("900");
+      expect(colors.primary).toHaveProperty("950");
     });
 
-    test('color values are valid hex colors', () => {
+    test("color values are valid hex colors", () => {
       const hexColorRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
 
       // Test a sample of colors
@@ -34,19 +34,19 @@ describe('Theme Configuration', () => {
     });
   });
 
-  describe('fontSizes', () => {
-    test('has all required font sizes', () => {
-      expect(fontSizes).toHaveProperty('xs');
-      expect(fontSizes).toHaveProperty('sm');
-      expect(fontSizes).toHaveProperty('base');
-      expect(fontSizes).toHaveProperty('lg');
-      expect(fontSizes).toHaveProperty('xl');
-      expect(fontSizes).toHaveProperty('2xl');
-      expect(fontSizes).toHaveProperty('3xl');
-      expect(fontSizes).toHaveProperty('4xl');
+  describe("fontSizes", () => {
+    test("has all required font sizes", () => {
+      expect(fontSizes).toHaveProperty("xs");
+      expect(fontSizes).toHaveProperty("sm");
+      expect(fontSizes).toHaveProperty("base");
+      expect(fontSizes).toHaveProperty("lg");
+      expect(fontSizes).toHaveProperty("xl");
+      expect(fontSizes).toHaveProperty("2xl");
+      expect(fontSizes).toHaveProperty("3xl");
+      expect(fontSizes).toHaveProperty("4xl");
     });
 
-    test('font size values are valid CSS units', () => {
+    test("font size values are valid CSS units", () => {
       const cssUnitRegex = /^(\d*\.?\d+)(rem|em|px|%)$/;
 
       // Test a sample of font sizes
@@ -56,17 +56,17 @@ describe('Theme Configuration', () => {
     });
   });
 
-  describe('spacing', () => {
-    test('has all required spacing values', () => {
-      expect(spacing).toHaveProperty('0');
-      expect(spacing).toHaveProperty('1');
-      expect(spacing).toHaveProperty('2');
-      expect(spacing).toHaveProperty('4');
-      expect(spacing).toHaveProperty('8');
-      expect(spacing).toHaveProperty('16');
+  describe("spacing", () => {
+    test("has all required spacing values", () => {
+      expect(spacing).toHaveProperty("0");
+      expect(spacing).toHaveProperty("1");
+      expect(spacing).toHaveProperty("2");
+      expect(spacing).toHaveProperty("4");
+      expect(spacing).toHaveProperty("8");
+      expect(spacing).toHaveProperty("16");
     });
 
-    test('spacing values are valid CSS units', () => {
+    test("spacing values are valid CSS units", () => {
       const cssUnitRegex = /^(\d*\.?\d+)(rem|em|px|%)$|^0$/;
 
       // Test a sample of spacing values
@@ -76,16 +76,16 @@ describe('Theme Configuration', () => {
     });
   });
 
-  describe('breakpoints', () => {
-    test('has all required breakpoints', () => {
-      expect(breakpoints).toHaveProperty('sm');
-      expect(breakpoints).toHaveProperty('md');
-      expect(breakpoints).toHaveProperty('lg');
-      expect(breakpoints).toHaveProperty('xl');
-      expect(breakpoints).toHaveProperty('2xl');
+  describe("breakpoints", () => {
+    test("has all required breakpoints", () => {
+      expect(breakpoints).toHaveProperty("sm");
+      expect(breakpoints).toHaveProperty("md");
+      expect(breakpoints).toHaveProperty("lg");
+      expect(breakpoints).toHaveProperty("xl");
+      expect(breakpoints).toHaveProperty("2xl");
     });
 
-    test('breakpoint values are valid CSS units', () => {
+    test("breakpoint values are valid CSS units", () => {
       const cssUnitRegex = /^(\d*\.?\d+)(rem|em|px|%)$/;
 
       // Test all breakpoints
@@ -93,12 +93,12 @@ describe('Theme Configuration', () => {
       expect(cssUnitRegex.test(breakpoints.md)).toBe(true);
       expect(cssUnitRegex.test(breakpoints.lg)).toBe(true);
       expect(cssUnitRegex.test(breakpoints.xl)).toBe(true);
-      expect(cssUnitRegex.test(breakpoints['2xl'])).toBe(true);
+      expect(cssUnitRegex.test(breakpoints["2xl"])).toBe(true);
     });
   });
 
-  describe('theme object', () => {
-    test('combines all theme parts', () => {
+  describe("theme object", () => {
+    test("combines all theme parts", () => {
       expect(theme.colors).toBe(colors);
       expect(theme.fontSizes).toBe(fontSizes);
       expect(theme.spacing).toBe(spacing);

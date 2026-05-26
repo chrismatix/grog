@@ -106,7 +106,7 @@ func (d *DockerRegistryOutputHandler) Hash(ctx context.Context, target model.Tar
 	return inspect.ID, nil
 }
 
-// lazyCient creates a new Docker client on demand
+// lazyClient creates a new Docker client on demand
 func (d *DockerRegistryOutputHandler) lazyClient() (*client.Client, error) {
 	if d.dockerClient != nil {
 		return d.dockerClient, nil

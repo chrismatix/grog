@@ -3,14 +3,15 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/sergi/go-diff/diffmatchpatch"
-	"gopkg.in/yaml.v3"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/sergi/go-diff/diffmatchpatch"
+	"gopkg.in/yaml.v3"
 
 	"reflect"
 )
@@ -175,7 +176,7 @@ func TestCliScenarios(t *testing.T) {
 					output, err := runBinary(tc.GrogArgs, tt.Repo, tc.EnvVars, coverDir)
 
 					if err != nil && !tc.ExpectFail {
-						fmt.Printf("Command ouput: %s\n", output)
+						fmt.Printf("Command output: %s\n", output)
 						t.Fatal(err)
 					}
 

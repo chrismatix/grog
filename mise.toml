@@ -1,0 +1,8 @@
+[tools]
+go = "1.26.3"
+"npm:oxfmt" = "latest"
+buildifier = "latest"
+pkl = "latest"
+shfmt = "latest"
+"aqua:numtide/treefmt" = "latest"
+prek = "latest"

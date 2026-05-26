@@ -1,0 +1,43 @@
+# Format with `treefmt`.
+# Install tools with `mise install` when using this repository's mise config.
+
+[formatter.gofmt]
+command = "gofmt"
+options = ["-w"]
+includes = ["*.go"]
+
+[formatter.oxfmt]
+command = "oxfmt"
+options = ["--write"]
+includes = [
+  "*.md",
+  "*.mdx",
+  "*.toml",
+  "*.yaml",
+  "*.yml",
+  "*.js",
+  "*.jsx",
+  "*.mjs",
+  "*.cjs",
+  "*.ts",
+  "*.tsx",
+  "*.json",
+  "*.jsonc",
+  "*.css",
+]
+excludes = ["integration/fixtures/**"]
+
+[formatter.buildifier]
+command = "buildifier"
+options = ["-mode=fix"]
+includes = ["*.star"]
+
+[formatter.pkl]
+command = "pkl"
+options = ["format", "-w"]
+includes = ["*.pkl"]
+
+[formatter.shfmt]
+command = "shfmt"
+options = ["-w"]
+includes = ["*.sh"]

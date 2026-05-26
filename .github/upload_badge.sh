@@ -10,8 +10,8 @@ COVERAGE_FILE="coverdata/coverage_overview.out"
 
 # Check if the coverage file exists
 if [ ! -f "$COVERAGE_FILE" ]; then
-  echo "Error: Coverage file $COVERAGE_FILE not found."
-  exit 1
+	echo "Error: Coverage file $COVERAGE_FILE not found."
+	exit 1
 fi
 
 # Extract the last word from the file (assumed to be the coverage percentage)
@@ -29,8 +29,8 @@ echo "Downloading badge from: $badge_url"
 curl -sSfL "$badge_url" -o badge.svg
 
 if [ $? -ne 0 ]; then
-  echo "Error: Failed to download badge."
-  exit 1
+	echo "Error: Failed to download badge."
+	exit 1
 fi
 
 echo "Badge downloaded successfully."
@@ -40,8 +40,8 @@ echo "Uploading badge.svg to gs://${BUCKET_NAME}/${OBJECT_KEY}"
 gsutil cp badge.svg gs://${BUCKET_NAME}/${OBJECT_KEY}
 
 if [ $? -ne 0 ]; then
-  echo "Error: Failed to upload badge to gs://${BUCKET_NAME}/${OBJECT_KEY}."
-  exit 1
+	echo "Error: Failed to upload badge to gs://${BUCKET_NAME}/${OBJECT_KEY}."
+	exit 1
 fi
 
 echo "Successfully uploaded badge to gs://${BUCKET_NAME}/${OBJECT_KEY}."
