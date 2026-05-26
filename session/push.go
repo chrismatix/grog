@@ -2,20 +2,31 @@ package session
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"regexp"
+	"sync/atomic"
 
+	"github.com/alitto/pond/v2"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 
 	"grog/internal/caching"
 	"grog/internal/config"
+	"grog/internal/console"
 	"grog/internal/dockerproxy"
 )
 
 var digestRe = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
+
+// pushTagWorkers bounds concurrent HEAD/Write operations against the
+// destination registry during a multi-tag push. Small enough not to swamp the
+// registry, large enough to keep latency low when many tags are requested.
+const pushTagWorkers = 4
 
 // PushOptions describes a request to push a built image to an external registry.
 type PushOptions struct {
@@ -66,12 +77,17 @@ func (s *Session) PushImage(ctx context.Context, opts PushOptions) (*PushResult,
 	cas := s.cas
 	s.mu.Unlock()
 
+	// Route logs through the session-injected logger (e.g. tflog under the
+	// Terraform provider) rather than the default.
+	ctx = console.WithLogger(ctx, s.logger)
 	return pushFromCAS(ctx, cas, authn.DefaultKeychain, opts)
 }
 
 // ImageExists reports whether the given manifest digest is present at the
-// destination repository. Used for drift detection: if a previously pushed
-// image has been deleted or garbage-collected, the next apply re-pushes it.
+// destination repository. Used for drift detection: a true 404 reports the
+// image as missing, but transient / auth / 5xx errors are returned so callers
+// (e.g. grog_image_push.Read) can keep state instead of churning during a
+// registry outage.
 func (s *Session) ImageExists(ctx context.Context, repository, manifestDigest string) (bool, error) {
 	if !digestRe.MatchString(manifestDigest) {
 		return false, fmt.Errorf("session: invalid manifest digest %q", manifestDigest)
@@ -83,11 +99,25 @@ func (s *Session) ImageExists(ctx context.Context, repository, manifestDigest st
 	if err != nil {
 		return false, fmt.Errorf("session: invalid destination %q: %w", repository, err)
 	}
-	if _, err := remote.Head(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain), remote.WithContext(ctx)); err != nil {
-		// Treat any error (including 404 / MANIFEST_UNKNOWN) as "not present".
+	_, err = remote.Head(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain), remote.WithContext(ctx))
+	if err == nil {
+		return true, nil
+	}
+	if isNotFound(err) {
 		return false, nil
 	}
-	return true, nil
+	return false, fmt.Errorf("session: HEAD %s: %w", ref, err)
+}
+
+// isNotFound reports whether a go-containerregistry error indicates the
+// manifest/blob is genuinely absent (HTTP 404 / MANIFEST_UNKNOWN etc.) rather
+// than a transient network or auth failure.
+func isNotFound(err error) bool {
+	var tErr *transport.Error
+	if errors.As(err, &tErr) {
+		return tErr.StatusCode == http.StatusNotFound
+	}
+	return false
 }
 
 // pushFromCAS contains the registry-movement logic, decoupled from Session so it
@@ -100,6 +130,7 @@ func pushFromCAS(ctx context.Context, cas *caching.Cas, keychain authn.Keychain,
 		return nil, fmt.Errorf("session: Repository is required")
 	}
 
+	logger := console.GetLogger(ctx)
 	authOpt := remote.WithAuthFromKeychain(keychain)
 
 	dstDigestRef, err := name.NewDigest(opts.Repository + "@" + opts.ManifestDigest)
@@ -107,15 +138,36 @@ func pushFromCAS(ctx context.Context, cas *caching.Cas, keychain authn.Keychain,
 		return nil, fmt.Errorf("session: invalid destination %q: %w", opts.Repository, err)
 	}
 
+	// Pre-compute tag refs in order so result.Tags is deterministic regardless
+	// of how the parallel network work below races.
+	tagRefs := make([]name.Tag, 0, len(opts.Tags))
+	for _, tag := range opts.Tags {
+		tagRef, terr := name.NewTag(opts.Repository + ":" + tag)
+		if terr != nil {
+			return nil, fmt.Errorf("session: invalid tag %q: %w", tag, terr)
+		}
+		tagRefs = append(tagRefs, tagRef)
+	}
+	tagStrs := make([]string, len(tagRefs))
+	for i, t := range tagRefs {
+		tagStrs[i] = t.String()
+	}
+
 	result := &PushResult{
 		Reference: dstDigestRef.String(),
 		Digest:    opts.ManifestDigest,
+		Tags:      tagStrs,
 	}
 
-	// Convergence: is the digest already at the destination?
+	// Convergence: is the digest already at the destination? Treat any non-404
+	// failure as "not present but worth flagging" — we can still push (which
+	// will surface the real error if it's persistent), but the user should see
+	// that the convergence check failed.
 	digestPresent := false
 	if _, err := remote.Head(dstDigestRef, authOpt, remote.WithContext(ctx)); err == nil {
 		digestPresent = true
+	} else if !isNotFound(err) {
+		logger.Warnf("session: HEAD %s during convergence check failed (%v); will attempt to push", dstDigestRef, err)
 	}
 
 	// Resolve the image we want to publish. Prefer the destination (avoids
@@ -147,25 +199,34 @@ func pushFromCAS(ctx context.Context, cas *caching.Cas, keychain authn.Keychain,
 		}
 	}
 
-	// Ensure each requested tag points at the digest. Convergent per tag.
-	allTagsPresent := true
-	for _, tag := range opts.Tags {
-		tagRef, terr := name.NewTag(opts.Repository + ":" + tag)
-		if terr != nil {
-			return nil, fmt.Errorf("session: invalid tag %q: %w", tag, terr)
-		}
-		result.Tags = append(result.Tags, tagRef.String())
+	// Ensure each requested tag points at the digest. Convergent per tag, and
+	// run in parallel through grog's worker-pool library so many tags don't
+	// serialize on registry latency.
+	var allTagsPresent atomic.Bool
+	allTagsPresent.Store(true)
 
-		if desc, herr := remote.Head(tagRef, authOpt, remote.WithContext(ctx)); herr == nil &&
-			desc.Digest.String() == opts.ManifestDigest {
-			continue // tag already resolves to the digest
-		}
-		allTagsPresent = false
-		if err := remote.Write(tagRef, img, authOpt, remote.WithContext(ctx)); err != nil {
-			return nil, fmt.Errorf("session: tagging %s: %w", tagRef, err)
-		}
+	pool := pond.NewPool(pushTagWorkers)
+	defer pool.StopAndWait()
+	group := pool.NewGroupContext(ctx)
+	for _, tagRef := range tagRefs {
+		group.SubmitErr(func() error {
+			if desc, herr := remote.Head(tagRef, authOpt, remote.WithContext(ctx)); herr == nil &&
+				desc.Digest.String() == opts.ManifestDigest {
+				return nil // tag already resolves to the digest
+			} else if herr != nil && !isNotFound(herr) {
+				logger.Warnf("session: HEAD %s failed (%v); will attempt to write the tag", tagRef, herr)
+			}
+			allTagsPresent.Store(false)
+			if werr := remote.Write(tagRef, img, authOpt, remote.WithContext(ctx)); werr != nil {
+				return fmt.Errorf("session: tagging %s: %w", tagRef, werr)
+			}
+			return nil
+		})
+	}
+	if err := group.Wait(); err != nil {
+		return nil, err
 	}
 
-	result.Skipped = digestPresent && allTagsPresent
+	result.Skipped = digestPresent && allTagsPresent.Load()
 	return result, nil
 }

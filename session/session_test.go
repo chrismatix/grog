@@ -84,6 +84,43 @@ func TestSessionBuildFileTarget(t *testing.T) {
 	}
 }
 
+func TestSessionBuildAlias(t *testing.T) {
+	root := t.TempDir()
+	cacheRoot := t.TempDir()
+	mustWrite(t, filepath.Join(root, "grog.toml"), "root = "+strconv.Quote(cacheRoot)+"\n")
+	mustWrite(t, filepath.Join(root, "pkg", "src", "input.txt"), "hello\n")
+	// A target plus an alias pointing at it.
+	mustWrite(t, filepath.Join(root, "pkg", "BUILD.json"), `{
+  "targets": [
+    {
+      "name": "gen",
+      "inputs": ["src/*.txt"],
+      "command": "cat src/input.txt > output.txt",
+      "outputs": ["output.txt"]
+    }
+  ],
+  "aliases": [
+    { "name": "gen_alias", "actual": "//pkg:gen" }
+  ]
+}`)
+
+	ctx := context.Background()
+	sess, err := New(ctx, Options{WorkspaceRoot: root})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer sess.Close()
+
+	// Building the alias label must return the underlying target's result.
+	res, err := sess.Build(ctx, "//pkg:gen_alias")
+	if err != nil {
+		t.Fatalf("Build(alias): %v", err)
+	}
+	if res.ChangeHash == "" || res.OutputHash == "" {
+		t.Errorf("alias build returned empty hashes: %+v", res)
+	}
+}
+
 func TestSessionBuildUnknownTarget(t *testing.T) {
 	root := writeWorkspace(t)
 	ctx := context.Background()

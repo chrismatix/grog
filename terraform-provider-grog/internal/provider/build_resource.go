@@ -56,7 +56,11 @@ func (r *buildResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Builds a grog target (and its dependency closure) and exposes its outputs. " +
 			"The build runs on every apply; grog's content-addressed cache makes unchanged builds fast no-ops. " +
-			"Docker outputs are published only to grog's CAS — use `grog_image_push` to deliver them to a registry.",
+			"Docker outputs are published only to grog's CAS — use `grog_image_push` to deliver them to a registry.\n\n" +
+			"**Docker daemon side effect:** building a docker target invokes `docker build`, so the resulting image " +
+			"is also tagged in the local Docker daemon under the BUILD file's local tag (e.g. `my-image:latest`). " +
+			"That lets you `docker run` the freshly built image locally for inspection without pulling. The push to a " +
+			"registry is independent (and daemon-free) — see `grog_image_push`.",
 		Attributes: map[string]schema.Attribute{
 			"target": schema.StringAttribute{
 				Required:            true,
@@ -89,6 +93,9 @@ func (r *buildResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			"cache_hit": schema.BoolAttribute{
 				Computed:            true,
 				MarkdownDescription: "Whether the most recent build was served from cache rather than executed.",
+				PlanModifiers: []planmodifier.Bool{
+					knownAfterApplyBool(),
+				},
 			},
 			"docker_images": schema.MapNestedAttribute{
 				Computed: true,

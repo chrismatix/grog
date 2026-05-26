@@ -204,6 +204,9 @@ func (s *Session) Build(ctx context.Context, targetStr string) (*BuildResult, er
 		return nil, fmt.Errorf("session: no targets matched %q", targetStr)
 	}
 
+	// disable_tea is set in InitForEmbedding, so console.UseTea() inside
+	// Executor.Execute returns false and the TUI is skipped — no separate
+	// headless toggle needed.
 	executor := execution.NewExecutor(
 		s.targetCache,
 		s.taintStore,
@@ -214,7 +217,6 @@ func (s *Session) Build(ctx context.Context, targetStr string) (*BuildResult, er
 		config.Global.EnableCache,
 		config.Global.GetLoadOutputsMode(),
 	)
-	executor.SetHeadless()
 
 	completionMap, execErr := executor.Execute(ctx)
 	// Always wait for async cache writes so results are durably persisted before
@@ -243,10 +245,44 @@ func (s *Session) Build(ctx context.Context, targetStr string) (*BuildResult, er
 		}
 	}
 
+	// If the caller asked to build an alias label, the alias node itself has no
+	// TargetResult — only the underlying target does. Follow the alias chain to
+	// find the real result and memoize the alias to it too.
+	if requested == nil {
+		if r := s.resolveAliasResult(targetLabel); r != nil {
+			s.memo[targetLabel] = r
+			requested = r
+		}
+	}
+
 	if requested == nil {
 		return nil, fmt.Errorf("session: build of %q produced no result", targetStr)
 	}
 	return requested, nil
+}
+
+// resolveAliasResult walks the alias chain starting at lbl and returns the
+// memoized BuildResult of the underlying target, or nil if lbl is not an alias
+// (or points nowhere). The chain length is bounded to avoid pathological loops
+// even though grog's graph builder rejects cycles.
+func (s *Session) resolveAliasResult(lbl label.TargetLabel) *BuildResult {
+	const maxAliasDepth = 32
+	cur := lbl
+	for i := 0; i < maxAliasDepth; i++ {
+		node, ok := s.graph.GetNodes()[cur]
+		if !ok {
+			return nil
+		}
+		alias, isAlias := node.(*model.Alias)
+		if !isAlias {
+			return s.memo[cur]
+		}
+		cur = alias.Actual
+		if r, ok := s.memo[cur]; ok {
+			return r
+		}
+	}
+	return nil
 }
 
 // Close releases the workspace lock and tears down output handlers (notably the

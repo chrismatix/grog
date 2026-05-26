@@ -51,11 +51,6 @@ type Executor struct {
 	deferAsyncWait   bool
 	asyncDrained     bool
 
-	// headless skips the Bubble Tea TUI during Execute. Required when grog is
-	// embedded in a process that owns stdout (e.g. the Terraform provider's
-	// go-plugin gRPC stream); rendering the TUI there corrupts the protocol.
-	headless bool
-
 	// results captures each built/cache-loaded target's TargetResult in memory
 	// so embedders can read structured outputs (manifest digests, hashes)
 	// without a separate cache round-trip. Keyed by target label.
@@ -85,12 +80,6 @@ func NewExecutor(
 		streamLogsToggle: console.NewStreamLogsToggle(streamLogs),
 		results:          make(map[label.TargetLabel]*gen.TargetResult),
 	}
-}
-
-// SetHeadless disables the interactive TUI during Execute. Embedders that own
-// stdout (e.g. the Terraform provider) must set this before calling Execute.
-func (e *Executor) SetHeadless() {
-	e.headless = true
 }
 
 // recordResult stores a target's TargetResult for in-memory retrieval by
@@ -129,11 +118,7 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	}
 
 	var sendMsg func(tea.Msg)
-	if e.headless {
-		// Embedded mode: no TUI. Status messages are dropped; structured
-		// progress still flows through the injected logger.
-		sendMsg = func(tea.Msg) {}
-	} else {
+	if console.UseTea() {
 		var program *tea.Program
 		ctx, program, sendMsg = console.StartTaskUI(ctx)
 		defer func(p *tea.Program) {
@@ -143,6 +128,12 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 			}
 		}(program)
 		defer program.Quit()
+	} else {
+		// Headless: no TUI (driven by --disable-tea, or stdout is not a
+		// terminal — e.g. embedded under the Terraform provider). Status
+		// messages are dropped; structured progress still flows through the
+		// injected logger.
+		sendMsg = func(tea.Msg) {}
 	}
 
 	// Get selected nodes and create a ResultLogger covering every selected

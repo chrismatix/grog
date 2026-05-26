@@ -69,4 +69,7 @@ go test ./...
 ```
 
 This module lives in the grog repository and depends on the parent module via a
-local `replace grog => ../` directive.
+local `replace grog => ../` directive. Releases ride along with the grog
+`v*.*.*` tag flow — see `.github/workflows/release.yml`. Required repository
+secrets for publishing: `GPG_PRIVATE_KEY` and `PASSPHRASE`, plus the GPG public
+key registered in your Terraform Registry account.

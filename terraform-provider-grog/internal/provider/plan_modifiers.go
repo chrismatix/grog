@@ -38,6 +38,26 @@ func (alwaysUnknownString) PlanModifyString(_ context.Context, req planmodifier.
 	resp.PlanValue = types.StringUnknown()
 }
 
+// alwaysUnknownBool is the Bool analogue of alwaysUnknownString.
+type alwaysUnknownBool struct{}
+
+func knownAfterApplyBool() planmodifier.Bool { return alwaysUnknownBool{} }
+
+func (alwaysUnknownBool) Description(_ context.Context) string {
+	return "Value is recomputed by grog on every apply."
+}
+
+func (alwaysUnknownBool) MarkdownDescription(_ context.Context) string {
+	return "Value is recomputed by grog on every apply."
+}
+
+func (alwaysUnknownBool) PlanModifyBool(_ context.Context, req planmodifier.BoolRequest, resp *planmodifier.BoolResponse) {
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+	resp.PlanValue = types.BoolUnknown()
+}
+
 // alwaysUnknownMap is the Map analogue of alwaysUnknownString.
 type alwaysUnknownMap struct{}
 

@@ -48,8 +48,9 @@ signs:
       - "${artifact}"
 
 release:
-  # The provider is released from a subdirectory of the grog monorepo on
-  # provider-prefixed tags; the registry consumes the GitHub release artifacts.
+  # The release.yml workflow runs goreleaser with --skip=publish; the publish
+  # job collects these artifacts (zips, SHASUMS, .sig, manifest) alongside the
+  # grog binary + pkl package and uploads them to the GitHub release together.
   extra_files:
     - glob: "terraform-registry-manifest.json"
       name_template: "{{ .ProjectName }}_{{ .Version }}_manifest.json"

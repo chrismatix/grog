@@ -39,8 +39,8 @@ Tear everything down (including the local registry):
 - `app/BUILD.yaml` + `app/Dockerfile` — the grog docker target.
 - `main.tf` — the provider, `grog_build`, and `grog_image_push` wired together.
   The Cloud Run service would consume `grog_image_push.app.reference`.
-- `cloud_run.tf.example` — the same flow against real GCP Artifact Registry +
-  Cloud Run (commented; rename to `.tf` and set a project to use).
+- [`../terraform_provider_gcp/`](../terraform_provider_gcp) — the same flow
+  against real GCP Artifact Registry + Cloud Run.
 
 ## Notes
 
@@ -48,6 +48,9 @@ Tear everything down (including the local registry):
   no-ops, but the plan shows the digest as *known after apply* (a v1 limitation).
 - Building the docker target needs a Docker daemon. The **push** itself is
   daemon-free (it streams from grog's CAS via go-containerregistry).
+- Side effect of `docker build`: the image is also tagged locally as
+  `grog-tf-demo:latest`, so you can `docker run grog-tf-demo:latest` after the
+  apply without pulling from the registry.
 - `localhost` registries are plain HTTP, which go-containerregistry handles
   automatically. For a real registry, authenticate with the Docker keychain
   (e.g. `gcloud auth configure-docker`).

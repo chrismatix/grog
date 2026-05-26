@@ -1,21 +1,15 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"grog/internal/cmd/cmds"
 	"grog/internal/cmd/cmds/traces"
 	"grog/internal/config"
 	"grog/internal/console"
-	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 
-	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/subosito/gotenv"
 )
 
 var Version string
@@ -84,21 +78,15 @@ func init() {
 	RootCmd.InitDefaultCompletionCmd()
 	RootCmd.CompletionOptions.DisableDefaultCmd = false
 
-	// Set up Viper
-	viper.SetConfigType("toml")
-	viper.SetEnvPrefix("GROG")
-	viper.AddConfigPath("$HOME/.grog")                     // optionally look for config in the home directory
-	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_")) // allow FLAG-NAME to map to ENV VAR_NAME
-	viper.AutomaticEnv()                                   // read in environment variables that match
-
-	// Set default global root directory
-	viper.SetDefault("root", filepath.Join(os.Getenv("HOME"), ".grog"))
+	// Shared with internal/config.InitForEmbedding so the CLI and the embedded
+	// session can't drift on viper setup or default values.
+	config.RegisterViperBase()
+	config.RegisterDefaults()
 
 	// Options:
 	// color
 	RootCmd.PersistentFlags().String("color", "auto", "Set color output (yes, no, or auto)")
 	err := viper.BindPFlag("color", RootCmd.PersistentFlags().Lookup("color"))
-	viper.SetDefault("color", "auto")
 
 	// debug
 	RootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
@@ -137,22 +125,18 @@ func init() {
 	// output_mode
 	RootCmd.PersistentFlags().String("output-mode", "terse", "Build output style: terse (one line per target) or detailed (stream each target's lifecycle)")
 	err = viper.BindPFlag("output_mode", RootCmd.PersistentFlags().Lookup("output-mode"))
-	viper.SetDefault("output_mode", "terse")
 
 	// disable_progress_tracker
 	RootCmd.PersistentFlags().Bool("disable-progress-tracker", false, "Disable progress tracking updates")
 	err = viper.BindPFlag("disable_progress_tracker", RootCmd.PersistentFlags().Lookup("disable-progress-tracker"))
-	viper.SetDefault("disable_progress_tracker", false)
 
 	// disable_default_shell_flags
 	RootCmd.PersistentFlags().Bool("disable-default-shell-flags", false, "Do not prepend \"set -eu\" to target commands")
 	err = viper.BindPFlag("disable_default_shell_flags", RootCmd.PersistentFlags().Lookup("disable-default-shell-flags"))
-	viper.SetDefault("disable_default_shell_flags", false)
 
 	// load_outputs
 	RootCmd.PersistentFlags().String("load-outputs", "all", "Level of output loading for cached targets. One of: all, minimal.")
 	err = viper.BindPFlag("load_outputs", RootCmd.PersistentFlags().Lookup("load-outputs"))
-	viper.SetDefault("load_outputs", "all")
 
 	// tags
 	RootCmd.PersistentFlags().StringSlice("tag", []string{}, "Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar")
@@ -163,22 +147,18 @@ func init() {
 	// enable_caching
 	RootCmd.PersistentFlags().Bool("enable-cache", true, "Enable cache")
 	err = viper.BindPFlag("enable_cache", RootCmd.PersistentFlags().Lookup("enable-cache"))
-	viper.SetDefault("enable_cache", true)
 
 	// select profiles
 	RootCmd.PersistentFlags().String("profile", "", "Select a configuration profile to use")
 	err = viper.BindPFlag("profile", RootCmd.PersistentFlags().Lookup("profile"))
-	viper.SetDefault("profile", "")
 
 	// async_cache_writes
 	RootCmd.PersistentFlags().Bool("async-cache-writes", true, "Defer cache writes to background I/O workers during the build")
 	err = viper.BindPFlag("async_cache_writes", RootCmd.PersistentFlags().Lookup("async-cache-writes"))
-	viper.SetDefault("async_cache_writes", true)
 
 	// disable_tea
 	RootCmd.PersistentFlags().Bool("disable-tea", false, "Disable interactive TUI (Bubble Tea)")
 	err = viper.BindPFlag("disable_tea", RootCmd.PersistentFlags().Lookup("disable-tea"))
-	viper.SetDefault("disable_tea", false)
 
 	// Register subcommands
 	RootCmd.AddCommand(cmds.VersionCmd)
@@ -205,49 +185,15 @@ func init() {
 }
 
 func initConfig(cmd *cobra.Command) error {
-	// Set defaults here
-	viper.SetDefault("log_level", "info")
-	viper.SetDefault("load_outputs", "all")
-	viper.SetDefault("disable_non_deterministic_logging", false)
-	viper.SetDefault("os", runtime.GOOS)
-	viper.SetDefault("arch", runtime.GOARCH)
-	viper.SetDefault("cache.gcs.shared_cache", true)
-	viper.SetDefault("cache.s3.shared_cache", true)
-	viper.SetDefault("cache.azure.shared_cache", true)
-	viper.SetDefault("hash_algorithm", config.HashAlgorithmXXH3)
-	viper.SetDefault("include_hidden", false)
-	viper.SetDefault("environment_variables", make(map[string]string))
-	viper.SetDefault("traces.enabled", false)
-
-	names := []string{"grog"}
-	if os.Getenv("CI") == "1" {
-		names = append([]string{"grog.ci"}, names...)
-	}
-	if viper.GetString("profile") != "" {
-		names = append([]string{"grog." + viper.GetString("profile")}, names...)
-	}
-
 	logger := console.InitLogger()
 
-	var found bool
-	for _, name := range names {
-		viper.SetConfigName(name)
-		if err := viper.ReadInConfig(); err != nil {
-			var configFileNotFoundError viper.ConfigFileNotFoundError
-			if errors.As(err, &configFileNotFoundError) {
-				continue
-			}
-			return err
-		}
-		found = true
-		logger.Debugf("Loaded config file: %s", viper.ConfigFileUsed())
-		break
+	if err := config.LoadConfigFile(viper.GetString("profile")); err != nil {
+		return err
 	}
-	if !found {
-		return fmt.Errorf("no grog config file found (tried: %v)", names)
-	}
+	logger.Debugf("Loaded config file: %s", viper.ConfigFileUsed())
 
-	// Determine effective log level precedence before unmarshalling into Global:
+	// Determine effective log level precedence after loading the config file
+	// but before consumers read it:
 	// 1) --log-level flag (if set)
 	// 2) --verbose/-v or --debug flags
 	// 3) workspace config (already read) or env or defaults
@@ -267,16 +213,10 @@ func initConfig(cmd *cobra.Command) error {
 		if viper.GetBool("debug") {
 			viper.Set("log_level", "debug")
 		}
+		// LoadConfigFile already unmarshalled; sync the log level we just set.
+		config.Global.LogLevel = viper.GetString("log_level")
 	}
 
-	// Merge all config sources into the global
-	if err := viper.Unmarshal(&config.Global); err != nil {
-		return fmt.Errorf("Failed to parse config: %v\n", err)
-	}
-
-	config.Global.HashAlgorithm = strings.ToLower(config.Global.HashAlgorithm)
-
-	logger.Debugf("Using config file: %s", viper.ConfigFileUsed())
 	logger.Debugf("Running on %s", config.Global.GetPlatform())
 
 	platform := viper.GetString("platform")
@@ -292,65 +232,5 @@ func initConfig(cmd *cobra.Command) error {
 		config.Global.Arch = parts[1]
 	}
 
-	if err := readInEnvironmentVariablesConfig(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// Viper always normalizes all configuration keys to be lower-case
-// but users should be able to specify upper case environment_variables
-// So as a workaround we load the section here a second time _if_ there are env vars.
-//
-// When environment_variables_file is set, variables are loaded from the file
-// first, then inline environment_variables from grog.toml are merged on top
-// (inline values take precedence over file values).
-func readInEnvironmentVariablesConfig() error {
-	merged := make(map[string]string)
-
-	// Phase 1: Load variables from file if configured.
-	if config.Global.EnvironmentVariablesFile != "" {
-		envFilePath := config.Global.EnvironmentVariablesFile
-		if !filepath.IsAbs(envFilePath) {
-			envFilePath = filepath.Join(config.Global.WorkspaceRoot, envFilePath)
-		}
-
-		f, err := os.Open(envFilePath)
-		if err != nil {
-			return fmt.Errorf("failed to open environment_variables_file %q: %w", envFilePath, err)
-		}
-		defer f.Close()
-
-		fileEnv := gotenv.Parse(f)
-		for k, v := range fileEnv {
-			merged[k] = v
-		}
-	}
-
-	// Phase 2: Load inline environment_variables from grog.toml (preserving case).
-	if len(config.Global.EnvironmentVariables) > 0 {
-		raw, err := os.ReadFile(viper.ConfigFileUsed())
-		if err != nil {
-			return err
-		}
-
-		var helper EnvVarsHelper
-		err = toml.Unmarshal(raw, &helper)
-		if err != nil {
-			return err
-		}
-
-		// Inline values override file-loaded values.
-		for k, v := range helper.EnvironmentVariables {
-			merged[k] = v
-		}
-	}
-
-	config.Global.EnvironmentVariables = merged
-	return nil
-}
-
-type EnvVarsHelper struct {
-	EnvironmentVariables map[string]string `toml:"environment_variables"`
+	return config.ReadEnvironmentVariables()
 }
