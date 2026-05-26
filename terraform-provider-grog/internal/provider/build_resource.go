@@ -31,16 +31,16 @@ func NewBuildResource() resource.Resource {
 
 // buildResourceModel is the Terraform state model for grog_build.
 type buildResourceModel struct {
-	Target       types.String `tfsdk:"target"`
-	ID           types.String `tfsdk:"id"`
-	ChangeHash   types.String `tfsdk:"change_hash"`
-	OutputHash   types.String `tfsdk:"output_hash"`
-	CacheHit     types.Bool   `tfsdk:"cache_hit"`
-	DockerImages types.Map    `tfsdk:"docker_images"`
+	Target     types.String `tfsdk:"target"`
+	ID         types.String `tfsdk:"id"`
+	ChangeHash types.String `tfsdk:"change_hash"`
+	OutputHash types.String `tfsdk:"output_hash"`
+	CacheHit   types.Bool   `tfsdk:"cache_hit"`
+	OCIImages  types.Map    `tfsdk:"oci_images"`
 }
 
-// dockerImageType is the object type for each entry in docker_images.
-var dockerImageType = types.ObjectType{
+// ociImageType is the object type for each entry in oci_images.
+var ociImageType = types.ObjectType{
 	AttrTypes: map[string]attr.Type{
 		"identifier":      types.StringType,
 		"image_id":        types.StringType,
@@ -56,10 +56,10 @@ func (r *buildResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Builds a grog target (and its dependency closure) and exposes its outputs. " +
 			"The build runs on every apply; grog's content-addressed cache makes unchanged builds fast no-ops. " +
-			"Docker outputs are published only to grog's CAS — use `grog_image_push` to deliver them to a registry.\n\n" +
-			"**Docker daemon side effect:** building a docker target invokes `docker build`, so the resulting image " +
-			"is also tagged in the local Docker daemon under the BUILD file's local tag (e.g. `my-image:latest`). " +
-			"That lets you `docker run` the freshly built image locally for inspection without pulling. The push to a " +
+			"Image outputs are published only to grog's CAS — use `grog_image_push` to deliver them to a registry.\n\n" +
+			"**Docker daemon side effect:** if the target builds an image via `docker build`, the resulting image is " +
+			"also tagged in the local Docker daemon under the BUILD file's local tag (e.g. `my-image:latest`). That " +
+			"lets you `docker run` the freshly built image locally for inspection without pulling. The push to a " +
 			"registry is independent (and daemon-free) — see `grog_image_push`.",
 		Attributes: map[string]schema.Attribute{
 			"target": schema.StringAttribute{
@@ -97,10 +97,11 @@ func (r *buildResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 					knownAfterApplyBool(),
 				},
 			},
-			"docker_images": schema.MapNestedAttribute{
+			"oci_images": schema.MapNestedAttribute{
 				Computed: true,
-				MarkdownDescription: "Docker image outputs keyed by their local tag (the image tag declared in the BUILD file). " +
-					"Each value carries the `manifest_digest` to feed into `grog_image_push`.",
+				MarkdownDescription: "Container (OCI) image outputs keyed by their local tag (the image tag declared in the BUILD file). " +
+					"Each value carries the `manifest_digest` to feed into `grog_image_push`. " +
+					"Named `oci_images` rather than `docker_images` because the manifest format is OCI regardless of which tool produced it.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"identifier": schema.StringAttribute{
@@ -203,9 +204,9 @@ func (r *buildResource) build(ctx context.Context, model *buildResourceModel, di
 	model.OutputHash = types.StringValue(result.OutputHash)
 	model.CacheHit = types.BoolValue(result.CacheHit)
 
-	images := make(map[string]attr.Value, len(result.DockerImages))
-	for id, img := range result.DockerImages {
-		obj, objDiags := types.ObjectValue(dockerImageType.AttrTypes, map[string]attr.Value{
+	images := make(map[string]attr.Value, len(result.OCIImages))
+	for id, img := range result.OCIImages {
+		obj, objDiags := types.ObjectValue(ociImageType.AttrTypes, map[string]attr.Value{
 			"identifier":      types.StringValue(img.Identifier),
 			"image_id":        types.StringValue(img.ImageID),
 			"manifest_digest": types.StringValue(img.ManifestDigest),
@@ -213,7 +214,7 @@ func (r *buildResource) build(ctx context.Context, model *buildResourceModel, di
 		diags.Append(objDiags...)
 		images[id] = obj
 	}
-	mapVal, mapDiags := types.MapValue(dockerImageType, images)
+	mapVal, mapDiags := types.MapValue(ociImageType, images)
 	diags.Append(mapDiags...)
-	model.DockerImages = mapVal
+	model.OCIImages = mapVal
 }

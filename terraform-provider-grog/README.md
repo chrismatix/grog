@@ -17,9 +17,9 @@ workspace once and serves every resource from a single in-process session, which
 bounds total build concurrency and deduplicates shared dependencies across
 concurrent resource operations.
 
-- **`grog_build`** builds a target and exposes its outputs. Docker outputs are
-  published only to grog's content-addressed store (CAS), keyed by their local
-  tag in a `docker_images` map. It does **not** push to a user registry.
+- **`grog_build`** builds a target and exposes its outputs. Container image
+  outputs are published only to grog's content-addressed store (CAS), keyed by
+  their local tag in an `oci_images` map. It does **not** push to a user registry.
 - **`grog_image_push`** copies a built image (by manifest digest) from grog's
   CAS to an external registry, **without the local Docker daemon**, using
   go-containerregistry. Auth comes from the ambient Docker keychain

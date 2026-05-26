@@ -20,7 +20,7 @@ resource "grog_build" "app" {
 # Push the built image (by digest) to the local registry started by run.sh.
 # Auth uses the ambient Docker keychain; localhost registries are plain HTTP.
 resource "grog_image_push" "app" {
-  source_digest = grog_build.app.docker_images["grog-tf-demo:latest"].manifest_digest
+  source_digest = grog_build.app.oci_images["grog-tf-demo:latest"].manifest_digest
   repository    = "localhost:5001/grog-tf-demo"
   tags          = ["latest"]
 }

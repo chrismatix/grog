@@ -14,7 +14,7 @@ Pushes a grog-built image (by manifest digest) from grog's content-addressed sto
 
 ```terraform
 resource "grog_image_push" "api" {
-  source_digest = grog_build.api.docker_images["api:latest"].manifest_digest
+  source_digest = grog_build.api.oci_images["api:latest"].manifest_digest
   repository    = "us-docker.pkg.dev/my-project/apps/api"
   tags          = ["v1", "latest"]
 }
@@ -31,7 +31,7 @@ output "api_reference" {
 ### Required
 
 - `repository` (String) Destination repository without a tag, e.g. `us-docker.pkg.dev/my-project/my-repo/api`.
-- `source_digest` (String) The OCI manifest digest of a built image (`sha256:…`), typically `grog_build.<name>.docker_images["<tag>"].manifest_digest`.
+- `source_digest` (String) The OCI manifest digest of a built image (`sha256:…`), typically `grog_build.<name>.oci_images["<tag>"].manifest_digest`.
 
 ### Optional
 

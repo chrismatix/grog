@@ -50,7 +50,7 @@ resource "grog_build" "app" {
 }
 
 resource "grog_image_push" "app" {
-  source_digest = grog_build.app.docker_images["grog-tf-demo:latest"].manifest_digest
+  source_digest = grog_build.app.oci_images["grog-tf-demo:latest"].manifest_digest
   repository    = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.apps.repository_id}/app"
   tags          = ["latest"]
 }

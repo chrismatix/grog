@@ -1,5 +1,5 @@
 resource "grog_image_push" "api" {
-  source_digest = grog_build.api.docker_images["api:latest"].manifest_digest
+  source_digest = grog_build.api.oci_images["api:latest"].manifest_digest
   repository    = "us-docker.pkg.dev/my-project/apps/api"
   tags          = ["v1", "latest"]
 }

@@ -52,7 +52,7 @@ func (r *imagePushResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 			"source_digest": schema.StringAttribute{
 				Required: true,
 				MarkdownDescription: "The OCI manifest digest of a built image (`sha256:…`), typically " +
-					"`grog_build.<name>.docker_images[\"<tag>\"].manifest_digest`.",
+					"`grog_build.<name>.oci_images[\"<tag>\"].manifest_digest`.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},

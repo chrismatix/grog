@@ -3,15 +3,15 @@
 page_title: "grog_build Resource - grog"
 subcategory: ""
 description: |-
-  Builds a grog target (and its dependency closure) and exposes its outputs. The build runs on every apply; grog's content-addressed cache makes unchanged builds fast no-ops. Docker outputs are published only to grog's CAS — use grog_image_push to deliver them to a registry.
-  Docker daemon side effect: building a docker target invokes docker build, so the resulting image is also tagged in the local Docker daemon under the BUILD file's local tag (e.g. my-image:latest). That lets you docker run the freshly built image locally for inspection without pulling. The push to a registry is independent (and daemon-free) — see grog_image_push.
+  Builds a grog target (and its dependency closure) and exposes its outputs. The build runs on every apply; grog's content-addressed cache makes unchanged builds fast no-ops. Image outputs are published only to grog's CAS — use grog_image_push to deliver them to a registry.
+  Docker daemon side effect: if the target builds an image via docker build, the resulting image is also tagged in the local Docker daemon under the BUILD file's local tag (e.g. my-image:latest). That lets you docker run the freshly built image locally for inspection without pulling. The push to a registry is independent (and daemon-free) — see grog_image_push.
 ---
 
 # grog_build (Resource)
 
-Builds a grog target (and its dependency closure) and exposes its outputs. The build runs on every apply; grog's content-addressed cache makes unchanged builds fast no-ops. Docker outputs are published only to grog's CAS — use `grog_image_push` to deliver them to a registry.
+Builds a grog target (and its dependency closure) and exposes its outputs. The build runs on every apply; grog's content-addressed cache makes unchanged builds fast no-ops. Image outputs are published only to grog's CAS — use `grog_image_push` to deliver them to a registry.
 
-**Docker daemon side effect:** building a docker target invokes `docker build`, so the resulting image is also tagged in the local Docker daemon under the BUILD file's local tag (e.g. `my-image:latest`). That lets you `docker run` the freshly built image locally for inspection without pulling. The push to a registry is independent (and daemon-free) — see `grog_image_push`.
+**Docker daemon side effect:** if the target builds an image via `docker build`, the resulting image is also tagged in the local Docker daemon under the BUILD file's local tag (e.g. `my-image:latest`). That lets you `docker run` the freshly built image locally for inspection without pulling. The push to a registry is independent (and daemon-free) — see `grog_image_push`.
 
 ## Example Usage
 
@@ -20,10 +20,10 @@ resource "grog_build" "api" {
   target = "//services/api:image"
 }
 
-# The manifest digest of a docker output, keyed by its local tag, is available
-# for downstream resources (e.g. grog_image_push).
+# The manifest digest of an OCI image output, keyed by its local tag, is
+# available for downstream resources (e.g. grog_image_push).
 output "api_digest" {
-  value = grog_build.api.docker_images["api:latest"].manifest_digest
+  value = grog_build.api.oci_images["api:latest"].manifest_digest
 }
 ```
 
@@ -38,12 +38,12 @@ output "api_digest" {
 
 - `cache_hit` (Boolean) Whether the most recent build was served from cache rather than executed.
 - `change_hash` (String) grog's content hash of the target definition, inputs, and dependency outputs (the cache key).
-- `docker_images` (Attributes Map) Docker image outputs keyed by their local tag (the image tag declared in the BUILD file). Each value carries the `manifest_digest` to feed into `grog_image_push`. (see [below for nested schema](#nestedatt--docker_images))
 - `id` (String) Resource identifier (the target label).
+- `oci_images` (Attributes Map) Container (OCI) image outputs keyed by their local tag (the image tag declared in the BUILD file). Each value carries the `manifest_digest` to feed into `grog_image_push`. Named `oci_images` rather than `docker_images` because the manifest format is OCI regardless of which tool produced it. (see [below for nested schema](#nestedatt--oci_images))
 - `output_hash` (String) grog's hash of the produced outputs.
 
-<a id="nestedatt--docker_images"></a>
-### Nested Schema for `docker_images`
+<a id="nestedatt--oci_images"></a>
+### Nested Schema for `oci_images`
 
 Read-Only:
 

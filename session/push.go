@@ -31,7 +31,7 @@ const pushTagWorkers = 4
 // PushOptions describes a request to push a built image to an external registry.
 type PushOptions struct {
 	// ManifestDigest is the OCI manifest digest of a built image, e.g.
-	// "sha256:abc…" — typically BuildResult.DockerImages[x].ManifestDigest.
+	// "sha256:abc…" — typically BuildResult.OCIImages[x].ManifestDigest.
 	ManifestDigest string
 	// Repository is the destination repository without a tag, e.g.
 	// "us-docker.pkg.dev/project/repo/api".

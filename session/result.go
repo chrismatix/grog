@@ -17,18 +17,20 @@ type BuildResult struct {
 	// CacheHit reports whether the target was served from cache rather than
 	// freshly executed.
 	CacheHit bool
-	// DockerImages holds the target's docker outputs keyed by their output
+	// OCIImages holds the target's container image outputs keyed by their output
 	// identifier (the local image tag declared in the BUILD file, e.g.
-	// "api:latest"). A target may declare more than one docker output.
-	DockerImages map[string]DockerImage
+	// "api:latest"). A target may declare more than one image output. The name
+	// is OCI- rather than Docker-specific because the manifest is OCI-format
+	// regardless of which tool produced it.
+	OCIImages map[string]OCIImage
 }
 
-// DockerImage describes a single docker image output produced by a target and
+// OCIImage describes a single container image output produced by a target and
 // stored content-addressed in grog's CAS.
-type DockerImage struct {
+type OCIImage struct {
 	// Identifier is the output identifier / local tag from the BUILD file.
 	Identifier string
-	// ImageID is the sha256 of the image config (docker image ID).
+	// ImageID is the sha256 of the image config.
 	ImageID string
 	// ManifestDigest is the OCI manifest digest, e.g. "sha256:abc…". This is
 	// the immutable, content-addressed handle used to push the image to a
@@ -37,12 +39,12 @@ type DockerImage struct {
 }
 
 // newBuildResult projects a proto TargetResult onto the public BuildResult,
-// extracting docker outputs into the identifier-keyed map.
+// extracting OCI image outputs into the identifier-keyed map.
 func newBuildResult(targetLabel string, cacheHit bool, tr *gen.TargetResult) *BuildResult {
 	res := &BuildResult{
-		Label:        targetLabel,
-		CacheHit:     cacheHit,
-		DockerImages: make(map[string]DockerImage),
+		Label:     targetLabel,
+		CacheHit:  cacheHit,
+		OCIImages: make(map[string]OCIImage),
 	}
 	if tr == nil {
 		return res
@@ -60,7 +62,7 @@ func newBuildResult(targetLabel string, cacheHit bool, tr *gen.TargetResult) *Bu
 		if d := img.GetManifestDigest(); d != nil {
 			manifestDigest = d.GetHash()
 		}
-		res.DockerImages[identifier] = DockerImage{
+		res.OCIImages[identifier] = OCIImage{
 			Identifier:     identifier,
 			ImageID:        img.GetImageId(),
 			ManifestDigest: manifestDigest,
