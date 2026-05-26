@@ -454,15 +454,19 @@ Renders the chain of targets affected by changes since a git ref as a tree.
 
 ### Synopsis
 
-Shows, as a tree, how file changes since a given git ref propagate through the dependency graph:
-changed input file -> directly-affected target(s) -> transitive dependents.
+Shows, as a tree, how file changes since a given git ref propagate through the dependency graph.
+
+By default the tree is rooted on the leaf consumers of the change — i.e. the top-level targets
+(binaries, tests, etc.) that ultimately depend on the changed code — and walks back through their
+dependencies to the directly-affected targets, with the changed input files attached as leaves.
+This surfaces the actionable answer (which top-level targets need to be rebuilt / retested) first
+and uses the chain underneath as the evidence.
 
 This is the human-readable counterpart to `grog changes`: same query, tree view. Use
 `grog changes` when you want a flat, pipeable list of target labels.
 
-Use --invert to flip the tree and start from the leaf consumers of the change instead — i.e. the
-top-level targets (binaries, tests, etc.) that ultimately depend on the changed code, walking back
-through their dependencies to the directly-affected targets and changed files.
+Use --files-first to flip the tree the other way: root on the changed files and walk downstream
+through the directly-affected targets to their transitive dependents.
 
 ```text
 grog explain-changes [flags]
@@ -471,18 +475,18 @@ grog explain-changes [flags]
 ### Examples
 
 ```text
-  grog explain-changes --since=HEAD~1                   # Explain impact of the last commit
-  grog explain-changes --since=main                     # Explain impact since the main branch
-  grog explain-changes --since=main --show-files=false  # Collapse to a target-rooted view
-  grog explain-changes --since=main --invert            # Root on leaf consumers, walk back to changes
+  grog explain-changes --since=HEAD~1                      # Explain impact of the last commit
+  grog explain-changes --since=main                        # Explain impact since the main branch
+  grog explain-changes --since=main --show-files=false     # Drop the changed-file leaves
+  grog explain-changes --since=main --files-first          # Flip to a file-rooted, downstream tree
 ```
 
 ### Options
 
 ```text
+      --files-first    Flip the tree to root on the changed files and walk downstream through the directly-affected targets to their transitive dependents.
   -h, --help           help for explain-changes
-      --invert         Invert the tree: root on the leaf consumers of the change (top-level targets that depend on the changed code) and walk back through dependencies to the directly-affected targets.
-      --show-files     Include the changed input files in the tree. Without --invert, files are tree roots; with --invert they are leaves under the directly-affected targets. Use --show-files=false to omit them. (default true)
+      --show-files     Include the changed input files in the tree. By default files are leaves under the directly-affected targets; with --files-first they are tree roots. Use --show-files=false to omit them. (default true)
       --since string   Git ref (commit or branch) to compare against
 ```
 

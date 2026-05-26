@@ -100,30 +100,31 @@ cases:
 
   # Explain changes (tree view)
   - name: explain_changes
-    # File-rooted tree: each changed file -> directly-affected target(s) -> transitive dependents.
+    # Default consumer-rooted view: leaf consumers as roots, walking back through
+    # dependencies to directly-affected targets; changed input files attached as
+    # leaves under them.
     grog_args:
       - explain-changes
       - --since=5e79b3bc4fc7f1978e78f917126710989bf0deaa
 
   - name: explain_changes_no_files
-    # Target-rooted view: collapses the file layer, one tree per directly-affected target.
+    # Consumer-rooted view without the file leaves.
     grog_args:
       - explain-changes
       - --show-files=false
       - --since=5e79b3bc4fc7f1978e78f917126710989bf0deaa
 
-  - name: explain_changes_inverted
-    # Inverted view: leaf consumers as roots, walking back through dependencies to
-    # directly-affected targets; changed input files attached as leaves under them.
+  - name: explain_changes_files_first
+    # File-rooted tree: each changed file -> directly-affected target(s) -> transitive dependents.
     grog_args:
       - explain-changes
-      - --invert
+      - --files-first
       - --since=5e79b3bc4fc7f1978e78f917126710989bf0deaa
 
-  - name: explain_changes_inverted_no_files
-    # Inverted target-only chain (no file leaves).
+  - name: explain_changes_files_first_no_files
+    # --files-first with the file roots dropped: one tree per directly-affected target.
     grog_args:
       - explain-changes
-      - --invert
+      - --files-first
       - --show-files=false
       - --since=5e79b3bc4fc7f1978e78f917126710989bf0deaa
