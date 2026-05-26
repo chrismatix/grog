@@ -1,0 +1,17 @@
+//:bin
+├── BUILD.pkl
+╰── bin.sh
+//package_1:foo_test
+├── package_1/BUILD.pkl
+╰── //package_1:foo
+    ├── package_1/BUILD.pkl
+    ╰── //package_1:bar
+        ├── package_1/BUILD.pkl
+        ╰── package_1/source_2.txt
+//package_2:package_2
+├── package_2/BUILD.pkl
+╰── //package_1:foo
+    ├── package_1/BUILD.pkl
+    ╰── //package_1:bar
+        ├── package_1/BUILD.pkl
+        ╰── package_1/source_2.txt

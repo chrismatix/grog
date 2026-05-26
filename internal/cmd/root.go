@@ -196,6 +196,7 @@ func init() {
 	cmds.AddRDepsCmd(RootCmd)
 	cmds.AddOwnersCmd(RootCmd)
 	cmds.AddChangesCmd(RootCmd)
+	cmds.AddExplainChangesCmd(RootCmd)
 	cmds.AddListCmd(RootCmd)
 	traces.AddCmd(RootCmd)
 

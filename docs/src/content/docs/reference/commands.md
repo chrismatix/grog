@@ -15,6 +15,7 @@ Reference for the `grog` CLI.
 - [`grog check`](#grog-check)
 - [`grog clean`](#grog-clean)
 - [`grog deps`](#grog-deps)
+- [`grog explain-changes`](#grog-explain-changes)
 - [`grog graph`](#grog-graph)
 - [`grog info`](#grog-info)
 - [`grog list`](#grog-list)
@@ -51,7 +52,9 @@ Reference for the `grog` CLI.
   -h, --help                          help for grog
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
@@ -67,6 +70,7 @@ Reference for the `grog` CLI.
 * [`grog check`](#grog-check) - Loads the build graph and runs basic consistency checks.
 * [`grog clean`](#grog-clean) - Removes all cached artifacts.
 * [`grog deps`](#grog-deps) - Lists (transitive) dependencies of a target.
+* [`grog explain-changes`](#grog-explain-changes) - Renders the chain of targets affected by changes since a git ref as a tree.
 * [`grog graph`](#grog-graph) - Outputs the target dependency graph.
 * [`grog info`](#grog-info) - Prints information about the grog cli and workspace.
 * [`grog list`](#grog-list) - Lists targets by pattern.
@@ -124,7 +128,9 @@ grog build [flags]
       --fail-fast                     Fail fast on first error
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
@@ -181,7 +187,9 @@ grog build-and-test [flags]
       --fail-fast                     Fail fast on first error
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
@@ -242,7 +250,9 @@ grog changes [flags]
       --fail-fast                     Fail fast on first error
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
@@ -297,7 +307,9 @@ grog check [flags]
       --fail-fast                     Fail fast on first error
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
@@ -320,7 +332,7 @@ Removes all cached artifacts.
 ### Synopsis
 
 Removes cached artifacts from the workspace or the entire grog cache.
-By default, only the workspace-specific cache is cleaned. Use the --expunge flag to remove all cached artifacts.
+By default, the target cache and the workspace's logs/lockfile are cleaned. Since the target cache is shared across checkouts of the same repo, running clean affects other workspaces pointing at the same GROG_ROOT. Use the --expunge flag to remove every grog cache directory (CAS included).
 
 ```text
 grog clean [flags]
@@ -329,7 +341,7 @@ grog clean [flags]
 ### Examples
 
 ```text
-  grog clean            # Clean the workspace cache
+  grog clean            # Clean the target cache and this checkout's logs
   grog clean --expunge   # Clean the entire grog cache
 ```
 
@@ -355,7 +367,9 @@ grog clean [flags]
       --fail-fast                     Fail fast on first error
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
@@ -416,7 +430,80 @@ grog deps [flags]
       --fail-fast                     Fail fast on first error
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
+      --profile string                Select a configuration profile to use
+      --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
+      --stream-logs                   Forward all target build/test logs to stdout/-err
+      --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+  -v, --verbose count                 Set verbosity level (-v, -vv)
+```
+
+### See also
+
+* [`grog`](#grog)
+
+
+
+---
+
+## grog explain-changes
+
+Renders the chain of targets affected by changes since a git ref as a tree.
+
+### Synopsis
+
+Shows, as a tree, how file changes since a given git ref propagate through the dependency graph:
+changed input file -> directly-affected target(s) -> transitive dependents.
+
+This is the human-readable counterpart to `grog changes`: same query, tree view. Use
+`grog changes` when you want a flat, pipeable list of target labels.
+
+Use --invert to flip the tree and start from the leaf consumers of the change instead — i.e. the
+top-level targets (binaries, tests, etc.) that ultimately depend on the changed code, walking back
+through their dependencies to the directly-affected targets and changed files.
+
+```text
+grog explain-changes [flags]
+```
+
+### Examples
+
+```text
+  grog explain-changes --since=HEAD~1                   # Explain impact of the last commit
+  grog explain-changes --since=main                     # Explain impact since the main branch
+  grog explain-changes --since=main --show-files=false  # Collapse to a target-rooted view
+  grog explain-changes --since=main --invert            # Root on leaf consumers, walk back to changes
+```
+
+### Options
+
+```text
+  -h, --help           help for explain-changes
+      --invert         Invert the tree: root on the leaf consumers of the change (top-level targets that depend on the changed code) and walk back through dependencies to the directly-affected targets.
+      --show-files     Include the changed input files in the tree. Without --invert, files are tree roots; with --invert they are leaves under the directly-affected targets. Use --show-files=false to omit them. (default true)
+      --since string   Git ref (commit or branch) to compare against
+```
+
+### Options inherited from parent commands
+
+```text
+  -a, --all-platforms                 Select all platforms (bypasses platform selectors)
+      --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
+      --color string                  Set color output (yes, no, or auto) (default "auto")
+      --debug                         Enable debug logging
+      --disable-default-shell-flags   Do not prepend "set -eu" to target commands
+      --disable-progress-tracker      Disable progress tracking updates
+      --disable-tea                   Disable interactive TUI (Bubble Tea)
+      --enable-cache                  Enable cache (default true)
+      --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
+      --fail-fast                     Fail fast on first error
+      --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
+      --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
+      --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
@@ -478,7 +565,9 @@ grog graph [flags]
       --fail-fast                     Fail fast on first error
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
@@ -534,7 +623,9 @@ grog info [flags]
       --fail-fast                     Fail fast on first error
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
@@ -593,7 +684,9 @@ grog list [flags]
       --fail-fast                     Fail fast on first error
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
@@ -651,7 +744,9 @@ grog logs [flags]
       --fail-fast                     Fail fast on first error
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
@@ -708,7 +803,9 @@ grog owners [flags]
       --fail-fast                     Fail fast on first error
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
@@ -769,7 +866,9 @@ grog rdeps [flags]
       --fail-fast                     Fail fast on first error
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
@@ -828,7 +927,9 @@ grog run [flags]
       --fail-fast                     Fail fast on first error
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
@@ -887,7 +988,9 @@ grog taint [flags]
       --fail-fast                     Fail fast on first error
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
@@ -911,6 +1014,8 @@ Loads the user configuration and executes test targets.
 
 Loads the user configuration, checks which targets need to be rebuilt based on file hashes, builds the dependency graph, and executes test targets.
 
+Use "--" to separate the list of targets from additional arguments passed to the target commands.
+
 ```text
 grog test [flags]
 ```
@@ -918,9 +1023,10 @@ grog test [flags]
 ### Examples
 
 ```text
-  grog test                      # Run all tests in the current package and subpackages
-  grog test //path/to/package:test  # Run a specific test
-  grog test //path/to/package/...   # Run all tests in a package and subpackages
+  grog test                                          # Run all tests in the current package and subpackages
+  grog test //path/to/package:test                   # Run a specific test
+  grog test //path/to/package/...                    # Run all tests in a package and subpackages
+  grog test //path/to/package:test -- -k test_foo    # Pass extra arguments to the test command
 ```
 
 ### Options
@@ -944,7 +1050,9 @@ grog test [flags]
       --fail-fast                     Fail fast on first error
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
@@ -989,7 +1097,9 @@ View, analyze, and export build execution traces for performance analysis and da
       --fail-fast                     Fail fast on first error
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
@@ -1051,7 +1161,9 @@ grog traces export [flags]
       --fail-fast                     Fail fast on first error
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
@@ -1109,7 +1221,9 @@ grog traces list [flags]
       --fail-fast                     Fail fast on first error
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
@@ -1162,7 +1276,9 @@ grog traces prune [flags]
       --fail-fast                     Fail fast on first error
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
@@ -1213,7 +1329,9 @@ grog traces pull [flags]
       --fail-fast                     Fail fast on first error
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
@@ -1267,7 +1385,9 @@ grog traces show <trace-id> [flags]
       --fail-fast                     Fail fast on first error
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
@@ -1325,7 +1445,9 @@ grog traces stats [flags]
       --fail-fast                     Fail fast on first error
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
@@ -1380,7 +1502,9 @@ grog version [flags]
       --fail-fast                     Fail fast on first error
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
       --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
