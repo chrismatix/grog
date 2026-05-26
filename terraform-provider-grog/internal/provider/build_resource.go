@@ -32,11 +32,13 @@ func NewBuildResource() resource.Resource {
 // buildResourceModel is the Terraform state model for grog_build.
 type buildResourceModel struct {
 	Target     types.String `tfsdk:"target"`
-	ID         types.String `tfsdk:"id"`
-	ChangeHash types.String `tfsdk:"change_hash"`
-	OutputHash types.String `tfsdk:"output_hash"`
-	CacheHit   types.Bool   `tfsdk:"cache_hit"`
-	OCIImages  types.Map    `tfsdk:"oci_images"`
+	ID          types.String `tfsdk:"id"`
+	ChangeHash  types.String `tfsdk:"change_hash"`
+	OutputHash  types.String `tfsdk:"output_hash"`
+	CacheHit    types.Bool   `tfsdk:"cache_hit"`
+	OCIImages   types.Map    `tfsdk:"oci_images"`
+	Files       types.Map    `tfsdk:"files"`
+	Directories types.Map    `tfsdk:"directories"`
 }
 
 // ociImageType is the object type for each entry in oci_images.
@@ -45,6 +47,23 @@ var ociImageType = types.ObjectType{
 		"identifier":      types.StringType,
 		"image_id":        types.StringType,
 		"manifest_digest": types.StringType,
+	},
+}
+
+// fileOutputType is the object type for each entry in files.
+var fileOutputType = types.ObjectType{
+	AttrTypes: map[string]attr.Type{
+		"path":          types.StringType,
+		"digest":        types.StringType,
+		"is_executable": types.BoolType,
+	},
+}
+
+// directoryOutputType is the object type for each entry in directories.
+var directoryOutputType = types.ObjectType{
+	AttrTypes: map[string]attr.Type{
+		"path":   types.StringType,
+		"digest": types.StringType,
 	},
 }
 
@@ -115,6 +134,50 @@ func (r *buildResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 						"manifest_digest": schema.StringAttribute{
 							Computed:            true,
 							MarkdownDescription: "The OCI manifest digest (`sha256:…`), the content-addressed handle for pushing.",
+						},
+					},
+				},
+				PlanModifiers: []planmodifier.Map{
+					knownAfterApplyMap(),
+				},
+			},
+			"files": schema.MapNestedAttribute{
+				Computed: true,
+				MarkdownDescription: "File outputs keyed by their package-relative path (the path declared in the BUILD file's `outputs`). " +
+					"`path` is the workspace-absolute path on disk, re-derived from the current workspace root on each read.",
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"path": schema.StringAttribute{
+							Computed:            true,
+							MarkdownDescription: "Workspace-absolute path to the produced file.",
+						},
+						"digest": schema.StringAttribute{
+							Computed:            true,
+							MarkdownDescription: "Content hash of the file (algorithm per `grog.toml`).",
+						},
+						"is_executable": schema.BoolAttribute{
+							Computed:            true,
+							MarkdownDescription: "Whether grog marked the file executable (used for `bin_output` targets).",
+						},
+					},
+				},
+				PlanModifiers: []planmodifier.Map{
+					knownAfterApplyMap(),
+				},
+			},
+			"directories": schema.MapNestedAttribute{
+				Computed: true,
+				MarkdownDescription: "Directory outputs keyed by their package-relative path. " +
+					"`digest` is grog's Merkle-tree hash of the directory contents.",
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"path": schema.StringAttribute{
+							Computed:            true,
+							MarkdownDescription: "Workspace-absolute path to the produced directory.",
+						},
+						"digest": schema.StringAttribute{
+							Computed:            true,
+							MarkdownDescription: "Merkle-tree digest of the directory contents.",
 						},
 					},
 				},
@@ -214,7 +277,34 @@ func (r *buildResource) build(ctx context.Context, model *buildResourceModel, di
 		diags.Append(objDiags...)
 		images[id] = obj
 	}
-	mapVal, mapDiags := types.MapValue(ociImageType, images)
-	diags.Append(mapDiags...)
-	model.OCIImages = mapVal
+	imagesMap, imagesDiags := types.MapValue(ociImageType, images)
+	diags.Append(imagesDiags...)
+	model.OCIImages = imagesMap
+
+	files := make(map[string]attr.Value, len(result.Files))
+	for id, f := range result.Files {
+		obj, objDiags := types.ObjectValue(fileOutputType.AttrTypes, map[string]attr.Value{
+			"path":          types.StringValue(f.Path),
+			"digest":        types.StringValue(f.Digest),
+			"is_executable": types.BoolValue(f.IsExecutable),
+		})
+		diags.Append(objDiags...)
+		files[id] = obj
+	}
+	filesMap, filesDiags := types.MapValue(fileOutputType, files)
+	diags.Append(filesDiags...)
+	model.Files = filesMap
+
+	dirs := make(map[string]attr.Value, len(result.Directories))
+	for id, d := range result.Directories {
+		obj, objDiags := types.ObjectValue(directoryOutputType.AttrTypes, map[string]attr.Value{
+			"path":   types.StringValue(d.Path),
+			"digest": types.StringValue(d.Digest),
+		})
+		diags.Append(objDiags...)
+		dirs[id] = obj
+	}
+	dirsMap, dirsDiags := types.MapValue(directoryOutputType, dirs)
+	diags.Append(dirsDiags...)
+	model.Directories = dirsMap
 }

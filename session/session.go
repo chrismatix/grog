@@ -238,7 +238,7 @@ func (s *Session) Build(ctx context.Context, targetStr string) (*BuildResult, er
 			continue
 		}
 		tr := executor.ResultFor(builtLabel)
-		result := newBuildResult(builtLabel.String(), completion.CacheResult == dag.CacheHit, tr)
+		result := newBuildResult(builtLabel, completion.CacheResult == dag.CacheHit, tr, s.workspaceRoot)
 		s.memo[builtLabel] = result
 		if builtLabel == targetLabel {
 			requested = result

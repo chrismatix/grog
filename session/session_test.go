@@ -31,6 +31,14 @@ func writeWorkspace(t *testing.T) string {
 	return root
 }
 
+func keysOf[V any](m map[string]V) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
 func mustWrite(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -72,6 +80,19 @@ func TestSessionBuildFileTarget(t *testing.T) {
 	// The command should have produced the output file.
 	if _, err := os.Stat(filepath.Join(root, "pkg", "output.txt")); err != nil {
 		t.Errorf("expected output.txt: %v", err)
+	}
+
+	// The file output should be exposed on the BuildResult, keyed by its
+	// package-relative path, with an absolute Path resolved from workspace_root.
+	fileOut, ok := res.Files["output.txt"]
+	if !ok {
+		t.Fatalf("Files map missing output.txt; got keys %v", keysOf(res.Files))
+	}
+	if fileOut.Path != filepath.Join(root, "pkg", "output.txt") {
+		t.Errorf("Files[output.txt].Path = %q, want workspace-absolute path", fileOut.Path)
+	}
+	if fileOut.Digest == "" {
+		t.Error("Files[output.txt].Digest is empty")
 	}
 
 	// Second build of the same label returns the memoized result instantly.

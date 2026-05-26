@@ -38,9 +38,30 @@ output "api_digest" {
 
 - `cache_hit` (Boolean) Whether the most recent build was served from cache rather than executed.
 - `change_hash` (String) grog's content hash of the target definition, inputs, and dependency outputs (the cache key).
+- `directories` (Attributes Map) Directory outputs keyed by their package-relative path. `digest` is grog's Merkle-tree hash of the directory contents. (see [below for nested schema](#nestedatt--directories))
+- `files` (Attributes Map) File outputs keyed by their package-relative path (the path declared in the BUILD file's `outputs`). `path` is the workspace-absolute path on disk, re-derived from the current workspace root on each read. (see [below for nested schema](#nestedatt--files))
 - `id` (String) Resource identifier (the target label).
 - `oci_images` (Attributes Map) Container (OCI) image outputs keyed by their local tag (the image tag declared in the BUILD file). Each value carries the `manifest_digest` to feed into `grog_image_push`. Named `oci_images` rather than `docker_images` because the manifest format is OCI regardless of which tool produced it. (see [below for nested schema](#nestedatt--oci_images))
 - `output_hash` (String) grog's hash of the produced outputs.
+
+<a id="nestedatt--directories"></a>
+### Nested Schema for `directories`
+
+Read-Only:
+
+- `digest` (String) Merkle-tree digest of the directory contents.
+- `path` (String) Workspace-absolute path to the produced directory.
+
+
+<a id="nestedatt--files"></a>
+### Nested Schema for `files`
+
+Read-Only:
+
+- `digest` (String) Content hash of the file (algorithm per `grog.toml`).
+- `is_executable` (Boolean) Whether grog marked the file executable (used for `bin_output` targets).
+- `path` (String) Workspace-absolute path to the produced file.
+
 
 <a id="nestedatt--oci_images"></a>
 ### Nested Schema for `oci_images`
