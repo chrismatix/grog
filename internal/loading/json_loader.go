@@ -11,7 +11,7 @@ import (
 type JsonLoader struct{}
 
 func (j JsonLoader) Matches(fileName string) bool {
-	return "BUILD.json" == fileName
+	return fileName == "BUILD.json"
 }
 
 // Load reads the file at the specified filePath and unmarshals its content into a model.Package.

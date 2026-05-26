@@ -65,7 +65,7 @@ set -e
 	if len(target.Inputs) == 0 || target.Inputs[0] != "format.grog.sh" {
 		t.Fatalf("expected script path to be the first input, got %#v", target.Inputs)
 	}
-	if target.Platforms == nil || len(target.Platforms) == 0 {
+	if len(target.Platforms) == 0 {
 		t.Fatalf("expected platform to be set")
 	}
 	if target.Platforms[0] != "linux/arm64" {

@@ -17,7 +17,7 @@ func (c CompletionMap) GetErrors() []error {
 	return errorList
 }
 
-// TargetSuccessCount returns the number of successful targets and the number of cache hits
+// TargetSuccessCount returns the number of successful targets and the number of cache hits.
 func (c CompletionMap) TargetSuccessCount() (int, int) {
 	successCount := 0
 	cacheHits := 0

@@ -14,9 +14,9 @@ import (
 	"grog/internal/proto/gen"
 	"grog/internal/worker"
 
+	"github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
-	"github.com/docker/docker/errdefs"
 )
 
 // DockerOutputHandler caches docker images by pushing them to an in-process

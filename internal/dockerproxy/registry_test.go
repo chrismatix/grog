@@ -460,7 +460,7 @@ func TestConcurrentChunkedUploadsAreIsolated(t *testing.T) {
 	const sessions = 8
 	payloads := make([][]byte, sessions)
 	digests := make([]string, sessions)
-	for i := 0; i < sessions; i++ {
+	for i := range sessions {
 		payloads[i] = []byte(strings.Repeat(fmt.Sprintf("%c", 'a'+i), 4096))
 		digests[i] = digestOf(payloads[i])
 	}
@@ -468,12 +468,8 @@ func TestConcurrentChunkedUploadsAreIsolated(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make(chan error, sessions)
 
-	for i := 0; i < sessions; i++ {
-		i := i
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+	for i := range sessions {
+		wg.Go(func() {
 			startResp, err := http.Post(urlFor(reg, "/v2/repo/blobs/uploads/"), "application/octet-stream", nil)
 			if err != nil {
 				errs <- err
@@ -509,7 +505,7 @@ func TestConcurrentChunkedUploadsAreIsolated(t *testing.T) {
 				errs <- fmt.Errorf("session %d: unexpected status %d", i, putResp.StatusCode)
 				return
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	close(errs)
@@ -517,7 +513,7 @@ func TestConcurrentChunkedUploadsAreIsolated(t *testing.T) {
 		t.Errorf("session error: %v", err)
 	}
 
-	for i := 0; i < sessions; i++ {
+	for i := range sessions {
 		got, err := cas.LoadBytes(ctx, digests[i])
 		require.NoError(t, err)
 		assert.Equal(t, payloads[i], got, "session %d", i)

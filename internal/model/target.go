@@ -142,7 +142,7 @@ func (t *Target) OutputDefinitions() []string {
 
 // HasOutputChecksOnly checks if this is a special type of target that only had output checks
 // and no in or outputs. In that case the output checks are the only thing that should determine
-// if a target needs to be run (
+// if a target needs to be run.
 func (t *Target) HasOutputChecksOnly() bool {
 	return len(t.OutputChecks) > 0 && len(t.AllOutputs()) == 0 && len(t.Inputs) == 0
 }
@@ -155,13 +155,14 @@ func PrintSortedLabels(nodes []BuildNode) {
 	label.PrintSorted(labels)
 }
 
-// Alias to avoid infinite recursion in MarshalJSON
+// Alias to avoid infinite recursion in MarshalJSON.
 type targetAlias Target
 
 func (t *Target) MarshalJSON() ([]byte, error) {
 	// embed all fields via alias, override BinOutput to a pointer so omitempty works
 	wrapper := struct {
 		*targetAlias
+
 		BinOutput *Output `json:"bin_output,omitempty"`
 	}{
 		targetAlias: (*targetAlias)(t),

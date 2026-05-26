@@ -109,7 +109,7 @@ func (s *TraceStore) Write(ctx context.Context, trace *BuildTrace) error {
 	return s.writer.Write(ctx, trace)
 }
 
-// Pull downloads remote trace files that are not yet in the local cache.
+// PullProgress tracks remote trace files downloaded into the local cache.
 // It lists keys from the remote backend and triggers a Get() for each missing
 // file, which causes the RemoteWrapper to fetch and cache it locally.
 // Returns the number of files synced.
@@ -300,10 +300,7 @@ func (s *TraceStore) LoadSpansForTraces(ctx context.Context, traceIDs []string) 
 
 	const chunkSize = 500
 	for start := 0; start < len(traceIDs); start += chunkSize {
-		end := start + chunkSize
-		if end > len(traceIDs) {
-			end = len(traceIDs)
-		}
+		end := min(start+chunkSize, len(traceIDs))
 		chunk := traceIDs[start:end]
 
 		quoted := make([]string, 0, len(chunk))
@@ -355,7 +352,7 @@ func (s *TraceStore) FindAndLoad(ctx context.Context, traceIDPrefix string) (*Bu
 	return &BuildTrace{Build: *build, Spans: spans}, nil
 }
 
-// Stats returns aggregate statistics over recent traces.
+// TraceStats contains aggregate statistics over recent traces.
 type TraceStats struct {
 	TraceCount   int
 	AvgDuration  float64
@@ -442,7 +439,7 @@ type BottleneckReport struct {
 	OverallCacheMissRate float64
 }
 
-// Bottleneck thresholds
+// Bottleneck thresholds.
 const (
 	queueSaturationThresholdMs = 500
 	ioBottleneckThresholdMs    = 1000

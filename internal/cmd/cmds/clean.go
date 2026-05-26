@@ -1,10 +1,11 @@
 package cmds
 
 import (
-	"github.com/spf13/cobra"
 	"grog/internal/config"
 	"grog/internal/console"
 	"os"
+
+	"github.com/spf13/cobra"
 )
 
 var expunge bool

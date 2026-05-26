@@ -27,7 +27,7 @@ type PreparedTargetResult struct {
 	WritePlans   []handlers.OutputWritePlan
 }
 
-// Registry manages the available output handlers
+// Registry manages the available output handlers.
 type Registry struct {
 	handlers     map[string]handlers.Handler
 	cas          *caching.Cas
@@ -35,7 +35,7 @@ type Registry struct {
 	handlerMutex sync.RWMutex
 
 	// Features like load_outputs=minimal may load outputs concurrently
-	// In this case we want to make sure that that only happens once per target
+	// In this case we want to make sure that only happens once per target
 	targetMutexMap *maps.MutexMap
 
 	hashMutex       sync.RWMutex
@@ -44,7 +44,7 @@ type Registry struct {
 	outputHashCache map[string]map[model.Output]string
 }
 
-// NewRegistry creates a new registry with default handlers
+// NewRegistry creates a new registry with default handlers.
 func NewRegistry(
 	ctx context.Context,
 	cas *caching.Cas,
@@ -95,7 +95,7 @@ func (r *Registry) Close() error {
 	return errors.Join(errs...)
 }
 
-// Register adds a new output handler to the registry
+// Register adds a new output handler to the registry.
 func (r *Registry) Register(handler handlers.Handler) {
 	r.handlerMutex.Lock()
 	defer r.handlerMutex.Unlock()
@@ -106,7 +106,7 @@ func (r *Registry) Register(handler handlers.Handler) {
 	r.handlers[string(handler.Type())] = handler
 }
 
-// GetHandler retrieves a handler by type
+// GetHandler retrieves a handler by type.
 func (r *Registry) mustGetHandlerFromProto(output *gen.Output) handlers.Handler {
 	var outputType string
 
@@ -124,7 +124,7 @@ func (r *Registry) mustGetHandlerFromProto(output *gen.Output) handlers.Handler 
 	return r.mustGetHandler(outputType)
 }
 
-// GetHandler retrieves a handler by type
+// GetHandler retrieves a handler by type.
 func (r *Registry) mustGetHandler(outputType string) handlers.Handler {
 	r.handlerMutex.RLock()
 	defer r.handlerMutex.RUnlock()
@@ -204,7 +204,7 @@ func (r *Registry) PrepareOutputs(
 }
 
 // GetNoCacheOutputHash computes the output hash for a target when target caching is disabled
-// using handler.GetHash() on local resources only
+// using handler.GetHash() on local resources only.
 func (r *Registry) GetNoCacheOutputHash(ctx context.Context, target *model.Target) (*gen.TargetResult, error) {
 	outputs := target.AllOutputs()
 
@@ -240,7 +240,7 @@ func (r *Registry) GetNoCacheOutputHash(ctx context.Context, target *model.Targe
 	}, nil
 }
 
-// LoadOutputs loads the outputs for a target once using the cached targetResult
+// LoadOutputs loads the outputs for a target once using the cached targetResult.
 func (r *Registry) LoadOutputs(
 	ctx context.Context,
 	target *model.Target,

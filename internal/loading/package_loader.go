@@ -16,7 +16,7 @@ type Loader interface {
 	Load(ctx context.Context, filePath string) (PackageDTO, bool, error)
 }
 
-// PackageLoader facade that delegates to the correct loader based on the pattern
+// PackageLoader facade that delegates to the correct loader based on the pattern.
 type PackageLoader struct {
 	loaders   []Loader
 	fileNames []string

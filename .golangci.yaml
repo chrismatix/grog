@@ -1,0 +1,52 @@
+version: "2"
+linters:
+  # Default set of linters.
+  # The value can be:
+  # - `standard`: the "Default" linters https://golangci-lint.run/docs/linters/#all-linters
+  # - `all`: enables all linters by default.
+  # - `none`: disables all linters by default.
+  # - `fast`: enables only linters considered as "fast" (`golangci-lint help linters --json | jq '[ .[] | select(.fast==true) ] | map(.name)'`).
+  # Default: standard
+  default: fast
+  enable:
+    - modernize
+    - nolintlint
+    - revive
+    - staticcheck
+  settings:
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+  disable:
+    - depguard
+    - wsl
+    - nlreturn
+    - tagalign
+    - gomodguard
+    - mnd
+    - gocognit
+    - nestif
+    - gocyclo
+    - cyclop
+    - funlen
+    - maintidx
+    - lll
+    - funcorder
+    - godox
+    - dupl
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - testpackage
+
+issues:
+  # Maximum issues count per one linter.
+  # Set to 0 to disable.
+  # Default: 50
+  max-issues-per-linter: 0
+
+formatters:
+  enable:
+    - goimports

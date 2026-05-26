@@ -102,11 +102,11 @@ var globalIOOnce sync.Once
 
 func ensureGlobalIOInit() {
 	globalIOOnce.Do(func() {
-		cap := config.Global.NumIOWorkers
-		if cap < 1 {
-			cap = DefaultIOConcurrency()
+		capacity := config.Global.NumIOWorkers
+		if capacity < 1 {
+			capacity = DefaultIOConcurrency()
 		}
-		SetGlobalIOConcurrency(cap)
+		SetGlobalIOConcurrency(capacity)
 	})
 }
 
@@ -120,7 +120,6 @@ func buildBackend(
 	}
 
 	switch cacheConfig.Backend {
-
 	case config.GCSCacheBackend:
 		gcsCache, err := NewGCSCache(ctx, cacheConfig.GCS)
 		if err != nil {

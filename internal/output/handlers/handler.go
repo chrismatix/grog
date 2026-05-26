@@ -24,7 +24,7 @@ type PreparedOutput struct {
 	WritePlan OutputWritePlan
 }
 
-// Handler defines how to handle a specific type of build output
+// Handler defines how to handle a specific type of build output.
 type Handler interface {
 	// Type returns the identifier for this output type (e.g., "dir", "docker")
 	Type() HandlerType
@@ -49,7 +49,7 @@ const (
 )
 
 // KnownHandlerTypes This is necessary so that we can statically check for handler type without having
-// to load them during the parsing of the outputs
+// to load them during the parsing of the outputs.
 var KnownHandlerTypes = []HandlerType{
 	FileHandler,
 	DirHandler,

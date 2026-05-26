@@ -72,7 +72,7 @@ func (d *directoryWritePlan) Cleanup(_ context.Context) error {
 	return os.RemoveAll(d.stagingRoot)
 }
 
-// NewDirectoryOutputHandler creates a new DirectoryOutputHandler
+// NewDirectoryOutputHandler creates a new DirectoryOutputHandler.
 func NewDirectoryOutputHandler(cas *caching.Cas) *DirectoryOutputHandler {
 	return &DirectoryOutputHandler{
 		cas: cas,
@@ -88,7 +88,7 @@ func (d *DirectoryOutputHandler) Hash(ctx context.Context, target model.Target, 
 	return d.getDirectoryHash(ctx, target, directoryPath)
 }
 
-// getDirectoryHash builds a hash tree for the given directory and returns the digest of the tree
+// getDirectoryHash builds a hash tree for the given directory and returns the digest of the tree.
 func (d *DirectoryOutputHandler) getDirectoryHash(ctx context.Context, target model.Target, directoryPath string) (string, error) {
 	logger := console.GetLogger(ctx)
 
@@ -254,7 +254,7 @@ func uploadFilesToCas(ctx context.Context, cas *caching.Cas, fileUploads []fileU
 }
 
 // Helper struct for recording file that need to be uploaded to the CAS
-// in parallel
+// in parallel.
 type fileUpload struct {
 	digest       string
 	absolutePath string
@@ -262,7 +262,7 @@ type fileUpload struct {
 }
 
 // writeDirectoryRecursive recursively builds a Directory message for the given path
-// and writes everything it encounters to the cas
+// and writes everything it encounters to the cas.
 func (d *DirectoryOutputHandler) writeDirectoryRecursive(
 	ctx context.Context,
 	rootPath string,
@@ -433,7 +433,7 @@ func stageFileSnapshot(sourcePath string, stagingRoot string, relativePath strin
 	}, nil
 }
 
-// Load fetches the tree from the CAS and then fetches all files from the cache
+// Load fetches the tree from the CAS and then fetches all files from the cache.
 func (d *DirectoryOutputHandler) Load(
 	ctx context.Context,
 	target model.Target,
@@ -526,7 +526,7 @@ func (d *DirectoryOutputHandler) Load(
 	return nil
 }
 
-// loadDirectoryRecursive recursively reconstructs a directory from the Directory message
+// loadDirectoryRecursive recursively reconstructs a directory from the Directory message.
 func (d *DirectoryOutputHandler) loadDirectoryRecursive(
 	ctx context.Context,
 	path string,

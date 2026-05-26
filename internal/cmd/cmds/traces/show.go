@@ -77,7 +77,7 @@ func printBuildSummary(b *tracing.BuildRow) {
 	failures := fmt.Sprintf("%d", b.FailureCount)
 
 	if styled() {
-		label := statsLabelStyle.Copy().Width(12)
+		label := statsLabelStyle.Width(12)
 		val := statsValueStyle
 
 		if b.FailureCount > 0 {
@@ -150,16 +150,18 @@ func printSpanTable(spans []tracing.SpanRow) {
 	var rows [][]string
 	for _, s := range displaySpans {
 		status := "ok"
-		if s.Status == "FAILURE" {
+		switch s.Status {
+		case "FAILURE":
 			status = "FAIL"
-		} else if s.Status == "CANCELLED" {
+		case "CANCELLED":
 			status = "skip"
 		}
 
 		cache := "miss"
-		if s.CacheResult == "CACHE_HIT" {
+		switch s.CacheResult {
+		case "CACHE_HIT":
 			cache = "hit"
-		} else if s.CacheResult == "CACHE_SKIP" {
+		case "CACHE_SKIP":
 			cache = "skip"
 		}
 

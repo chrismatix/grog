@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// TestHashFile tests the HashFile function with various scenarios
+// TestHashFile tests the HashFile function with various scenarios.
 func TestHashFile(t *testing.T) {
 	// Create a temporary directory for test files
 	tempDir, err := os.MkdirTemp("", "hashfile_test")
@@ -45,7 +45,7 @@ func TestHashFile(t *testing.T) {
 	})
 }
 
-// TestHashFiles tests the HashFiles function
+// TestHashFiles tests the HashFiles function.
 func TestHashFiles(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "hashfiles_test")
 	if err != nil {

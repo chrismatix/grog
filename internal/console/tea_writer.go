@@ -8,7 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// TeaWriter small helper so that we can use a tea.Program as a sync for zap
+// TeaWriter small helper so that we can use a tea.Program as a sync for zap.
 type TeaWriter struct {
 	Program *tea.Program
 	isDone  bool

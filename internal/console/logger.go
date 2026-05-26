@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"strings"
 
+	"grog/internal/config"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fatih/color"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"grog/internal/config"
 )
 
 // TraceLevel represents the most verbose logging level supported by grog.
@@ -20,6 +21,7 @@ const TraceLevel zapcore.Level = zapcore.DebugLevel - 1
 // the sugared logging ergonomics throughout the codebase.
 type Logger struct {
 	*zap.SugaredLogger
+
 	traceEnabled bool
 }
 
@@ -79,7 +81,7 @@ func InitLogger() *Logger {
 }
 
 // InitLoggerWithTea returns a new logger that writes to the given Program.
-// Leave the Program empty to write to stdout
+// Leave the Program empty to write to stdout.
 func InitLoggerWithTea(program *tea.Program) *Logger {
 	logPath := config.Global.LogOutputPath
 	if logPath == "" {
@@ -169,7 +171,7 @@ func WithLogger(ctx context.Context, logger *Logger) context.Context {
 
 type programKey struct{}
 
-// WithTeaLogger returns a new context with a tea logger and the tea Program
+// WithTeaLogger returns a new context with a tea logger and the tea Program.
 func WithTeaLogger(ctx context.Context, program *tea.Program) context.Context {
 	loggerCtx := context.WithValue(ctx, ctxLoggerKey{}, InitLoggerWithTea(program))
 	return context.WithValue(loggerCtx, programKey{}, program)
@@ -202,16 +204,17 @@ func WarnOnError(ctx context.Context, fn func() error) {
 
 func MustApplyColorSetting() {
 	colorSetting := viper.GetString("color")
-	if colorSetting == "yes" || colorSetting == "1" {
+	switch colorSetting {
+	case "yes", "1":
 		color.NoColor = false
-	} else if colorSetting == "no" || colorSetting == "0" {
+	case "no", "0":
 		color.NoColor = true
 		// No need to explicitly handle "auto" as the color package will
 		// automatically detect if it is a TTY or not.
 	}
 }
 
-// CustomLevelEncoder matches the way bazel outputs its log levels
+// CustomLevelEncoder matches the way bazel outputs its log levels.
 func CustomLevelEncoder(level zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {
 	enc.AppendString(getMessagePrefix(level))
 }

@@ -62,13 +62,8 @@ func main() {
 				if tasks[i].done {
 					continue
 				}
-				// Lint task just cycles status text without a bar
-				if tasks[i].tot == 0 {
-					// Toggle between states every ~1.2s
-					if time.Now().UnixNano()/int64(time.Second)%2 == 0 {
-						// noop, status will be set below
-					}
-				} else {
+				// Lint task just cycles status text without a bar.
+				if tasks[i].tot != 0 {
 					// Increase by a chunk, slow down near the end
 					inc := tasks[i].tot / 40 // ~4% per tick
 					if tasks[i].cur > tasks[i].tot*90/100 {

@@ -56,7 +56,7 @@ func (m BuildNodeMap) NodesAlphabetically() []BuildNode {
 	return nodes
 }
 
-// SelectedNodesAlphabetically returns the selected nodes in alphabetical order
+// SelectedNodesAlphabetically returns the selected nodes in alphabetical order.
 func (m BuildNodeMap) SelectedNodesAlphabetically() []BuildNode {
 	var nodes []BuildNode
 	for _, node := range m {

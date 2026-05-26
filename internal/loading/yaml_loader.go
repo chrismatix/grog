@@ -12,7 +12,7 @@ import (
 type YamlLoader struct{}
 
 func (j YamlLoader) Matches(fileName string) bool {
-	return "BUILD.yaml" == fileName || "BUILD.yml" == fileName
+	return fileName == "BUILD.yaml" || fileName == "BUILD.yml"
 }
 
 // Load reads the file at the specified filePath and unmarshals its content into a model.Package.

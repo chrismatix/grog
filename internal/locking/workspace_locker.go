@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/fatih/color"
 	"grog/internal/config"
 	"grog/internal/console"
 	"os"
@@ -14,6 +13,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/fatih/color"
 )
 
 const lockFileFieldSeparator = "\t"
@@ -73,7 +74,7 @@ func (wl *WorkspaceLocker) Lock(ctx context.Context) error {
 			continue
 		}
 
-		if waitPrinted == false {
+		if !waitPrinted {
 			green := color.New(color.FgGreen).SprintFunc()
 			if otherCommand == "" {
 				fmt.Printf("%s: Another grog build (PID %d) is running. Waiting..", green("INFO"), otherPid)

@@ -16,10 +16,10 @@ import (
 	"github.com/spf13/viper"
 )
 
-// HeaderMsg What to display in the header
+// HeaderMsg What to display in the header.
 type HeaderMsg string
 
-// TaskState reflects the current State of a task for display
+// TaskState reflects the current State of a task for display.
 type TaskState struct {
 	Status       string
 	SubStatus    string // optional secondary detail line rendered below status
@@ -96,7 +96,7 @@ func UseTea() bool {
 	return isatty.IsTerminal(os.Stdout.Fd())
 }
 
-// Bubbletea Model
+// Bubbletea Model.
 type model struct {
 	// the header message to keep updating
 	header string
@@ -214,17 +214,17 @@ func (m *model) View() string {
 	for _, i := range keys {
 		if status, ok := m.tasks[i]; ok {
 			timePassed := int(time.Since(time.Unix(status.StartedAtSec, 0)).Seconds())
-			s.WriteString(fmt.Sprintf("%s%s %ds\n", indent, status.Status, timePassed))
+			fmt.Fprintf(&s, "%s%s %ds\n", indent, status.Status, timePassed)
 			hasProgress := status.Progress != nil && status.Progress.shouldRender()
 			if status.SubStatus != "" {
 				connector := "╰─"
 				if hasProgress {
 					connector = "├─"
 				}
-				s.WriteString(fmt.Sprintf("%s%s%s\n", progressIndent, connector, dim(status.SubStatus)))
+				fmt.Fprintf(&s, "%s%s%s\n", progressIndent, connector, dim(status.SubStatus))
 			}
 			if hasProgress {
-				s.WriteString(fmt.Sprintf("%s╰─%s\n", progressIndent, formatProgressBar(*status.Progress, 24)))
+				fmt.Fprintf(&s, "%s╰─%s\n", progressIndent, formatProgressBar(*status.Progress, 24))
 			}
 		}
 	}

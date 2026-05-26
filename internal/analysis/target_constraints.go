@@ -6,11 +6,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/fatih/color"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/label"
 	"grog/internal/model"
+
+	"github.com/fatih/color"
 )
 
 /*
@@ -24,7 +25,7 @@ TODO: We don't yet check that a parent package does not include inputs from chil
 */
 
 // CheckTargetConstraints checks that the paths defined by each target are valid
-// logs any warnings on the way
+// logs any warnings on the way.
 func CheckTargetConstraints(logger *console.Logger, nodeMap model.BuildNodeMap) (errs []error) {
 	// iterate over targets in alphabetical order for consistent logging
 	for _, node := range nodeMap.NodesAlphabetically() {
@@ -85,7 +86,7 @@ func checkDependencyConstraints(nodeMap model.BuildNodeMap) (errs []error) {
 		}
 	}
 
-	return
+	return errs
 }
 
 func resolveDependencyTarget(
@@ -120,7 +121,7 @@ func resolveDependencyTarget(
 }
 
 // checkInputPathsRelative checks that all inputs are relative to the package path
-// and do not point outside the package
+// and do not point outside the package.
 func checkInputPathsRelative(target *model.Target) (errs []error) {
 	for _, input := range target.Inputs {
 		if path.IsAbs(input) {
@@ -182,7 +183,7 @@ func checkOutputsAreWithinRepository(target *model.Target) (errs []error) {
 		}
 	}
 
-	return
+	return errs
 }
 
 // isWithinWorkspace checks whether the resolved path (when joined with a starting directory)

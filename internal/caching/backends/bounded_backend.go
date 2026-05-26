@@ -52,16 +52,16 @@ var (
 
 // SetGlobalIOConcurrency installs (or replaces) the process-wide I/O
 // semaphore. A non-positive capacity disables the limit.
-func SetGlobalIOConcurrency(cap int) {
+func SetGlobalIOConcurrency(capacity int) {
 	globalIOSemMu.Lock()
 	defer globalIOSemMu.Unlock()
-	if cap <= 0 {
+	if capacity <= 0 {
 		globalIOSem.Store(nil)
 		globalIOCap.Store(0)
 		return
 	}
-	globalIOSem.Store(semaphore.NewWeighted(int64(cap)))
-	globalIOCap.Store(int64(cap))
+	globalIOSem.Store(semaphore.NewWeighted(int64(capacity)))
+	globalIOCap.Store(int64(capacity))
 }
 
 // GlobalIOConcurrency reports the configured process-wide I/O cap, falling
@@ -183,6 +183,7 @@ func (b *BoundedBackend) ListKeys(ctx context.Context, path, suffix string) ([]s
 // releasingReadCloser releases its semaphore slot on Close. Idempotent.
 type releasingReadCloser struct {
 	io.ReadCloser
+
 	release func()
 }
 

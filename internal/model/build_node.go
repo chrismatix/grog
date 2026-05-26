@@ -2,7 +2,7 @@ package model
 
 import "grog/internal/label"
 
-// NodeType represents the type of a build node
+// NodeType represents the type of a build node.
 type NodeType string
 
 const (

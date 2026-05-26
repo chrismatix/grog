@@ -215,6 +215,7 @@ func TestRunTargetCommandForwardsExtraArgs(t *testing.T) {
 
 	prev := config.Global
 	config.Global = config.WorkspaceConfig{
+		Root:                     tmpDir,
 		WorkspaceRoot:            tmpDir,
 		DisableDefaultShellFlags: true,
 	}
@@ -252,6 +253,7 @@ func TestRunTargetCommandHandlesLargeScript(t *testing.T) {
 
 	prev := config.Global
 	config.Global = config.WorkspaceConfig{
+		Root:                     tmpDir,
 		WorkspaceRoot:            tmpDir,
 		DisableDefaultShellFlags: true,
 	}
@@ -284,6 +286,7 @@ func TestRunTargetCommandWithoutExtraArgs(t *testing.T) {
 
 	prev := config.Global
 	config.Global = config.WorkspaceConfig{
+		Root:                     tmpDir,
 		WorkspaceRoot:            tmpDir,
 		DisableDefaultShellFlags: true,
 	}

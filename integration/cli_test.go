@@ -61,7 +61,7 @@ type TestTable struct {
 
 // TestStep defines a single test step
 // It can either run a grog command using GrogArgs or some other command using SetupCommand
-// If SetupCommand is defined and GrogArgs is empty the step will only run the setup command (without fixtures)
+// If SetupCommand is defined and GrogArgs is empty the step will only run the setup command (without fixtures).
 type TestStep struct {
 	// Names must be unique as they determine the fixture file name
 	Name         string   `yaml:"name"`
@@ -112,8 +112,6 @@ func TestCliScenarios(t *testing.T) {
 				continue
 			}
 		}
-
-		tt := tt
 
 		t.Run(tt.Name, func(t *testing.T) {
 			if repoCounts[tt.Repo] == 1 {
@@ -172,7 +170,6 @@ func TestCliScenarios(t *testing.T) {
 				testCaseNames[tc.Name] = true
 
 				t.Run(tc.Name, func(t *testing.T) {
-
 					output, err := runBinary(tc.GrogArgs, tt.Repo, tc.EnvVars, coverDir)
 
 					if err != nil && !tc.ExpectFail {
@@ -244,9 +241,7 @@ func runBinary(args []string, repoPath string, extraEnvVars []string, coverDir s
 	// clean`. coverDir is stable per test table, so cases within a table
 	// continue to share cache state as they did before.
 	cmd.Env = append(cmd.Env, "GROG_ROOT="+filepath.Join(coverDir, "grog_root"))
-	for _, envVar := range extraEnvVars {
-		cmd.Env = append(cmd.Env, envVar)
-	}
+	cmd.Env = append(cmd.Env, extraEnvVars...)
 
 	// Uncomment to enable debug logging
 	// TODO move to makefile flag

@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -60,12 +61,8 @@ func (pc *PoolCoordinator) flushState() {
 	ioState := pc.ioPool.GetTaskState()
 
 	merged := make(console.TaskStateMap, len(taskState)+len(ioState))
-	for k, v := range taskState {
-		merged[k] = v
-	}
-	for k, v := range ioState {
-		merged[k] = v
-	}
+	maps.Copy(merged, taskState)
+	maps.Copy(merged, ioState)
 
 	pc.sendMsg(console.TaskStateMsg{State: merged})
 
