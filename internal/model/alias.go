@@ -22,4 +22,6 @@ func (a *Alias) GetDependencies() []label.TargetLabel { return []label.TargetLab
 
 func (a *Alias) Select() { a.IsSelected = true }
 
+func (a *Alias) Deselect() { a.IsSelected = false }
+
 func (a *Alias) GetIsSelected() bool { return a.IsSelected }

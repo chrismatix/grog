@@ -30,10 +30,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: "1.26"
 
@@ -66,7 +66,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install pkl
         run: |
@@ -89,9 +89,52 @@ jobs:
           # package (warning only, so the job still "succeeded").
           include-hidden-files: true
 
+  # Builds the Terraform provider with goreleaser (build + archive + sign), but
+  # stops short of publishing to the GitHub release — the `publish` job below
+  # collects every artifact and uploads them together so there's a single
+  # authoritative release-upload step.
+  #
+  # Required repository secrets: GPG_PRIVATE_KEY, PASSPHRASE
+  # (the GPG public key must also be registered in your Terraform Registry
+  # account for the registry to accept the SHA256SUMS signature).
+  release-provider:
+    name: Build Terraform provider
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+
+      - name: Import GPG key
+        uses: crazy-max/ghaction-import-gpg@v6
+        id: import_gpg
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.PASSPHRASE }}
+
+      - name: Run GoReleaser (build only)
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          # --skip=publish defers the GitHub release upload to the publish job.
+          args: release --clean --skip=publish
+          workdir: terraform-provider-grog
+        env:
+          GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
+
+      - name: Upload provider artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-provider-grog
+          path: terraform-provider-grog/dist/*
+
   publish:
     name: Publish release
-    needs: [release-bin, release-pkl]
+    needs: [release-bin, release-pkl, release-provider]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
@@ -115,8 +158,15 @@ jobs:
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
         with:
+          # Excludes goreleaser's intermediate metadata files (artifacts.json,
+          # config.yaml, metadata.json) — only the provider archives, checksums,
+          # signature, and registry manifest go to the release.
           files: |
             dist/*
             artifacts/pkl-package/**/*
+            artifacts/terraform-provider-grog/terraform-provider-grog_*.zip
+            artifacts/terraform-provider-grog/terraform-provider-grog_*_SHA256SUMS
+            artifacts/terraform-provider-grog/terraform-provider-grog_*_SHA256SUMS.sig
+            artifacts/terraform-provider-grog/terraform-provider-grog_*_manifest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

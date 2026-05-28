@@ -192,6 +192,10 @@ func (t *Target) Select() {
 	t.IsSelected = true
 }
 
+func (t *Target) Deselect() {
+	t.IsSelected = false
+}
+
 func (t *Target) GetIsSelected() bool {
 	return t.IsSelected
 }

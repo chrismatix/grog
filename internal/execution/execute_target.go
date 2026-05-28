@@ -167,6 +167,16 @@ func runTargetCommand(
 			cmd.Stdout = multiOut
 			cmd.Stderr = multiOut
 		}
+	} else if streamLogs {
+		// No tea program (headless CLI: --disable-tea or stdout isn't a TTY).
+		// Honor --stream-logs by forwarding target output straight to stdout,
+		// mirroring TeaWriter's non-TTY fallback. The embedded session forces
+		// stream_logs=false so this branch is never taken there — important,
+		// because under the Terraform provider stdout is owned by the
+		// go-plugin gRPC protocol and writing to it would corrupt the stream.
+		multiOut := io.MultiWriter(logWriter, os.Stdout, &buffer)
+		cmd.Stdout = multiOut
+		cmd.Stderr = multiOut
 	} else {
 		multiOut := io.MultiWriter(logWriter, &buffer)
 		cmd.Stdout = multiOut
