@@ -6,20 +6,20 @@ import (
 	"sync/atomic"
 )
 
-// MutexMap provides a locking mechanism based on the passed in reference name
+// MutexMap provides a locking mechanism based on the passed in reference name.
 type MutexMap struct {
 	mutex sync.Mutex
 	locks map[string]*wrappedMutex
 }
 
-// NewMutexMap creates a new MutexMap
+// NewMutexMap creates a new MutexMap.
 func NewMutexMap() *MutexMap {
 	return &MutexMap{
 		locks: make(map[string]*wrappedMutex),
 	}
 }
 
-// Lock locks a mutex with the given name. If it doesn't exist, one is created
+// Lock locks a mutex with the given name. If it doesn't exist, one is created.
 func (l *MutexMap) Lock(name string) {
 	l.mutex.Lock()
 
@@ -41,7 +41,7 @@ func (l *MutexMap) Lock(name string) {
 }
 
 // Unlock unlocks the mutex with the given name
-// If the given wrappedMutex is not being waited on by any other callers, it is deleted
+// If the given wrappedMutex is not being waited on by any other callers, it is deleted.
 func (l *MutexMap) Unlock(name string) error {
 	l.mutex.Lock()
 	nameLock, exists := l.locks[name]
@@ -60,24 +60,24 @@ func (l *MutexMap) Unlock(name string) error {
 }
 
 // wrappedMutex adds a count of waiters to the wrappedMutex
-// so that the map knows when to clean up a wrapped mutex
+// so that the map knows when to clean up a wrapped mutex.
 type wrappedMutex struct {
 	mu sync.Mutex
 	// waiters is the number of waiters waiting to acquire the wrappedMutex
 	// this is int32 instead of uint32 so we can add `-1` in `dec()`
-	waiters int32
+	waiters atomic.Int32
 }
 
 func (l *wrappedMutex) inc() {
-	atomic.AddInt32(&l.waiters, 1)
+	l.waiters.Add(1)
 }
 
 func (l *wrappedMutex) dec() {
-	atomic.AddInt32(&l.waiters, -1)
+	l.waiters.Add(-1)
 }
 
 func (l *wrappedMutex) count() int32 {
-	return atomic.LoadInt32(&l.waiters)
+	return l.waiters.Load()
 }
 
 func (l *wrappedMutex) Lock() {

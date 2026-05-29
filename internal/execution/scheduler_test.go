@@ -82,7 +82,7 @@ func TestScheduler_GroupSerializes(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(5)
 	start := time.Now()
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		tgt := newTarget("t", "serial_group")
 		go func() {
 			defer wg.Done()
@@ -119,7 +119,7 @@ func TestScheduler_GroupBoundedCapacity(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(5)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		tgt := newTarget("t", "bounded")
 		go func() {
 			defer wg.Done()

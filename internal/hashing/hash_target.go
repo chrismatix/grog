@@ -9,7 +9,7 @@ import (
 )
 
 // GetTargetChangeHash computes the hash that tells us if a target has changed.
-// dependencyHashes are the change hashes of the direct dependencies
+// dependencyHashes are the change hashes of the direct dependencies.
 func GetTargetChangeHash(target model.Target, dependencyHashes []string, extraArgs []string) (string, error) {
 	targetDefinitionHash, err := hashTargetDefinition(target, dependencyHashes, extraArgs)
 	if err != nil {
@@ -31,37 +31,53 @@ func GetTargetChangeHash(target model.Target, dependencyHashes []string, extraAr
 func hashTargetDefinition(target model.Target, dependencyHashes []string, extraArgs []string) (string, error) {
 	hasher := GetHasher()
 
-	_, err := hasher.WriteString(target.Label.String())
-	_, err = hasher.WriteString(target.Command)
-	_, err = hasher.WriteString(sorted(target.Inputs))
-	_, err = hasher.WriteString(sorted(target.OutputDefinitions()))
-	_, err = hasher.WriteString(sorted(dependencyHashes))
-	_, err = hasher.WriteString(sortedKeyValue(target.Fingerprint))
+	if _, err := hasher.WriteString(target.Label.String()); err != nil {
+		return "", err
+	}
+	if _, err := hasher.WriteString(target.Command); err != nil {
+		return "", err
+	}
+	if _, err := hasher.WriteString(sorted(target.Inputs)); err != nil {
+		return "", err
+	}
+	if _, err := hasher.WriteString(sorted(target.OutputDefinitions())); err != nil {
+		return "", err
+	}
+	if _, err := hasher.WriteString(sorted(dependencyHashes)); err != nil {
+		return "", err
+	}
+	if _, err := hasher.WriteString(sortedKeyValue(target.Fingerprint)); err != nil {
+		return "", err
+	}
 
 	// Include extra command-line arguments (e.g. from "grog test -- -k foo")
 	// so that different invocations with different flags bust the cache.
 	if len(extraArgs) > 0 {
-		_, err = hasher.WriteString(strings.Join(extraArgs, "\x00"))
+		if _, err := hasher.WriteString(strings.Join(extraArgs, "\x00")); err != nil {
+			return "", err
+		}
 	}
 
 	// By default, target hashes are separate between platforms unless
 	// the target has a multiplatform-cache tag
 	if !target.IsMultiplatformCache() {
-		_, err = hasher.WriteString(config.Global.GetPlatform())
+		if _, err := hasher.WriteString(config.Global.GetPlatform()); err != nil {
+			return "", err
+		}
 		if len(config.Global.PlatformTags) > 0 {
 			tags := slices.Clone(config.Global.PlatformTags)
-			_, err = hasher.WriteString(sorted(tags))
+			if _, err := hasher.WriteString(sorted(tags)); err != nil {
+				return "", err
+			}
 		}
 	}
 
 	// Include the docker backend in the hash for targets with docker outputs
 	// so that cache results from different backends (fs vs registry) can co-exist
 	if hasDockerOutput(target) {
-		_, err = hasher.WriteString(config.Global.Docker.Backend)
-	}
-
-	if err != nil {
-		return "", err
+		if _, err := hasher.WriteString(config.Global.Docker.Backend); err != nil {
+			return "", err
+		}
 	}
 	// Return the hash as a hexadecimal string.
 	return hasher.SumString(), nil

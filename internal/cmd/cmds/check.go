@@ -1,11 +1,12 @@
 package cmds
 
 import (
-	"github.com/spf13/cobra"
 	"grog/internal/analysis"
 	"grog/internal/console"
 	"grog/internal/loading"
 	"os"
+
+	"github.com/spf13/cobra"
 )
 
 var CheckCmd = &cobra.Command{

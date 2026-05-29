@@ -370,10 +370,10 @@ func TestWalkerEdgeCases(t *testing.T) {
 // raced startNode's locked read ("concurrent map read and map write").
 // Run with -race to also catch the data race.
 func TestWalkerNoDepStartsLaterDependant(t *testing.T) {
-	for iter := 0; iter < 200; iter++ {
+	for iter := range 200 {
 		const pairs = 50
 		graph := NewDirectedGraph()
-		for i := 0; i < pairs; i++ {
+		for i := range pairs {
 			root := GetTarget(fmt.Sprintf("root-%d", i))
 			dep := GetTarget(fmt.Sprintf("dep-%d", i))
 			graph.AddNode(root)

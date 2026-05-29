@@ -38,10 +38,7 @@ func TestStartTaskUIToggleStreamLogs(t *testing.T) {
 	program.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
 
 	deadline := time.After(time.Second)
-	for {
-		if toggle.Enabled() {
-			break
-		}
+	for !toggle.Enabled() {
 		select {
 		case <-deadline:
 			t.Fatal("stream logs toggle did not enable after pressing 's'")

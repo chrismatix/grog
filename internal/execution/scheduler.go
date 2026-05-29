@@ -60,10 +60,7 @@ func (s *Scheduler) groupFor(name string) *semaphore.Weighted {
 	if sem, ok := s.groups[name]; ok {
 		return sem
 	}
-	capacity := config.Global.ConcurrencyGroups[name]
-	if capacity < 1 {
-		capacity = 1
-	}
+	capacity := max(config.Global.ConcurrencyGroups[name], 1)
 	sem := semaphore.NewWeighted(int64(capacity))
 	s.groups[name] = sem
 	return sem

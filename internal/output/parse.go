@@ -20,7 +20,7 @@ func ParseOutputs(outputs []string) ([]model.Output, error) {
 	return parsedOutputs, nil
 }
 
-// ParseOutput takes a raw output string and determines its type and reference
+// ParseOutput takes a raw output string and determines its type and reference.
 func ParseOutput(outputStr string) (model.Output, error) {
 	// Handle the default case (regular file) if no :: is present
 	if !strings.Contains(outputStr, "::") {

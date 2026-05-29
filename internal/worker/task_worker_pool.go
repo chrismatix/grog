@@ -299,9 +299,7 @@ func (twp *TaskWorkerPool[T]) GetTaskState() console.TaskStateMap {
 	twp.mu.Lock()
 	defer twp.mu.Unlock()
 	mapCopy := make(console.TaskStateMap, len(twp.taskState))
-	for k, v := range twp.taskState {
-		mapCopy[k] = v
-	}
+	maps.Copy(mapCopy, twp.taskState)
 	return mapCopy
 }
 

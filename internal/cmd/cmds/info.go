@@ -2,13 +2,14 @@ package cmds
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"grog/internal/caching/backends"
 	"grog/internal/config"
 	"grog/internal/console"
 	"os"
 	"text/tabwriter"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var InfoCmd = &cobra.Command{

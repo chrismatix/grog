@@ -61,7 +61,7 @@ func (f *fileWritePlan) Cleanup(_ context.Context) error {
 }
 
 // FileOutputHandler is the default output handler that writes files to the file system.
-// mostly passes directly through to the target cache which handles files
+// mostly passes directly through to the target cache which handles files.
 type FileOutputHandler struct {
 	cas *caching.Cas
 }

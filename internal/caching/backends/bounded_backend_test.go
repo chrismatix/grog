@@ -24,8 +24,8 @@ type fakeBackend struct {
 func (f *fakeBackend) recordEntry() {
 	n := f.inFlight.Add(1)
 	for {
-		max := f.maxSeen.Load()
-		if n <= max || f.maxSeen.CompareAndSwap(max, n) {
+		maximum := f.maxSeen.Load()
+		if n <= maximum || f.maxSeen.CompareAndSwap(maximum, n) {
 			break
 		}
 	}
@@ -82,7 +82,7 @@ func (w *fakeStagedWriter) Cancel(ctx context.Context) error {
 }
 
 // withGlobalIOConcurrency installs a temporary cap, restored at test end.
-func withGlobalIOConcurrency(t *testing.T, cap int) {
+func withGlobalIOConcurrency(t *testing.T, capacity int) {
 	t.Helper()
 	prevSem := globalIOSem.Load()
 	prevCap := globalIOCap.Load()
@@ -92,7 +92,7 @@ func withGlobalIOConcurrency(t *testing.T, cap int) {
 		globalIOSem.Store(prevSem)
 		globalIOCap.Store(prevCap)
 	})
-	SetGlobalIOConcurrency(cap)
+	SetGlobalIOConcurrency(capacity)
 }
 
 func TestBoundedBackend_BoundsConcurrentSets(t *testing.T) {
@@ -106,7 +106,7 @@ func TestBoundedBackend_BoundsConcurrentSets(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(callers)
-	for i := 0; i < callers; i++ {
+	for range callers {
 		go func() {
 			defer wg.Done()
 			if err := bb.Set(context.Background(), "p", "k", strings.NewReader("x")); err != nil {
@@ -133,7 +133,7 @@ func TestBoundedBackend_GetReleasesOnReaderClose(t *testing.T) {
 
 	// Acquire `limit` slots and hold them via open readers.
 	readers := make([]io.ReadCloser, 0, limit)
-	for i := 0; i < limit; i++ {
+	for i := range limit {
 		rc, err := bb.Get(context.Background(), "p", "k")
 		if err != nil {
 			t.Fatalf("Get %d failed: %v", i, err)
@@ -185,7 +185,7 @@ func TestBoundedBackend_BeginWriteIsNotBounded(t *testing.T) {
 
 	const sessions = 8
 	writers := make([]StagedWriter, 0, sessions)
-	for i := 0; i < sessions; i++ {
+	for i := range sessions {
 		sw, err := bb.BeginWrite(context.Background())
 		if err != nil {
 			t.Fatalf("BeginWrite %d: %v", i, err)
@@ -230,7 +230,7 @@ func TestBoundedBackend_PassthroughWhenSemDisabled(t *testing.T) {
 	const callers = 16
 	var wg sync.WaitGroup
 	wg.Add(callers)
-	for i := 0; i < callers; i++ {
+	for range callers {
 		go func() {
 			defer wg.Done()
 			_ = bb.Set(context.Background(), "p", "k", strings.NewReader("x"))

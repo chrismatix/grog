@@ -12,15 +12,15 @@ import (
 type CacheResult int
 
 const (
-	// CacheHit found the cache data and loaded it successfully
+	// CacheHit found the cache data and loaded it successfully.
 	CacheHit CacheResult = iota
 	// CacheSkip cache was intentionally skipped (does not invalidate downstream targets!)
 	CacheSkip
-	// CacheMiss either did not find the cache data or failed to load it or there was some other error
+	// CacheMiss either did not find the cache data or failed to load it or there was some other error.
 	CacheMiss
 )
 
-// WalkCallback is called for each target and should return true if the target was cached
+// WalkCallback is called for each target and should return true if the target was cached.
 type WalkCallback func(ctx context.Context, node model.BuildNode) (CacheResult, error)
 
 type Completion struct {
@@ -190,7 +190,7 @@ func (w *Walker) startNode(node model.BuildNode) {
 
 // onComplete called when a node is done
 // - fans out ready messages to dependants (if their deps are satisfied)
-// - in case of failure, cancels all dependants (or the entire walk if failFast=true)
+// - in case of failure, cancels all dependants (or the entire walk if failFast=true).
 func (w *Walker) onComplete(node model.BuildNode, completion Completion) {
 	w.doneMutex.Lock()
 	defer w.doneMutex.Unlock()
@@ -222,7 +222,6 @@ func (w *Walker) onComplete(node model.BuildNode, completion Completion) {
 	// Iterate over all dependants and send a ready message
 	// if their deps are satisfied
 	for _, dependant := range w.graph.outEdges[node.GetLabel()] {
-
 		// Check if dependant deps are satisfied
 		depsDone := true
 		for _, dep := range w.graph.inEdges[dependant.GetLabel()] {

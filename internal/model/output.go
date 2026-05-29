@@ -1,6 +1,6 @@
 package model
 
-// Output represents a parsed output reference
+// Output represents a parsed output reference.
 type Output struct {
 	// Type returns the type of the reference
 	// e.g. docker::image-name -> docker

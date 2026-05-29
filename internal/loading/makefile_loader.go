@@ -17,7 +17,7 @@ func (m MakefileLoader) Matches(fileName string) bool {
 	return fileName == "Makefile"
 }
 
-// Load reads the Makefile at filePath parses it to PackageDTO
+// Load reads the Makefile at filePath parses it to PackageDTO.
 func (m MakefileLoader) Load(_ context.Context, filePath string) (PackageDTO, bool, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -55,7 +55,7 @@ func newMakefileParser(scanner *bufio.Scanner) *makefileParser {
 }
 
 // parse iterates through the file line by line, handling annotations and targets.
-// returns the parsed PackageDTO and a bool indicating if targets were found at all
+// returns the parsed PackageDTO and a bool indicating if targets were found at all.
 func (p *makefileParser) parse() (PackageDTO, bool, error) {
 	targetsFound := false
 	lineCount := 0

@@ -6,19 +6,20 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bmatcuk/doublestar/v4"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/label"
 	"grog/internal/model"
 	"grog/internal/output"
+
+	"github.com/bmatcuk/doublestar/v4"
 )
 
 // getEnrichedPackage enriches the parsing dto with the following information
 // - adds the package path to the target labels
 // - resolves the globs in the inputs
 // - applies any defaults
-// - parses the deps into target labels
+// - parses the deps into target labels.
 func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageDTO) (*model.Package, error) {
 	targets := make(map[label.TargetLabel]*model.Target)
 	aliases := make(map[label.TargetLabel]*model.Alias)
@@ -60,7 +61,7 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse bin output for target %s: %w", targetLabel, err)
 			}
-			if parsedBinOutput.IsFile() == false {
+			if !parsedBinOutput.IsFile() {
 				return nil, fmt.Errorf("bin output %s for target %s must be of type file",
 					target.BinOutput, targetLabel)
 			}
@@ -137,7 +138,7 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 	}, nil
 }
 
-// resolveInputs resolves the glob patterns in the inputs and excludeInputs
+// resolveInputs resolves the glob patterns in the inputs and excludeInputs.
 func resolveInputs(
 	logger *console.Logger,
 	absolutePackagePath string,

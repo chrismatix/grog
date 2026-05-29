@@ -1,11 +1,12 @@
 package loading
 
 import (
-	"go.uber.org/zap/zapcore"
-	"go.uber.org/zap/zaptest"
 	"grog/internal/console"
 	"grog/internal/label"
 	"testing"
+
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
 )
 
 func TestGetEnrichedPackage_DefaultPlatforms(t *testing.T) {

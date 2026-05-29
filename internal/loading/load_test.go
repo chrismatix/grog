@@ -2,8 +2,6 @@ package loading
 
 import (
 	"fmt"
-	"go.uber.org/zap/zapcore"
-	"go.uber.org/zap/zaptest"
 	"grog/internal/console"
 	"os"
 	"path/filepath"
@@ -11,10 +9,12 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
 )
 
 func TestResolveInputs(t *testing.T) {
-
 	// Helper function to create files in the temporary directory.
 	createFile := func(tmpDir string, path string, content string) {
 		fullPath := filepath.Join(tmpDir, path)
@@ -76,7 +76,6 @@ func TestResolveInputs(t *testing.T) {
 				createFile(tmpDir, "subdir/file2.txt", "content2")
 				createFile(tmpDir, "subdir/nested/file3.txt", "content3")
 				createFile(tmpDir, "file1.md", "content4")
-
 			},
 			expected:      []string{"file1.txt", "subdir/file2.txt", "subdir/nested/file3.txt"},
 			expectedError: false,

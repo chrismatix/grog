@@ -1,7 +1,6 @@
 package cmds
 
 import (
-	"github.com/spf13/cobra"
 	"grog/internal/completions"
 	"grog/internal/config"
 	"grog/internal/console"
@@ -9,6 +8,8 @@ import (
 	"grog/internal/loading"
 	"grog/internal/model"
 	"grog/internal/selection"
+
+	"github.com/spf13/cobra"
 )
 
 var rDepsOptions struct {

@@ -1,6 +1,6 @@
 package loading
 
-// scriptAnnotation represents a grog yaml annotation for the grog scripts feature
+// scriptAnnotation represents a grog yaml annotation for the grog scripts feature.
 type scriptAnnotation struct {
 	Name                 string            `yaml:"name"`
 	Dependencies         []string          `yaml:"dependencies"`
@@ -15,6 +15,7 @@ type scriptAnnotation struct {
 // grogAnnotation represents the annotation block in a Makefile.
 type grogAnnotation struct {
 	scriptAnnotation `yaml:",inline"`
+
 	// script annotations cannot have outputs
 	Outputs []string `yaml:"outputs"`
 }

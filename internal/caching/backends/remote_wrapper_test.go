@@ -600,6 +600,7 @@ func TestRemoteWrapper_BeginWriteCancel(t *testing.T) {
 // field for the BeginWrite tests.
 type beginWriteAwareMock struct {
 	*mockCacheBackend
+
 	writer StagedWriter
 }
 

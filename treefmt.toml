@@ -1,8 +1,8 @@
 # Format with `treefmt`.
 # Install tools with `mise install` when using this repository's mise config.
 
-[formatter.gofmt]
-command = "gofmt"
+[formatter.goimports]
+command = "goimports"
 options = ["-w"]
 includes = ["*.go"]
 

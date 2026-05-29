@@ -101,10 +101,7 @@ func ExportOTLP(ctx context.Context, loader SpanLoader, builds []BuildRow, w io.
 
 func forEachChunk(ctx context.Context, loader SpanLoader, builds []BuildRow, emit func(BuildRow, []SpanRow) error) error {
 	for start := 0; start < len(builds); start += exportChunkSize {
-		end := start + exportChunkSize
-		if end > len(builds) {
-			end = len(builds)
-		}
+		end := min(start+exportChunkSize, len(builds))
 		chunk := builds[start:end]
 
 		ids := make([]string, len(chunk))

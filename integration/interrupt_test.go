@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/Netflix/go-expect"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,6 +8,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/Netflix/go-expect"
 )
 
 func TestInterruptHandling(t *testing.T) {

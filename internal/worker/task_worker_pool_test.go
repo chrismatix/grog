@@ -4,13 +4,14 @@ package worker
 import (
 	"context"
 	"errors"
-	tea "github.com/charmbracelet/bubbletea"
-	"go.uber.org/zap/zapcore"
-	"go.uber.org/zap/zaptest"
 	"grog/internal/console"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
 )
 
 func TestSimpleTasks(t *testing.T) {
@@ -23,7 +24,6 @@ func TestSimpleTasks(t *testing.T) {
 	total := 10
 	sum := int32(0)
 	for i := range total {
-		i := i
 		go func() {
 			res, err := pool.Run(func(update StatusFunc) (int, error) {
 				update(Status("running"))

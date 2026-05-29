@@ -14,7 +14,7 @@ import (
 // Hasher defines the hashing interface used throughout grog.
 type Hasher interface {
 	io.Writer
-	WriteString(string) (int, error)
+	WriteString(value string) (int, error)
 	SumString() string
 }
 
@@ -73,6 +73,6 @@ func (h *sha256Hasher) SumString() string {
 	return fmt.Sprintf("%016x", h.hasher.Sum(nil))
 }
 
-// Assert types
+// Assert types.
 var _ Hasher = (*xxh3Hasher)(nil)
 var _ Hasher = (*sha256Hasher)(nil)

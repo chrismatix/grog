@@ -7,6 +7,7 @@ import (
 	"grog/internal/cmd/cmds/traces"
 	"grog/internal/config"
 	"grog/internal/console"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -64,7 +65,7 @@ func isCompletionCmd(cmd *cobra.Command) bool {
 	return false
 }
 
-// Stamp sets the data for the version command
+// Stamp sets the data for the version command.
 func Stamp(version string, commit string, buildDate string) {
 	RootCmd.Version = version
 	Version = version
@@ -78,7 +79,9 @@ func Stamp(version string, commit string, buildDate string) {
 	))
 }
 
-func init() {
+var rootConfigured = configureRoot()
+
+func configureRoot() bool {
 	cobra.OnInitialize()
 
 	RootCmd.InitDefaultCompletionCmd()
@@ -97,87 +100,87 @@ func init() {
 	// Options:
 	// color
 	RootCmd.PersistentFlags().String("color", "auto", "Set color output (yes, no, or auto)")
-	err := viper.BindPFlag("color", RootCmd.PersistentFlags().Lookup("color"))
+	_ = viper.BindPFlag("color", RootCmd.PersistentFlags().Lookup("color"))
 	viper.SetDefault("color", "auto")
 
 	// debug
 	RootCmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
-	err = viper.BindPFlag("debug", RootCmd.PersistentFlags().Lookup("debug"))
+	_ = viper.BindPFlag("debug", RootCmd.PersistentFlags().Lookup("debug"))
 	RootCmd.PersistentFlags().CountP("verbose", "v", "Set verbosity level (-v, -vv)")
-	err = viper.BindPFlag("verbose", RootCmd.PersistentFlags().Lookup("verbose"))
+	_ = viper.BindPFlag("verbose", RootCmd.PersistentFlags().Lookup("verbose"))
 
 	// log_level
 	RootCmd.PersistentFlags().String("log-level", "", "Set log level (trace, debug, info, warn, error)")
-	err = viper.BindPFlag("log_level", RootCmd.PersistentFlags().Lookup("log-level"))
+	_ = viper.BindPFlag("log_level", RootCmd.PersistentFlags().Lookup("log-level"))
 
 	// fail_fast
 	RootCmd.PersistentFlags().Bool("fail-fast", false, "Fail fast on first error")
-	err = viper.BindPFlag("fail_fast", RootCmd.PersistentFlags().Lookup("fail-fast"))
+	_ = viper.BindPFlag("fail_fast", RootCmd.PersistentFlags().Lookup("fail-fast"))
 
 	// skip_workspace_lock
 	RootCmd.PersistentFlags().Bool("skip-workspace-lock", false, "Skip the workspace level lock (DANGEROUS: may corrupt the cache)")
-	err = viper.BindPFlag("skip_workspace_lock", RootCmd.PersistentFlags().Lookup("skip-workspace-lock"))
+	_ = viper.BindPFlag("skip_workspace_lock", RootCmd.PersistentFlags().Lookup("skip-workspace-lock"))
 
 	// all_platforms
 	RootCmd.PersistentFlags().BoolP("all-platforms", "a", false, "Select all platforms (bypasses platform selectors)")
-	err = viper.BindPFlag("all_platforms", RootCmd.PersistentFlags().Lookup("all-platforms"))
+	_ = viper.BindPFlag("all_platforms", RootCmd.PersistentFlags().Lookup("all-platforms"))
 
 	// platform
 	RootCmd.PersistentFlags().String("platform", "", "Force a specific platform in the form os/arch")
-	err = viper.BindPFlag("platform", RootCmd.PersistentFlags().Lookup("platform"))
+	_ = viper.BindPFlag("platform", RootCmd.PersistentFlags().Lookup("platform"))
 
 	// platform_tag
 	RootCmd.PersistentFlags().StringSlice("platform-tag", []string{}, "Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.")
-	err = viper.BindPFlag("platform_tag", RootCmd.PersistentFlags().Lookup("platform-tag"))
+	_ = viper.BindPFlag("platform_tag", RootCmd.PersistentFlags().Lookup("platform-tag"))
 
 	// stream_logs
 	RootCmd.PersistentFlags().Bool("stream-logs", false, "Forward all target build/test logs to stdout/-err")
-	err = viper.BindPFlag("stream_logs", RootCmd.PersistentFlags().Lookup("stream-logs"))
+	_ = viper.BindPFlag("stream_logs", RootCmd.PersistentFlags().Lookup("stream-logs"))
 
 	// output_mode
 	RootCmd.PersistentFlags().String("output-mode", "terse", "Build output style: terse (one line per target) or detailed (stream each target's lifecycle)")
-	err = viper.BindPFlag("output_mode", RootCmd.PersistentFlags().Lookup("output-mode"))
+	_ = viper.BindPFlag("output_mode", RootCmd.PersistentFlags().Lookup("output-mode"))
 	viper.SetDefault("output_mode", "terse")
 
 	// disable_progress_tracker
 	RootCmd.PersistentFlags().Bool("disable-progress-tracker", false, "Disable progress tracking updates")
-	err = viper.BindPFlag("disable_progress_tracker", RootCmd.PersistentFlags().Lookup("disable-progress-tracker"))
+	_ = viper.BindPFlag("disable_progress_tracker", RootCmd.PersistentFlags().Lookup("disable-progress-tracker"))
 	viper.SetDefault("disable_progress_tracker", false)
 
 	// disable_default_shell_flags
 	RootCmd.PersistentFlags().Bool("disable-default-shell-flags", false, "Do not prepend \"set -eu\" to target commands")
-	err = viper.BindPFlag("disable_default_shell_flags", RootCmd.PersistentFlags().Lookup("disable-default-shell-flags"))
+	_ = viper.BindPFlag("disable_default_shell_flags", RootCmd.PersistentFlags().Lookup("disable-default-shell-flags"))
 	viper.SetDefault("disable_default_shell_flags", false)
 
 	// load_outputs
 	RootCmd.PersistentFlags().String("load-outputs", "all", "Level of output loading for cached targets. One of: all, minimal.")
-	err = viper.BindPFlag("load_outputs", RootCmd.PersistentFlags().Lookup("load-outputs"))
+	_ = viper.BindPFlag("load_outputs", RootCmd.PersistentFlags().Lookup("load-outputs"))
 	viper.SetDefault("load_outputs", "all")
 
 	// tags
 	RootCmd.PersistentFlags().StringSlice("tag", []string{}, "Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar")
-	err = viper.BindPFlag("tag", RootCmd.PersistentFlags().Lookup("tag"))
+	_ = viper.BindPFlag("tag", RootCmd.PersistentFlags().Lookup("tag"))
 	RootCmd.PersistentFlags().StringSlice("exclude-tag", []string{}, "Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar")
-	err = viper.BindPFlag("exclude_tag", RootCmd.PersistentFlags().Lookup("exclude-tag"))
+	_ = viper.BindPFlag("exclude_tag", RootCmd.PersistentFlags().Lookup("exclude-tag"))
 
 	// enable_caching
 	RootCmd.PersistentFlags().Bool("enable-cache", true, "Enable cache")
-	err = viper.BindPFlag("enable_cache", RootCmd.PersistentFlags().Lookup("enable-cache"))
+	_ = viper.BindPFlag("enable_cache", RootCmd.PersistentFlags().Lookup("enable-cache"))
 	viper.SetDefault("enable_cache", true)
 
 	// select profiles
 	RootCmd.PersistentFlags().String("profile", "", "Select a configuration profile to use")
-	err = viper.BindPFlag("profile", RootCmd.PersistentFlags().Lookup("profile"))
+	_ = viper.BindPFlag("profile", RootCmd.PersistentFlags().Lookup("profile"))
 	viper.SetDefault("profile", "")
 
 	// async_cache_writes
 	RootCmd.PersistentFlags().Bool("async-cache-writes", true, "Defer cache writes to background I/O workers during the build")
-	err = viper.BindPFlag("async_cache_writes", RootCmd.PersistentFlags().Lookup("async-cache-writes"))
+	_ = viper.BindPFlag("async_cache_writes", RootCmd.PersistentFlags().Lookup("async-cache-writes"))
 	viper.SetDefault("async_cache_writes", true)
 
 	// disable_tea
 	RootCmd.PersistentFlags().Bool("disable-tea", false, "Disable interactive TUI (Bubble Tea)")
-	err = viper.BindPFlag("disable_tea", RootCmd.PersistentFlags().Lookup("disable-tea"))
+	_ = viper.BindPFlag("disable_tea", RootCmd.PersistentFlags().Lookup("disable-tea"))
 	viper.SetDefault("disable_tea", false)
 
 	// Register subcommands
@@ -198,10 +201,7 @@ func init() {
 	cmds.AddChangesCmd(RootCmd)
 	cmds.AddListCmd(RootCmd)
 	traces.AddCmd(RootCmd)
-
-	if err != nil {
-		panic(err)
-	}
+	return true
 }
 
 func initConfig(cmd *cobra.Command) error {
@@ -271,7 +271,7 @@ func initConfig(cmd *cobra.Command) error {
 
 	// Merge all config sources into the global
 	if err := viper.Unmarshal(&config.Global); err != nil {
-		return fmt.Errorf("Failed to parse config: %v\n", err)
+		return fmt.Errorf("failed to parse config: %w", err)
 	}
 
 	config.Global.HashAlgorithm = strings.ToLower(config.Global.HashAlgorithm)
@@ -323,9 +323,7 @@ func readInEnvironmentVariablesConfig() error {
 		defer f.Close()
 
 		fileEnv := gotenv.Parse(f)
-		for k, v := range fileEnv {
-			merged[k] = v
-		}
+		maps.Copy(merged, fileEnv)
 	}
 
 	// Phase 2: Load inline environment_variables from grog.toml (preserving case).
@@ -342,9 +340,7 @@ func readInEnvironmentVariablesConfig() error {
 		}
 
 		// Inline values override file-loaded values.
-		for k, v := range helper.EnvironmentVariables {
-			merged[k] = v
-		}
+		maps.Copy(merged, helper.EnvironmentVariables)
 	}
 
 	config.Global.EnvironmentVariables = merged

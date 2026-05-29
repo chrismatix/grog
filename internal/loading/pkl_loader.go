@@ -24,7 +24,7 @@ type PklLoader struct {
 }
 
 func (pl *PklLoader) Matches(fileName string) bool {
-	return "BUILD.pkl" == fileName
+	return fileName == "BUILD.pkl"
 }
 
 // getEvaluator lazily loads and caches the evaluator.

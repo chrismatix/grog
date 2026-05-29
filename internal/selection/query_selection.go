@@ -5,7 +5,7 @@ import (
 	"grog/internal/model"
 )
 
-// SelectTargets sets targets as selected
+// SelectTargets sets targets as selected.
 func (s *Selector) SelectTargets(
 	graph *dag.DirectedTargetGraph,
 ) {

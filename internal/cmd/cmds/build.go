@@ -203,9 +203,10 @@ func RunBuildAndAfter(
 	completionMap, executionErr := executor.Execute(ctx)
 
 	goal := "Build"
-	if testFilter == selection.TestOnly {
+	switch testFilter {
+	case selection.TestOnly:
 		goal = "Test"
-	} else if testFilter == selection.AllTargets {
+	case selection.AllTargets:
 		goal = "Build and test"
 	}
 
@@ -266,7 +267,6 @@ func RunBuildAndAfter(
 	elapsedTime := time.Since(startTime).Seconds()
 	// Mostly used to keep our test fixtures deterministic
 	if !config.Global.DisableNonDeterministicLogging {
-
 		if criticalPath, ok := graph.GetSelectedSubgraph().FindCriticalPath(); ok && len(criticalPath.Nodes) > 0 {
 			var criticalPathLabels []string
 			for _, node := range criticalPath.Nodes {

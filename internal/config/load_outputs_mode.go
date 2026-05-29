@@ -2,18 +2,18 @@ package config
 
 import "fmt"
 
-// LoadOutputsMode determines what outputs to load
+// LoadOutputsMode determines what outputs to load.
 type LoadOutputsMode int
 
 const (
-	// LoadOutputsAll loads all outputs
+	// LoadOutputsAll loads all outputs.
 	LoadOutputsAll LoadOutputsMode = iota
-	// LoadOutputsMinimal only loads an output if a direct dependant needs to be re-built
+	// LoadOutputsMinimal only loads an output if a direct dependant needs to be re-built.
 	LoadOutputsMinimal
 )
 
 // ParseLoadOutputsMode converts a string to a LoadOutputsMode
-// Returns an error if the string is not a valid mode
+// Returns an error if the string is not a valid mode.
 func ParseLoadOutputsMode(s string) (LoadOutputsMode, error) {
 	switch s {
 	case "all":

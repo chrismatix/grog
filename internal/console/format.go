@@ -7,7 +7,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// Pl small pluralization helper
+// Pl small pluralization helper.
 func Pl(s string, count int) string {
 	if count == 1 {
 		return s
@@ -15,22 +15,22 @@ func Pl(s string, count int) string {
 	return s + "s"
 }
 
-// FCount Format a count
+// FCount Format a count.
 func FCount(count int, s string) string {
 	return fmt.Sprintf("%d %s", count, Pl(s, count))
 }
 
-// FCountTargets Format a target count
+// FCountTargets Format a target count.
 func FCountTargets(count int) string {
 	return FCount(count, "target")
 }
 
-// FCountOutputs Format a target count
+// FCountOutputs Format a target count.
 func FCountOutputs(count int) string {
 	return FCount(count, "output")
 }
 
-// FCountPkg Format a package count
+// FCountPkg Format a package count.
 func FCountPkg(count int) string {
 	return FCount(count, "package")
 }
