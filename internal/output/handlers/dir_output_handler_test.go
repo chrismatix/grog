@@ -17,7 +17,7 @@ import (
 	"testing"
 )
 
-// mockCacheBackend is a simple mock for CacheBackend to simulate failures
+// mockCacheBackend is a simple mock for CacheBackend to simulate failures.
 type mockCacheBackend struct {
 	setErr error
 	getErr error
@@ -97,7 +97,7 @@ func TestDirectoryOutputHandler_WriteAndLoad(t *testing.T) {
 	}
 
 	dirOutput, err := handler.Write(ctx, target, output, nil)
-	if _, err := handler.Write(ctx, target, output, nil); err != nil {
+	if err != nil {
 		t.Fatalf("Write failed: %v", err)
 	}
 

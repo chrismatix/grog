@@ -22,7 +22,7 @@ func NewTargetLogFile(target model.Target) *TargetLogFile {
 }
 
 // Path returns the path of the latest/current log file for a given target
-// -> {targetPackagePath}/{targetName}.txt
+// -> {targetPackagePath}/{targetName}.txt.
 func (tl *TargetLogFile) Path() string {
 	targetPath := fmt.Sprintf(
 		"%s/%s.txt",
@@ -49,7 +49,7 @@ func (tl *TargetLogFile) Exists() bool {
 	return err == nil
 }
 
-// Print prints out the entire file
+// Print prints out the entire file.
 func (tl *TargetLogFile) Print() error {
 	file, err := os.Open(tl.Path())
 	if err != nil {

@@ -13,6 +13,7 @@ import (
 	"go.starlark.net/lib/time"
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
+	"go.starlark.net/syntax"
 )
 
 // StarlarkLoader implements the Loader interface for Starlark files.
@@ -22,7 +23,7 @@ func (sl StarlarkLoader) Matches(fileName string) bool {
 	return fileName == "BUILD.star" || fileName == "BUILD.bzl"
 }
 
-// starlarkPackageCollector holds the collected targets, aliases, and environments
+// starlarkPackageCollector holds the collected targets, aliases, and environments.
 type starlarkPackageCollector struct {
 	targets          []*TargetDTO
 	aliases          []*AliasDTO
@@ -30,7 +31,7 @@ type starlarkPackageCollector struct {
 	defaultPlatforms []string
 }
 
-// moduleLoadContext tracks loaded modules and in-progress loads for cycle detection
+// moduleLoadContext tracks loaded modules and in-progress loads for cycle detection.
 type moduleLoadContext struct {
 	// cache stores already-loaded modules
 	cache map[string]starlark.StringDict
@@ -54,9 +55,9 @@ func (sl StarlarkLoader) Load(ctx context.Context, filePath string) (PackageDTO,
 
 	// Create predeclared functions and values
 	predeclared := starlark.StringDict{
-		"target":        starlark.NewBuiltin("target", collector.targetBuiltin),
-		"alias":         starlark.NewBuiltin("alias", collector.aliasBuiltin),
-		"environment":   starlark.NewBuiltin("environment", collector.environmentBuiltin),
+		"target":             starlark.NewBuiltin("target", collector.targetBuiltin),
+		"alias":              starlark.NewBuiltin("alias", collector.aliasBuiltin),
+		"environment":        starlark.NewBuiltin("environment", collector.environmentBuiltin),
 		"GROG_OS":            starlark.String(config.Global.OS),
 		"GROG_ARCH":          starlark.String(config.Global.Arch),
 		"GROG_PLATFORM":      starlark.String(config.Global.GetPlatform()),
@@ -79,7 +80,7 @@ func (sl StarlarkLoader) Load(ctx context.Context, filePath string) (PackageDTO,
 	}
 
 	// Execute the Starlark file
-	_, err := starlark.ExecFile(thread, filePath, nil, predeclared)
+	_, err := starlark.ExecFileOptions(&syntax.FileOptions{}, thread, filePath, nil, predeclared)
 	if err != nil {
 		return PackageDTO{}, false, fmt.Errorf("failed to evaluate Starlark file %s: %w", filePath, err)
 	}
@@ -95,7 +96,7 @@ func (sl StarlarkLoader) Load(ctx context.Context, filePath string) (PackageDTO,
 }
 
 // loadModule implements the load() function for importing other Starlark files
-// with caching and cycle detection
+// with caching and cycle detection.
 func (sl StarlarkLoader) loadModule(thread *starlark.Thread, module string, currentFile string, collector *starlarkPackageCollector, loadContext *moduleLoadContext) (starlark.StringDict, error) {
 	// Resolve module path relative to workspace root or current file
 	var modulePath string
@@ -137,9 +138,9 @@ func (sl StarlarkLoader) loadModule(thread *starlark.Thread, module string, curr
 
 	// Create predeclared functions for the loaded module
 	predeclared := starlark.StringDict{
-		"target":        starlark.NewBuiltin("target", collector.targetBuiltin),
-		"alias":         starlark.NewBuiltin("alias", collector.aliasBuiltin),
-		"environment":   starlark.NewBuiltin("environment", collector.environmentBuiltin),
+		"target":             starlark.NewBuiltin("target", collector.targetBuiltin),
+		"alias":              starlark.NewBuiltin("alias", collector.aliasBuiltin),
+		"environment":        starlark.NewBuiltin("environment", collector.environmentBuiltin),
 		"GROG_OS":            starlark.String(config.Global.OS),
 		"GROG_ARCH":          starlark.String(config.Global.Arch),
 		"GROG_PLATFORM":      starlark.String(config.Global.GetPlatform()),
@@ -163,7 +164,7 @@ func (sl StarlarkLoader) loadModule(thread *starlark.Thread, module string, curr
 	}
 
 	// Execute the module
-	globals, err := starlark.ExecFile(moduleThread, modulePath, nil, predeclared)
+	globals, err := starlark.ExecFileOptions(&syntax.FileOptions{}, moduleThread, modulePath, nil, predeclared)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load module %s: %w", module, err)
 	}
@@ -174,7 +175,7 @@ func (sl StarlarkLoader) loadModule(thread *starlark.Thread, module string, curr
 	return globals, nil
 }
 
-// targetBuiltin implements the target() function in Starlark
+// targetBuiltin implements the target() function in Starlark.
 func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var name string
 	var command string
@@ -315,7 +316,7 @@ func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *st
 	return starlark.None, nil
 }
 
-// aliasBuiltin implements the alias() function in Starlark
+// aliasBuiltin implements the alias() function in Starlark.
 func (c *starlarkPackageCollector) aliasBuiltin(thread *starlark.Thread, fn *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var name string
 	var actual string
@@ -336,7 +337,7 @@ func (c *starlarkPackageCollector) aliasBuiltin(thread *starlark.Thread, fn *sta
 	return starlark.None, nil
 }
 
-// environmentBuiltin implements the environment() function in Starlark
+// environmentBuiltin implements the environment() function in Starlark.
 func (c *starlarkPackageCollector) environmentBuiltin(thread *starlark.Thread, fn *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var name string
 	var envType string

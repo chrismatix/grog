@@ -9,9 +9,9 @@ import (
 	"sort"
 	"strings"
 
+	cerrdefs "github.com/containerd/errdefs"
 	dockerconfig "github.com/docker/cli/cli/config"
 	"github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/errdefs"
 	"github.com/docker/docker/pkg/jsonmessage"
 
 	"grog/internal/caching"
@@ -70,7 +70,7 @@ func (d *dockerRegistryWritePlan) Execute(ctx context.Context, tracker *worker.P
 
 func (d *dockerRegistryWritePlan) Cleanup(ctx context.Context) error {
 	_, err := d.dockerClient.ImageRemove(ctx, d.remoteImageName, image.RemoveOptions{})
-	if err != nil && !errdefs.IsNotFound(err) {
+	if err != nil && !cerrdefs.IsNotFound(err) {
 		console.GetLogger(ctx).Warnf("failed to remove image %q from local Docker daemon: %v", d.remoteImageName, err)
 	}
 	return nil
@@ -106,7 +106,7 @@ func (d *DockerRegistryOutputHandler) Hash(ctx context.Context, target model.Tar
 	return inspect.ID, nil
 }
 
-// lazyCient creates a new Docker client on demand
+// lazyClient creates a new Docker client on demand.
 func (d *DockerRegistryOutputHandler) lazyClient() (*client.Client, error) {
 	if d.dockerClient != nil {
 		return d.dockerClient, nil
@@ -278,7 +278,7 @@ func (d *DockerRegistryOutputHandler) Load(
 	return nil
 }
 
-// dockerLayerProgress holds per-layer tracking state for bridging JSON progress
+// dockerLayerProgress holds per-layer tracking state for bridging JSON progress.
 type dockerLayerProgress struct {
 	tracker     *worker.ProgressTracker
 	lastCurrent int64

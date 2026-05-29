@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -293,11 +294,8 @@ func TestFileSystemCache_BeginWriteListKeysFiltersStaging(t *testing.T) {
 
 	// Sanity check: the committed entry is still discoverable.
 	var found bool
-	for _, k := range keys {
-		if k == "sha256:committed" {
-			found = true
-			break
-		}
+	if slices.Contains(keys, "sha256:committed") {
+		found = true
 	}
 	if !found {
 		t.Fatalf("ListKeys missing committed entry; got %v", keys)

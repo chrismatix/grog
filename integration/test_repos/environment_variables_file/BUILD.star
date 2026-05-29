@@ -2,30 +2,39 @@
 target(
     name = "file_env",
     command = "echo $FILE_VAR > file.txt",
-    outputs = ["file.txt"],
     output_checks = [
-        {"command": "cat file.txt", "expected_output": "from_file"},
+        {
+            "command": "cat file.txt",
+            "expected_output": "from_file",
+        },
     ],
+    outputs = ["file.txt"],
 )
 
 # Test that inline environment_variables in grog.toml override file-loaded values.
 target(
     name = "inline_overrides_file",
     command = "echo $SHARED_VAR > shared.txt",
-    outputs = ["shared.txt"],
     output_checks = [
-        {"command": "cat shared.txt", "expected_output": "from_toml"},
+        {
+            "command": "cat shared.txt",
+            "expected_output": "from_toml",
+        },
     ],
+    outputs = ["shared.txt"],
 )
 
 # Test that quoted values from the env file are handled correctly.
 target(
     name = "quoted_env",
     command = 'echo "$QUOTED_VAR" > quoted.txt',
-    outputs = ["quoted.txt"],
     output_checks = [
-        {"command": "cat quoted.txt", "expected_output": "hello world"},
+        {
+            "command": "cat quoted.txt",
+            "expected_output": "hello world",
+        },
     ],
+    outputs = ["quoted.txt"],
 )
 
 # Test that file-loaded env vars are available as Starlark predeclared variables.

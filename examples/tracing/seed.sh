@@ -12,46 +12,46 @@ tempo_api_port="${TEMPO_API_PORT:-3200}"
 loki_port="${LOKI_PORT:-3100}"
 
 if [ -n "${GROG_BIN:-}" ]; then
-  grog_mode="custom"
+	grog_mode="custom"
 elif command -v grog >/dev/null 2>&1; then
-  grog_mode="installed"
+	grog_mode="installed"
 else
-  grog_mode="go_run"
+	grog_mode="go_run"
 fi
 
 run_grog() {
-  if [ "$grog_mode" = "custom" ]; then
-    "${GROG_BIN}" "$@"
-    return
-  fi
+	if [ "$grog_mode" = "custom" ]; then
+		"${GROG_BIN}" "$@"
+		return
+	fi
 
-  if [ "$grog_mode" = "installed" ]; then
-    grog "$@"
-    return
-  fi
+	if [ "$grog_mode" = "installed" ]; then
+		grog "$@"
+		return
+	fi
 
-  GOCACHE="${GOCACHE:-/tmp/grog-tracing-example-gocache}" go run "${repo_root}" "$@"
+	GOCACHE="${GOCACHE:-/tmp/grog-tracing-example-gocache}" go run "${repo_root}" "$@"
 }
 
 wait_for_http() {
-  url="$1"
-  description="$2"
+	url="$1"
+	description="$2"
 
-  attempts=0
-  while :; do
-    status_code="$(curl -sS -o /dev/null -w '%{http_code}' "$url" || true)"
-    if [ "$status_code" = "200" ]; then
-      return 0
-    fi
+	attempts=0
+	while :; do
+		status_code="$(curl -sS -o /dev/null -w '%{http_code}' "$url" || true)"
+		if [ "$status_code" = "200" ]; then
+			return 0
+		fi
 
-    attempts=$((attempts + 1))
-    if [ "$attempts" -ge 60 ]; then
-      echo "Timed out waiting for ${description} at ${url}" >&2
-      return 1
-    fi
+		attempts=$((attempts + 1))
+		if [ "$attempts" -ge 60 ]; then
+			echo "Timed out waiting for ${description} at ${url}" >&2
+			return 1
+		fi
 
-    sleep 1
-  done
+		sleep 1
+	done
 }
 
 wait_for_http "http://localhost:${jaeger_ui_port}" "Jaeger UI"
@@ -72,13 +72,13 @@ rm -f /tmp/traces-otel.json /tmp/grog-traces.jsonl
 
 run_grog traces export --format=otel --limit 2 --output /tmp/traces-otel.json
 curl -sS -X POST "http://localhost:${jaeger_otlp_port}/v1/traces" \
-  -H "Content-Type: application/json" \
-  --data-binary @/tmp/traces-otel.json >/dev/null
+	-H "Content-Type: application/json" \
+	--data-binary @/tmp/traces-otel.json >/dev/null
 curl -sS -X POST "http://localhost:${tempo_otlp_port}/v1/traces" \
-  -H "Content-Type: application/json" \
-  --data-binary @/tmp/traces-otel.json >/dev/null
+	-H "Content-Type: application/json" \
+	--data-binary @/tmp/traces-otel.json >/dev/null
 
-run_grog traces export --format=jsonl --limit 2 >> /tmp/grog-traces.jsonl
+run_grog traces export --format=jsonl --limit 2 >>/tmp/grog-traces.jsonl
 
 echo "Seeded traces into Jaeger, Tempo, and Loki."
 echo "Jaeger:  http://localhost:${jaeger_ui_port}"

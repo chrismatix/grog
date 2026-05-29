@@ -32,25 +32,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Set up mise
+        uses: jdx/mise-action@v4
+
+      - name: Cache Go dependencies
+        uses: actions/cache@v5
         with:
-          go-version: "1.26"
+          path: |
+            ~/.cache/go-build
+            ~/Library/Caches/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-${{ matrix.goos }}-${{ matrix.goarch }}-go-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.goos }}-${{ matrix.goarch }}-go-
+            ${{ runner.os }}-go-
 
-      - name: Install protoc (Linux)
-        if: matrix.goos == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
-
-      - name: Install protoc (macOS)
-        if: matrix.goos == 'darwin'
-        run: brew install protobuf
-
-      - name: Install Go dependencies
-        run: |
-          go mod tidy
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+      - name: Download Go modules
+        run: go mod download
 
       - name: Build release binary
         run: make release-build GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }}
@@ -68,12 +66,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install pkl
-        run: |
-          curl -L -o pkl-bin 'https://github.com/apple/pkl/releases/download/0.30.0/pkl-linux-amd64'
-          chmod +x pkl-bin
-          sudo mv pkl-bin /usr/local/bin/pkl
-          pkl --version
+      - name: Set up mise
+        uses: jdx/mise-action@v4
 
       - name: Build pkl package
         run: |

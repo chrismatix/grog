@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-// Provisioned by ldflags
+// Provisioned by ldflags.
 var (
 	version   string
 	commit    string

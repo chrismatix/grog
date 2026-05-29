@@ -17,7 +17,7 @@ type TargetLabel struct {
 // ParseTargetLabel parses a Bazel-style target label relative to the given packagePath.
 // It accepts both explicit labels ("//pkg:target"), shorthand labels ("//pkg"),
 // and relative labels (":target") for the current packagePath.
-// I.e. "path", ":target" -> "//path:target"
+// I.e. "path", ":target" -> "//path:target".
 func ParseTargetLabel(packagePath, label string) (TargetLabel, error) {
 	if strings.HasPrefix(label, ":") {
 		if packagePath == "." {
@@ -84,7 +84,7 @@ func validateName(name string) error {
 	return nil
 }
 
-// TL is a convenience shorthand for tests
+// TL is a convenience shorthand for tests.
 func TL(packagePath, label string) TargetLabel {
 	return TargetLabel{Package: packagePath, Name: label}
 }

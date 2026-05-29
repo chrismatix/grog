@@ -120,7 +120,7 @@ func detectOutputConflicts(graph *dag.DirectedTargetGraph) error {
 
 	sort.Strings(conflicts)
 
-	return fmt.Errorf("conflicting outputs detected between independent targets:\n%s\nNote: These overlapping outputs create a race condition that can lead to unexpected or inconsistent build results.", strings.Join(conflicts, "\n"))
+	return fmt.Errorf("conflicting outputs detected between independent targets:\n%s\nnote: these overlapping outputs create a race condition that can lead to unexpected or inconsistent build results", strings.Join(conflicts, "\n"))
 }
 
 func cleanOutputPath(target *model.Target, output string) string {

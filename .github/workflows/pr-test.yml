@@ -19,27 +19,22 @@ jobs:
         with:
           fetch-depth: "0"
 
-      - name: Set up Go
-        uses: actions/setup-go@v4
+      - name: Set up mise
+        uses: jdx/mise-action@v4
+
+      - name: Cache Go dependencies
+        uses: actions/cache@v5
         with:
-          go-version: 1.26
+          path: |
+            ~/.cache/go-build
+            ~/Library/Caches/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
-      - name: Install dependencies
-        run: |
-          go mod tidy
-          go install gotest.tools/gotestsum@latest
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-
-
-      - name: Install pkl
-        run: |
-          curl -L -o pkl-bin 'https://github.com/apple/pkl/releases/download/0.28.2/pkl-linux-amd64'
-          chmod +x pkl-bin
-          sudo mv pkl-bin /usr/local/bin/pkl
-
-          pkl --version
+      - name: Download Go modules
+        run: go mod download
 
       - name: Build and test
         run: make test

@@ -1,0 +1,15 @@
+[tools]
+"aqua:numtide/treefmt" = "latest"
+"aqua:protocolbuffers/protobuf/protoc" = "34.1" # protoc
+"go:google.golang.org/protobuf/cmd/protoc-gen-go" = "latest"
+"go:golang.org/x/tools/cmd/goimports" = "latest"
+"go:gotest.tools/gotestsum" = "latest"
+"npm:oxfmt" = "latest"
+buildifier = "latest"
+go = "1.26.3"
+node = "24"
+pkl = "latest"
+prek = "latest"
+shfmt = "latest"
+golangci-lint = "latest"
+make = "latest"

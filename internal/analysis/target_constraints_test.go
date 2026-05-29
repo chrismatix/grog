@@ -1,7 +1,6 @@
 package analysis
 
 import (
-	"github.com/stretchr/testify/assert"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/output"
@@ -9,12 +8,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
+	"grog/internal/label"
+	"grog/internal/model"
+
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
-	"grog/internal/label"
-	"grog/internal/model"
 )
 
 func setupWorkspaceRoot(t *testing.T) (string, func()) {

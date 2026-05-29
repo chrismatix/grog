@@ -1,7 +1,7 @@
-import { colors } from '@monorepo/theme';
-import Header from './components/Header';
-import Footer from './components/Footer';
-import { isNotEmpty } from '@monorepo/utils';
+import { colors } from "@monorepo/theme";
+import Header from "./components/Header";
+import Footer from "./components/Footer";
+import { isNotEmpty } from "@monorepo/utils";
 
 export default function Home() {
   // Example of using the utility function

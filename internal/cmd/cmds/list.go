@@ -63,10 +63,13 @@ var ListCmd = &cobra.Command{
 	},
 }
 
-func init() {
+var listCmdConfigured = configureListCmd()
+
+func configureListCmd() bool {
 	ListCmd.Flags().StringVar(
 		&listOptions.targetType,
 		"target-type",
 		"all",
 		"Filter targets by type (all, test, no_test, bin_output)")
+	return true
 }

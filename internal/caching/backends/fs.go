@@ -19,7 +19,7 @@ import (
 // cross-device copy.
 const fsStagingDirName = ".staging"
 
-// FileSystemCache implements the CacheBackend interface using the file system for storage
+// FileSystemCache implements the CacheBackend interface using the file system for storage.
 type FileSystemCache struct {
 	workspaceCacheDir string
 	sharedCasDir      string
@@ -29,7 +29,7 @@ func (fsc *FileSystemCache) TypeName() string {
 	return "fs"
 }
 
-// NewFileSystemCache creates a new cache using the configured cache directory
+// NewFileSystemCache creates a new cache using the configured cache directory.
 func NewFileSystemCache(ctx context.Context) (*FileSystemCache, error) {
 	workspaceCacheDir := config.Global.GetWorkspaceCacheDirectory()
 	sharedCasDir := config.Global.GetCasDirectory()
@@ -49,7 +49,7 @@ func NewFileSystemCache(ctx context.Context) (*FileSystemCache, error) {
 	}, nil
 }
 
-// buildFilePath constructs the full file path for a cached item
+// buildFilePath constructs the full file path for a cached item.
 func (fsc *FileSystemCache) buildFilePath(path, key string) string {
 	dir := fsc.getDir(path)
 	return filepath.Join(dir, key)
@@ -62,7 +62,7 @@ func (fsc *FileSystemCache) getDir(path string) string {
 	return filepath.Join(fsc.workspaceCacheDir, path)
 }
 
-// Get retrieves a cached file by its key
+// Get retrieves a cached file by its key.
 func (fsc *FileSystemCache) Get(ctx context.Context, path, key string) (io.ReadCloser, error) {
 	logger := console.GetLogger(ctx)
 	logger.Tracef("Getting file from cache for path: %s, key: %s", path, key)
@@ -78,7 +78,7 @@ func (fsc *FileSystemCache) Get(ctx context.Context, path, key string) (io.ReadC
 	return file, err
 }
 
-// Set stores a file in the cache with the given key and content
+// Set stores a file in the cache with the given key and content.
 func (fsc *FileSystemCache) Set(ctx context.Context, path, key string, content io.Reader) error {
 	logger := console.GetLogger(ctx)
 	logger.Tracef("Setting file in cache for path: %s, key: %s", path, key)
@@ -112,7 +112,7 @@ func (fsc *FileSystemCache) Set(ctx context.Context, path, key string, content i
 	return os.Rename(tmpFile.Name(), filePath)
 }
 
-// Delete removes a cached file by its key
+// Delete removes a cached file by its key.
 func (fsc *FileSystemCache) Delete(ctx context.Context, path, key string) error {
 	logger := console.GetLogger(ctx)
 	logger.Tracef("Deleting file from cache for path: %s, key: %s", path, key)
@@ -128,7 +128,7 @@ func (fsc *FileSystemCache) Delete(ctx context.Context, path, key string) error 
 	return os.Remove(filePath)
 }
 
-// Exists checks if a file exists in the cache with the given key
+// Exists checks if a file exists in the cache with the given key.
 func (fsc *FileSystemCache) Exists(ctx context.Context, path, key string) (bool, error) {
 	logger := console.GetLogger(ctx)
 

@@ -53,7 +53,6 @@ func (p *scriptParser) parse() (PackageDTO, bool, error) {
 		trimmed := strings.TrimSpace(line)
 
 		if strings.HasPrefix(trimmed, "# @grog") {
-
 			// Collect the subsequent comment lines.
 			var annotationLines []string
 			var annotationLineNumbers []int

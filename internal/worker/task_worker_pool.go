@@ -58,7 +58,7 @@ type TaskWorkerPool[T any] struct {
 	nextTaskId     int
 	completedTasks int
 
-	workerIdOffset int   // offset applied to worker IDs in taskState keys
+	workerIdOffset int    // offset applied to worker IDs in taskState keys
 	onStateChange  func() // if set, called instead of sending messages directly
 
 	activeJobs sync.WaitGroup
@@ -299,9 +299,7 @@ func (twp *TaskWorkerPool[T]) GetTaskState() console.TaskStateMap {
 	twp.mu.Lock()
 	defer twp.mu.Unlock()
 	mapCopy := make(console.TaskStateMap, len(twp.taskState))
-	for k, v := range twp.taskState {
-		mapCopy[k] = v
-	}
+	maps.Copy(mapCopy, twp.taskState)
 	return mapCopy
 }
 

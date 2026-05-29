@@ -2,7 +2,6 @@ package cmds
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
 	"grog/internal/completions"
 	"grog/internal/config"
 	"grog/internal/console"
@@ -10,6 +9,8 @@ import (
 	"grog/internal/loading"
 	"grog/internal/logs"
 	"grog/internal/model"
+
+	"github.com/spf13/cobra"
 )
 
 var logsOptions struct {
@@ -51,11 +52,11 @@ Use the --path-only flag to only print the path to the log file instead of its c
 
 		targetLogFile := logs.NewTargetLogFile(*logTarget)
 
-		if targetLogFile.Exists() == false {
+		if !targetLogFile.Exists() {
 			logger.Fatalf("no log file found for target %s", targetLabel)
 		}
 
-		if logsOptions.pathOnly == true {
+		if logsOptions.pathOnly {
 			fmt.Println(targetLogFile.Path())
 			return
 		}

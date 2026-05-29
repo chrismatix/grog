@@ -3,13 +3,14 @@ package cmds
 import (
 	"slices"
 
-	"github.com/spf13/cobra"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/label"
 	"grog/internal/loading"
 	"grog/internal/model"
 	"path/filepath"
+
+	"github.com/spf13/cobra"
 )
 
 var OwnersCmd = &cobra.Command{

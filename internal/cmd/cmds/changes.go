@@ -135,7 +135,7 @@ Can optionally include transitive dependents of changed targets to find all affe
 	},
 }
 
-// getChangedFiles returns a list of files that have changed since the given git ref
+// getChangedFiles returns a list of files that have changed since the given git ref.
 func getChangedFiles(gitRef string) ([]string, error) {
 	// Run git diff to get changed files
 	gitDiffCmd := exec.Command("git", "diff", "--name-only", gitRef)
@@ -165,7 +165,7 @@ func getChangedFiles(gitRef string) ([]string, error) {
 	return files, nil
 }
 
-// containsFile checks if the list of files contains the given file
+// containsFile checks if the list of files contains the given file.
 func containsFile(files []string, file string) bool {
 	return slices.Contains(files, file)
 }

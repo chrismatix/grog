@@ -10,7 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/google/uuid"
@@ -48,20 +48,18 @@ type S3Client interface {
 // AWSS3Adapter adapts the AWS S3 client to the S3Client interface.
 type AWSS3Adapter struct {
 	client   *s3.Client
-	uploader *manager.Uploader
+	uploader *transfermanager.Client
 }
 
 // NewAWSS3Adapter creates a new adapter for the AWS S3 client.
-// The adapter wraps the provided S3 client with a streaming multipart Uploader
-// so PutObject can stream arbitrarily large bodies without buffering them in memory.
 func NewAWSS3Adapter(client *s3.Client) *AWSS3Adapter {
-	uploader := manager.NewUploader(client, func(u *manager.Uploader) {
+	uploader := transfermanager.New(client, func(options *transfermanager.Options) {
 		// 16 MiB parts; AWS minimum is 5 MiB. Larger parts mean fewer requests
 		// for big layers but a bigger floor on per-upload memory usage.
-		u.PartSize = 16 * 1024 * 1024
+		options.PartSizeBytes = 16 * 1024 * 1024
 		// Concurrency per upload — keep this modest because grog already runs
 		// many uploads in parallel at the target/output level.
-		u.Concurrency = 4
+		options.Concurrency = 4
 	})
 	return &AWSS3Adapter{
 		client:   client,
@@ -85,10 +83,10 @@ func (a *AWSS3Adapter) GetObject(ctx context.Context, bucket, key string) (io.Re
 }
 
 // PutObject uploads an object to S3 by streaming the body through the
-// multipart Uploader. The body is consumed lazily — at most PartSize *
+// transfer manager. The body is consumed lazily — at most PartSizeBytes *
 // Concurrency bytes are buffered in memory at a time, regardless of total size.
 func (a *AWSS3Adapter) PutObject(ctx context.Context, bucket, key string, body io.Reader) error {
-	_, err := a.uploader.Upload(ctx, &s3.PutObjectInput{
+	_, err := a.uploader.UploadObject(ctx, &transfermanager.UploadObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 		Body:   body,

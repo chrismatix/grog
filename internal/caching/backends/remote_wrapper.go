@@ -14,7 +14,7 @@ import (
 // RemoteWrapper is the default implementation when using a remote cache
 // It implements the logic of using the local file system first and
 // falling back to the remote cache if the file is not found locally
-// while updating the remote cache with local changes
+// while updating the remote cache with local changes.
 type RemoteWrapper struct {
 	fs     *FileSystemCache
 	remote CacheBackend
@@ -147,7 +147,7 @@ func (rw *RemoteWrapper) Set(ctx context.Context, path, key string, content io.R
 		var errMsg strings.Builder
 		errMsg.WriteString("multiple cache write errors occurred:")
 		for i, err := range errs {
-			errMsg.WriteString(fmt.Sprintf(" (%d) %v;", i+1, err))
+			fmt.Fprintf(&errMsg, " (%d) %v;", i+1, err)
 		}
 		return errors.New(errMsg.String())
 	}

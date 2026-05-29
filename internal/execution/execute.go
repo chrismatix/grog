@@ -74,12 +74,12 @@ func NewExecutor(
 	}
 }
 
-// Execute executes the targets in the given graph and returns the completion map
+// Execute executes the targets in the given graph and returns the completion map.
 func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	numWorkers := config.Global.NumWorkers
-	numIOWorkers := config.Global.NumIOWorkers
-	if numIOWorkers < 1 {
-		numIOWorkers = numWorkers * 3
+	numAsyncWriters := config.Global.NumAsyncWriters
+	if numAsyncWriters < 1 {
+		numAsyncWriters = numWorkers * 3
 	}
 	stdLogger := console.GetLogger(ctx)
 
@@ -115,7 +115,7 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	resultLogger := console.NewResultLogger(targetLabels, 0) // 0 means use default terminal width
 	ctx = context.WithValue(ctx, console.ResultLoggerKey{}, resultLogger)
 
-	coordinator := NewPoolCoordinator(stdLogger, numWorkers, numIOWorkers, sendMsg, selectedNodeCount)
+	coordinator := NewPoolCoordinator(stdLogger, numWorkers, numAsyncWriters, sendMsg, selectedNodeCount)
 	coordinator.StartTaskWorkers(ctx)
 	// The task pool is only used during the DAG walk below; shutting it down
 	// here (LIFO after the walker returns) is safe. The I/O pool, however,
@@ -222,7 +222,7 @@ func (e *Executor) AsyncWaitTime() time.Duration {
 	return e.asyncWaitTime
 }
 
-// getBinToolPaths From all the direct dependencies of a target, get their bin_output if defined
+// getBinToolPaths From all the direct dependencies of a target, get their bin_output if defined.
 func (e *Executor) getBinToolPaths(target *model.Target) (BinToolMap, error) {
 	deps := e.graph.GetTargetDependencies(target)
 
@@ -363,9 +363,9 @@ func (e *Executor) getTaskFunc(
 
 		cacheCheckStart := time.Now()
 		targetResult, err := e.targetCache.Load(ctx, target.ChangeHash)
-		if err != nil {
-			// TODO distinguish between NotFound and cache backend errors
-			// logger.Warnf("failed to check target %s cache: %v", target.Label, err)
+		if err != nil && logger.DebugEnabled() {
+			// TODO distinguish between NotFound and cache backend errors.
+			logger.Debugf("failed to check target %s cache: %v", target.Label, err)
 		}
 		target.HasCacheHit = targetResult != nil
 		if logger.DebugEnabled() {
@@ -564,7 +564,7 @@ func (e *Executor) executeTarget(
 // - writes the outputs if necessary
 // - computes and sets the output hash
 // - writes the target result to the cache
-// For no-cache targets it will set the OutputHash to the hash of the outputs
+// For no-cache targets it will set the OutputHash to the hash of the outputs.
 func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, update worker.StatusFunc) error {
 	logger := console.GetLogger(ctx)
 	var targetResult *gen.TargetResult

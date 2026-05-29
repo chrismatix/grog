@@ -16,7 +16,7 @@ const (
 	AllTargets  TargetTypeSelection = "all_targets"
 )
 
-// StringToTargetTypeSelection converts a string to a TargetTypeSelection
+// StringToTargetTypeSelection converts a string to a TargetTypeSelection.
 func StringToTargetTypeSelection(targetType string) (TargetTypeSelection, error) {
 	switch targetType {
 	case "test":
@@ -32,7 +32,7 @@ func StringToTargetTypeSelection(targetType string) (TargetTypeSelection, error)
 	}
 }
 
-// Selector bundles the default selection options into a single interface
+// Selector bundles the default selection options into a single interface.
 type Selector struct {
 	Patterns    []label.TargetPattern
 	Tags        []string

@@ -42,7 +42,7 @@ needs a few things Cargo alone does not give you:
    same proto file produces Go, Python, **and** Rust stubs in one DAG.
 
 4. **Granular parallelism.** Cargo parallelizes within a workspace.
-   Grog parallelizes the *DAG of actions*: while `crates/cli:build` is
+   Grog parallelizes the _DAG of actions_: while `crates/cli:build` is
    compiling, `crates/server:clippy` and `crates/format:test` are running
    on other cores.
 
@@ -73,15 +73,15 @@ grog build :lint_all
 
 ## Targets at a glance
 
-| Target                          | What it does                          |
-| ------------------------------- | ------------------------------------- |
-| `//:build_all`                  | Fan-out build of every crate          |
-| `//:lint_all`                   | `cargo clippy -- -D warnings` per crate |
-| `//crates/<name>:build`         | `cargo build -p <name> --release`     |
-| `//crates/<name>:test`          | `cargo test -p <name>`                |
-| `//crates/<name>:clippy`        | `cargo clippy -p <name> -- -D warnings` |
-| `//crates/cli:build`            | also drops `bin/cli` for downstream  |
-| `//crates/server:build`         | also drops `bin/server` for downstream |
+| Target                   | What it does                            |
+| ------------------------ | --------------------------------------- |
+| `//:build_all`           | Fan-out build of every crate            |
+| `//:lint_all`            | `cargo clippy -- -D warnings` per crate |
+| `//crates/<name>:build`  | `cargo build -p <name> --release`       |
+| `//crates/<name>:test`   | `cargo test -p <name>`                  |
+| `//crates/<name>:clippy` | `cargo clippy -p <name> -- -D warnings` |
+| `//crates/cli:build`     | also drops `bin/cli` for downstream     |
+| `//crates/server:build`  | also drops `bin/server` for downstream  |
 
 The binary crates copy their artifact out of the shared `target/` directory
 into a per-crate `bin/` so that Grog can hash it as a declared output and

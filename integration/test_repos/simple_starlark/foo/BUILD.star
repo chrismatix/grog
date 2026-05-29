@@ -15,9 +15,9 @@ mkdir -p dist
 echo "Hello test streamed output"
 cat src/source_1.txt > dist/test_output.txt
 """,
+    dependencies = [":foo"],
     inputs = ["src/*.txt"],
     outputs = ["dist/test_output.txt"],
-    dependencies = [":foo"],
 )
 
 alias(

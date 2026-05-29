@@ -27,6 +27,7 @@ brew tap chrismatix/grog
 brew install grog
 
 # Or download the binary
+
 curl -L https://grog.build/latest/grog-darwin-arm64 -o /usr/local/bin/grog
 chmod +x /usr/local/bin/grog
 
@@ -61,87 +62,76 @@ Grog provides a wide array of build file formats:
 
 <Tabs>
   <TabItem label="YAML">
-    ```yaml
-    # BUILD.yaml
-    targets:
-      - name: build_ui
-        command: npm run build:ui
-        inputs:
-          - frontend/src/**/*.{js,ts,jsx,tsx}
-          - frontend/package.json
-        outputs:
-          - dir::frontend/dist
 
-      - name: compile_backend
-        command: go build -o backend/bin/app ./backend
-        inputs:
-          - backend/**/*.go
-        outputs:
-          - backend/bin/app
+```yaml
+# BUILD.yaml
+targets:
+  - name: build_ui
+    command: npm run build:ui
+    inputs:
+      - frontend/src/**/*.{js,ts,jsx,tsx}
+      - frontend/package.json
+    outputs:
+      - dir::frontend/dist
 
-      - name: build_image
-        command: >
-          docker build \
-          --file Dockerfile \
-          --tag myorg/myapp:latest .
-        dependencies:
-          - :build_ui
-          - :compile_backend
-        inputs:
-          - Dockerfile
-        outputs:
-          - docker::myorg/myapp:latest
-    ```
+  - name: compile_backend
+    command: go build -o backend/bin/app ./backend
+    inputs:
+      - backend/**/*.go
+    outputs:
+      - backend/bin/app
+
+  - name: build_image
+    command: >
+      docker build \
+      --file Dockerfile \
+      --tag myorg/myapp:latest .
+    dependencies:
+      - :build_ui
+      - :compile_backend
+    inputs:
+      - Dockerfile
+    outputs:
+      - docker::myorg/myapp:latest
+```
+
     Save this as `BUILD.yaml` in your project directory.
 
   </TabItem>
   <TabItem label="JSON">
-  ```json
-  {
-    "targets": [
-      {
-        "name": "build_ui",
-        "command": "npm run build:ui",
-        "inputs": [
-          "frontend/src/**/*.{js,ts,jsx,tsx}",
-          "frontend/package.json"
-        ],
-        "outputs": [
-          "dir::frontend/dist"
-        ]
-      },
-      {
-        "name": "compile_backend",
-        "command": "go build -o backend/bin/app ./backend",
-        "inputs": [
-          "backend/**/*.go"
-        ],
-        "outputs": [
-          "backend/bin/app"
-        ]
-      },
-      {
-        "name": "build_image",
-        "command": "docker build --file Dockerfile --tag myapp .",
-        "dependencies": [
-          ":build_ui",
-          ":compile_backend"
-        ],
-        "inputs": [
-          "Dockerfile"
-        ],
-        "outputs": [
-          "docker::myapp"
-        ]
-      }
-    ]
-  }
-    ```
-  Save this as `BUILD.json` in your project directory.
+
+```json
+{
+  "targets": [
+    {
+      "name": "build_ui",
+      "command": "npm run build:ui",
+      "inputs": ["frontend/src/**/*.{js,ts,jsx,tsx}", "frontend/package.json"],
+      "outputs": ["dir::frontend/dist"]
+    },
+    {
+      "name": "compile_backend",
+      "command": "go build -o backend/bin/app ./backend",
+      "inputs": ["backend/**/*.go"],
+      "outputs": ["backend/bin/app"]
+    },
+    {
+      "name": "build_image",
+      "command": "docker build --file Dockerfile --tag myapp .",
+      "dependencies": [":build_ui", ":compile_backend"],
+      "inputs": ["Dockerfile"],
+      "outputs": ["docker::myapp"]
+    }
+  ]
+}
+```
+
+Save this as `BUILD.json` in your project directory.
+
   </TabItem>
   <TabItem label="Makefile">
-```make
 
+```make
 # @grog
 # inputs:
 #   - frontend/src/**/*.{js,ts,jsx,tsx}
@@ -170,12 +160,14 @@ compile_backend:
 build_image:
   docker build --file Dockerfile --tag myapp:latest .
 
-````
+```
 
 Add the grog metadata comments to your `Makefile` goals to allow running them with Grog.
+
 </TabItem>
 <TabItem label="Starlark">
-```python
+
+```starlark
 # BUILD.star
 target(
     name = "build_ui",
@@ -207,8 +199,10 @@ target(
 ```
 
 Save this as `BUILD.star` in your project directory.
+
 </TabItem>
 <TabItem label="Pkl">
+
 ```Pkl
 amends "package://grog.build/releases/v0.9.3/grog@0.9.3#/package.pkl"
 
@@ -251,7 +245,7 @@ targets {
     }
   }
 }
-````
+```
 
 Save this as `BUILD.pkl` in your project directory.
 
@@ -357,9 +351,8 @@ Grog tracks inputs by computing a hash of their contents.
 This allows it to detect changes and only rebuild when necessary.
 
 <Aside>
-  You do not have to specify all files that your build target depends on for
-  grog to work. However, it is recommended to specify all inputs to avoid
-  unnecessary rebuilds.
+  You do not have to specify all files that your build target depends on for grog to work. However,
+  it is recommended to specify all inputs to avoid unnecessary rebuilds.
 </Aside>
 
 ### Dependencies

@@ -29,7 +29,7 @@ func getOutputHash(outputs []*gen.Output) (string, error) {
 
 	hasher := hashing.GetHasher()
 	// Sort digests to ensure a consistent order
-	sort.Sort(sort.StringSlice(digests))
+	sort.Strings(digests)
 	for _, digest := range digests {
 		_, err := hasher.WriteString(digest)
 		if err != nil {

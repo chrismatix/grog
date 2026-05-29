@@ -21,7 +21,7 @@ import (
 //go:embed run_sh.sh.tmpl
 var binTemplate string
 
-// templateData is the data expected by the run_sh.sh.tmpl
+// templateData is the data expected by the run_sh.sh.tmpl.
 type templateData struct {
 	BinToolMap              BinToolMap
 	OutputIdentifierMap     OutputIdentifierMap
@@ -48,7 +48,7 @@ func ExtraArgsFromContext(ctx context.Context) []string {
 	return args
 }
 
-// BinToolMap Maps target label to tool a binary path
+// BinToolMap Maps target label to tool a binary path.
 type BinToolMap map[string]string
 
 // OutputIdentifierMap maps a target label (and its shorthands) to the list of
@@ -103,7 +103,7 @@ func executeTarget(
 	return nil
 }
 
-// runTargetCommand runs a single shell command in the context of a target
+// runTargetCommand runs a single shell command in the context of a target.
 func runTargetCommand(
 	ctx context.Context,
 	target *model.Target,

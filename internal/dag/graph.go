@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"grog/internal/label"
 	"grog/internal/model"
+	"slices"
 	"sort"
 	"time"
 )
 
 // DirectedTargetGraph represents a directed graph of build targets.
 // It is used to represent the dependency graph of a project.
-// In order to assert that it does not contain cycles, you can call hasCycle()
+// In order to assert that it does not contain cycles, you can call hasCycle().
 type DirectedTargetGraph struct {
 	nodes model.BuildNodeMap
 
@@ -40,7 +41,7 @@ func NewDirectedGraphFromMap(targetMap model.BuildNodeMap) *DirectedTargetGraph 
 	}
 }
 
-// NewDirectedGraphFromTargets Useful for testing
+// NewDirectedGraphFromTargets Useful for testing.
 func NewDirectedGraphFromTargets(nodes ...model.BuildNode) *DirectedTargetGraph {
 	return &DirectedTargetGraph{
 		nodes:    model.BuildNodeMapFromNodes(nodes...),
@@ -175,7 +176,7 @@ func (g *DirectedTargetGraph) hasNode(node model.BuildNode) bool {
 // It maintains three states for each node:
 // - 0: unvisited
 // - 1: visiting (currently in the recursion stack)
-// - 2: visited (completely explored)
+// - 2: visited (completely explored).
 func (g *DirectedTargetGraph) HasCycle() bool {
 	_, hasCycle := g.FindCycle()
 	return hasCycle
@@ -204,8 +205,8 @@ func (g *DirectedTargetGraph) FindCycle() ([]model.BuildNode, bool) {
 			}
 			if visited[neighbor] == 1 {
 				idx := -1
-				for i := len(stack) - 1; i >= 0; i-- {
-					if stack[i] == neighbor {
+				for i, v := range slices.Backward(stack) {
+					if v == neighbor {
 						idx = i
 						break
 					}
@@ -349,7 +350,7 @@ func (g *DirectedTargetGraph) FindCriticalPath() (CriticalPath, bool) {
 	}, true
 }
 
-// GraphJSON is a helper struct for JSON serialization
+// GraphJSON is a helper struct for JSON serialization.
 type GraphJSON struct {
 	Nodes []model.BuildNode   `json:"nodes"`
 	Edges map[string][]string `json:"edges"` // from label to label
@@ -361,7 +362,7 @@ func (g *DirectedTargetGraph) LogSelectedNodes() {
 	}
 }
 
-// MarshalJSON serializes the graph to JSON
+// MarshalJSON serializes the graph to JSON.
 func (g *DirectedTargetGraph) MarshalJSON() ([]byte, error) {
 	graphJSON := GraphJSON{
 		Nodes: g.nodes.NodesAlphabetically(),

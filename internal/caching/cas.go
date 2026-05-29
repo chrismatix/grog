@@ -10,7 +10,7 @@ import (
 )
 
 // Cas is a content-addressable store.
-// That is: Every record is identified by its digest
+// That is: Every record is identified by its digest.
 type Cas struct {
 	backend backends.CacheBackend
 	// Cache for exists queries since we assume that during the runtime of a build
@@ -30,7 +30,7 @@ func (c *Cas) GetBackend() backends.CacheBackend {
 	return c.backend
 }
 
-// Write writes a digest for a given reader
+// Write writes a digest for a given reader.
 func (c *Cas) Write(ctx context.Context, digest string, reader io.Reader) error {
 	if exists, err := c.Exists(ctx, digest); exists && err == nil {
 		// If the digest already exists, we don't need to write it again
@@ -45,7 +45,7 @@ func (c *Cas) Write(ctx context.Context, digest string, reader io.Reader) error 
 	return err
 }
 
-// WriteBytes writes a digest for a given reader
+// WriteBytes writes a digest for a given reader.
 func (c *Cas) WriteBytes(ctx context.Context, digest string, content []byte) error {
 	return c.Write(ctx, digest, bytes.NewReader(content))
 }
@@ -65,12 +65,12 @@ func (c *Cas) BeginWrite(ctx context.Context) (StagedWriter, error) {
 	return c.backend.BeginWrite(ctx)
 }
 
-// Load loads the content for a given digest
+// Load loads the content for a given digest.
 func (c *Cas) Load(ctx context.Context, digest string) (io.ReadCloser, error) {
 	return c.backend.Get(ctx, "cas", digest)
 }
 
-// LoadBytes loads the content for a given digest directly into a byte slice
+// LoadBytes loads the content for a given digest directly into a byte slice.
 func (c *Cas) LoadBytes(ctx context.Context, digest string) ([]byte, error) {
 	reader, err := c.backend.Get(ctx, "cas", digest)
 	if err != nil {
