@@ -148,17 +148,18 @@ func runTargetCommand(
 	defer logWriter.Close()
 
 	var buffer bytes.Buffer
+	var teaWriter *console.TeaWriter
 
 	if program := console.GetTeaProgram(ctx); program != nil {
 		toggle := console.GetStreamLogsToggle(ctx)
 		if toggle != nil {
-			teaWriter := console.NewTeaWriter(program)
+			teaWriter = console.NewTeaWriter(program)
 			toggleWriter := console.NewStreamToggleWriter(teaWriter, toggle)
 			multiOut := io.MultiWriter(logWriter, toggleWriter, &buffer)
 			cmd.Stdout = multiOut
 			cmd.Stderr = multiOut
 		} else if streamLogs {
-			teaWriter := console.NewTeaWriter(program)
+			teaWriter = console.NewTeaWriter(program)
 			multiOut := io.MultiWriter(logWriter, teaWriter, &buffer)
 			cmd.Stdout = multiOut
 			cmd.Stderr = multiOut
@@ -173,7 +174,12 @@ func runTargetCommand(
 		cmd.Stderr = multiOut
 	}
 
-	if cmdErr := cmd.Run(); cmdErr != nil {
+	cmdErr := cmd.Run()
+	// Emit any buffered partial line now that the stream has closed.
+	if teaWriter != nil {
+		teaWriter.Flush()
+	}
+	if cmdErr != nil {
 		return buffer.Bytes(), cmdErr
 	}
 	return buffer.Bytes(), nil
