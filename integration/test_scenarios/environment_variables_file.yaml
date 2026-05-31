@@ -17,3 +17,7 @@ cases:
     grog_args:
       - build
       - :starlark_predeclared
+  - name: grog_env_file_predeclared
+    grog_args:
+      - build
+      - :grog_env_file_predeclared

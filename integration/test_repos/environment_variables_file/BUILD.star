@@ -46,3 +46,15 @@ target(
         },
     ],
 )
+
+# Test that GROG_ENV_FILE is available as a predeclared variable
+# containing the absolute path to the configured environment variables file.
+target(
+    name = "grog_env_file_predeclared",
+    output_checks = [
+        {
+            # Verify GROG_ENV_FILE is an absolute path ending with env.vars
+            "command": 'echo "%s" | grep -q "/env.vars$" && test "%s" != ""' % (GROG_ENV_FILE, GROG_ENV_FILE),
+        },
+    ],
+)

@@ -62,6 +62,7 @@ func (sl StarlarkLoader) Load(ctx context.Context, filePath string) (PackageDTO,
 		"GROG_ARCH":          starlark.String(config.Global.Arch),
 		"GROG_PLATFORM":      starlark.String(config.Global.GetPlatform()),
 		"GROG_PLATFORM_TAGS": platformTagsStarlarkList(),
+		"GROG_ENV_FILE":      starlark.String(resolvedEnvironmentVariablesFilePath()),
 		"json":               json.Module,
 		"math":               math.Module,
 		"time":               time.Module,
@@ -145,6 +146,7 @@ func (sl StarlarkLoader) loadModule(thread *starlark.Thread, module string, curr
 		"GROG_ARCH":          starlark.String(config.Global.Arch),
 		"GROG_PLATFORM":      starlark.String(config.Global.GetPlatform()),
 		"GROG_PLATFORM_TAGS": platformTagsStarlarkList(),
+		"GROG_ENV_FILE":      starlark.String(resolvedEnvironmentVariablesFilePath()),
 		"json":               json.Module,
 		"math":               math.Module,
 		"time":               time.Module,
@@ -473,4 +475,18 @@ func starlarkListToOutputChecks(list *starlark.List) ([]model.OutputCheck, error
 		})
 	}
 	return result, nil
+}
+
+// resolvedEnvironmentVariablesFilePath returns the absolute path to the
+// configured environment variables file. If EnvironmentVariablesFile is empty,
+// it returns an empty string. Relative paths are resolved against WorkspaceRoot.
+func resolvedEnvironmentVariablesFilePath() string {
+	environmentVariablesFilePath := config.Global.EnvironmentVariablesFile
+	if environmentVariablesFilePath == "" {
+		return ""
+	}
+	if !filepath.IsAbs(environmentVariablesFilePath) {
+		environmentVariablesFilePath = filepath.Join(config.Global.WorkspaceRoot, environmentVariablesFilePath)
+	}
+	return filepath.Clean(environmentVariablesFilePath)
 }
