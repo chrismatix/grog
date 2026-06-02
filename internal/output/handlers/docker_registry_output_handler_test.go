@@ -188,3 +188,77 @@ func TestSeedLayerCache_NoopWithEmptyCacheMode(t *testing.T) {
 		t.Fatalf("expected nil error with empty cache mode, got %v", err)
 	}
 }
+
+func TestSeedLayerCache_NoopWhenPrebuildLayerFetchDisabled(t *testing.T) {
+	disabled := false
+	handler := &DockerRegistryOutputHandler{
+		config: config.DockerConfig{
+			CacheMode:          config.DockerCacheModeTarget,
+			PrebuildLayerFetch: &disabled,
+		},
+	}
+
+	target := model.Target{
+		Label: label.TargetLabel{Package: "pkg", Name: "tgt"},
+	}
+
+	// Target mode with prebuild_layer_fetch explicitly disabled -- should be a no-op.
+	if err := handler.SeedLayerCache(nil, target, nil); err != nil {
+		t.Fatalf("expected nil error with prebuild_layer_fetch=false, got %v", err)
+	}
+}
+
+func TestIsPrebuildLayerFetchEnabled(t *testing.T) {
+	boolPtr := func(v bool) *bool { return &v }
+
+	tests := []struct {
+		name      string
+		cacheMode string
+		prefetch  *bool
+		want      bool
+	}{
+		{
+			name:      "target mode, unset defaults to true",
+			cacheMode: config.DockerCacheModeTarget,
+			prefetch:  nil,
+			want:      true,
+		},
+		{
+			name:      "target mode, explicitly true",
+			cacheMode: config.DockerCacheModeTarget,
+			prefetch:  boolPtr(true),
+			want:      true,
+		},
+		{
+			name:      "target mode, explicitly false",
+			cacheMode: config.DockerCacheModeTarget,
+			prefetch:  boolPtr(false),
+			want:      false,
+		},
+		{
+			name:      "content mode, unset defaults to false",
+			cacheMode: config.DockerCacheModeContent,
+			prefetch:  nil,
+			want:      false,
+		},
+		{
+			name:      "empty mode, unset defaults to false",
+			cacheMode: "",
+			prefetch:  nil,
+			want:      false,
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			dockerConfig := config.DockerConfig{
+				CacheMode:          testCase.cacheMode,
+				PrebuildLayerFetch: testCase.prefetch,
+			}
+			got := dockerConfig.IsPrebuildLayerFetchEnabled()
+			if got != testCase.want {
+				t.Fatalf("IsPrebuildLayerFetchEnabled() = %v, want %v", got, testCase.want)
+			}
+		})
+	}
+}

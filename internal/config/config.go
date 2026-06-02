@@ -192,6 +192,20 @@ func (w WorkspaceConfig) Validate() error {
 			w.Docker.Backend, DockerBackendFS, DockerBackendRegistry)
 	}
 
+	switch w.Docker.CacheMode {
+	case "", DockerCacheModeContent, DockerCacheModeTarget:
+	default:
+		return fmt.Errorf("invalid docker cache_mode: %s. Must be either %q or %q",
+			w.Docker.CacheMode, DockerCacheModeContent, DockerCacheModeTarget)
+	}
+
+	// prebuild_layer_fetch requires target-based naming to have a stable
+	// image to pull.
+	if w.Docker.PrebuildLayerFetch != nil && *w.Docker.PrebuildLayerFetch &&
+		w.Docker.CacheMode != DockerCacheModeTarget {
+		return fmt.Errorf("prebuild_layer_fetch requires cache_mode = %q", DockerCacheModeTarget)
+	}
+
 	// assert that tags and exclude tags do not overlap
 	for _, tag := range w.Tags {
 		if slices.Contains(w.ExcludeTags, tag) {
@@ -327,6 +341,25 @@ type DockerConfig struct {
 
 	// CacheMode controls how registry cache images are named.
 	// "content" (default): one repo per unique image digest.
-	// "target": one repo per target label, enabling Docker layer cache reuse.
+	// "target": one repo per target label, producing stable, predictable
+	// registry repository names.
 	CacheMode string `mapstructure:"cache_mode"`
+
+	// PrebuildLayerFetch controls whether grog pulls the previous image
+	// for a target into the local Docker daemon before building, so that
+	// Docker's layer cache can reuse unchanged layers. Only effective when
+	// CacheMode is "target". Defaults to true when CacheMode is "target".
+	// Set to false if you handle layer caching yourself (e.g. via
+	// --cache-from in your build command).
+	PrebuildLayerFetch *bool `mapstructure:"prebuild_layer_fetch"`
+}
+
+// IsPrebuildLayerFetchEnabled returns whether layer cache seeding is active.
+// When PrebuildLayerFetch is nil (unset), it defaults to true in target mode.
+func (d DockerConfig) IsPrebuildLayerFetchEnabled() bool {
+	if d.PrebuildLayerFetch != nil {
+		return *d.PrebuildLayerFetch
+	}
+	// Default: enabled in target mode, disabled otherwise.
+	return d.CacheMode == DockerCacheModeTarget
 }
