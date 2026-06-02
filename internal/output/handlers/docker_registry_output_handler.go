@@ -235,14 +235,15 @@ func makeRegistryAuth(ref string) (string, error) {
 
 // SeedLayerCache pulls the previous image for a target into the local Docker daemon
 // so that its layers are available for cache reuse during the next build.
-// This is only active when cache_mode is "target" (stable image names).
+// This is only active when prebuild_layer_fetch is enabled (which requires
+// cache_mode = "target" for stable image names).
 // It is called on cache misses, before the target's build command executes.
 func (d *DockerRegistryOutputHandler) SeedLayerCache(
 	ctx context.Context,
 	target model.Target,
 	tracker *worker.ProgressTracker,
 ) error {
-	if d.config.CacheMode != config.OCICacheModeTarget {
+	if !d.config.IsPrebuildLayerFetchEnabled() {
 		return nil
 	}
 
