@@ -377,6 +377,43 @@ func (r *Registry) LoadOutputs(
 	return nil
 }
 
+// SeedLayerCaches calls SeedLayerCache on any handler that implements
+// LayerCacheSeeder for the target's outputs. This pulls previous images
+// into the local Docker daemon before a build so their layers can be reused.
+func (r *Registry) SeedLayerCaches(
+	ctx context.Context,
+	target *model.Target,
+	update worker.StatusFunc,
+) {
+	logger := console.GetLogger(ctx)
+
+	// Deduplicate handler types — only seed once per handler even if a target
+	// has multiple docker outputs.
+	seeded := make(map[handlers.HandlerType]bool)
+	for _, outputRef := range target.AllOutputs() {
+		handler := r.mustGetHandler(outputRef.Type)
+		if seeded[handler.Type()] {
+			continue
+		}
+		seeder, ok := handler.(handlers.LayerCacheSeeder)
+		if !ok {
+			continue
+		}
+		seeded[handler.Type()] = true
+
+		update(worker.Status(fmt.Sprintf("%s: seeding layer cache", target.Label)))
+		progress := worker.NewProgressTracker(
+			fmt.Sprintf("%s: seeding layer cache", target.Label),
+			0,
+			update,
+		)
+		if err := seeder.SeedLayerCache(ctx, *target, progress); err != nil {
+			// Layer cache seeding is best-effort; log and continue.
+			logger.Debugf("%s: layer cache seed failed (non-fatal): %v", target.Label, err)
+		}
+	}
+}
+
 // ensureBinOutputExecutable marks a target's bin_output 0755 on disk.
 // The CAS doesn't track file mode, and a user's build command may not chmod
 // the binary itself, so the Registry guarantees this post-condition at every

@@ -48,6 +48,14 @@ type ImagePusher interface {
 	PushImage(ctx context.Context, image *gen.OCIImageOutput, destination string, tracker *worker.ProgressTracker) (skipped bool, err error)
 }
 
+// LayerCacheSeeder is an optional interface that output handlers may implement
+// to seed build-time caches before a target's command executes. This is used by
+// the Docker registry handler to pull a previous image's layers into the local
+// daemon so that subsequent docker build commands can reuse them.
+type LayerCacheSeeder interface {
+	SeedLayerCache(ctx context.Context, target model.Target, tracker *worker.ProgressTracker) error
+}
+
 type HandlerType string
 
 const (

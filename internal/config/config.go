@@ -310,6 +310,16 @@ const (
 	OCIBackendRegistry = "registry"
 )
 
+const (
+	// OCICacheModeContent names cache images by content digest (default).
+	// Each unique image gets its own registry repo.
+	OCICacheModeContent = "content"
+
+	// OCICacheModeTarget names cache images by target label (stable).
+	// One registry repo per target, enabling Docker layer cache reuse across builds.
+	OCICacheModeTarget = "target"
+)
+
 type OCIConfig struct {
 	Backend string `mapstructure:"backend"`
 
@@ -324,4 +334,9 @@ type OCIConfig struct {
 	// docker daemon's insecure-registries config so a user already familiar
 	// with that knob has no new mental model.
 	InsecureRegistries []string `mapstructure:"insecure_registries"`
+
+	// CacheMode controls how registry cache images are named.
+	// "content" (default): one repo per unique image digest.
+	// "target": one repo per target label, enabling Docker layer cache reuse.
+	CacheMode string `mapstructure:"cache_mode"`
 }
