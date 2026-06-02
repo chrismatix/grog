@@ -1,4 +1,4 @@
-INFO: 1 package loaded, 4 targets configured.
+INFO: 1 package loaded, 5 targets configured.
 INFO: Selected 1 target.
 INFO: //:file_env DONE
 INFO: Build completed successfully. 1 target completed (0 cache hits).
