@@ -9,6 +9,18 @@ cases:
     grog_args:
       - build
 
+  # Regression for chrismatix/grog#155: when the bin_output file is missing
+  # the cache restore must put it back AND keep the executable bit so the
+  # binary can be invoked. Without the fix, dist/bin is restored as 0644
+  # and `grog run` fails with EACCES.
+  - name: run_after_cache_restore_preserves_exec_bit
+    setup_command: rm -f dist/bin
+    grog_args:
+      - run
+      - //:creates_bin_tool
+      - --
+      - foo
+
   - name: run_command_fails
     grog_args:
       - run

@@ -418,6 +418,12 @@ func (e *Executor) getTaskFunc(
 				// Don't return so that we instead break out and continue executing the target
 				logger.Errorf("%s re-running due to output loading failure: %v", target.Label, loadingErr)
 			} else {
+				// The CAS doesn't track file mode, so a restored bin_output
+				// comes back 0644. Re-apply the executable bit to match a
+				// fresh build (issue #155).
+				if err := markBinOutputExecutable(target); err != nil {
+					return dag.CacheMiss, err
+				}
 				// Log the cached execution time recorded when the target was
 				// originally built, not the (near-zero) cache-load time.
 				logTargetCached(ctx, logger, target, float64(targetResult.ExecutionDurationMillis)/1000)
@@ -674,6 +680,11 @@ func (e *Executor) LoadDependencyOutputs(
 				update,
 			)
 			loadErr = e.registry.LoadOutputs(ctx, localDep, targetResult, progress)
+			if loadErr == nil {
+				// Restored files come back without an executable bit; bin_output
+				// must stay executable across cache hits (issue #155).
+				loadErr = markBinOutputExecutable(localDep)
+			}
 		} else {
 			// Target cache not available (e.g. async cache write not yet complete).
 			// Treat as a load failure so the dependency is re-built below.
