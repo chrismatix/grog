@@ -441,6 +441,11 @@ func (e *Executor) getTaskFunc(
 			target.DepLoadTime = time.Since(depLoadStart)
 		}
 
+		// Seed Docker layer caches before executing the build command.
+		// On a cache miss for a target with docker outputs, this pulls the
+		// previous image into the local daemon so its layers can be reused.
+		e.registry.SeedLayerCaches(ctx, target, update)
+
 		return e.executeTarget(ctx, target, binToolPaths, outputIdentifiers, transitiveOutputs, taggedOutputs, update, isTainted)
 	}
 }

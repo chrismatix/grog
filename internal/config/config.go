@@ -308,10 +308,25 @@ const (
 	DockerBackendRegistry = "registry"
 )
 
+const (
+	// DockerCacheModeContent names cache images by content digest (default).
+	// Each unique image gets its own registry repo.
+	DockerCacheModeContent = "content"
+
+	// DockerCacheModeTarget names cache images by target label (stable).
+	// One registry repo per target, enabling Docker layer cache reuse across builds.
+	DockerCacheModeTarget = "target"
+)
+
 type DockerConfig struct {
 	Backend string `mapstructure:"backend"`
 
 	Registry string `mapstructure:"registry"`
 	Username string `mapstructure:"username"`
 	Password string `mapstructure:"password"`
+
+	// CacheMode controls how registry cache images are named.
+	// "content" (default): one repo per unique image digest.
+	// "target": one repo per target label, enabling Docker layer cache reuse.
+	CacheMode string `mapstructure:"cache_mode"`
 }

@@ -119,11 +119,20 @@ func (d *DockerRegistryOutputHandler) lazyClient() (*client.Client, error) {
 	return d.dockerClient, nil
 }
 
-func (d *DockerRegistryOutputHandler) cacheImageName(digest string) string {
+func (d *DockerRegistryOutputHandler) cacheImageName(target model.Target, digest string) string {
 	workspaceDir := config.Global.WorkspaceRoot
 	workspacePrefix := config.GetWorkspaceCachePrefix(workspaceDir)
 
-	// strip the leading sha256: prefix from the digest
+	if d.config.CacheMode == config.DockerCacheModeTarget {
+		// Stable name: one repo per target, enabling Docker layer cache reuse.
+		// Target names are validated to [a-zA-Z0-9_\-.]
+		// Package paths use / which we replace with -
+		sanitized := strings.ReplaceAll(target.Label.Package, "/", "-")
+		return fmt.Sprintf("%s/%s-%s-%s:latest",
+			d.config.Registry, workspacePrefix, sanitized, target.Label.Name)
+	}
+
+	// Default: content-addressed (one repo per unique image digest)
 	if strings.Contains(digest, ":") {
 		digest = strings.Split(digest, ":")[1]
 	}
@@ -152,7 +161,7 @@ func (d *DockerRegistryOutputHandler) Write(
 		return nil, fmt.Errorf("%s: image output %s was not created: %w", target.Label.String(), localImageName, err)
 	}
 
-	remoteCacheImageName := d.cacheImageName(inspect.ID)
+	remoteCacheImageName := d.cacheImageName(target, inspect.ID)
 
 	logger.Debugf("tagging Docker image %s as %s for deferred push", localImageName, remoteCacheImageName)
 
@@ -207,6 +216,57 @@ func makeRegistryAuth(ref string) (string, error) {
 		return "", fmt.Errorf("marshaling auth config: %w", err)
 	}
 	return base64.URLEncoding.EncodeToString(raw), nil
+}
+
+// SeedLayerCache pulls the previous image for a target into the local Docker daemon
+// so that its layers are available for cache reuse during the next build.
+// This is only active when cache_mode is "target" (stable image names).
+// It is called on cache misses, before the target's build command executes.
+func (d *DockerRegistryOutputHandler) SeedLayerCache(
+	ctx context.Context,
+	target model.Target,
+	tracker *worker.ProgressTracker,
+) error {
+	if d.config.CacheMode != config.DockerCacheModeTarget {
+		return nil
+	}
+
+	logger := console.GetLogger(ctx)
+
+	cli, err := d.lazyClient()
+	if err != nil {
+		return err
+	}
+
+	// Build the stable remote image name for this target.
+	// The digest parameter is unused in target mode, but cacheImageName requires it.
+	remoteImageName := d.cacheImageName(target, "")
+
+	logger.Debugf("seeding Docker layer cache for %s from %s", target.Label, remoteImageName)
+
+	auth, err := makeRegistryAuth(remoteImageName)
+	if err != nil {
+		logger.Debugf("failed to get registry auth for layer cache seed: %v", err)
+		return nil
+	}
+
+	pull, err := cli.ImagePull(ctx, remoteImageName, image.PullOptions{
+		RegistryAuth: auth,
+	})
+	if err != nil {
+		// Not finding a previous image is expected on first build.
+		logger.Debugf("no previous image to seed layer cache for %s: %v", target.Label, err)
+		return nil
+	}
+	defer pull.Close()
+
+	if err := consumeDockerProgress(pull, tracker, fmt.Sprintf("%s: seeding layer cache", target.Label)); err != nil {
+		logger.Debugf("error seeding layer cache for %s: %v", target.Label, err)
+		return nil
+	}
+
+	logger.Debugf("successfully seeded Docker layer cache for %s from %s", target.Label, remoteImageName)
+	return nil
 }
 
 // Load pulls the Docker image from the remote registry and writes it into the local Docker daemon.
