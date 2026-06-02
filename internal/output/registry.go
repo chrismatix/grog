@@ -14,6 +14,8 @@ import (
 	"grog/internal/proto/gen"
 	"grog/internal/worker"
 	"io"
+	"os"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"sync"
@@ -278,6 +280,19 @@ func (r *Registry) LoadOutputs(
 	for _, task := range tasks {
 		if err := task.Wait(); err != nil {
 			return err
+		}
+	}
+
+	// The CAS doesn't track file mode, so a restored bin_output comes back
+	// 0644. Re-apply 0755 here — at the restore boundary — so any caller of
+	// LoadOutputs ends up with the same on-disk state as a fresh build
+	// (issue #155).
+	if target.HasBinOutput() {
+		binOutputPath := config.GetPathAbsoluteToWorkspaceRoot(
+			filepath.Join(target.Label.Package, target.BinOutput.Identifier),
+		)
+		if err := os.Chmod(binOutputPath, 0755); err != nil {
+			return fmt.Errorf("failed to mark bin_output executable for %s: %w", target.Label, err)
 		}
 	}
 
