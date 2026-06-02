@@ -192,6 +192,10 @@ func (r *Registry) PrepareOutputs(
 		return nil, err
 	}
 
+	if err := ensureBinOutputExecutable(target); err != nil {
+		return nil, err
+	}
+
 	logger.Debugf("%s: outputs written", target.Label)
 
 	return &PreparedTargetResult{
@@ -233,6 +237,10 @@ func (r *Registry) GetNoCacheOutputHash(ctx context.Context, target *model.Targe
 		if err := task.Wait(); err != nil {
 			return nil, err
 		}
+	}
+
+	if err := ensureBinOutputExecutable(target); err != nil {
+		return nil, err
 	}
 
 	return &gen.TargetResult{
@@ -283,22 +291,31 @@ func (r *Registry) LoadOutputs(
 		}
 	}
 
-	// The CAS doesn't track file mode, so a restored bin_output comes back
-	// 0644. Re-apply 0755 here — at the restore boundary — so any caller of
-	// LoadOutputs ends up with the same on-disk state as a fresh build
-	// (issue #155).
-	if target.HasBinOutput() {
-		binOutputPath := config.GetPathAbsoluteToWorkspaceRoot(
-			filepath.Join(target.Label.Package, target.BinOutput.Identifier),
-		)
-		if err := os.Chmod(binOutputPath, 0755); err != nil {
-			return fmt.Errorf("failed to mark bin_output executable for %s: %w", target.Label, err)
-		}
+	if err := ensureBinOutputExecutable(target); err != nil {
+		return err
 	}
 
 	logger.Debugf("%s: outputs loaded", target.Label)
 	target.OutputsLoaded = true
 	target.OutputHash = targetResult.OutputHash
+	return nil
+}
+
+// ensureBinOutputExecutable marks a target's bin_output 0755 on disk.
+// The CAS doesn't track file mode, and a user's build command may not chmod
+// the binary itself, so the Registry guarantees this post-condition at every
+// boundary that produces outputs (fresh build, no-cache build, cache restore)
+// — see issue #155.
+func ensureBinOutputExecutable(target *model.Target) error {
+	if !target.HasBinOutput() {
+		return nil
+	}
+	binOutputPath := config.GetPathAbsoluteToWorkspaceRoot(
+		filepath.Join(target.Label.Package, target.BinOutput.Identifier),
+	)
+	if err := os.Chmod(binOutputPath, 0755); err != nil {
+		return fmt.Errorf("failed to mark bin_output executable for %s: %w", target.Label, err)
+	}
 	return nil
 }
 
