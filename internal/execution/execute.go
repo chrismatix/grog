@@ -15,7 +15,6 @@ import (
 	"grog/internal/output/handlers"
 	"grog/internal/proto/gen"
 	"grog/internal/worker"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -535,12 +534,6 @@ func (e *Executor) executeTarget(
 		return dag.CacheMiss, outputCheckErr
 	}
 
-	// If the target produced a bin output automatically mark it as executable
-	err = markBinOutputExecutable(target)
-	if err != nil {
-		return dag.CacheMiss, err
-	}
-
 	// Write outputs to the cache:
 	logger.Debugf("writing outputs for target %s", target.Label)
 	update(worker.Status(fmt.Sprintf("%s: writing outputs", target.Label)))
@@ -702,20 +695,6 @@ func (e *Executor) LoadDependencyOutputs(
 				return rerunError
 			}
 		}
-	}
-
-	return nil
-}
-
-func markBinOutputExecutable(target *model.Target) error {
-	if !target.HasBinOutput() {
-		return nil
-	}
-
-	binOutputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(target.Label.Package, target.BinOutput.Identifier))
-	err := os.Chmod(binOutputPath, 0755)
-	if err != nil {
-		return fmt.Errorf("failed to mark binary output as executable for target %s: %w", target.Label, err)
 	}
 
 	return nil

@@ -39,6 +39,7 @@ func (pl *PklLoader) getEvaluator(ctx context.Context) (pkl.Evaluator, error) {
 					"GROG_ARCH":          config.Global.Arch,
 					"GROG_PLATFORM":      config.Global.GetPlatform(),
 					"GROG_PLATFORM_TAGS": strings.Join(config.Global.PlatformTags, ","),
+					"GROG_ENV_FILE":      resolvedEnvironmentVariablesFilePath(),
 				}),
 				withEnv(config.Global.EnvironmentVariables),
 			)
@@ -50,6 +51,7 @@ func (pl *PklLoader) getEvaluator(ctx context.Context) (pkl.Evaluator, error) {
 					"GROG_ARCH":          config.Global.Arch,
 					"GROG_PLATFORM":      config.Global.GetPlatform(),
 					"GROG_PLATFORM_TAGS": strings.Join(config.Global.PlatformTags, ","),
+					"GROG_ENV_FILE":      resolvedEnvironmentVariablesFilePath(),
 				}),
 				withEnv(config.Global.EnvironmentVariables),
 			)
