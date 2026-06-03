@@ -37,6 +37,19 @@ jobs:
           docker --version
           podman --version
 
+      - name: Mark grog's loopback registry as insecure for podman
+        run: |
+          # Docker auto-treats 127.0.0.1 as an insecure (HTTP) registry; podman
+          # does not. Grog's in-process OCI proxy serves plain HTTP on a random
+          # 127.0.0.1:<port>, so without this config podman tries HTTPS and
+          # fails the push.
+          mkdir -p ~/.config/containers/registries.conf.d
+          cat > ~/.config/containers/registries.conf.d/grog-loopback.conf <<'EOF'
+          [[registry]]
+          location = "127.0.0.1"
+          insecure = true
+          EOF
+
       - name: Start podman compat socket
         run: |
           systemctl --user enable --now podman.socket
