@@ -1,0 +1,9 @@
+INFO: 1 package loaded, 2 targets configured.
+INFO: Selected 2 targets.
+INFO: --push will ship 2 image(s):
+INFO:   //:cross_host -> 127.0.0.1:5557/prod/cross:1
+INFO:   //:same_host -> 127.0.0.1:5556/prod/same:1
+INFO: //:cross_host DONE
+INFO: //:same_host  DONE
+INFO: Build completed successfully. 2 targets completed (0 cache hits).
+INFO: Pushes: 2 pushed, 0 already current, 0 failed.

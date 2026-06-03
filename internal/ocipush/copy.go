@@ -48,10 +48,12 @@ type Options struct {
 // side instead of being streamed through the client; otherwise blobs stream
 // through the process but never through the local Docker daemon.
 //
-// Copy is a no-op when the destination already holds an image with a manifest
-// digest identical to the source's: the HEAD probe sees a match and skips.
-// This makes Copy idempotent for re-runs of the same build invocation.
-func Copy(ctx context.Context, source, destination string, opts Options) error {
+// Returns (skipped=true, nil) when the destination already holds an image with
+// a manifest digest identical to the source's — the HEAD probe sees a match
+// and short-circuits. (skipped=false, nil) on a successful new push. The two
+// outcomes are separated so the build summary can distinguish "shipped" from
+// "already current," both of which are successes for exit-code purposes.
+func Copy(ctx context.Context, source, destination string, opts Options) (bool, error) {
 	if opts.MaxAttempts <= 0 {
 		opts.MaxAttempts = 4
 	}
@@ -61,11 +63,11 @@ func Copy(ctx context.Context, source, destination string, opts Options) error {
 
 	srcRef, err := parseRef(source, opts.SourceInsecure)
 	if err != nil {
-		return fmt.Errorf("parse source %q: %w", source, err)
+		return false, fmt.Errorf("parse source %q: %w", source, err)
 	}
 	dstRef, err := parseRef(destination, false)
 	if err != nil {
-		return fmt.Errorf("parse destination %q: %w", destination, err)
+		return false, fmt.Errorf("parse destination %q: %w", destination, err)
 	}
 
 	srcImg, err := remote.Image(srcRef,
@@ -73,12 +75,12 @@ func Copy(ctx context.Context, source, destination string, opts Options) error {
 		remote.WithAuthFromKeychain(authn.DefaultKeychain),
 	)
 	if err != nil {
-		return fmt.Errorf("fetch source manifest %q: %w", source, err)
+		return false, fmt.Errorf("fetch source manifest %q: %w", source, err)
 	}
 
 	srcDigest, err := srcImg.Digest()
 	if err != nil {
-		return fmt.Errorf("read source digest: %w", err)
+		return false, fmt.Errorf("read source digest: %w", err)
 	}
 
 	// HEAD probe: if the destination tag already points at the same manifest
@@ -89,7 +91,7 @@ func Copy(ctx context.Context, source, destination string, opts Options) error {
 		remote.WithAuthFromKeychain(authn.DefaultKeychain),
 	)
 	if err == nil && dstDesc != nil && dstDesc.Digest == srcDigest {
-		return nil
+		return true, nil
 	}
 
 	backoff := opts.InitialBackoff
@@ -97,20 +99,20 @@ func Copy(ctx context.Context, source, destination string, opts Options) error {
 	for attempt := 1; attempt <= opts.MaxAttempts; attempt++ {
 		err := writeImage(ctx, dstRef, srcImg)
 		if err == nil {
-			return nil
+			return false, nil
 		}
 		lastErr = err
 		if !isTransient(err) || attempt == opts.MaxAttempts {
-			return fmt.Errorf("push %q -> %q: %w", source, destination, err)
+			return false, fmt.Errorf("push %q -> %q: %w", source, destination, err)
 		}
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return false, ctx.Err()
 		case <-time.After(backoff):
 		}
 		backoff *= 2
 	}
-	return fmt.Errorf("push %q -> %q after %d attempts: %w", source, destination, opts.MaxAttempts, lastErr)
+	return false, fmt.Errorf("push %q -> %q after %d attempts: %w", source, destination, opts.MaxAttempts, lastErr)
 }
 
 // CopyWithCrane is a convenience that uses crane.Copy for a simpler call site

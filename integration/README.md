@@ -35,3 +35,12 @@ cases:
 Run the integration tests with `make test`.
 
 To update a single test fixture you can run `make test update={test case name}`
+
+## Gated scenarios
+
+Some scenarios require external resources and are skipped by default:
+
+| Gate env var             | Purpose                                                                                                                                                                                                    |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `REQUIRES_CREDENTIALS=1` | Scenarios that talk to a cloud registry/cache (e.g. GAR) and need ambient credentials.                                                                                                                     |
+| `REQUIRES_DOCKER=1`      | Scenarios that spin up local containers via `docker run` or `docker compose` — currently the `oci-push::` smoke and cross-repo tests. Requires a working local Docker daemon and free TCP ports 5555–5557. |

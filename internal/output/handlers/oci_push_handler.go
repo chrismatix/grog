@@ -16,10 +16,11 @@ import (
 // go-containerregistry dependency lives in internal/ocipush and is wired up
 // by the output registry, not here.
 //
-// The function must HEAD-probe the destination, perform the copy with retries
-// on transient errors, and return nil when the destination already holds an
-// image whose digest matches the source.
-type PushFunc func(ctx context.Context, source, destination string, sourceInsecure bool) error
+// The function HEAD-probes the destination, performs the copy with retries
+// on transient errors, and returns (skipped=true, nil) when the destination
+// already holds an image whose digest matches the source's. (skipped=false,
+// nil) on a successful new push, (_, err) on failure.
+type PushFunc func(ctx context.Context, source, destination string, sourceInsecure bool) (skipped bool, err error)
 
 // OciPushOutputHandler implements the oci-push:: output type by delegating its cache
 // behavior (Hash/Write/Load) to the underlying docker handler — whichever one
@@ -95,10 +96,40 @@ func (h *OciPushOutputHandler) Hash(ctx context.Context, target model.Target, ou
 	return h.inner.Hash(ctx, target, asDockerOutput(output))
 }
 
-// Load delegates to the inner handler: oci-push:: outputs restore from cache
-// the same way docker:: outputs do. Push is purely a write-side concern.
+// Load restores the cached image via the inner docker handler and, when
+// --push is enabled, fires the same registry-to-registry copy the write path
+// uses. This is what makes "build once, ship every release" work: cache-hit
+// builds still push, so a deploy invocation under a new VERSION re-uses the
+// cached bytes but updates the destination tag.
+//
+// Push failures from Load are recorded to the reporter but never propagated
+// — a non-nil return here would force the executor to rebuild from scratch
+// (see internal/execution/execute.go:418), which is the wrong remediation
+// for a transient registry hiccup against a fully-cached source image.
+// HasFailures() on the reporter still drives the build's non-zero exit.
 func (h *OciPushOutputHandler) Load(ctx context.Context, target model.Target, output *gen.Output, tracker *worker.ProgressTracker) error {
-	return h.inner.Load(ctx, target, output, tracker)
+	if err := h.inner.Load(ctx, target, output, tracker); err != nil {
+		return err
+	}
+	if !h.pushEnabled() {
+		return nil
+	}
+	img := output.GetDockerImage()
+	if img == nil || img.GetPushDestination() == "" {
+		return nil
+	}
+	plan := &ociPushWritePlan{
+		pushFn:      h.pushFn,
+		source:      h.source,
+		dockerOut:   img,
+		destination: img.GetPushDestination(),
+		targetLabel: target.Label.String(),
+		reporter:    h.reporter,
+		aborted:     &h.aborted,
+		failFast:    h.failFast,
+	}
+	_ = plan.Execute(ctx, tracker)
+	return nil
 }
 
 // Write runs the inner handler's Write to stage the cache plan, stamps the
@@ -207,10 +238,11 @@ func (p *ociPushWritePlan) Execute(ctx context.Context, tracker *worker.Progress
 		return err
 	}
 
-	err := p.pushFn(ctx, sourceRef, p.destination, insecure)
+	skipped, err := p.pushFn(ctx, sourceRef, p.destination, insecure)
 	report := PushReport{
 		TargetLabel: p.targetLabel,
 		Destination: p.destination,
+		Skipped:     skipped,
 		Err:         err,
 	}
 	p.reporter.Record(report)
@@ -219,7 +251,11 @@ func (p *ociPushWritePlan) Execute(ctx context.Context, tracker *worker.Progress
 		p.maybeAbort()
 		return err
 	}
-	logger.Debugf("%s: pushed %s", p.targetLabel, p.destination)
+	if skipped {
+		logger.Debugf("%s: %s already current, skipped push", p.targetLabel, p.destination)
+	} else {
+		logger.Debugf("%s: pushed %s", p.targetLabel, p.destination)
+	}
 	return nil
 }
 

@@ -1,0 +1,4 @@
+# fs backend so the test does not need a remote cache registry. The
+# loopback dockerproxy serves as the push source via OCI Distribution.
+[docker]
+backend = "fs"

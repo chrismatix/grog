@@ -55,6 +55,11 @@ type TestTable struct {
 	// Only run this test when REQUIRES_CREDENTIALS is set
 	// (for tests that require cloud credentials)
 	RequiresCredentials bool `yaml:"requires_credentials"`
+	// Only run this test when REQUIRES_DOCKER is set. For scenarios that
+	// spin up local containers (e.g. an OCI distribution registry for
+	// oci-push:: smoke tests) but do not need cloud credentials. Lets CI
+	// gate them separately from cred-bearing tests.
+	RequiresDocker bool `yaml:"requires_docker"`
 	// Whether to skip the clean step
 	SkipClean bool `yaml:"skip_clean"`
 }
@@ -109,6 +114,11 @@ func TestCliScenarios(t *testing.T) {
 	for _, tt := range testTables {
 		if tt.RequiresCredentials {
 			if os.Getenv("REQUIRES_CREDENTIALS") == "" {
+				continue
+			}
+		}
+		if tt.RequiresDocker {
+			if os.Getenv("REQUIRES_DOCKER") == "" {
 				continue
 			}
 		}

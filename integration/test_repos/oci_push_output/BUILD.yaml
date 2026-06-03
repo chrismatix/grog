@@ -1,0 +1,12 @@
+targets:
+  - name: smoke
+    # Pin the platform so the image-id is reproducible across machines —
+    # without this the fs-cache hit path would not be exercised
+    # deterministically by the second --push run in the scenario.
+    command: |
+      docker buildx build --platform=linux/amd64 -t 127.0.0.1:5555/grog-smoke/image:1.0.0 .
+    inputs:
+      - script.sh
+      - Dockerfile
+    outputs:
+      - oci-push::127.0.0.1:5555/grog-smoke/image:1.0.0

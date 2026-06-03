@@ -1,0 +1,26 @@
+targets:
+  # same_host pushes a destination that lives on the SAME registry as the
+  # cache (127.0.0.1:5556). go-containerregistry detects this at copy time
+  # and asks the registry to cross-repo-mount layers from the cache repo
+  # into the prod repo — no layer bytes flow through grog.
+  - name: same_host
+    command: |
+      docker buildx build --platform=linux/amd64 -t 127.0.0.1:5556/prod/same:1 .
+    inputs:
+      - script.sh
+      - Dockerfile
+    outputs:
+      - oci-push::127.0.0.1:5556/prod/same:1
+
+  # cross_host pushes to a SECOND registry (127.0.0.1:5557) the cache does
+  # not live on. Cross-host blob mount is not possible, so go-container-
+  # registry streams each blob through the grog process. The verifier
+  # confirms the destination ended up with the manifest regardless.
+  - name: cross_host
+    command: |
+      docker buildx build --platform=linux/amd64 -t 127.0.0.1:5557/prod/cross:1 .
+    inputs:
+      - script.sh
+      - Dockerfile
+    outputs:
+      - oci-push::127.0.0.1:5557/prod/cross:1

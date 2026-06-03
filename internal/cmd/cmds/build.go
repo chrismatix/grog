@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -81,7 +82,7 @@ func AddBuildCmd(rootCmd *cobra.Command) {
 // signature the output registry expects (bare sourceInsecure bool). Defaults
 // for retry/backoff live in ocipush.Copy; this keeps the handler package free
 // of go-containerregistry.
-var ociPushAdapter handlers.PushFunc = func(ctx context.Context, source, destination string, sourceInsecure bool) error {
+var ociPushAdapter handlers.PushFunc = func(ctx context.Context, source, destination string, sourceInsecure bool) (bool, error) {
 	return ocipush.Copy(ctx, source, destination, ocipush.Options{SourceInsecure: sourceInsecure})
 }
 
@@ -407,6 +408,10 @@ func announcePushDestinations(logger *console.Logger, graph *dag.DirectedTargetG
 			}
 		}
 	}
+	// Selected-nodes iteration runs over a map; sort so the header lines are
+	// deterministic for fixture-based integration tests and a stable read for
+	// humans diffing CI logs across builds.
+	sort.Strings(destinations)
 	if len(destinations) == 0 {
 		logger.Infof("--push set but no oci-push:: outputs reached by this selection; nothing will be pushed.")
 		return

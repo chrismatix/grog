@@ -60,10 +60,11 @@ func (f *fakeInnerHandler) SourceRef(_ *gen.DockerImageOutput) (string, bool, bo
 }
 
 // recordingPushFn captures the args the push plan would have sent to a real
-// registry copier. Returns whatever stub error the test sets.
+// registry copier. Returns whatever stub (skipped, error) the test sets.
 type recordingPushFn struct {
-	calls []pushCall
-	err   error
+	calls   []pushCall
+	skipped bool
+	err     error
 }
 
 type pushCall struct {
@@ -72,9 +73,9 @@ type pushCall struct {
 }
 
 func (r *recordingPushFn) fn() PushFunc {
-	return func(_ context.Context, src, dst string, insecure bool) error {
+	return func(_ context.Context, src, dst string, insecure bool) (bool, error) {
 		r.calls = append(r.calls, pushCall{source: src, destination: dst, insecure: insecure})
-		return r.err
+		return r.skipped, r.err
 	}
 }
 
@@ -242,6 +243,76 @@ func TestOciPushHandler_FailFast_AbortsSubsequent(t *testing.T) {
 	}
 	if len(pusher.calls) != beforeCalls {
 		t.Errorf("pushFn was invoked after abort (was %d, now %d)", beforeCalls, len(pusher.calls))
+	}
+}
+
+func TestOciPushHandler_Load_PushEnabled_PushesAfterRestore(t *testing.T) {
+	// Simulates the cache-hit code path: the inner Load restores the image
+	// from cache, then the push fires against the destination. This is what
+	// makes "redeploy unchanged image" cheap — no rebuild, just a HEAD probe
+	// + tag retag.
+	inner := &fakeInnerHandler{
+		imageID:   "sha256:abc",
+		sourceRef: "cache.example.com/grog/abc",
+		sourceOk:  true,
+	}
+	pusher := &recordingPushFn{skipped: true} // destination already current
+	reporter := NewPushReporter()
+	h := NewOciPushOutputHandler(inner, pusher.fn(), reporter,
+		func() bool { return true },
+		func() bool { return false },
+	)
+
+	target := newTargetWithLabel(t, "//pkg:tgt")
+	cachedOutput := &gen.Output{
+		Kind: &gen.Output_DockerImage{
+			DockerImage: &gen.DockerImageOutput{
+				LocalTag:        "repo/image:1.2.3",
+				ImageId:         "sha256:abc",
+				PushDestination: "repo/image:1.2.3",
+			},
+		},
+	}
+
+	if err := h.Load(context.Background(), target, cachedOutput, newProgress(t)); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if inner.loadCalls.Load() != 1 {
+		t.Errorf("inner Load called %d times, want 1", inner.loadCalls.Load())
+	}
+	if len(pusher.calls) != 1 {
+		t.Fatalf("push called %d times, want 1", len(pusher.calls))
+	}
+	reports := reporter.Reports()
+	if len(reports) != 1 || !reports[0].Skipped || reports[0].Err != nil {
+		t.Errorf("expected one skipped report, got %+v", reports)
+	}
+}
+
+func TestOciPushHandler_Load_PushFailure_DoesNotPropagate(t *testing.T) {
+	// A push failure during Load must NOT force a rebuild — return nil to
+	// the executor so it does not interpret this as "loading failed."
+	inner := &fakeInnerHandler{imageID: "sha256:abc", sourceRef: "cache/abc", sourceOk: true}
+	pusher := &recordingPushFn{err: errors.New("registry down")}
+	reporter := NewPushReporter()
+	h := NewOciPushOutputHandler(inner, pusher.fn(), reporter,
+		func() bool { return true },
+		func() bool { return false },
+	)
+
+	target := newTargetWithLabel(t, "//pkg:tgt")
+	out := &gen.Output{
+		Kind: &gen.Output_DockerImage{
+			DockerImage: &gen.DockerImageOutput{
+				LocalTag: "x", ImageId: "sha256:abc", PushDestination: "repo/x:1",
+			},
+		},
+	}
+	if err := h.Load(context.Background(), target, out, newProgress(t)); err != nil {
+		t.Fatalf("Load returned %v; push failures must not propagate from Load", err)
+	}
+	if !reporter.HasFailures() {
+		t.Errorf("reporter should still see the failure for the build-summary exit code")
 	}
 }
 
