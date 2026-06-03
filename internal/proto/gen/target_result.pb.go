@@ -207,11 +207,7 @@ type DockerImageOutput struct {
 	ManifestDigest *Digest `protobuf:"bytes,5,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"`
 	// Digest of the config blob stored in CAS (filesystem backend).
 	ConfigDigest *Digest `protobuf:"bytes,6,opt,name=config_digest,json=configDigest,proto3" json:"config_digest,omitempty"` // Field 7 was reserved for layer_digests; intentionally removed.
-	// Remote registry tag this image should ship to when the build is invoked
-	// with --push. Set only for outputs declared as `oci-push::<tag>`; empty
-	// for plain `docker::<tag>` (cache-only) outputs. Including this in the
-	// proto lets the cached TargetResult round-trip oci-push semantics so a
-	// cache-hit build can still push.
+	// Remote tag to ship to under --push. Empty for plain docker:: outputs.
 	PushDestination string `protobuf:"bytes,8,opt,name=push_destination,json=pushDestination,proto3" json:"push_destination,omitempty"`
 }
 

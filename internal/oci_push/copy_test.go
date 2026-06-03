@@ -1,4 +1,4 @@
-package ocipush
+package oci_push
 
 import (
 	"context"

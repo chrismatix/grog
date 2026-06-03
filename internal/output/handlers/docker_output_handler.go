@@ -11,6 +11,7 @@ import (
 	"grog/internal/console"
 	"grog/internal/dockerproxy"
 	"grog/internal/model"
+	"grog/internal/oci_push"
 	"grog/internal/proto/gen"
 	"grog/internal/worker"
 
@@ -40,12 +41,18 @@ type DockerOutputHandler struct {
 	proxyInit sync.Once
 	proxy     *dockerproxy.Registry
 	proxyErr  error
+
+	pushReporter *PushReporter
+	pushEnabled  func() bool
 }
 
 // NewDockerOutputHandler creates a new DockerOutputHandler. The Docker client
 // and the in-process registry are both created lazily on first use.
-func NewDockerOutputHandler(_ context.Context, cas *caching.Cas) *DockerOutputHandler {
-	return &DockerOutputHandler{cas: cas}
+func NewDockerOutputHandler(_ context.Context, cas *caching.Cas, pushReporter *PushReporter, pushEnabled func() bool) *DockerOutputHandler {
+	if pushEnabled == nil {
+		pushEnabled = func() bool { return false }
+	}
+	return &DockerOutputHandler{cas: cas, pushReporter: pushReporter, pushEnabled: pushEnabled}
 }
 
 // Type returns the type of the handler.
@@ -155,10 +162,29 @@ func (d *DockerOutputHandler) Write(
 		targetLabel:    target.Label.String(),
 	}
 
-	return &PreparedOutput{
-		Output:    genOutput,
-		WritePlan: plan,
-	}, nil
+	prepared := &PreparedOutput{Output: genOutput, WritePlan: plan}
+	d.maybeAttachPushPlan(prepared, dockerImageOutput, output, target)
+	return prepared, nil
+}
+
+// maybeAttachPushPlan chains an ociPushPlan behind the cache plan when the
+// output was declared as oci-push:: and --push is enabled. The cache plan
+// fills in image_id and manifest_digest first, then the push plan reads them.
+func (d *DockerOutputHandler) maybeAttachPushPlan(prepared *PreparedOutput, image *gen.DockerImageOutput, output model.Output, target model.Target) {
+	if output.Type != string(OciPushHandler) {
+		return
+	}
+	image.PushDestination = output.Identifier
+	if !d.pushEnabled() {
+		return
+	}
+	prepared.WritePlan = &CompositeWritePlan{Plans: []OutputWritePlan{prepared.WritePlan, &ociPushPlan{
+		pusher:      d,
+		dockerOut:   image,
+		destination: output.Identifier,
+		targetLabel: target.Label.String(),
+		reporter:    d.pushReporter,
+	}}}
 }
 
 // Load restores a previously cached image into the local Docker daemon by
@@ -232,7 +258,42 @@ func (d *DockerOutputHandler) Load(
 	}
 
 	logger.Debugf("successfully loaded Docker image %s from cache", localImageName)
+	d.maybePushOnLoad(ctx, target, dockerImage, tracker)
 	return nil
+}
+
+// maybePushOnLoad fires the same push the write path does, but for cache hits.
+// Errors are warned and recorded but not returned — a transient push failure
+// must not invalidate a successful cache restore.
+func (d *DockerOutputHandler) maybePushOnLoad(ctx context.Context, target model.Target, image *gen.DockerImageOutput, tracker *worker.ProgressTracker) {
+	if !d.pushEnabled() || image.GetPushDestination() == "" {
+		return
+	}
+	plan := &ociPushPlan{
+		pusher:      d,
+		dockerOut:   image,
+		destination: image.GetPushDestination(),
+		targetLabel: target.Label.String(),
+		reporter:    d.pushReporter,
+	}
+	_ = plan.Execute(ctx, tracker)
+}
+
+// PushImage copies the cached image from the loopback proxy to the destination
+// registry. The proxy is started on demand by Write/Load and stays up until
+// the registry's Close. Source is always loopback (insecure HTTP).
+func (d *DockerOutputHandler) PushImage(ctx context.Context, image *gen.DockerImageOutput, destination string, _ *worker.ProgressTracker) (bool, error) {
+	proxy, err := d.ensureProxy(ctx)
+	if err != nil {
+		return false, err
+	}
+	manifestDigest := image.GetManifestDigest().GetHash()
+	imageID := image.GetImageId()
+	if manifestDigest == "" || imageID == "" {
+		return false, fmt.Errorf("cache write did not populate image identity for push to %s", destination)
+	}
+	src := fmt.Sprintf("%s/%s@%s", proxy.Addr(), loopbackRepoName(imageID), manifestDigest)
+	return oci_push.Copy(ctx, src, destination, oci_push.Options{SourceInsecure: true})
 }
 
 // dockerImageWritePlan defers the actual `docker push` to the cache-write phase.
@@ -290,24 +351,6 @@ func (d *dockerImageWritePlan) Execute(ctx context.Context, tracker *worker.Prog
 
 	logger.Debugf("successfully cached Docker image %s (manifest %s)", d.localImageName, manifestDigest)
 	return nil
-}
-
-// SourceRef returns a loopback registry reference that points at the cached
-// image content. It is the same name shape the daemon would use to pull on
-// cache restore (Load), reachable over plain HTTP at the lazily-started
-// proxy's loopback port. Returns ok=false if the cache write has not yet
-// populated manifest_digest — the push plan must run strictly after the
-// cache plan that fills it in.
-func (d *DockerOutputHandler) SourceRef(output *gen.DockerImageOutput) (string, bool, bool) {
-	if d.proxy == nil {
-		return "", false, false
-	}
-	manifestDigest := output.GetManifestDigest().GetHash()
-	imageID := output.GetImageId()
-	if manifestDigest == "" || imageID == "" {
-		return "", false, false
-	}
-	return fmt.Sprintf("%s/%s@%s", d.proxy.Addr(), loopbackRepoName(imageID), manifestDigest), true, true
 }
 
 // Close shuts down the in-process loopback registry, if one was started.

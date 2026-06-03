@@ -100,10 +100,6 @@ type WorkspaceConfig struct {
 	// Docker
 	Docker DockerConfig `mapstructure:"docker"`
 
-	// Push enables registry pushes for oci-push:: outputs. When false (the
-	// default), oci-push:: outputs behave exactly like docker:: outputs —
-	// the image is built and cached, but nothing is shipped to the remote
-	// registry. Set via the --push flag on `grog build`.
 	Push bool `mapstructure:"push"`
 
 	// Environment Variables

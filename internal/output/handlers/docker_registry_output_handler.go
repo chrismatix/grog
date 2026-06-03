@@ -18,6 +18,7 @@ import (
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/model"
+	"grog/internal/oci_push"
 	"grog/internal/proto/gen"
 	"grog/internal/worker"
 
@@ -29,6 +30,9 @@ type DockerRegistryOutputHandler struct {
 	cas          *caching.Cas
 	config       config.DockerConfig
 	dockerClient *client.Client
+
+	pushReporter *PushReporter
+	pushEnabled  func() bool
 }
 
 // dockerRegistryWritePlan pushes a pre-tagged Docker image to the configured remote
@@ -79,11 +83,18 @@ func (d *dockerRegistryWritePlan) Cleanup(ctx context.Context) error {
 // NewDockerRegistryOutputHandler creates a new DockerRegistryOutputHandler.
 func NewDockerRegistryOutputHandler(
 	cas *caching.Cas,
-	config config.DockerConfig,
+	cfg config.DockerConfig,
+	pushReporter *PushReporter,
+	pushEnabled func() bool,
 ) *DockerRegistryOutputHandler {
+	if pushEnabled == nil {
+		pushEnabled = func() bool { return false }
+	}
 	return &DockerRegistryOutputHandler{
-		cas:    cas,
-		config: config,
+		cas:          cas,
+		config:       cfg,
+		pushReporter: pushReporter,
+		pushEnabled:  pushEnabled,
 	}
 }
 
@@ -119,17 +130,15 @@ func (d *DockerRegistryOutputHandler) lazyClient() (*client.Client, error) {
 	return d.dockerClient, nil
 }
 
-// SourceRef returns the cache-registry name the image is published under
-// after Write/Execute. It is the same content-addressed reference Load uses
-// to restore the image on cache hits. The cache registry serves HTTPS, so
-// insecure=false; auth flows through the ambient docker keychain when the
-// push primitive calls in.
-func (d *DockerRegistryOutputHandler) SourceRef(output *gen.DockerImageOutput) (string, bool, bool) {
-	imageID := output.GetImageId()
+// PushImage copies the cached image from the configured cache registry to
+// destination. Both refs are real registries served over HTTPS; auth flows
+// through the ambient docker keychain.
+func (d *DockerRegistryOutputHandler) PushImage(ctx context.Context, image *gen.DockerImageOutput, destination string, _ *worker.ProgressTracker) (bool, error) {
+	imageID := image.GetImageId()
 	if imageID == "" {
-		return "", false, false
+		return false, fmt.Errorf("cache write did not populate image_id for push to %s", destination)
 	}
-	return d.cacheImageName(imageID), false, true
+	return oci_push.Copy(ctx, d.cacheImageName(imageID), destination, oci_push.Options{})
 }
 
 func (d *DockerRegistryOutputHandler) cacheImageName(digest string) string {
@@ -191,10 +200,26 @@ func (d *DockerRegistryOutputHandler) Write(
 		targetLabel:     target.Label.String(),
 	}
 
-	return &PreparedOutput{
-		Output:    genOutput,
-		WritePlan: writePlan,
-	}, nil
+	prepared := &PreparedOutput{Output: genOutput, WritePlan: writePlan}
+	d.maybeAttachPushPlan(prepared, genOutput.GetDockerImage(), output, target)
+	return prepared, nil
+}
+
+func (d *DockerRegistryOutputHandler) maybeAttachPushPlan(prepared *PreparedOutput, image *gen.DockerImageOutput, output model.Output, target model.Target) {
+	if output.Type != string(OciPushHandler) {
+		return
+	}
+	image.PushDestination = output.Identifier
+	if !d.pushEnabled() {
+		return
+	}
+	prepared.WritePlan = &CompositeWritePlan{Plans: []OutputWritePlan{prepared.WritePlan, &ociPushPlan{
+		pusher:      d,
+		dockerOut:   image,
+		destination: output.Identifier,
+		targetLabel: target.Label.String(),
+		reporter:    d.pushReporter,
+	}}}
 }
 
 func makeRegistryAuth(ref string) (string, error) {
@@ -251,6 +276,7 @@ func (d *DockerRegistryOutputHandler) Load(
 			return fmt.Errorf("failed to tag existing image %q as %q: %w", imageId, localImageName, err)
 		}
 		logger.Debugf("image %s already exists in local Docker daemon, skipping pull", localImageName)
+		d.maybePushOnLoad(ctx, target, dockerImage, tracker)
 		return nil
 	}
 
@@ -288,7 +314,25 @@ func (d *DockerRegistryOutputHandler) Load(
 	}
 
 	logger.Debugf("successfully loaded Docker image %s from registry tag %s", localImageName, remoteImageName)
+	d.maybePushOnLoad(ctx, target, dockerImage, tracker)
 	return nil
+}
+
+// maybePushOnLoad fires the same push the write path does, but for cache hits.
+// Errors are warned and recorded but not returned — a transient push failure
+// must not invalidate a successful cache restore.
+func (d *DockerRegistryOutputHandler) maybePushOnLoad(ctx context.Context, target model.Target, image *gen.DockerImageOutput, tracker *worker.ProgressTracker) {
+	if !d.pushEnabled() || image.GetPushDestination() == "" {
+		return
+	}
+	plan := &ociPushPlan{
+		pusher:      d,
+		dockerOut:   image,
+		destination: image.GetPushDestination(),
+		targetLabel: target.Label.String(),
+		reporter:    d.pushReporter,
+	}
+	_ = plan.Execute(ctx, tracker)
 }
 
 // dockerLayerProgress holds per-layer tracking state for bridging JSON progress.

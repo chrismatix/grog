@@ -3,16 +3,11 @@ package handlers
 import (
 	"sort"
 	"sync"
+	"sync/atomic"
 )
 
-// PushReport captures the outcome of a single oci-push:: push attempt. It is
-// recorded by the push write plan after Execute() resolves, win or lose, and
-// read by the build command at end-of-build to render a per-push summary
-// and decide the process exit code.
-//
-// Skipped is set when the destination probe found the image already at the
-// requested digest (idempotent re-run); the push performed no transfer. A
-// skipped push is a success.
+// PushReport captures the outcome of a single oci-push:: push attempt.
+// Skipped means the HEAD probe matched and no bytes were sent.
 type PushReport struct {
 	TargetLabel string
 	Destination string
@@ -20,32 +15,46 @@ type PushReport struct {
 	Err         error
 }
 
-// PushReporter accumulates PushReport entries from concurrent push plans. It
-// is owned by the output Registry so a single reporter spans every push in a
-// build invocation. Reads via Reports() return a stable, label-sorted copy
-// suitable for rendering and exit-code decisions.
+// PushReporter accumulates PushReport entries and carries the build-level
+// abort flag that --fail-fast trips. One instance per build, owned by the
+// output Registry and shared across all docker handlers.
 type PushReporter struct {
+	failFast func() bool
+
 	mu      sync.Mutex
 	entries []PushReport
+
+	aborted atomic.Bool
 }
 
-func NewPushReporter() *PushReporter {
-	return &PushReporter{}
+func NewPushReporter(failFast func() bool) *PushReporter {
+	if failFast == nil {
+		failFast = func() bool { return false }
+	}
+	return &PushReporter{failFast: failFast}
 }
 
-// Record appends a report. Safe for concurrent callers.
 func (p *PushReporter) Record(report PushReport) {
 	if p == nil {
 		return
 	}
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	p.entries = append(p.entries, report)
+	p.mu.Unlock()
+	if report.Err != nil && p.failFast() {
+		p.aborted.Store(true)
+	}
 }
 
-// Reports returns a sorted copy of the recorded reports. Sorting by (target
-// label, destination) keeps the build summary deterministic regardless of
-// async push ordering.
+// Aborted reports whether a prior fail-fast failure has tripped the abort.
+// Push plans check this before issuing a copy.
+func (p *PushReporter) Aborted() bool {
+	if p == nil {
+		return false
+	}
+	return p.aborted.Load()
+}
+
 func (p *PushReporter) Reports() []PushReport {
 	if p == nil {
 		return nil
@@ -63,9 +72,6 @@ func (p *PushReporter) Reports() []PushReport {
 	return out
 }
 
-// HasFailures reports whether any recorded push errored. Used by the build
-// command to decide the process exit code: any push failure causes a
-// non-zero exit even if the build itself succeeded.
 func (p *PushReporter) HasFailures() bool {
 	if p == nil {
 		return false

@@ -45,25 +45,17 @@ type Registry struct {
 	outputHashMutex sync.RWMutex
 	outputHashCache map[string]map[model.Output]string
 
-	// pushReporter accumulates per-push results from oci-push:: outputs so
-	// the build summary can render them and decide the process exit code.
-	// Exposed via PushReporter().
 	pushReporter *handlers.PushReporter
 }
 
 // NewRegistry creates a new registry with default handlers.
-//
-// pushFn is the registry-to-registry copy primitive used by oci-push::
-// outputs. It is injected by the caller (typically wired to ocipush.Copy)
-// rather than imported here so this package stays free of the
-// go-containerregistry dependency tree. A nil pushFn is permitted — in that
-// case oci-push:: outputs that try to push will fail at Execute time, which
-// is only reachable when the caller separately opts into --push.
 func NewRegistry(
 	ctx context.Context,
 	cas *caching.Cas,
-	pushFn handlers.PushFunc,
 ) *Registry {
+	pushReporter := handlers.NewPushReporter(func() bool { return config.Global.FailFast })
+	pushEnabled := func() bool { return config.Global.Push }
+
 	r := &Registry{
 		handlers:        make(map[string]handlers.Handler),
 		targetMutexMap:  maps.NewMutexMap(),
@@ -72,41 +64,34 @@ func NewRegistry(
 		pool: pond.NewPool(
 			runtime.NumCPU() * 2,
 		),
-		pushReporter: handlers.NewPushReporter(),
+		pushReporter: pushReporter,
 	}
 
-	// Register built-in handlers
 	r.Register(handlers.NewFileOutputHandler(cas))
 	r.Register(handlers.NewDirectoryOutputHandler(cas))
 
 	var dockerHandler handlers.Handler
-	dockerBackend := config.Global.Docker.Backend
-	if dockerBackend == "registry" {
-		dockerHandler = handlers.NewDockerRegistryOutputHandler(cas, config.Global.Docker)
+	if config.Global.Docker.Backend == "registry" {
+		dockerHandler = handlers.NewDockerRegistryOutputHandler(cas, config.Global.Docker, pushReporter, pushEnabled)
 	} else {
-		// The backend setting is validated in the config package
-		// so we can assume it's either "registry" or "fs"
-		dockerHandler = handlers.NewDockerOutputHandler(ctx, cas)
+		dockerHandler = handlers.NewDockerOutputHandler(ctx, cas, pushReporter, pushEnabled)
 	}
+	// The docker handler serves both docker:: and oci-push:: — it branches on
+	// output.Type internally to decide whether to chain a push plan.
 	r.Register(dockerHandler)
-
-	// oci-push:: composes on top of whichever docker handler is active —
-	// same cache lifecycle, plus an optional registry-to-registry push when
-	// --push is set. The pushEnabled closure is evaluated per-write rather
-	// than at registration time so tests can flip config.Global.Push without
-	// rebuilding the registry.
-	r.Register(handlers.NewOciPushOutputHandler(
-		dockerHandler,
-		pushFn,
-		r.pushReporter,
-		func() bool { return config.Global.Push },
-		func() bool { return config.Global.FailFast },
-	))
+	r.registerAlias(handlers.OciPushHandler, dockerHandler)
 	return r
 }
 
-// PushReporter exposes the accumulator of oci-push:: outcomes for the build
-// command to render in its summary and use for the exit code.
+// registerAlias maps a second handler type to an already-registered handler
+// instance. Used to give the docker handler both "docker" and "oci-push" as
+// routing keys without inventing a wrapper struct.
+func (r *Registry) registerAlias(alias handlers.HandlerType, handler handlers.Handler) {
+	r.handlerMutex.Lock()
+	defer r.handlerMutex.Unlock()
+	r.handlers[string(alias)] = handler
+}
+
 func (r *Registry) PushReporter() *handlers.PushReporter {
 	return r.pushReporter
 }
@@ -146,25 +131,18 @@ func (r *Registry) Register(handler handlers.Handler) {
 // GetHandler retrieves a handler by type.
 func (r *Registry) mustGetHandlerFromProto(output *gen.Output) handlers.Handler {
 	var outputType string
-
-	switch kind := output.Kind.(type) {
+	switch output.Kind.(type) {
 	case *gen.Output_File:
 		outputType = string(handlers.FileHandler)
 	case *gen.Output_Directory:
 		outputType = string(handlers.DirHandler)
 	case *gen.Output_DockerImage:
-		// oci-push:: shares the DockerImageOutput proto with docker:: and is
-		// discriminated by push_destination being set. Both kinds go through
-		// the same load path (pull from cache); only the write path differs.
-		if kind.DockerImage.GetPushDestination() != "" {
-			outputType = string(handlers.OciPushHandler)
-		} else {
-			outputType = string(handlers.DockerHandler)
-		}
+		// docker:: and oci-push:: both share the docker handler instance;
+		// the "docker" key resolves either way.
+		outputType = string(handlers.DockerHandler)
 	default:
 		panic(fmt.Errorf("unknown output kind: %T", output.Kind))
 	}
-
 	return r.mustGetHandler(outputType)
 }
 
@@ -229,12 +207,6 @@ func (r *Registry) PrepareOutputs(
 		}
 	}
 
-	// When a target declares multiple oci-push:: outputs, all of them must
-	// resolve to the same locally-built image — the recipe is expected to
-	// docker-tag a single image-id under each destination. Otherwise --push
-	// would ship semantically-different images to destinations the user
-	// probably believes are siblings, and there's no reasonable way to
-	// recover after the fact.
 	if err := validateOciPushImageIdentity(target, targetOutputs); err != nil {
 		return nil, err
 	}
@@ -372,13 +344,8 @@ func ensureBinOutputExecutable(target *model.Target) error {
 }
 
 // validateOciPushImageIdentity enforces that every oci-push:: output on a
-// single target points at the same locally-built image. Concretely: after the
-// docker handler has populated image_id on each output's proto, all of the
-// outputs with a non-empty push_destination must share the same image_id.
-//
-// The check fires at Write-time (before any push happens) so the build fails
-// before bytes leave the machine. The error message lists the offending
-// outputs so the user can see which destinations diverged.
+// target points at the same image-id — the recipe must tag one image under
+// every declared destination.
 func validateOciPushImageIdentity(target *model.Target, outputs []*gen.Output) error {
 	type pushEntry struct {
 		destination string
@@ -472,10 +439,6 @@ func getOutputDefinitionFromProto(output *gen.Output) (string, error) {
 	case *gen.Output_Directory:
 		return model.NewOutput(string(handlers.DirHandler), outputKind.Directory.GetPath()).String(), nil
 	case *gen.Output_DockerImage:
-		// oci-push:: identifier is the remote push destination — for the
-		// design we settled on (the recipe produces a local tag whose name
-		// equals the remote tag), local_tag == push_destination, so either
-		// would work, but reading push_destination makes the intent explicit.
 		if dest := outputKind.DockerImage.GetPushDestination(); dest != "" {
 			return model.NewOutput(string(handlers.OciPushHandler), dest).String(), nil
 		}
