@@ -29,7 +29,7 @@ Grog supports two storage backends for Docker images:
 The filesystem backend stores Docker images as content-addressable blobs (manifest, config, and layers) using your configured (remote) filesystem cache:
 
 ```toml
-[docker]
+[oci]
 backend = "fs"  # This is the default, so it's optional
 ```
 
@@ -51,7 +51,7 @@ backend = "fs"  # This is the default, so it's optional
 The registry backend stores Docker images in a Docker registry:
 
 ```toml
-[docker]
+[oci]
 backend = "registry"
 registry_url = "https://your-registry-url"
 ```
@@ -99,7 +99,7 @@ targets:
       docker build -t api-service:latest .
     outputs:
       # Cache the local image
-      - docker::api-service:latest
+      - oci::api-service:latest
 ```
 
 ## Using Docker Images in Dependent Targets
@@ -114,9 +114,10 @@ targets:
       - src/**/*.go
     command: docker build -t api-service:latest .
     outputs:
-      - docker::api-service:latest
+      - oci::api-service:latest
 
   - name: integration_test
+
     dependencies:
       - :build_api_image
     command: |

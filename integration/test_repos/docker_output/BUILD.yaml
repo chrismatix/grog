@@ -6,4 +6,4 @@ targets:
     inputs:
       - script.sh
     outputs:
-      - docker::grog-hello-world-tar
+      - oci::grog-hello-world-tar

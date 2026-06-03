@@ -75,7 +75,7 @@ func hashTargetDefinition(target model.Target, dependencyHashes []string, extraA
 	// Include the docker backend in the hash for targets with docker outputs
 	// so that cache results from different backends (fs vs registry) can co-exist
 	if hasDockerOutput(target) {
-		if _, err := hasher.WriteString(config.Global.Docker.Backend); err != nil {
+		if _, err := hasher.WriteString(config.Global.OCI.Backend); err != nil {
 			return "", err
 		}
 	}
@@ -85,7 +85,7 @@ func hashTargetDefinition(target model.Target, dependencyHashes []string, extraA
 
 func hasDockerOutput(target model.Target) bool {
 	for _, output := range target.AllOutputs() {
-		if output.Type == "docker" {
+		if output.Type == "oci" {
 			return true
 		}
 	}

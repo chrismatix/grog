@@ -35,7 +35,7 @@ targets {
       "Dockerfile"
     }
     outputs {
-      "docker::myorg/myapp:latest"
+      "oci::myorg/myapp:latest"
     }
   }
 }

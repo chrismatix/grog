@@ -51,12 +51,12 @@ func (c *Cas) WriteBytes(ctx context.Context, digest string, content []byte) err
 }
 
 // StagedWriter is re-exported so callers don't have to import the backends
-// package just to type the streaming writer the dockerproxy registry uses.
+// package just to type the streaming writer the ociproxy registry uses.
 type StagedWriter = backends.StagedWriter
 
 // BeginWrite opens a streaming writer that can be Commit'ed to the CAS once
 // the caller has determined the digest of the bytes it pushed in. Used by
-// the dockerproxy registry to stream PATCH bodies straight into the backend
+// the ociproxy registry to stream PATCH bodies straight into the backend
 // without buffering them through a temp file first.
 //
 // The caller MUST call Commit (with the verified digest) or Cancel on the
@@ -81,7 +81,7 @@ func (c *Cas) LoadBytes(ctx context.Context, digest string) ([]byte, error) {
 }
 
 // Size returns the byte size of the CAS entry with the given digest. The
-// dockerproxy registry uses this to populate Content-Length headers on blob
+// ociproxy registry uses this to populate Content-Length headers on blob
 // HEAD/GET responses, which the Docker daemon insists on.
 func (c *Cas) Size(ctx context.Context, digest string) (int64, error) {
 	return c.backend.Size(ctx, "cas", digest)

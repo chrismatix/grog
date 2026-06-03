@@ -27,7 +27,7 @@ import (
 // DockerRegistryOutputHandler writes Docker images to and loads them from a registry specified by configuration.
 type DockerRegistryOutputHandler struct {
 	cas          *caching.Cas
-	config       config.DockerConfig
+	config       config.OCIConfig
 	dockerClient *client.Client
 }
 
@@ -79,7 +79,7 @@ func (d *dockerRegistryWritePlan) Cleanup(ctx context.Context) error {
 // NewDockerRegistryOutputHandler creates a new DockerRegistryOutputHandler.
 func NewDockerRegistryOutputHandler(
 	cas *caching.Cas,
-	config config.DockerConfig,
+	config config.OCIConfig,
 ) *DockerRegistryOutputHandler {
 	return &DockerRegistryOutputHandler{
 		cas:    cas,
@@ -88,7 +88,7 @@ func NewDockerRegistryOutputHandler(
 }
 
 func (d *DockerRegistryOutputHandler) Type() HandlerType {
-	return DockerHandler
+	return OCIHandler
 }
 
 func (d *DockerRegistryOutputHandler) Hash(ctx context.Context, target model.Target, output model.Output) (string, error) {
@@ -161,8 +161,8 @@ func (d *DockerRegistryOutputHandler) Write(
 	}
 
 	genOutput := &gen.Output{
-		Kind: &gen.Output_DockerImage{
-			DockerImage: &gen.DockerImageOutput{
+		Kind: &gen.Output_OciImage{
+			OciImage: &gen.OCIImageOutput{
 				LocalTag:  localImageName,
 				RemoteTag: remoteCacheImageName,
 				ImageId:   inspect.ID,
@@ -216,12 +216,12 @@ func (d *DockerRegistryOutputHandler) Load(
 	output *gen.Output,
 	tracker *worker.ProgressTracker,
 ) error {
-	dockerImage := output.GetDockerImage()
+	dockerImage := output.GetOciImage()
 	if dockerImage.GetMode() != gen.ImageMode_REGISTRY {
 		return fmt.Errorf("cannot restore %s docker cache as registry cache is configured", dockerImage.GetMode())
 	}
-	localImageName := output.GetDockerImage().GetLocalTag()
-	imageId := output.GetDockerImage().GetImageId()
+	localImageName := output.GetOciImage().GetLocalTag()
+	imageId := output.GetOciImage().GetImageId()
 
 	logger := console.GetLogger(ctx)
 
@@ -241,7 +241,7 @@ func (d *DockerRegistryOutputHandler) Load(
 		return nil
 	}
 
-	remoteImageName := output.GetDockerImage().GetRemoteTag()
+	remoteImageName := output.GetOciImage().GetRemoteTag()
 	logger.Debugf("pulling Docker image %s from registry", remoteImageName)
 
 	// Build the RegistryAuth header from ~/.docker/config.json / helpers

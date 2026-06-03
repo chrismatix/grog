@@ -22,7 +22,7 @@ type CacheBackend interface {
 
 	// BeginWrite opens a streaming writer whose final cache location is
 	// decided at Commit time. This is used by callers that compute the cache
-	// key from the streamed bytes themselves (e.g. the dockerproxy registry,
+	// key from the streamed bytes themselves (e.g. the ociproxy registry,
 	// which only learns the digest from the daemon's PUT request after every
 	// chunk has already been received).
 	//
@@ -45,7 +45,7 @@ type CacheBackend interface {
 	Exists(ctx context.Context, path string, key string) (bool, error)
 
 	// Size returns the byte size of the entry without reading its content.
-	// Used by the dockerproxy registry to populate Content-Length headers on
+	// Used by the ociproxy registry to populate Content-Length headers on
 	// blob HEAD/GET responses (the Docker daemon refuses responses without one).
 	// Returns an error if the entry does not exist.
 	Size(ctx context.Context, path, key string) (int64, error)

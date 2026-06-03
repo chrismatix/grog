@@ -134,7 +134,7 @@ func (b *BoundedBackend) Set(ctx context.Context, path, key string, content io.R
 	return b.inner.Set(ctx, path, key, content)
 }
 
-// BeginWrite is intentionally NOT bounded. The dockerproxy registry holds
+// BeginWrite is intentionally NOT bounded. The ociproxy registry holds
 // staged writes across POST/PATCH/.../PUT, so a global slot held for the
 // whole session would leak on interrupted uploads until concurrent docker
 // pushes blocked the rest of the cache. Bytes through the staged writer

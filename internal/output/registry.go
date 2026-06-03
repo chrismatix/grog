@@ -65,9 +65,9 @@ func NewRegistry(
 	r.Register(handlers.NewFileOutputHandler(cas))
 	r.Register(handlers.NewDirectoryOutputHandler(cas))
 
-	dockerBackend := config.Global.Docker.Backend
+	dockerBackend := config.Global.OCI.Backend
 	if dockerBackend == "registry" {
-		r.Register(handlers.NewDockerRegistryOutputHandler(cas, config.Global.Docker))
+		r.Register(handlers.NewDockerRegistryOutputHandler(cas, config.Global.OCI))
 	} else {
 		// The backend setting is validated in the config package
 		// so we can assume it's either "registry" or "fs"
@@ -117,8 +117,8 @@ func (r *Registry) mustGetHandlerFromProto(output *gen.Output) handlers.Handler 
 		outputType = string(handlers.FileHandler)
 	case *gen.Output_Directory:
 		outputType = string(handlers.DirHandler)
-	case *gen.Output_DockerImage:
-		outputType = string(handlers.DockerHandler)
+	case *gen.Output_OciImage:
+		outputType = string(handlers.OCIHandler)
 	default:
 		panic(fmt.Errorf("unknown output kind: %T", output.Kind))
 	}
@@ -382,8 +382,8 @@ func getOutputDefinitionFromProto(output *gen.Output) (string, error) {
 		return model.NewOutput(string(handlers.FileHandler), outputKind.File.GetPath()).String(), nil
 	case *gen.Output_Directory:
 		return model.NewOutput(string(handlers.DirHandler), outputKind.Directory.GetPath()).String(), nil
-	case *gen.Output_DockerImage:
-		return model.NewOutput(string(handlers.DockerHandler), outputKind.DockerImage.GetLocalTag()).String(), nil
+	case *gen.Output_OciImage:
+		return model.NewOutput(string(handlers.OCIHandler), outputKind.OciImage.GetLocalTag()).String(), nil
 	default:
 		return "", fmt.Errorf("unknown output kind: %T", output.Kind)
 	}

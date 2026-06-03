@@ -92,7 +92,7 @@ targets:
     inputs:
       - Dockerfile
     outputs:
-      - docker::myorg/myapp:latest
+      - oci::myorg/myapp:latest
 ```
 
     Save this as `BUILD.yaml` in your project directory.
@@ -120,7 +120,7 @@ targets:
       "command": "docker build --file Dockerfile --tag myapp .",
       "dependencies": [":build_ui", ":compile_backend"],
       "inputs": ["Dockerfile"],
-      "outputs": ["docker::myapp"]
+      "outputs": ["oci::myapp"]
     }
   ]
 }
@@ -156,7 +156,7 @@ compile_backend:
 # inputs:
 #   - Dockerfile
 # outputs:
-#   - docker::myapp:latest
+#   - oci::myapp:latest
 build_image:
   docker build --file Dockerfile --tag myapp:latest .
 
@@ -194,7 +194,7 @@ target(
         ":compile_backend",
     ],
     inputs = ["Dockerfile"],
-    outputs = ["docker::myapp:latest"],
+    outputs = ["oci::myapp:latest"],
 )
 ```
 
@@ -241,7 +241,7 @@ targets {
       "Dockerfile"
     }
     outputs {
-      "docker::myapp:latest"
+      "oci::myapp:latest"
     }
   }
 }
@@ -384,12 +384,12 @@ Grog, therefore, caches these outputs and restores them when possible to avoid u
 outputs:
   - dist/bundle.js
   - dir::dist/assets/
-  - docker::some-image
+  - oci::some-image
 ```
 
 - `dist/bundle.js` - A file output
 - `dir::dist/assets/` - A directory output
-- `docker::some-image-tag` - A Docker image output
+- `oci::some-image-tag` - An OCI container image output
 
 ## Next Steps
 
