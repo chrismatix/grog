@@ -1,15 +1,25 @@
 ---
-title: Docker Outputs
-description: Learn how to cache and manage Docker images in your Grog build process for faster builds and deployments.
+title: Docker (OCI) Outputs
+description: Learn how to cache and manage Docker / OCI container images in your Grog build process for faster builds and deployments.
 ---
 
 import { Aside } from "@astrojs/starlight/components";
 
+<Aside title="Why 'OCI'?">
+  Grog uses the `oci::` prefix and an `[oci]` config section because the manifest format and
+  registry protocol it caches against are [Open Container Initiative](https://opencontainers.org/)
+  standards. Docker is by far the most common producer, but Podman, Buildah, and BuildKit (with
+  `--output=oci`) produce the same artifacts. Today Grog ingests images through a Docker-compatible
+  daemon socket (which Podman also exposes), so anywhere you see "Docker" below you can read
+  "Docker, Podman, or any other tool talking the Docker Engine API". Tool-neutral file/registry
+  ingestion paths are tracked separately.
+</Aside>
+
 ## Introduction to Docker Caching
 
-Many real-world CI/CD pipelines don't just produce files or directories but package entire applications into Docker images. Building Docker images can be time-consuming, especially for large applications, making them perfect candidates for caching.
+Many real-world CI/CD pipelines don't just produce files or directories but package entire applications into Docker (OCI) images. Building images can be time-consuming, especially for large applications, making them perfect candidates for caching.
 
-Grog can cache Docker images, allowing you to:
+Grog can cache Docker (OCI) images, allowing you to:
 
 - Skip building images when their inputs haven't changed
 - Share images between team members using a remote cache
@@ -82,9 +92,9 @@ When using the registry backend, Grog expects your current session to be authent
   before Grog runs.
 </Aside>
 
-## Defining Docker Outputs
+## Defining Docker (OCI) Outputs
 
-Once your Docker storage is set up, you can define Docker image outputs for your targets:
+Once your Docker storage is set up, you can define container image outputs for your targets. The prefix is `oci::` regardless of which tool builds the image:
 
 ```yaml
 targets:
