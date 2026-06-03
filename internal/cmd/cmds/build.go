@@ -11,6 +11,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	"grog/internal/analysis"
 	"grog/internal/caching"
@@ -24,7 +25,9 @@ import (
 	"grog/internal/loading"
 	"grog/internal/locking"
 	"grog/internal/model"
+	"grog/internal/ocipush"
 	"grog/internal/output"
+	"grog/internal/output/handlers"
 	"grog/internal/selection"
 	"grog/internal/tracing"
 )
@@ -69,7 +72,17 @@ var BuildCmd = &cobra.Command{
 }
 
 func AddBuildCmd(rootCmd *cobra.Command) {
+	BuildCmd.Flags().Bool("push", false, "Push oci-push:: outputs to their declared remote tags after a successful build")
+	_ = viper.BindPFlag("push", BuildCmd.Flags().Lookup("push"))
 	rootCmd.AddCommand(BuildCmd)
+}
+
+// ociPushAdapter bridges ocipush.Copy (Options struct) to the handlers.PushFunc
+// signature the output registry expects (bare sourceInsecure bool). Defaults
+// for retry/backoff live in ocipush.Copy; this keeps the handler package free
+// of go-containerregistry.
+var ociPushAdapter handlers.PushFunc = func(ctx context.Context, source, destination string, sourceInsecure bool) error {
+	return ocipush.Copy(ctx, source, destination, ocipush.Options{SourceInsecure: sourceInsecure})
 }
 
 // RunBuild runs the build/test command for the given target pattern.
@@ -154,6 +167,14 @@ func RunBuildAndAfter(
 
 	logger.Infof(infoStr)
 
+	// Surface what --push will actually ship before any work starts. The
+	// transitive scope (Q3a (A) from the design grilling) means a target with
+	// oci-push:: deep in the dependency closure WILL push when --push is set,
+	// which is easy to overlook without a heads-up.
+	if config.Global.Push {
+		announcePushDestinations(logger, graph)
+	}
+
 	failFast := config.Global.FailFast
 
 	cache, err := backends.GetCacheBackend(ctx, config.Global.Cache)
@@ -163,7 +184,7 @@ func RunBuildAndAfter(
 	targetCache := caching.NewTargetResultCache(cache)
 	cas := caching.NewCas(cache)
 	taintCache := caching.NewTaintStore()
-	registry := output.NewRegistry(ctx, cas)
+	registry := output.NewRegistry(ctx, cas, ociPushAdapter)
 
 	// Only lock the workspace once necessary, i.e., before we start building.
 	// releaseWorkspaceLock is invoked explicitly before afterBuildSuccess so a
@@ -230,6 +251,12 @@ func RunBuildAndAfter(
 	}
 
 	executor.WaitForAsyncWrites(ctx)
+
+	// Render the oci-push:: outcome summary before tearing the registry down.
+	// pushHadFailures bubbles up to the exit code below: a failed push is a
+	// build-level failure even if every target compiled successfully, since
+	// the user's intent under --push is "build AND ship."
+	pushHadFailures := renderPushSummary(logger, registry.PushReporter())
 
 	// Close output handlers (notably the loopback docker registry) only after
 	// async writes have drained. Closing earlier would tear the proxy down
@@ -352,6 +379,81 @@ func RunBuildAndAfter(
 	if afterBuildErr != nil {
 		logger.Fatalf("%v", afterBuildErr)
 	}
+
+	// Push failures fall through here so the build-level summary above prints
+	// first. We exit non-zero so CI/scripts can distinguish "build succeeded,
+	// not shipped" from "build succeeded, shipped" — a partial release is not
+	// a success.
+	if pushHadFailures {
+		os.Exit(1)
+	}
+}
+
+// announcePushDestinations enumerates oci-push:: outputs across the selected
+// target set so the user sees, before any work runs, the exact destinations
+// --push will write to. Transitive scope means a target deep in a dependency
+// chain can push without being on the command line; this header makes that
+// visible.
+func announcePushDestinations(logger *console.Logger, graph *dag.DirectedTargetGraph) {
+	var destinations []string
+	for _, node := range graph.GetSelectedNodes() {
+		target, ok := node.(*model.Target)
+		if !ok {
+			continue
+		}
+		for _, out := range target.AllOutputs() {
+			if out.Type == string(handlers.OciPushHandler) {
+				destinations = append(destinations, fmt.Sprintf("  %s -> %s", target.Label, out.Identifier))
+			}
+		}
+	}
+	if len(destinations) == 0 {
+		logger.Infof("--push set but no oci-push:: outputs reached by this selection; nothing will be pushed.")
+		return
+	}
+	logger.Infof("--push will ship %d image(s):", len(destinations))
+	for _, line := range destinations {
+		logger.Infof("%s", line)
+	}
+}
+
+// renderPushSummary prints one line per recorded oci-push:: outcome and
+// returns whether any push failed. A nil/empty reporter renders nothing —
+// builds without --push or without any oci-push:: outputs stay silent.
+func renderPushSummary(logger *console.Logger, reporter *handlers.PushReporter) bool {
+	if reporter == nil {
+		return false
+	}
+	reports := reporter.Reports()
+	if len(reports) == 0 {
+		return false
+	}
+
+	var pushed, skipped, failed int
+	for _, r := range reports {
+		switch {
+		case r.Err != nil:
+			failed++
+		case r.Skipped:
+			skipped++
+		default:
+			pushed++
+		}
+	}
+
+	logger.Infof("Pushes: %d pushed, %d already current, %d failed.", pushed, skipped, failed)
+	for _, r := range reports {
+		switch {
+		case r.Err != nil:
+			logger.Errorf("  push %s -> %s: %v", r.TargetLabel, r.Destination, r.Err)
+		case r.Skipped:
+			logger.Debugf("  push %s -> %s: already current", r.TargetLabel, r.Destination)
+		default:
+			logger.Debugf("  push %s -> %s: pushed", r.TargetLabel, r.Destination)
+		}
+	}
+
+	return failed > 0
 }
 
 // buildSucceeded reports whether it is safe to run a dependent post-build step.

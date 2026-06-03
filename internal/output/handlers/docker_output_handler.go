@@ -292,6 +292,24 @@ func (d *dockerImageWritePlan) Execute(ctx context.Context, tracker *worker.Prog
 	return nil
 }
 
+// SourceRef returns a loopback registry reference that points at the cached
+// image content. It is the same name shape the daemon would use to pull on
+// cache restore (Load), reachable over plain HTTP at the lazily-started
+// proxy's loopback port. Returns ok=false if the cache write has not yet
+// populated manifest_digest — the push plan must run strictly after the
+// cache plan that fills it in.
+func (d *DockerOutputHandler) SourceRef(output *gen.DockerImageOutput) (string, bool, bool) {
+	if d.proxy == nil {
+		return "", false, false
+	}
+	manifestDigest := output.GetManifestDigest().GetHash()
+	imageID := output.GetImageId()
+	if manifestDigest == "" || imageID == "" {
+		return "", false, false
+	}
+	return fmt.Sprintf("%s/%s@%s", d.proxy.Addr(), loopbackRepoName(imageID), manifestDigest), true, true
+}
+
 // Close shuts down the in-process loopback registry, if one was started.
 // Must be called only after all async cache writes that push through the
 // proxy have drained — otherwise the daemon's mid-push HTTP requests will

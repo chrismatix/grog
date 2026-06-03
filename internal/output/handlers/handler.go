@@ -40,12 +40,29 @@ type Handler interface {
 	Load(ctx context.Context, target model.Target, output *gen.Output, tracker *worker.ProgressTracker) error
 }
 
+// DockerImageSource is implemented by docker output handlers that can expose
+// the cached image as a registry reference reachable from the current process.
+// The OciPushHandler consumes this to source bytes for its registry-to-registry
+// copy without ever touching the local Docker daemon: for the fs backend the
+// ref is grog's loopback dockerproxy (insecure HTTP, localhost), for the
+// registry backend it is the configured cache registry's content-addressed
+// name.
+//
+// The output proto must have been populated by a prior Write — specifically,
+// it must carry image_id (and, for the fs backend, manifest_digest). Callers
+// invoke SourceRef from the push write plan, which always runs after the
+// cache write plan that populates these fields.
+type DockerImageSource interface {
+	SourceRef(output *gen.DockerImageOutput) (ref string, insecure bool, ok bool)
+}
+
 type HandlerType string
 
 const (
-	FileHandler   HandlerType = "file"
-	DirHandler    HandlerType = "dir"
-	DockerHandler HandlerType = "docker"
+	FileHandler    HandlerType = "file"
+	DirHandler     HandlerType = "dir"
+	DockerHandler  HandlerType = "docker"
+	OciPushHandler HandlerType = "oci-push"
 )
 
 // KnownHandlerTypes This is necessary so that we can statically check for handler type without having
@@ -54,4 +71,5 @@ var KnownHandlerTypes = []HandlerType{
 	FileHandler,
 	DirHandler,
 	DockerHandler,
+	OciPushHandler,
 }

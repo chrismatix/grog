@@ -395,7 +395,7 @@ func TestExecutorDeferAsyncWaitKeepsIOPoolAliveAfterExecute(t *testing.T) {
 	targetCache := caching.NewTargetResultCache(backend)
 	cas := caching.NewCas(backend)
 	taintCache := caching.NewTaintStore()
-	registry := output.NewRegistry(ctx, cas)
+	registry := output.NewRegistry(ctx, cas, nil)
 	graph := dag.NewDirectedGraph()
 
 	executor := NewExecutor(

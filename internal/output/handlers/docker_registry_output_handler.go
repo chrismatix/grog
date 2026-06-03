@@ -119,6 +119,19 @@ func (d *DockerRegistryOutputHandler) lazyClient() (*client.Client, error) {
 	return d.dockerClient, nil
 }
 
+// SourceRef returns the cache-registry name the image is published under
+// after Write/Execute. It is the same content-addressed reference Load uses
+// to restore the image on cache hits. The cache registry serves HTTPS, so
+// insecure=false; auth flows through the ambient docker keychain when the
+// push primitive calls in.
+func (d *DockerRegistryOutputHandler) SourceRef(output *gen.DockerImageOutput) (string, bool, bool) {
+	imageID := output.GetImageId()
+	if imageID == "" {
+		return "", false, false
+	}
+	return d.cacheImageName(imageID), false, true
+}
+
 func (d *DockerRegistryOutputHandler) cacheImageName(digest string) string {
 	workspaceDir := config.Global.WorkspaceRoot
 	workspacePrefix := config.GetWorkspaceCachePrefix(workspaceDir)
