@@ -1,7 +1,5 @@
 INFO: 1 package loaded, 1 target configured.
 INFO: Selected 1 target.
-INFO: --push will ship 1 image(s):
-INFO:   //:smoke -> 127.0.0.1:5555/grog-smoke/image:1.0.0
 INFO: //:smoke DONE (cached)
 INFO: Build completed successfully. 1 target completed (1 cache hits).
 INFO: Pushes: 0 pushed, 1 already current, 0 failed.
