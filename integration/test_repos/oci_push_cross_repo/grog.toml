@@ -6,3 +6,5 @@
 [oci]
 backend = "registry"
 registry = "127.0.0.1:5556/grog-cache"
+# Cache and remote registries both serve HTTP only.
+insecure_registries = ["127.0.0.1:5556", "127.0.0.1:5557"]

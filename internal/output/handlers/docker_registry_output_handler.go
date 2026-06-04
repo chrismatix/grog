@@ -121,14 +121,18 @@ func (d *DockerRegistryOutputHandler) lazyClient() (*client.Client, error) {
 }
 
 // PushImage copies the cached image from the configured cache registry to
-// destination. Both refs are real registries served over HTTPS; auth flows
-// through the ambient docker keychain.
+// destination. Auth flows through the ambient docker keychain; either side
+// can be tagged plain-HTTP via oci.insecure_registries.
 func (d *DockerRegistryOutputHandler) PushImage(ctx context.Context, image *gen.OCIImageOutput, destination string, _ *worker.ProgressTracker) (bool, error) {
 	imageID := image.GetImageId()
 	if imageID == "" {
 		return false, fmt.Errorf("cache write did not populate image_id for push to %s", destination)
 	}
-	return oci_push.Copy(ctx, d.cacheImageName(imageID), destination, oci_push.Options{})
+	src := d.cacheImageName(imageID)
+	return oci_push.Copy(ctx, src, destination, oci_push.Options{
+		SourceInsecure:      matchesInsecureRegistry(src, d.config.InsecureRegistries),
+		DestinationInsecure: matchesInsecureRegistry(destination, d.config.InsecureRegistries),
+	})
 }
 
 func (d *DockerRegistryOutputHandler) cacheImageName(digest string) string {

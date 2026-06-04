@@ -316,4 +316,12 @@ type OCIConfig struct {
 	Registry string `mapstructure:"registry"`
 	Username string `mapstructure:"username"`
 	Password string `mapstructure:"password"`
+
+	// InsecureRegistries lists registry hosts grog should talk to over plain
+	// HTTP. Entries are matched against the destination's host portion: an
+	// entry without a port matches any port on that host ("localhost" matches
+	// "localhost:5000"); an entry with a port matches exactly. Mirrors the
+	// docker daemon's insecure-registries config so a user already familiar
+	// with that knob has no new mental model.
+	InsecureRegistries []string `mapstructure:"insecure_registries"`
 }

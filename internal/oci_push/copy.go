@@ -1,15 +1,13 @@
 // Package oci_push performs daemon-free registry-to-registry image copies via
-// go-containerregistry. Used by docker output handlers to ship cached images
-// to oci-push:: destinations.
+// go-containerregistry. Used by oci output handlers to ship cached images to
+// oci-push:: destinations.
 package oci_push
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
 
@@ -20,10 +18,17 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 )
 
-// Options control a single Copy call. Plain-HTTP access for loopback / RFC1918
-// / *.local hosts is auto-detected on both source and destination; no flag
-// needed for the common cases (grog's loopback proxy, on-prem registries).
+// Options control a single Copy call. Plain-HTTP access for either side is
+// the caller's decision — Copy applies name.Insecure when these flags are set
+// and never auto-detects from the URL.
 type Options struct {
+	// SourceInsecure permits plain-HTTP access for the source ref.
+	SourceInsecure bool
+
+	// DestinationInsecure permits plain-HTTP access for the destination ref.
+	// Callers compute this from their configured insecure_registries list.
+	DestinationInsecure bool
+
 	// MaxAttempts caps total tries; transient errors are retried up to this
 	// count with exponential backoff. Defaults to 3.
 	MaxAttempts int
@@ -43,11 +48,11 @@ func Copy(ctx context.Context, source, destination string, opts Options) (bool, 
 		opts.InitialBackoff = 500 * time.Millisecond
 	}
 
-	srcRef, err := parseRef(source)
+	srcRef, err := parseRef(source, opts.SourceInsecure)
 	if err != nil {
 		return false, fmt.Errorf("parse source %q: %w", source, err)
 	}
-	dstRef, err := parseRef(destination)
+	dstRef, err := parseRef(destination, opts.DestinationInsecure)
 	if err != nil {
 		return false, fmt.Errorf("parse destination %q: %w", destination, err)
 	}
@@ -82,7 +87,7 @@ func Copy(ctx context.Context, source, destination string, opts Options) (bool, 
 		}
 		lastErr = err
 		if !isTransient(err) || attempt == opts.MaxAttempts {
-			return false, err
+			return false, wrapInsecureHint(destination, opts.DestinationInsecure, err)
 		}
 		select {
 		case <-ctx.Done():
@@ -91,7 +96,7 @@ func Copy(ctx context.Context, source, destination string, opts Options) (bool, 
 		}
 		backoff *= 2
 	}
-	return false, lastErr
+	return false, wrapInsecureHint(destination, opts.DestinationInsecure, lastErr)
 }
 
 func writeImage(ctx context.Context, dst name.Reference, img v1.Image) error {
@@ -101,68 +106,15 @@ func writeImage(ctx context.Context, dst name.Reference, img v1.Image) error {
 	)
 }
 
-func parseRef(ref string) (name.Reference, error) {
+func parseRef(ref string, insecure bool) (name.Reference, error) {
 	var opts []name.Option
-	if looksInsecure(ref) {
+	if insecure {
 		opts = append(opts, name.Insecure)
 	}
 	if strings.Contains(ref, "@") {
 		return name.NewDigest(ref, opts...)
 	}
 	return name.ParseReference(ref, opts...)
-}
-
-// reLocalSuffix matches "*.localhost" or "*.local" registry hostnames, both of
-// which container tooling treats as plain HTTP by convention.
-var reLocalSuffix = regexp.MustCompile(`\.(localhost|local)(?::\d{1,5})?$`)
-
-// looksInsecure reports whether ref's registry host is one of the patterns
-// commonly served over plain HTTP: localhost, the loopback IPs, a *.local /
-// *.localhost suffix, or any RFC1918 private IP. Tagging name.Insecure for
-// these short-circuits go-containerregistry's parallel-ping discovery (it
-// would otherwise race an HTTPS attempt that will never succeed) and lets
-// pushes to non-public registries work without extra configuration.
-func looksInsecure(ref string) bool {
-	host := registryHost(ref)
-	if host == "" {
-		return false
-	}
-	if host == "localhost" || strings.HasPrefix(host, "localhost:") {
-		return true
-	}
-	if reLocalSuffix.MatchString(host) {
-		return true
-	}
-	if ip := net.ParseIP(stripPort(host)); ip != nil {
-		if ip.IsLoopback() || ip.IsPrivate() {
-			return true
-		}
-	}
-	return false
-}
-
-// stripPort drops a trailing ":port" from host and unwraps a bracketed IPv6
-// literal (`[::1]:5555` → `::1`). Returns host unchanged when there is no port.
-func stripPort(host string) string {
-	if strings.HasPrefix(host, "[") {
-		if i := strings.Index(host, "]"); i > 0 {
-			return host[1:i]
-		}
-		return host
-	}
-	if i := strings.LastIndex(host, ":"); i >= 0 {
-		return host[:i]
-	}
-	return host
-}
-
-// registryHost returns the registry portion of an OCI reference (everything
-// before the first "/"). Empty for malformed refs.
-func registryHost(ref string) string {
-	if i := strings.IndexByte(ref, '/'); i > 0 {
-		return ref[:i]
-	}
-	return ""
 }
 
 // isTransient reports whether err is worth retrying: network failures and 5xx
@@ -175,4 +127,33 @@ func isTransient(err error) bool {
 		return terr.StatusCode >= 500 || terr.StatusCode == http.StatusRequestTimeout || terr.StatusCode == http.StatusTooManyRequests
 	}
 	return !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
+}
+
+// wrapInsecureHint annotates a push failure with a pointer at
+// oci.insecure_registries when the failure looks like an HTTPS attempt against
+// a plain-HTTP server. Only fires when the caller did NOT already mark the
+// destination as insecure — once the user has opted in, the wrong hint would
+// just be noise.
+func wrapInsecureHint(destination string, destinationInsecure bool, err error) error {
+	if destinationInsecure || !looksLikeTLSToHTTP(err) {
+		return err
+	}
+	return fmt.Errorf(
+		"push to %q failed: %w (if this is an HTTP-only registry, add its host to oci.insecure_registries in grog.toml)",
+		destination, err,
+	)
+}
+
+// looksLikeTLSToHTTP matches the canonical errors Go's TLS client emits when
+// it tries to handshake against a server that immediately responds in plain
+// HTTP. Catching these specifically (rather than any push error) keeps the
+// hint useful: a true auth/network failure on an HTTPS registry still surfaces
+// its own message.
+func looksLikeTLSToHTTP(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "tls: first record does not look like a TLS handshake") ||
+		strings.Contains(msg, "http: server gave HTTP response to HTTPS client")
 }

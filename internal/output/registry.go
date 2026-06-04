@@ -74,7 +74,7 @@ func NewRegistry(
 	if config.Global.OCI.Backend == "registry" {
 		ociHandler = handlers.NewDockerRegistryOutputHandler(cas, config.Global.OCI)
 	} else {
-		ociHandler = handlers.NewDockerOutputHandler(ctx, cas)
+		ociHandler = handlers.NewDockerOutputHandler(ctx, cas, config.Global.OCI.InsecureRegistries)
 	}
 	r.Register(ociHandler)
 	r.Register(handlers.NewOciPushOutputHandler(ociHandler, pushReporter, pushEnabled))

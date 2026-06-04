@@ -40,11 +40,13 @@ type DockerOutputHandler struct {
 	proxyInit sync.Once
 	proxy     *ociproxy.Registry
 	proxyErr  error
+
+	insecureRegistries []string
 }
 
 // NewDockerOutputHandler creates a new DockerOutputHandler.
-func NewDockerOutputHandler(_ context.Context, cas *caching.Cas) *DockerOutputHandler {
-	return &DockerOutputHandler{cas: cas}
+func NewDockerOutputHandler(_ context.Context, cas *caching.Cas, insecureRegistries []string) *DockerOutputHandler {
+	return &DockerOutputHandler{cas: cas, insecureRegistries: insecureRegistries}
 }
 
 // Type returns the type of the handler.
@@ -245,7 +247,12 @@ func (d *DockerOutputHandler) PushImage(ctx context.Context, image *gen.OCIImage
 		return false, fmt.Errorf("cache write did not populate image identity for push to %s", destination)
 	}
 	src := fmt.Sprintf("%s/%s@%s", proxy.Addr(), loopbackRepoName(imageID), manifestDigest)
-	return oci_push.Copy(ctx, src, destination, oci_push.Options{})
+	return oci_push.Copy(ctx, src, destination, oci_push.Options{
+		// Source is grog's own loopback proxy — structurally HTTP, not
+		// something the user opts in to.
+		SourceInsecure:      true,
+		DestinationInsecure: matchesInsecureRegistry(destination, d.insecureRegistries),
+	})
 }
 
 // dockerImageWritePlan defers the actual `docker push` to the cache-write phase.
