@@ -97,8 +97,8 @@ type WorkspaceConfig struct {
 	// Tracing
 	Traces TracesConfig `mapstructure:"traces"`
 
-	// Docker
-	Docker DockerConfig `mapstructure:"docker"`
+	// OCI
+	OCI OCIConfig `mapstructure:"oci"`
 
 	// Environment Variables
 	EnvironmentVariables     map[string]string `mapstructure:"environment_variables"`
@@ -186,24 +186,24 @@ func (w WorkspaceConfig) Validate() error {
 		return fmt.Errorf("invalid hash_algorithm: %s. Must be either %s or %s", w.HashAlgorithm, HashAlgorithmXXH3, HashAlgorithmSHA256)
 	}
 
-	if w.Docker.Backend != "" &&
-		(w.Docker.Backend != DockerBackendFS && w.Docker.Backend != DockerBackendRegistry) {
-		return fmt.Errorf("invalid docker backend: %s. Must be either %s or %s",
-			w.Docker.Backend, DockerBackendFS, DockerBackendRegistry)
+	if w.OCI.Backend != "" &&
+		(w.OCI.Backend != OCIBackendFS && w.OCI.Backend != OCIBackendRegistry) {
+		return fmt.Errorf("invalid oci backend: %s. Must be either %s or %s",
+			w.OCI.Backend, OCIBackendFS, OCIBackendRegistry)
 	}
 
-	switch w.Docker.CacheMode {
-	case "", DockerCacheModeContent, DockerCacheModeTarget:
+	switch w.OCI.CacheMode {
+	case "", OCICacheModeContent, OCICacheModeTarget:
 	default:
-		return fmt.Errorf("invalid docker cache_mode: %s. Must be either %q or %q",
-			w.Docker.CacheMode, DockerCacheModeContent, DockerCacheModeTarget)
+		return fmt.Errorf("invalid oci cache_mode: %s. Must be either %q or %q",
+			w.OCI.CacheMode, OCICacheModeContent, OCICacheModeTarget)
 	}
 
 	// prebuild_layer_fetch requires target-based naming to have a stable
 	// image to pull.
-	if w.Docker.PrebuildLayerFetch != nil && *w.Docker.PrebuildLayerFetch &&
-		w.Docker.CacheMode != DockerCacheModeTarget {
-		return fmt.Errorf("prebuild_layer_fetch requires cache_mode = %q", DockerCacheModeTarget)
+	if w.OCI.PrebuildLayerFetch != nil && *w.OCI.PrebuildLayerFetch &&
+		w.OCI.CacheMode != OCICacheModeTarget {
+		return fmt.Errorf("prebuild_layer_fetch requires cache_mode = %q", OCICacheModeTarget)
 	}
 
 	// assert that tags and exclude tags do not overlap
@@ -318,21 +318,21 @@ type TracesConfig struct {
 }
 
 const (
-	DockerBackendFS       = "fs"
-	DockerBackendRegistry = "registry"
+	OCIBackendFS       = "fs"
+	OCIBackendRegistry = "registry"
 )
 
 const (
-	// DockerCacheModeContent names cache images by content digest (default).
+	// OCICacheModeContent names cache images by content digest (default).
 	// Each unique image gets its own registry repo.
-	DockerCacheModeContent = "content"
+	OCICacheModeContent = "content"
 
-	// DockerCacheModeTarget names cache images by target label (stable).
-	// One registry repo per target, enabling Docker layer cache reuse across builds.
-	DockerCacheModeTarget = "target"
+	// OCICacheModeTarget names cache images by target label (stable).
+	// One registry repo per target, enabling OCI layer cache reuse across builds.
+	OCICacheModeTarget = "target"
 )
 
-type DockerConfig struct {
+type OCIConfig struct {
 	Backend string `mapstructure:"backend"`
 
 	Registry string `mapstructure:"registry"`
@@ -356,10 +356,10 @@ type DockerConfig struct {
 
 // IsPrebuildLayerFetchEnabled returns whether layer cache seeding is active.
 // When PrebuildLayerFetch is nil (unset), it defaults to true in target mode.
-func (d DockerConfig) IsPrebuildLayerFetchEnabled() bool {
+func (d OCIConfig) IsPrebuildLayerFetchEnabled() bool {
 	if d.PrebuildLayerFetch != nil {
 		return *d.PrebuildLayerFetch
 	}
 	// Default: enabled in target mode, disabled otherwise.
-	return d.CacheMode == DockerCacheModeTarget
+	return d.CacheMode == OCICacheModeTarget
 }

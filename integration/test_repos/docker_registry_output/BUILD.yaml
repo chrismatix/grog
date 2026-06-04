@@ -7,5 +7,5 @@ targets:
     inputs:
       - script.sh
     outputs:
-      - docker::grog-hello-world-registry
-      - docker::us-central1-docker.pkg.dev/grog-457510/grog-cache/grog-hello-world-registry
+      - oci::grog-hello-world-registry
+      - oci::us-central1-docker.pkg.dev/grog-457510/grog-cache/grog-hello-world-registry

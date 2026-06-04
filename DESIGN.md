@@ -229,7 +229,7 @@ targets:
     outputs:
       - ../output.txt
       # Local or with repository
-      - docker::some-docker-tag
+      - oci::some-image-tag
       - dir::some_dir/
       - ...
 ```

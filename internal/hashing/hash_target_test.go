@@ -36,16 +36,16 @@ func TestHashTargetDefinition_DockerBackendAffectsHashForDockerTargets(t *testin
 	dockerTarget := model.Target{
 		Label:   label.TL("pkg", "target"),
 		Command: "docker build .",
-		Outputs: []model.Output{model.NewOutput("docker", "my-image")},
+		Outputs: []model.Output{model.NewOutput("oci", "my-image")},
 	}
 
-	config.Global.Docker.Backend = config.DockerBackendFS
+	config.Global.OCI.Backend = config.OCIBackendFS
 	hashFS, err := hashTargetDefinition(dockerTarget, nil, nil)
 	if err != nil {
 		t.Fatalf("hashTargetDefinition returned error: %v", err)
 	}
 
-	config.Global.Docker.Backend = config.DockerBackendRegistry
+	config.Global.OCI.Backend = config.OCIBackendRegistry
 	hashRegistry, err := hashTargetDefinition(dockerTarget, nil, nil)
 	if err != nil {
 		t.Fatalf("hashTargetDefinition returned error: %v", err)
@@ -63,13 +63,13 @@ func TestHashTargetDefinition_DockerBackendDoesNotAffectNonDockerTargets(t *test
 		Outputs: []model.Output{model.NewOutput("file", "output.txt")},
 	}
 
-	config.Global.Docker.Backend = config.DockerBackendFS
+	config.Global.OCI.Backend = config.OCIBackendFS
 	hashFS, err := hashTargetDefinition(target, nil, nil)
 	if err != nil {
 		t.Fatalf("hashTargetDefinition returned error: %v", err)
 	}
 
-	config.Global.Docker.Backend = config.DockerBackendRegistry
+	config.Global.OCI.Backend = config.OCIBackendRegistry
 	hashRegistry, err := hashTargetDefinition(target, nil, nil)
 	if err != nil {
 		t.Fatalf("hashTargetDefinition returned error: %v", err)

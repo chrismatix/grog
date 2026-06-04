@@ -3,11 +3,11 @@ package model
 // Output represents a parsed output reference.
 type Output struct {
 	// Type returns the type of the reference
-	// e.g. docker::image-name -> docker
+	// e.g. oci::image-name -> oci
 	Type string `json:"type" yaml:"type"`
 
 	// Identifier returns the identifying part of the reference (without type)
-	// e.g. docker::image-name -> image-name
+	// e.g. oci::image-name -> image-name
 	Identifier string `json:"identifier" yaml:"identifier"`
 }
 

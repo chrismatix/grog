@@ -344,21 +344,21 @@ func (c *starlarkPackageCollector) environmentBuiltin(thread *starlark.Thread, f
 	var name string
 	var envType string
 	var dependencies *starlark.List
-	var dockerImage string
+	var ociImage string
 
 	if err := starlark.UnpackArgs("environment", args, kwargs,
 		"name", &name,
 		"type", &envType,
 		"dependencies?", &dependencies,
-		"docker_image?", &dockerImage,
+		"oci_image?", &ociImage,
 	); err != nil {
 		return nil, err
 	}
 
 	env := &EnvironmentDTO{
-		Name:        name,
-		Type:        envType,
-		DockerImage: dockerImage,
+		Name:     name,
+		Type:     envType,
+		OCIImage: ociImage,
 	}
 
 	// Convert dependencies

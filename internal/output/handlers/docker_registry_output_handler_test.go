@@ -13,9 +13,9 @@ func TestCacheImageName_ContentMode(t *testing.T) {
 	t.Cleanup(func() { config.Global.WorkspaceRoot = origRoot })
 
 	handler := &DockerRegistryOutputHandler{
-		config: config.DockerConfig{
+		config: config.OCIConfig{
 			Registry:  "123456.dkr.ecr.us-west-2.amazonaws.com",
-			CacheMode: config.DockerCacheModeContent,
+			CacheMode: config.OCICacheModeContent,
 		},
 	}
 
@@ -38,9 +38,9 @@ func TestCacheImageName_TargetMode(t *testing.T) {
 	t.Cleanup(func() { config.Global.WorkspaceRoot = origRoot })
 
 	handler := &DockerRegistryOutputHandler{
-		config: config.DockerConfig{
+		config: config.OCIConfig{
 			Registry:  "123456.dkr.ecr.us-west-2.amazonaws.com",
-			CacheMode: config.DockerCacheModeTarget,
+			CacheMode: config.OCICacheModeTarget,
 		},
 	}
 
@@ -63,9 +63,9 @@ func TestCacheImageName_TargetMode_StableAcrossDigests(t *testing.T) {
 	t.Cleanup(func() { config.Global.WorkspaceRoot = origRoot })
 
 	handler := &DockerRegistryOutputHandler{
-		config: config.DockerConfig{
+		config: config.OCIConfig{
 			Registry:  "123456.dkr.ecr.us-west-2.amazonaws.com",
-			CacheMode: config.DockerCacheModeTarget,
+			CacheMode: config.OCICacheModeTarget,
 		},
 	}
 
@@ -87,9 +87,9 @@ func TestCacheImageName_ContentMode_DifferentDigests(t *testing.T) {
 	t.Cleanup(func() { config.Global.WorkspaceRoot = origRoot })
 
 	handler := &DockerRegistryOutputHandler{
-		config: config.DockerConfig{
+		config: config.OCIConfig{
 			Registry:  "123456.dkr.ecr.us-west-2.amazonaws.com",
-			CacheMode: config.DockerCacheModeContent,
+			CacheMode: config.OCICacheModeContent,
 		},
 	}
 
@@ -112,7 +112,7 @@ func TestCacheImageName_DefaultCacheModeIsContent(t *testing.T) {
 
 	// Empty CacheMode should behave like content mode (the default).
 	handler := &DockerRegistryOutputHandler{
-		config: config.DockerConfig{
+		config: config.OCIConfig{
 			Registry:  "123456.dkr.ecr.us-west-2.amazonaws.com",
 			CacheMode: "",
 		},
@@ -135,9 +135,9 @@ func TestCacheImageName_TargetMode_RootPackage(t *testing.T) {
 	t.Cleanup(func() { config.Global.WorkspaceRoot = origRoot })
 
 	handler := &DockerRegistryOutputHandler{
-		config: config.DockerConfig{
+		config: config.OCIConfig{
 			Registry:  "123456.dkr.ecr.us-west-2.amazonaws.com",
-			CacheMode: config.DockerCacheModeTarget,
+			CacheMode: config.OCICacheModeTarget,
 		},
 	}
 
@@ -156,8 +156,8 @@ func TestCacheImageName_TargetMode_RootPackage(t *testing.T) {
 
 func TestSeedLayerCache_NoopInContentMode(t *testing.T) {
 	handler := &DockerRegistryOutputHandler{
-		config: config.DockerConfig{
-			CacheMode: config.DockerCacheModeContent,
+		config: config.OCIConfig{
+			CacheMode: config.OCICacheModeContent,
 		},
 	}
 
@@ -174,7 +174,7 @@ func TestSeedLayerCache_NoopInContentMode(t *testing.T) {
 
 func TestSeedLayerCache_NoopWithEmptyCacheMode(t *testing.T) {
 	handler := &DockerRegistryOutputHandler{
-		config: config.DockerConfig{
+		config: config.OCIConfig{
 			CacheMode: "",
 		},
 	}
@@ -192,8 +192,8 @@ func TestSeedLayerCache_NoopWithEmptyCacheMode(t *testing.T) {
 func TestSeedLayerCache_NoopWhenPrebuildLayerFetchDisabled(t *testing.T) {
 	disabled := false
 	handler := &DockerRegistryOutputHandler{
-		config: config.DockerConfig{
-			CacheMode:          config.DockerCacheModeTarget,
+		config: config.OCIConfig{
+			CacheMode:          config.OCICacheModeTarget,
 			PrebuildLayerFetch: &disabled,
 		},
 	}
@@ -219,25 +219,25 @@ func TestIsPrebuildLayerFetchEnabled(t *testing.T) {
 	}{
 		{
 			name:      "target mode, unset defaults to true",
-			cacheMode: config.DockerCacheModeTarget,
+			cacheMode: config.OCICacheModeTarget,
 			prefetch:  nil,
 			want:      true,
 		},
 		{
 			name:      "target mode, explicitly true",
-			cacheMode: config.DockerCacheModeTarget,
+			cacheMode: config.OCICacheModeTarget,
 			prefetch:  boolPtr(true),
 			want:      true,
 		},
 		{
 			name:      "target mode, explicitly false",
-			cacheMode: config.DockerCacheModeTarget,
+			cacheMode: config.OCICacheModeTarget,
 			prefetch:  boolPtr(false),
 			want:      false,
 		},
 		{
 			name:      "content mode, unset defaults to false",
-			cacheMode: config.DockerCacheModeContent,
+			cacheMode: config.OCICacheModeContent,
 			prefetch:  nil,
 			want:      false,
 		},
@@ -251,7 +251,7 @@ func TestIsPrebuildLayerFetchEnabled(t *testing.T) {
 
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
-			dockerConfig := config.DockerConfig{
+			dockerConfig := config.OCIConfig{
 				CacheMode:          testCase.cacheMode,
 				PrebuildLayerFetch: testCase.prefetch,
 			}

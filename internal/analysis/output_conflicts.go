@@ -37,7 +37,7 @@ func detectOutputConflicts(graph *dag.DirectedTargetGraph) error {
 
 		for _, output := range target.AllOutputs() {
 			switch output.Type {
-			case string(handlers.DockerHandler):
+			case string(handlers.OCIHandler):
 				dockerOutputs[output.Identifier] = append(dockerOutputs[output.Identifier], outputRecord{
 					target: target,
 					output: output,
