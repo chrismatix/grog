@@ -10,3 +10,14 @@ targets:
       - Dockerfile
     outputs:
       - oci-push::127.0.0.1:5555/grog-smoke/image:1.0.0
+
+  # Builds the same image but pushes to a port nothing is listening on,
+  # exercising the failure path of the push summary.
+  - name: fail
+    command: |
+      docker buildx build --platform=linux/amd64 -t 127.0.0.1:5560/grog-smoke/fail:1.0.0 .
+    inputs:
+      - script.sh
+      - Dockerfile
+    outputs:
+      - oci-push::127.0.0.1:5560/grog-smoke/fail:1.0.0

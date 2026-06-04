@@ -3,3 +3,4 @@ INFO: Selected 1 target.
 INFO: //:smoke DONE (cached)
 INFO: Build completed successfully. 1 target completed (1 cache hits).
 INFO: Pushes: 0 pushed, 1 already current, 0 failed.
+INFO:   CURRENT //:smoke -> 127.0.0.1:5555/grog-smoke/image:1.0.0

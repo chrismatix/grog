@@ -51,6 +51,16 @@ cases:
         -H 'Accept: application/vnd.oci.image.manifest.v1+json' \
         http://127.0.0.1:5555/v2/grog-smoke/image/manifests/1.0.0
 
+  # Push to a port nothing is listening on; the build itself succeeds but
+  # the push fails and the summary reports the destination + the underlying
+  # network error.
+  - name: oci_push_failed_push
+    grog_args:
+      - build
+      - --push
+      - :fail
+    expect_fail: true
+
   - name: stop_smoke_registry
     setup_command: |
       docker rm -f grog-smoke-registry >/dev/null 2>&1 || true
@@ -58,3 +68,4 @@ cases:
       # (per design Q9: no local-tag cleanup). Remove it here so the
       # test machine does not accumulate tags across runs.
       docker rmi 127.0.0.1:5555/grog-smoke/image:1.0.0 >/dev/null 2>&1 || true
+      docker rmi 127.0.0.1:5560/grog-smoke/fail:1.0.0 >/dev/null 2>&1 || true

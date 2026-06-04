@@ -115,11 +115,11 @@ func (p *PushReporter) RenderSummary(logger *console.Logger) bool {
 	for _, r := range reports {
 		switch {
 		case r.Err != nil:
-			logger.Errorf("  push %s -> %s: %v", r.TargetLabel, r.Destination, r.Err)
+			logger.Errorf("  FAILED %s -> %s: %v", r.TargetLabel, r.Destination, r.Err)
 		case r.Skipped:
-			logger.Debugf("  push %s -> %s: already current", r.TargetLabel, r.Destination)
+			logger.Infof("  CURRENT %s -> %s", r.TargetLabel, r.Destination)
 		default:
-			logger.Debugf("  push %s -> %s: pushed", r.TargetLabel, r.Destination)
+			logger.Infof("  PUSHED %s -> %s", r.TargetLabel, r.Destination)
 		}
 	}
 	return failed > 0

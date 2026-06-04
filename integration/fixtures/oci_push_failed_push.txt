@@ -1,0 +1,8 @@
+INFO: 1 package loaded, 2 targets configured.
+INFO: Selected 1 target.
+INFO: //:fail DONE
+INFO: Build completed successfully. 1 target completed (0 cache hits).
+WARN: //:fail: push to 127.0.0.1:5560/grog-smoke/fail:1.0.0 failed: Get "https://127.0.0.1:5560/v2/": dial tcp 127.0.0.1:5560: connect: connection refused; Get "http://127.0.0.1:5560/v2/": dial tcp 127.0.0.1:5560: connect: connection refused
+WARN: async cache write error for //:fail (non-fatal): skipping target cache publication for //:fail: Get "https://127.0.0.1:5560/v2/": dial tcp 127.0.0.1:5560: connect: connection refused; Get "http://127.0.0.1:5560/v2/": dial tcp 127.0.0.1:5560: connect: connection refused
+INFO: Pushes: 0 pushed, 0 already current, 1 failed.
+ERROR:   FAILED //:fail -> 127.0.0.1:5560/grog-smoke/fail:1.0.0: Get "https://127.0.0.1:5560/v2/": dial tcp 127.0.0.1:5560: connect: connection refused; Get "http://127.0.0.1:5560/v2/": dial tcp 127.0.0.1:5560: connect: connection refused

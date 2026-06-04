@@ -82,7 +82,7 @@ func Copy(ctx context.Context, source, destination string, opts Options) (bool, 
 		}
 		lastErr = err
 		if !isTransient(err) || attempt == opts.MaxAttempts {
-			return false, fmt.Errorf("push %q -> %q: %w", source, destination, err)
+			return false, err
 		}
 		select {
 		case <-ctx.Done():
@@ -91,7 +91,7 @@ func Copy(ctx context.Context, source, destination string, opts Options) (bool, 
 		}
 		backoff *= 2
 	}
-	return false, fmt.Errorf("push %q -> %q after %d attempts: %w", source, destination, opts.MaxAttempts, lastErr)
+	return false, lastErr
 }
 
 func writeImage(ctx context.Context, dst name.Reference, img v1.Image) error {
