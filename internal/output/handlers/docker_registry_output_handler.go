@@ -146,8 +146,27 @@ func (d *DockerRegistryOutputHandler) cacheImageName(target model.Target, digest
 		// Target names are validated to [a-zA-Z0-9_\-.]
 		// Package paths use / which we replace with -
 		sanitized := strings.ReplaceAll(target.Label.Package, "/", "-")
-		return fmt.Sprintf("%s/%s-%s-%s:latest",
-			d.config.Registry, workspacePrefix, sanitized, target.Label.Name)
+
+		// Qualify the tag with the build platform (os/arch) so concurrent
+		// multi-arch builds of the same target do not clobber one another.
+		// A single mutable ":latest" tag is shared by every architecture, so
+		// the last push wins: a different arch then seeds its layer cache from a
+		// wrong-arch image (or misses the cache entirely). grog already keys the
+		// target change hash by platform (see internal/hashing/hash_target.go),
+		// so the cache image name must be platform-qualified too. GetPlatform()
+		// returns "os/arch"; the "/" is replaced with "-" to keep the tag
+		// registry-safe.
+		//
+		// NOTE: This remains a best-effort, mutable tag per (target, platform).
+		// Two builds that produce different content for the same target and
+		// platform still race on the tag (last push wins), but that only changes
+		// the layer-cache hit rate, never build correctness. A digest-derived
+		// immutable tag would not fit this design: SeedLayerCache must compute
+		// this name to pull the previous image before the new image (and thus
+		// its digest) exists.
+		platformTag := strings.ReplaceAll(config.Global.GetPlatform(), "/", "-")
+		return fmt.Sprintf("%s/%s-%s-%s:%s",
+			d.config.Registry, workspacePrefix, sanitized, target.Label.Name, platformTag)
 	}
 
 	// Default: content-addressed (one repo per unique image digest)
