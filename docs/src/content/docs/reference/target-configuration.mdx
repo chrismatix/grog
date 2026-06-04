@@ -96,13 +96,13 @@ Examples:
 
 ### outputs
 
-Files or directories produced by the target. For directories, use the `dir::` prefix. For Docker images, use the `docker::` prefix.
+Files or directories produced by the target. For directories, use the `dir::` prefix. For container images, use the `oci::` prefix.
 
 Examples:
 
 - `dist/bundle.js` - A file output
 - `dir::dist/assets/` - A directory output
-- `docker::myregistry.com/myimage:tag` - A Docker image
+- `oci::myregistry.com/myimage:tag` - An OCI container image (built by `docker build`, `podman build`, etc.)
 
 ### dependencies
 

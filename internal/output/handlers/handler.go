@@ -26,7 +26,7 @@ type PreparedOutput struct {
 
 // Handler defines how to handle a specific type of build output.
 type Handler interface {
-	// Type returns the identifier for this output type (e.g., "dir", "docker")
+	// Type returns the identifier for this output type (e.g., "dir", "oci")
 	Type() HandlerType
 
 	// Write prepares the output and returns the output proto plus an optional write plan.
@@ -43,9 +43,9 @@ type Handler interface {
 type HandlerType string
 
 const (
-	FileHandler   HandlerType = "file"
-	DirHandler    HandlerType = "dir"
-	DockerHandler HandlerType = "docker"
+	FileHandler HandlerType = "file"
+	DirHandler  HandlerType = "dir"
+	OCIHandler  HandlerType = "oci"
 )
 
 // KnownHandlerTypes This is necessary so that we can statically check for handler type without having
@@ -53,5 +53,5 @@ const (
 var KnownHandlerTypes = []HandlerType{
 	FileHandler,
 	DirHandler,
-	DockerHandler,
+	OCIHandler,
 }

@@ -33,7 +33,7 @@ type EnvironmentDTO struct {
 	Name         string   `json:"name" yaml:"name" pkl:"name" starlark:"name"`
 	Type         string   `json:"type" yaml:"type" pkl:"type" starlark:"type"`
 	Dependencies []string `json:"dependencies,omitempty" yaml:"dependencies,omitempty" pkl:"dependencies" starlark:"dependencies"`
-	DockerImage  string   `json:"docker_image" yaml:"docker_image" pkl:"docker_image" starlark:"docker_image"`
+	OCIImage     string   `json:"oci_image" yaml:"oci_image" pkl:"oci_image" starlark:"oci_image"`
 }
 
 // PackageDTO is used for deserializing a package in a loader.

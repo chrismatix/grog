@@ -1,4 +1,4 @@
-package dockerproxy_test
+package ociproxy_test
 
 import (
 	"bytes"
@@ -18,20 +18,20 @@ import (
 
 	"grog/internal/caching"
 	"grog/internal/caching/backends"
-	"grog/internal/dockerproxy"
+	"grog/internal/ociproxy"
 )
 
 // newTestRegistry spins up a registry backed by a fresh on-disk filesystem CAS
 // inside t.TempDir(). It returns the registry and the underlying CAS so tests
 // can poke at storage directly.
-func newTestRegistry(t *testing.T) (*dockerproxy.Registry, *caching.Cas) {
+func newTestRegistry(t *testing.T) (*ociproxy.Registry, *caching.Cas) {
 	t.Helper()
 	ctx := context.Background()
 
 	fs := backends.NewFileSystemCacheForTest(t.TempDir(), t.TempDir())
 	cas := caching.NewCas(fs)
 
-	reg, err := dockerproxy.New(ctx, cas)
+	reg, err := ociproxy.New(ctx, cas)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = reg.Close() })
 
@@ -45,7 +45,7 @@ func digestOf(b []byte) string {
 }
 
 // urlFor builds a full URL against the registry under test.
-func urlFor(reg *dockerproxy.Registry, path string) string {
+func urlFor(reg *ociproxy.Registry, path string) string {
 	return "http://" + reg.Addr() + path
 }
 
@@ -416,7 +416,7 @@ func TestRegistry_ChunkedUploadSurvivesPostContextCancellation(t *testing.T) {
 	fs := backends.NewFileSystemCacheForTest(t.TempDir(), t.TempDir())
 	cas := caching.NewCas(&ctxObservingBackend{CacheBackend: fs})
 
-	reg, err := dockerproxy.New(ctx, cas)
+	reg, err := ociproxy.New(ctx, cas)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = reg.Close() })
 

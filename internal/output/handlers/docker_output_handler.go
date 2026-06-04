@@ -9,8 +9,8 @@ import (
 
 	"grog/internal/caching"
 	"grog/internal/console"
-	"grog/internal/dockerproxy"
 	"grog/internal/model"
+	"grog/internal/ociproxy"
 	"grog/internal/proto/gen"
 	"grog/internal/worker"
 
@@ -38,7 +38,7 @@ type DockerOutputHandler struct {
 	// proxy is the loopback OCI registry. Lazily started on first push so that
 	// runs without docker targets pay no cost.
 	proxyInit sync.Once
-	proxy     *dockerproxy.Registry
+	proxy     *ociproxy.Registry
 	proxyErr  error
 }
 
@@ -50,7 +50,7 @@ func NewDockerOutputHandler(_ context.Context, cas *caching.Cas) *DockerOutputHa
 
 // Type returns the type of the handler.
 func (d *DockerOutputHandler) Type() HandlerType {
-	return DockerHandler
+	return OCIHandler
 }
 
 func (d *DockerOutputHandler) ensureClient() (*client.Client, error) {
@@ -65,9 +65,9 @@ func (d *DockerOutputHandler) ensureClient() (*client.Client, error) {
 	return d.dockerClient, d.dockerErr
 }
 
-func (d *DockerOutputHandler) ensureProxy(ctx context.Context) (*dockerproxy.Registry, error) {
+func (d *DockerOutputHandler) ensureProxy(ctx context.Context) (*ociproxy.Registry, error) {
 	d.proxyInit.Do(func() {
-		reg, err := dockerproxy.New(ctx, d.cas)
+		reg, err := ociproxy.New(ctx, d.cas)
 		if err != nil {
 			d.proxyErr = fmt.Errorf("failed to start in-process docker registry proxy: %w", err)
 			return
@@ -132,7 +132,7 @@ func (d *DockerOutputHandler) Write(
 		return nil, fmt.Errorf("failed to tag image %q as %q: %w", imageName, loopbackRef, err)
 	}
 
-	dockerImageOutput := &gen.DockerImageOutput{
+	dockerImageOutput := &gen.OCIImageOutput{
 		Mode:     gen.ImageMode_LAYERS,
 		LocalTag: imageName,
 		ImageId:  inspect.ID,
@@ -140,8 +140,8 @@ func (d *DockerOutputHandler) Write(
 	}
 
 	genOutput := &gen.Output{
-		Kind: &gen.Output_DockerImage{
-			DockerImage: dockerImageOutput,
+		Kind: &gen.Output_OciImage{
+			OciImage: dockerImageOutput,
 		},
 	}
 
@@ -171,7 +171,7 @@ func (d *DockerOutputHandler) Load(
 	output *gen.Output,
 	tracker *worker.ProgressTracker,
 ) error {
-	dockerImage := output.GetDockerImage()
+	dockerImage := output.GetOciImage()
 	if dockerImage.GetMode() != gen.ImageMode_LAYERS {
 		return fmt.Errorf("cannot restore %s docker cache as layer cache is configured", dockerImage.GetMode())
 	}
@@ -241,12 +241,12 @@ func (d *DockerOutputHandler) Load(
 // which manifest to pull.
 type dockerImageWritePlan struct {
 	dockerClient *client.Client
-	proxy        *dockerproxy.Registry
+	proxy        *ociproxy.Registry
 
 	// output is the same pointer that lives in PreparedTargetResult.TargetResult.Outputs[i].
 	// Execute mutates its ManifestDigest field; the cache writer persists the
 	// proto AFTER all write plans succeed, so the mutation is captured.
-	output *gen.DockerImageOutput
+	output *gen.OCIImageOutput
 
 	loopbackRef    string // host:port/repo:tag — the local tag we put on the image
 	repoName       string // path part of loopbackRef, used to look up the manifest digest

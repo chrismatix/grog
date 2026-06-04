@@ -1,4 +1,4 @@
-// Package dockerproxy implements a minimal OCI Distribution v2 registry
+// Package ociproxy implements a minimal OCI Distribution v2 registry
 // that listens on a loopback port and proxies blob/manifest reads and writes
 // to grog's content-addressable store.
 //
@@ -25,7 +25,7 @@
 // The "name" portion of the URL is treated as a routing prefix only — CAS
 // keys are content digests, never names. Manifest GETs only support digest
 // references (sha256:...) since grog always pulls by digest.
-package dockerproxy
+package ociproxy
 
 import (
 	"context"
@@ -95,7 +95,7 @@ type pendingUpload struct {
 func New(ctx context.Context, cas *caching.Cas) (*Registry, error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return nil, fmt.Errorf("dockerproxy: listen: %w", err)
+		return nil, fmt.Errorf("ociproxy: listen: %w", err)
 	}
 
 	// Derive the session context from the caller's ctx so that cancelling
@@ -124,11 +124,11 @@ func New(ctx context.Context, cas *caching.Cas) (*Registry, error) {
 
 	go func() {
 		if err := registry.server.Serve(listener); err != nil && err != http.ErrServerClosed {
-			registry.logger.Warnf("dockerproxy server stopped: %v", err)
+			registry.logger.Warnf("ociproxy server stopped: %v", err)
 		}
 	}()
 
-	registry.logger.Debugf("dockerproxy listening on %s", listener.Addr())
+	registry.logger.Debugf("ociproxy listening on %s", listener.Addr())
 
 	return registry, nil
 }
@@ -177,7 +177,7 @@ func (r *Registry) handle(w http.ResponseWriter, req *http.Request) {
 	// registry's logger up front so every handler and backend call made with
 	// req.Context() inherits it.
 	req = req.WithContext(console.WithLogger(req.Context(), r.logger))
-	r.logger.Tracef("dockerproxy: %s %s", req.Method, req.URL.RequestURI())
+	r.logger.Tracef("ociproxy: %s %s", req.Method, req.URL.RequestURI())
 	// Version probe — both GET and HEAD must return 200 with the API version header.
 	if req.URL.Path == "/v2/" || req.URL.Path == "/v2" {
 		w.Header().Set("Docker-Distribution-API-Version", "registry/2.0")
@@ -294,7 +294,7 @@ func (r *Registry) getBlob(w http.ResponseWriter, req *http.Request, digest stri
 	w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
 	w.WriteHeader(http.StatusOK)
 	if _, err := io.Copy(w, reader); err != nil {
-		r.logger.Warnf("dockerproxy: blob %s stream error: %v", digest, err)
+		r.logger.Warnf("ociproxy: blob %s stream error: %v", digest, err)
 	}
 }
 
@@ -536,7 +536,7 @@ func (r *Registry) putManifest(w http.ResponseWriter, req *http.Request, name, r
 	r.manifestsByName[name] = digest
 	r.manifestsMu.Unlock()
 
-	r.logger.Debugf("dockerproxy: stored manifest %s (reference %q under %q)", digest, reference, name)
+	r.logger.Debugf("ociproxy: stored manifest %s (reference %q under %q)", digest, reference, name)
 
 	w.Header().Set("Docker-Content-Digest", digest)
 	w.Header().Set("Location", "/v2/"+name+"/manifests/"+digest)

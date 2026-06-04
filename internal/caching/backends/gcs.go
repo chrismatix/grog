@@ -151,7 +151,7 @@ func (gcs *GCSCache) Delete(ctx context.Context, path string, key string) error 
 // The ctx passed here lives for the entire upload session — it's captured
 // inside *storage.Writer which uses it to drive the resumable upload — so
 // callers must pass a context that outlives all subsequent Write calls
-// (e.g. the dockerproxy registry's session ctx, not an HTTP request ctx).
+// (e.g. the ociproxy registry's session ctx, not an HTTP request ctx).
 func (gcs *GCSCache) BeginWrite(ctx context.Context) (StagedWriter, error) {
 	stagingKey := gcs.buildPath(gcsStagingPath, uuid.NewString())
 	wc := gcs.client.Bucket(gcs.bucketName).Object(stagingKey).NewWriter(ctx)
