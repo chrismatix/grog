@@ -28,13 +28,22 @@ jobs:
       - name: Set up mise
         uses: jdx/mise-action@v4
 
-      - name: Confirm podman is available
+      - name: Route docker CLI through podman
         run: |
           # ubuntu-latest ships both the Docker CLI and podman preinstalled.
-          # We don't replace the Docker CLI with a podman shim — once
-          # DOCKER_HOST is exported below, the preinstalled `docker` CLI in
-          # the test's BUILD.yaml and grog's Docker SDK calls both route to
-          # podman's compat socket.
+          # We *do* need to make `docker build` actually use podman, not just
+          # route Docker-CLI build requests to the podman socket — the two
+          # paths disagree on image-name normalization. When the real Docker
+          # CLI builds via DOCKER_HOST, the tag is stored by podman under
+          # `localhost/<name>`; the Docker SDK then asks for
+          # `docker.io/library/<name>` and gets "no such image".
+          #
+          # The Debian `podman-docker` package fixes this but can conflict
+          # with the preinstalled docker-ce on `ubuntu-latest`. Drop in a
+          # symlink instead — /usr/local/bin precedes /usr/bin in PATH, so
+          # both `docker` and `docker build` in BUILD.yaml resolve to podman
+          # with no package surgery.
+          sudo ln -sf "$(command -v podman)" /usr/local/bin/docker
           docker --version
           podman --version
 
