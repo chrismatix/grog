@@ -28,12 +28,13 @@ jobs:
       - name: Set up mise
         uses: jdx/mise-action@v4
 
-      - name: Install podman docker-compat shim
+      - name: Confirm podman is available
         run: |
-          sudo apt-get update
-          sudo apt-get install -y podman-docker
-          # /usr/bin/docker now points at podman; the BUILD.yaml's
-          # `docker build` runs through podman as a result.
+          # ubuntu-latest ships both the Docker CLI and podman preinstalled.
+          # We don't replace the Docker CLI with a podman shim — once
+          # DOCKER_HOST is exported below, the preinstalled `docker` CLI in
+          # the test's BUILD.yaml and grog's Docker SDK calls both route to
+          # podman's compat socket.
           docker --version
           podman --version
 
