@@ -213,13 +213,10 @@ func (d *DockerRegistryOutputHandler) maybeAttachPushPlan(prepared *PreparedOutp
 	if !d.pushEnabled() {
 		return
 	}
-	prepared.WritePlan = &CompositeWritePlan{Plans: []OutputWritePlan{prepared.WritePlan, &ociPushPlan{
-		pusher:      d,
-		dockerOut:   image,
-		destination: output.Identifier,
-		targetLabel: target.Label.String(),
-		reporter:    d.pushReporter,
-	}}}
+	prepared.WritePlan = &CompositeWritePlan{Plans: []OutputWritePlan{
+		prepared.WritePlan,
+		newOciPushPlan(d, image, output.Identifier, target.Label.String(), d.pushReporter),
+	}}
 }
 
 func makeRegistryAuth(ref string) (string, error) {
@@ -325,14 +322,7 @@ func (d *DockerRegistryOutputHandler) maybePushOnLoad(ctx context.Context, targe
 	if !d.pushEnabled() || image.GetPushDestination() == "" {
 		return
 	}
-	plan := &ociPushPlan{
-		pusher:      d,
-		dockerOut:   image,
-		destination: image.GetPushDestination(),
-		targetLabel: target.Label.String(),
-		reporter:    d.pushReporter,
-	}
-	_ = plan.Execute(ctx, tracker)
+	_ = newOciPushPlan(d, image, image.GetPushDestination(), target.Label.String(), d.pushReporter).Execute(ctx, tracker)
 }
 
 // dockerLayerProgress holds per-layer tracking state for bridging JSON progress.

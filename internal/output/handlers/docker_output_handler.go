@@ -178,13 +178,10 @@ func (d *DockerOutputHandler) maybeAttachPushPlan(prepared *PreparedOutput, imag
 	if !d.pushEnabled() {
 		return
 	}
-	prepared.WritePlan = &CompositeWritePlan{Plans: []OutputWritePlan{prepared.WritePlan, &ociPushPlan{
-		pusher:      d,
-		dockerOut:   image,
-		destination: output.Identifier,
-		targetLabel: target.Label.String(),
-		reporter:    d.pushReporter,
-	}}}
+	prepared.WritePlan = &CompositeWritePlan{Plans: []OutputWritePlan{
+		prepared.WritePlan,
+		newOciPushPlan(d, image, output.Identifier, target.Label.String(), d.pushReporter),
+	}}
 }
 
 // Load restores a previously cached image into the local Docker daemon by
@@ -228,6 +225,7 @@ func (d *DockerOutputHandler) Load(
 				return fmt.Errorf("failed to tag existing image %q as %q: %w", imageID, localImageName, err)
 			}
 			logger.Debugf("image %s already present locally, skipped pull", localImageName)
+			d.maybePushOnLoad(ctx, target, dockerImage, tracker)
 			return nil
 		}
 	}
@@ -269,14 +267,7 @@ func (d *DockerOutputHandler) maybePushOnLoad(ctx context.Context, target model.
 	if !d.pushEnabled() || image.GetPushDestination() == "" {
 		return
 	}
-	plan := &ociPushPlan{
-		pusher:      d,
-		dockerOut:   image,
-		destination: image.GetPushDestination(),
-		targetLabel: target.Label.String(),
-		reporter:    d.pushReporter,
-	}
-	_ = plan.Execute(ctx, tracker)
+	_ = newOciPushPlan(d, image, image.GetPushDestination(), target.Label.String(), d.pushReporter).Execute(ctx, tracker)
 }
 
 // PushImage copies the cached image from the loopback proxy to the destination

@@ -10,15 +10,26 @@ import (
 )
 
 // ociPushPlan ships the cached image to its user-facing destination by
-// invoking the docker handler's own PushImage. It runs after the cache write
-// plan it is chained behind, by which point the cache plan has populated
-// image_id / manifest_digest on dockerOut.
+// invoking the docker handler's own PushImage. When chained behind a cache
+// write plan, the cache plan has already populated image_id / manifest_digest
+// on dockerOut by the time Execute runs.
 type ociPushPlan struct {
 	pusher      ImagePusher
 	dockerOut   *gen.DockerImageOutput
 	destination string
 	targetLabel string
 	reporter    *PushReporter
+}
+
+// newOciPushPlan is the canonical constructor used by both docker handlers.
+func newOciPushPlan(pusher ImagePusher, image *gen.DockerImageOutput, destination, targetLabel string, reporter *PushReporter) *ociPushPlan {
+	return &ociPushPlan{
+		pusher:      pusher,
+		dockerOut:   image,
+		destination: destination,
+		targetLabel: targetLabel,
+		reporter:    reporter,
+	}
 }
 
 func (p *ociPushPlan) Execute(ctx context.Context, tracker *worker.ProgressTracker) error {
