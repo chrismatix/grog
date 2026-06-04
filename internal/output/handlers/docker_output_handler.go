@@ -245,7 +245,7 @@ func (d *DockerOutputHandler) PushImage(ctx context.Context, image *gen.OCIImage
 		return false, fmt.Errorf("cache write did not populate image identity for push to %s", destination)
 	}
 	src := fmt.Sprintf("%s/%s@%s", proxy.Addr(), loopbackRepoName(imageID), manifestDigest)
-	return oci_push.Copy(ctx, src, destination, oci_push.Options{SourceInsecure: true})
+	return oci_push.Copy(ctx, src, destination, oci_push.Options{})
 }
 
 // dockerImageWritePlan defers the actual `docker push` to the cache-write phase.

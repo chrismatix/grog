@@ -7,7 +7,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -18,12 +20,10 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 )
 
-// Options control a single Copy call.
+// Options control a single Copy call. Plain-HTTP access for loopback / RFC1918
+// / *.local hosts is auto-detected on both source and destination; no flag
+// needed for the common cases (grog's loopback proxy, on-prem registries).
 type Options struct {
-	// SourceInsecure permits plain-HTTP access for the source (e.g. the
-	// loopback dockerproxy). Destination is always treated as secure.
-	SourceInsecure bool
-
 	// MaxAttempts caps total tries; transient errors are retried up to this
 	// count with exponential backoff. Defaults to 3.
 	MaxAttempts int
@@ -43,11 +43,11 @@ func Copy(ctx context.Context, source, destination string, opts Options) (bool, 
 		opts.InitialBackoff = 500 * time.Millisecond
 	}
 
-	srcRef, err := parseRef(source, opts.SourceInsecure)
+	srcRef, err := parseRef(source)
 	if err != nil {
 		return false, fmt.Errorf("parse source %q: %w", source, err)
 	}
-	dstRef, err := parseRef(destination, false)
+	dstRef, err := parseRef(destination)
 	if err != nil {
 		return false, fmt.Errorf("parse destination %q: %w", destination, err)
 	}
@@ -101,15 +101,68 @@ func writeImage(ctx context.Context, dst name.Reference, img v1.Image) error {
 	)
 }
 
-func parseRef(ref string, insecure bool) (name.Reference, error) {
+func parseRef(ref string) (name.Reference, error) {
 	var opts []name.Option
-	if insecure {
+	if looksInsecure(ref) {
 		opts = append(opts, name.Insecure)
 	}
 	if strings.Contains(ref, "@") {
 		return name.NewDigest(ref, opts...)
 	}
 	return name.ParseReference(ref, opts...)
+}
+
+// reLocalSuffix matches "*.localhost" or "*.local" registry hostnames, both of
+// which container tooling treats as plain HTTP by convention.
+var reLocalSuffix = regexp.MustCompile(`\.(localhost|local)(?::\d{1,5})?$`)
+
+// looksInsecure reports whether ref's registry host is one of the patterns
+// commonly served over plain HTTP: localhost, the loopback IPs, a *.local /
+// *.localhost suffix, or any RFC1918 private IP. Tagging name.Insecure for
+// these short-circuits go-containerregistry's parallel-ping discovery (it
+// would otherwise race an HTTPS attempt that will never succeed) and lets
+// pushes to non-public registries work without extra configuration.
+func looksInsecure(ref string) bool {
+	host := registryHost(ref)
+	if host == "" {
+		return false
+	}
+	if host == "localhost" || strings.HasPrefix(host, "localhost:") {
+		return true
+	}
+	if reLocalSuffix.MatchString(host) {
+		return true
+	}
+	if ip := net.ParseIP(stripPort(host)); ip != nil {
+		if ip.IsLoopback() || ip.IsPrivate() {
+			return true
+		}
+	}
+	return false
+}
+
+// stripPort drops a trailing ":port" from host and unwraps a bracketed IPv6
+// literal (`[::1]:5555` → `::1`). Returns host unchanged when there is no port.
+func stripPort(host string) string {
+	if strings.HasPrefix(host, "[") {
+		if i := strings.Index(host, "]"); i > 0 {
+			return host[1:i]
+		}
+		return host
+	}
+	if i := strings.LastIndex(host, ":"); i >= 0 {
+		return host[:i]
+	}
+	return host
+}
+
+// registryHost returns the registry portion of an OCI reference (everything
+// before the first "/"). Empty for malformed refs.
+func registryHost(ref string) string {
+	if i := strings.IndexByte(ref, '/'); i > 0 {
+		return ref[:i]
+	}
+	return ""
 }
 
 // isTransient reports whether err is worth retrying: network failures and 5xx
