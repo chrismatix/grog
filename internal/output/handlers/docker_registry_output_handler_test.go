@@ -37,6 +37,10 @@ func TestCacheImageName_TargetMode(t *testing.T) {
 	config.Global.WorkspaceRoot = "/home/user/myproject"
 	t.Cleanup(func() { config.Global.WorkspaceRoot = origRoot })
 
+	origOS, origArch := config.Global.OS, config.Global.Arch
+	config.Global.OS, config.Global.Arch = "linux", "amd64"
+	t.Cleanup(func() { config.Global.OS, config.Global.Arch = origOS, origArch })
+
 	handler := &DockerRegistryOutputHandler{
 		config: config.OCIConfig{
 			Registry:  "123456.dkr.ecr.us-west-2.amazonaws.com",
@@ -49,9 +53,10 @@ func TestCacheImageName_TargetMode(t *testing.T) {
 	}
 
 	got := handler.cacheImageName(target, "sha256:abcdef1234567890")
-	// Target mode: should use the sanitized target label, not the digest.
+	// Target mode: should use the sanitized target label (not the digest), with
+	// the build platform as the tag so multi-arch builds do not collide.
 	prefix := config.GetWorkspaceCachePrefix("/home/user/myproject")
-	want := "123456.dkr.ecr.us-west-2.amazonaws.com/" + prefix + "-services-api-build_image:latest"
+	want := "123456.dkr.ecr.us-west-2.amazonaws.com/" + prefix + "-services-api-build_image:linux-amd64"
 	if got != want {
 		t.Fatalf("target mode:\n  got  %q\n  want %q", got, want)
 	}
@@ -61,6 +66,10 @@ func TestCacheImageName_TargetMode_StableAcrossDigests(t *testing.T) {
 	origRoot := config.Global.WorkspaceRoot
 	config.Global.WorkspaceRoot = "/home/user/myproject"
 	t.Cleanup(func() { config.Global.WorkspaceRoot = origRoot })
+
+	origOS, origArch := config.Global.OS, config.Global.Arch
+	config.Global.OS, config.Global.Arch = "linux", "amd64"
+	t.Cleanup(func() { config.Global.OS, config.Global.Arch = origOS, origArch })
 
 	handler := &DockerRegistryOutputHandler{
 		config: config.OCIConfig{
@@ -78,6 +87,48 @@ func TestCacheImageName_TargetMode_StableAcrossDigests(t *testing.T) {
 	name2 := handler.cacheImageName(target, "sha256:bbbb")
 	if name1 != name2 {
 		t.Fatalf("target mode should produce stable names across digests:\n  digest1: %q\n  digest2: %q", name1, name2)
+	}
+}
+
+func TestCacheImageName_TargetMode_DistinctPerPlatform(t *testing.T) {
+	origRoot := config.Global.WorkspaceRoot
+	config.Global.WorkspaceRoot = "/home/user/myproject"
+	t.Cleanup(func() { config.Global.WorkspaceRoot = origRoot })
+
+	origOS, origArch := config.Global.OS, config.Global.Arch
+	t.Cleanup(func() { config.Global.OS, config.Global.Arch = origOS, origArch })
+
+	handler := &DockerRegistryOutputHandler{
+		config: config.OCIConfig{
+			Registry:  "123456.dkr.ecr.us-west-2.amazonaws.com",
+			CacheMode: config.OCICacheModeTarget,
+		},
+	}
+
+	target := model.Target{
+		Label: label.TargetLabel{Package: "services/api", Name: "build_image"},
+	}
+
+	// The same target built for two architectures must produce distinct image
+	// names. Otherwise concurrent multi-arch builds share one mutable tag and
+	// clobber each other's layer cache.
+	config.Global.OS, config.Global.Arch = "linux", "amd64"
+	amd64Name := handler.cacheImageName(target, "")
+	config.Global.OS, config.Global.Arch = "linux", "arm64"
+	arm64Name := handler.cacheImageName(target, "")
+
+	if amd64Name == arm64Name {
+		t.Fatalf("target mode should produce distinct names per platform: both got %q", amd64Name)
+	}
+
+	prefix := config.GetWorkspaceCachePrefix("/home/user/myproject")
+	wantAMD64 := "123456.dkr.ecr.us-west-2.amazonaws.com/" + prefix + "-services-api-build_image:linux-amd64"
+	if amd64Name != wantAMD64 {
+		t.Fatalf("amd64:\n  got  %q\n  want %q", amd64Name, wantAMD64)
+	}
+	wantARM64 := "123456.dkr.ecr.us-west-2.amazonaws.com/" + prefix + "-services-api-build_image:linux-arm64"
+	if arm64Name != wantARM64 {
+		t.Fatalf("arm64:\n  got  %q\n  want %q", arm64Name, wantARM64)
 	}
 }
 
@@ -134,6 +185,10 @@ func TestCacheImageName_TargetMode_RootPackage(t *testing.T) {
 	config.Global.WorkspaceRoot = "/home/user/myproject"
 	t.Cleanup(func() { config.Global.WorkspaceRoot = origRoot })
 
+	origOS, origArch := config.Global.OS, config.Global.Arch
+	config.Global.OS, config.Global.Arch = "linux", "amd64"
+	t.Cleanup(func() { config.Global.OS, config.Global.Arch = origOS, origArch })
+
 	handler := &DockerRegistryOutputHandler{
 		config: config.OCIConfig{
 			Registry:  "123456.dkr.ecr.us-west-2.amazonaws.com",
@@ -148,7 +203,7 @@ func TestCacheImageName_TargetMode_RootPackage(t *testing.T) {
 
 	got := handler.cacheImageName(target, "")
 	prefix := config.GetWorkspaceCachePrefix("/home/user/myproject")
-	want := "123456.dkr.ecr.us-west-2.amazonaws.com/" + prefix + "--build_image:latest"
+	want := "123456.dkr.ecr.us-west-2.amazonaws.com/" + prefix + "--build_image:linux-amd64"
 	if got != want {
 		t.Fatalf("root package:\n  got  %q\n  want %q", got, want)
 	}
