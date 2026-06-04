@@ -4,6 +4,8 @@ import (
 	"sort"
 	"sync"
 	"sync/atomic"
+
+	"grog/internal/console"
 )
 
 // PushReport captures the outcome of a single oci-push:: push attempt.
@@ -84,4 +86,41 @@ func (p *PushReporter) HasFailures() bool {
 		}
 	}
 	return false
+}
+
+// RenderSummary logs the per-push counts and per-entry detail and reports
+// whether any push failed. Nil/empty reporter renders nothing.
+func (p *PushReporter) RenderSummary(logger *console.Logger) bool {
+	if p == nil {
+		return false
+	}
+	reports := p.Reports()
+	if len(reports) == 0 {
+		return false
+	}
+
+	var pushed, skipped, failed int
+	for _, r := range reports {
+		switch {
+		case r.Err != nil:
+			failed++
+		case r.Skipped:
+			skipped++
+		default:
+			pushed++
+		}
+	}
+
+	logger.Infof("Pushes: %d pushed, %d already current, %d failed.", pushed, skipped, failed)
+	for _, r := range reports {
+		switch {
+		case r.Err != nil:
+			logger.Errorf("  push %s -> %s: %v", r.TargetLabel, r.Destination, r.Err)
+		case r.Skipped:
+			logger.Debugf("  push %s -> %s: already current", r.TargetLabel, r.Destination)
+		default:
+			logger.Debugf("  push %s -> %s: pushed", r.TargetLabel, r.Destination)
+		}
+	}
+	return failed > 0
 }

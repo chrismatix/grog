@@ -25,7 +25,7 @@ type Options struct {
 	SourceInsecure bool
 
 	// MaxAttempts caps total tries; transient errors are retried up to this
-	// count with exponential backoff. Defaults to 4.
+	// count with exponential backoff. Defaults to 3.
 	MaxAttempts int
 
 	// InitialBackoff is the wait before the first retry; doubles per
@@ -37,7 +37,7 @@ type Options struct {
 // the destination already holds the same manifest digest as the source.
 func Copy(ctx context.Context, source, destination string, opts Options) (bool, error) {
 	if opts.MaxAttempts <= 0 {
-		opts.MaxAttempts = 4
+		opts.MaxAttempts = 3
 	}
 	if opts.InitialBackoff <= 0 {
 		opts.InitialBackoff = 500 * time.Millisecond

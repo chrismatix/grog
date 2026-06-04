@@ -26,7 +26,6 @@ import (
 	"grog/internal/locking"
 	"grog/internal/model"
 	"grog/internal/output"
-	"grog/internal/output/handlers"
 	"grog/internal/selection"
 	"grog/internal/tracing"
 )
@@ -235,7 +234,7 @@ func RunBuildAndAfter(
 
 	executor.WaitForAsyncWrites(ctx)
 
-	pushHadFailures := renderPushSummary(logger, registry.PushReporter())
+	pushHadFailures := registry.PushReporter().RenderSummary(logger)
 
 	// Close output handlers (notably the loopback docker registry) only after
 	// async writes have drained. Closing earlier would tear the proxy down
@@ -362,44 +361,6 @@ func RunBuildAndAfter(
 	if pushHadFailures {
 		os.Exit(1)
 	}
-}
-
-// renderPushSummary prints the oci-push:: outcome summary and reports whether
-// any push failed. Nil/empty reporter renders nothing.
-func renderPushSummary(logger *console.Logger, reporter *handlers.PushReporter) bool {
-	if reporter == nil {
-		return false
-	}
-	reports := reporter.Reports()
-	if len(reports) == 0 {
-		return false
-	}
-
-	var pushed, skipped, failed int
-	for _, r := range reports {
-		switch {
-		case r.Err != nil:
-			failed++
-		case r.Skipped:
-			skipped++
-		default:
-			pushed++
-		}
-	}
-
-	logger.Infof("Pushes: %d pushed, %d already current, %d failed.", pushed, skipped, failed)
-	for _, r := range reports {
-		switch {
-		case r.Err != nil:
-			logger.Errorf("  push %s -> %s: %v", r.TargetLabel, r.Destination, r.Err)
-		case r.Skipped:
-			logger.Debugf("  push %s -> %s: already current", r.TargetLabel, r.Destination)
-		default:
-			logger.Debugf("  push %s -> %s: pushed", r.TargetLabel, r.Destination)
-		}
-	}
-
-	return failed > 0
 }
 
 // buildSucceeded reports whether it is safe to run a dependent post-build step.

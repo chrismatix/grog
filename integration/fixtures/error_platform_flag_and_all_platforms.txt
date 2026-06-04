@@ -9,6 +9,7 @@ Examples:
 
 Flags:
   -h, --help   help for build
+      --push   Push oci-push:: outputs to their declared remote tags after a successful build
 
 Global Flags:
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
