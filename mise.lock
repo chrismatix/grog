@@ -24,6 +24,30 @@ checksum = "sha256:4592b096e553f67799ae70d4b6167eeda3ec74587d68c7aecbf4e7b1df136
 url = "https://conda.anaconda.org/conda-forge/linux-aarch64/libgomp-15.2.0-h8acb6b2_19.conda"
 checksum = "sha256:2370ef0ffcbae5bede3c4bf136add4abc257245eb91f724c99bb4a43116c5a83"
 
+[conda-packages.linux-x64."_openmp_mutex-4.5-20_gnu"]
+url = "https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda"
+checksum = "sha256:1dd3fffd892081df9726d7eb7e0dea6198962ba775bd88842135a4ddb4deb3c9"
+
+[conda-packages.linux-x64."libgcc-15.2.0-he0feb66_19"]
+url = "https://conda.anaconda.org/conda-forge/linux-64/libgcc-15.2.0-he0feb66_19.conda"
+checksum = "sha256:8e0a3b5e41272e5678499b5dfc4cddb673f9e935de01eb0767ce857001229f46"
+
+[conda-packages.linux-x64."libgomp-15.2.0-he0feb66_19"]
+url = "https://conda.anaconda.org/conda-forge/linux-64/libgomp-15.2.0-he0feb66_19.conda"
+checksum = "sha256:5abe4ab9d93f6c9757d654f1969ae2267d4505315c1f2f8fe705fd60af084f1b"
+
+[conda-packages.linux-x64-musl."_openmp_mutex-4.5-20_gnu"]
+url = "https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda"
+checksum = "sha256:1dd3fffd892081df9726d7eb7e0dea6198962ba775bd88842135a4ddb4deb3c9"
+
+[conda-packages.linux-x64-musl."libgcc-15.2.0-he0feb66_19"]
+url = "https://conda.anaconda.org/conda-forge/linux-64/libgcc-15.2.0-he0feb66_19.conda"
+checksum = "sha256:8e0a3b5e41272e5678499b5dfc4cddb673f9e935de01eb0767ce857001229f46"
+
+[conda-packages.linux-x64-musl."libgomp-15.2.0-he0feb66_19"]
+url = "https://conda.anaconda.org/conda-forge/linux-64/libgomp-15.2.0-he0feb66_19.conda"
+checksum = "sha256:5abe4ab9d93f6c9757d654f1969ae2267d4505315c1f2f8fe705fd60af084f1b"
+
 [conda-packages.windows-x64."_openmp_mutex-4.5-20_gnu"]
 url = "https://conda.anaconda.org/conda-forge/win-64/_openmp_mutex-4.5-20_gnu.conda"
 checksum = "sha256:8a1cee28bd0ee7451ada1cd50b64720e57e17ff994fc62dd8329bef570d382e4"
@@ -239,6 +263,24 @@ conda_deps = [
     "libgcc-15.2.0-h8acb6b2_19",
     "_openmp_mutex-4.5-20_gnu",
     "libgomp-15.2.0-h8acb6b2_19",
+]
+
+[tools.make."platforms.linux-x64"]
+checksum = "sha256:d652c7bd4d3b6f82b0f6d063b0d8df6f54cc47531092d7ff008e780f3261bdda"
+url = "https://conda.anaconda.org/conda-forge/linux-64/make-4.4.1-hb9d3cd8_2.conda"
+conda_deps = [
+    "libgcc-15.2.0-he0feb66_19",
+    "_openmp_mutex-4.5-20_gnu",
+    "libgomp-15.2.0-he0feb66_19",
+]
+
+[tools.make."platforms.linux-x64-musl"]
+checksum = "sha256:d652c7bd4d3b6f82b0f6d063b0d8df6f54cc47531092d7ff008e780f3261bdda"
+url = "https://conda.anaconda.org/conda-forge/linux-64/make-4.4.1-hb9d3cd8_2.conda"
+conda_deps = [
+    "libgcc-15.2.0-he0feb66_19",
+    "_openmp_mutex-4.5-20_gnu",
+    "libgomp-15.2.0-he0feb66_19",
 ]
 
 [tools.make."platforms.macos-arm64"]
