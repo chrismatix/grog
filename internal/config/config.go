@@ -97,8 +97,8 @@ type WorkspaceConfig struct {
 	// Tracing
 	Traces TracesConfig `mapstructure:"traces"`
 
-	// Docker
-	Docker DockerConfig `mapstructure:"docker"`
+	// OCI
+	OCI OCIConfig `mapstructure:"oci"`
 
 	Push bool `mapstructure:"push"`
 
@@ -188,10 +188,10 @@ func (w WorkspaceConfig) Validate() error {
 		return fmt.Errorf("invalid hash_algorithm: %s. Must be either %s or %s", w.HashAlgorithm, HashAlgorithmXXH3, HashAlgorithmSHA256)
 	}
 
-	if w.Docker.Backend != "" &&
-		(w.Docker.Backend != DockerBackendFS && w.Docker.Backend != DockerBackendRegistry) {
-		return fmt.Errorf("invalid docker backend: %s. Must be either %s or %s",
-			w.Docker.Backend, DockerBackendFS, DockerBackendRegistry)
+	if w.OCI.Backend != "" &&
+		(w.OCI.Backend != OCIBackendFS && w.OCI.Backend != OCIBackendRegistry) {
+		return fmt.Errorf("invalid oci backend: %s. Must be either %s or %s",
+			w.OCI.Backend, OCIBackendFS, OCIBackendRegistry)
 	}
 
 	// assert that tags and exclude tags do not overlap
@@ -306,11 +306,11 @@ type TracesConfig struct {
 }
 
 const (
-	DockerBackendFS       = "fs"
-	DockerBackendRegistry = "registry"
+	OCIBackendFS       = "fs"
+	OCIBackendRegistry = "registry"
 )
 
-type DockerConfig struct {
+type OCIConfig struct {
 	Backend string `mapstructure:"backend"`
 
 	Registry string `mapstructure:"registry"`

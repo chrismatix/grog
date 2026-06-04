@@ -21,8 +21,8 @@ func TestParseOutput(t *testing.T) {
 			expected: model.NewOutput("dir", "dist/"),
 		},
 		{
-			input:    "docker::my-image:tag",
-			expected: model.NewOutput("docker", "my-image:tag"),
+			input:    "oci::my-image:tag",
+			expected: model.NewOutput("oci", "my-image:tag"),
 		},
 		{
 			input:    "oci-push::us-east1-docker.pkg.dev/proj/repo/image:1.2.3",

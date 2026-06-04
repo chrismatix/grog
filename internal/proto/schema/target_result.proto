@@ -24,16 +24,15 @@ enum ImageMode {
   REGISTRY = 2;
 }
 
-message DockerImageOutput {
+message OCIImageOutput {
   // Where it's stored
   ImageMode mode = 1;
   // The tag under which to find the image locally when writing and where to
   // load it to when restoring
   string local_tag = 2;
 
-  // this is the id return by docker inspect (registry mode)
-  // the docs describe it as a content-addressable identifier of the config
-  // see also image.ConfigName() in go-containerregistry
+  // The image config digest (sha256 of the config blob); matches
+  // image.ConfigName() in go-containerregistry and `docker inspect` ID.
   string image_id = 3;
   // the remote tag for registry mode
   string remote_tag = 4;
@@ -43,7 +42,7 @@ message DockerImageOutput {
   Digest config_digest = 6;
   // Field 7 was reserved for layer_digests; intentionally removed.
 
-  // Remote tag to ship to under --push. Empty for plain docker:: outputs.
+  // Remote tag to ship to under --push. Empty for plain oci:: outputs.
   string push_destination = 8;
 }
 
@@ -51,7 +50,7 @@ message Output {
   oneof kind {
     FileOutput file = 1;
     DirectoryOutput directory = 2;
-    DockerImageOutput docker_image = 3;
+    OCIImageOutput oci_image = 3;
   }
 }
 
@@ -63,7 +62,7 @@ message TargetResult {
   // The combined digest of all of its outputs
   string output_hash = 2;
 
-  // Declared outputs (files, dirs, docker images).
+  // Declared outputs (files, dirs, OCI images).
   repeated Output outputs = 3;
 
   int64 execution_duration_millis = 4;

@@ -14,8 +14,8 @@ import (
 // the docker handler's Write path.
 func makeDockerOutput(localTag, pushDest, imageID string) *gen.Output {
 	return &gen.Output{
-		Kind: &gen.Output_DockerImage{
-			DockerImage: &gen.DockerImageOutput{
+		Kind: &gen.Output_OciImage{
+			OciImage: &gen.OCIImageOutput{
 				LocalTag:        localTag,
 				PushDestination: pushDest,
 				ImageId:         imageID,
@@ -60,7 +60,7 @@ func TestValidateOciPushImageIdentity_Divergent_Errors(t *testing.T) {
 }
 
 func TestValidateOciPushImageIdentity_IgnoresPlainDocker(t *testing.T) {
-	// A plain docker:: output (push_destination empty) sitting alongside a
+	// A plain oci:: output (push_destination empty) sitting alongside a
 	// single oci-push:: output should not be considered for the identity
 	// check — only oci-push outputs need to match.
 	target := &model.Target{Label: label.TL("pkg", "tgt")}
@@ -69,6 +69,6 @@ func TestValidateOciPushImageIdentity_IgnoresPlainDocker(t *testing.T) {
 		makeDockerOutput("push-tag", "repo/x:1", "sha256:222"),
 	}
 	if err := validateOciPushImageIdentity(target, outputs); err != nil {
-		t.Fatalf("plain docker:: outputs should be ignored, got %v", err)
+		t.Fatalf("plain oci:: outputs should be ignored, got %v", err)
 	}
 }

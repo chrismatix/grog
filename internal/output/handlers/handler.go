@@ -26,7 +26,7 @@ type PreparedOutput struct {
 
 // Handler defines how to handle a specific type of build output.
 type Handler interface {
-	// Type returns the identifier for this output type (e.g., "dir", "docker")
+	// Type returns the identifier for this output type (e.g., "dir", "oci")
 	Type() HandlerType
 
 	// Write prepares the output and returns the output proto plus an optional write plan.
@@ -40,12 +40,12 @@ type Handler interface {
 	Load(ctx context.Context, target model.Target, output *gen.Output, tracker *worker.ProgressTracker) error
 }
 
-// ImagePusher is the optional capability docker output handlers implement to
+// ImagePusher is the optional capability oci output handlers implement to
 // ship a cached image to a user-facing registry. The handler reads its own
 // cache state to resolve a source ref and copies it daemon-free to the
 // destination. Called by the oci-push:: write/load paths.
 type ImagePusher interface {
-	PushImage(ctx context.Context, image *gen.DockerImageOutput, destination string, tracker *worker.ProgressTracker) (skipped bool, err error)
+	PushImage(ctx context.Context, image *gen.OCIImageOutput, destination string, tracker *worker.ProgressTracker) (skipped bool, err error)
 }
 
 type HandlerType string
@@ -53,7 +53,7 @@ type HandlerType string
 const (
 	FileHandler    HandlerType = "file"
 	DirHandler     HandlerType = "dir"
-	DockerHandler  HandlerType = "docker"
+	OCIHandler     HandlerType = "oci"
 	OciPushHandler HandlerType = "oci-push"
 )
 
@@ -62,6 +62,6 @@ const (
 var KnownHandlerTypes = []HandlerType{
 	FileHandler,
 	DirHandler,
-	DockerHandler,
+	OCIHandler,
 	OciPushHandler,
 }

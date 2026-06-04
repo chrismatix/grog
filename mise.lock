@@ -330,6 +330,45 @@ url = "https://github.com/apple/pkl/releases/download/0.31.1/pkl-macos-amd64"
 checksum = "sha256:a8834481667325b44c539dbb758d7365a16389070f343c04b639bbe525ede013"
 url = "https://github.com/apple/pkl/releases/download/0.31.1/pkl-windows-amd64.exe"
 
+[[tools.podman]]
+version = "5.8.2"
+backend = "github:containers/podman"
+
+[tools.podman."platforms.linux-arm64"]
+checksum = "sha256:7c93faf3cdfa25f920bfcdc2e7d449a4224dd3e618eff08bf88456d70b471535"
+url = "https://github.com/podman-container-tools/podman/releases/download/v5.8.2/podman-remote-static-linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/396393574"
+
+[tools.podman."platforms.linux-arm64-musl"]
+checksum = "sha256:7c93faf3cdfa25f920bfcdc2e7d449a4224dd3e618eff08bf88456d70b471535"
+url = "https://github.com/podman-container-tools/podman/releases/download/v5.8.2/podman-remote-static-linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/396393574"
+
+[tools.podman."platforms.linux-x64"]
+checksum = "sha256:88f7c21e8399a8f5edd1ef7b5c2e12b29706d0a4f24463f264a0e88d887ebbbf"
+url = "https://github.com/podman-container-tools/podman/releases/download/v5.8.2/podman-remote-static-linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/396393573"
+
+[tools.podman."platforms.linux-x64-musl"]
+checksum = "sha256:88f7c21e8399a8f5edd1ef7b5c2e12b29706d0a4f24463f264a0e88d887ebbbf"
+url = "https://github.com/podman-container-tools/podman/releases/download/v5.8.2/podman-remote-static-linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/396393573"
+
+[tools.podman."platforms.macos-arm64"]
+checksum = "sha256:2379bcb0bf320df5deccf84115337109d3f9051f7d017948ee68a92ce932e798"
+url = "https://github.com/podman-container-tools/podman/releases/download/v5.8.2/podman-remote-release-darwin_arm64.zip"
+url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/396393567"
+
+[tools.podman."platforms.macos-x64"]
+checksum = "sha256:8c54f845651fd606512debd509a273f7a8d20e6ab0adb372a46863608275aa78"
+url = "https://github.com/podman-container-tools/podman/releases/download/v5.8.2/podman-remote-release-darwin_amd64.zip"
+url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/396393565"
+
+[tools.podman."platforms.windows-x64"]
+checksum = "sha256:1b60aae4bd4879c3932c283d2070bb87116ec1f0ab3a4a98eff7e65f318f9e4e"
+url = "https://github.com/podman-container-tools/podman/releases/download/v5.8.2/podman-remote-release-windows_amd64.zip"
+url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/396393568"
+
 [[tools.prek]]
 version = "0.4.2"
 backend = "aqua:j178/prek"

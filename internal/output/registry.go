@@ -70,16 +70,16 @@ func NewRegistry(
 	r.Register(handlers.NewFileOutputHandler(cas))
 	r.Register(handlers.NewDirectoryOutputHandler(cas))
 
-	var dockerHandler handlers.Handler
-	if config.Global.Docker.Backend == "registry" {
-		dockerHandler = handlers.NewDockerRegistryOutputHandler(cas, config.Global.Docker, pushReporter, pushEnabled)
+	var ociHandler handlers.Handler
+	if config.Global.OCI.Backend == "registry" {
+		ociHandler = handlers.NewDockerRegistryOutputHandler(cas, config.Global.OCI, pushReporter, pushEnabled)
 	} else {
-		dockerHandler = handlers.NewDockerOutputHandler(ctx, cas, pushReporter, pushEnabled)
+		ociHandler = handlers.NewDockerOutputHandler(ctx, cas, pushReporter, pushEnabled)
 	}
-	// The docker handler serves both docker:: and oci-push:: — it branches on
+	// The oci handler serves both oci:: and oci-push:: — it branches on
 	// output.Type internally to decide whether to chain a push plan.
-	r.Register(dockerHandler)
-	r.registerAlias(handlers.OciPushHandler, dockerHandler)
+	r.Register(ociHandler)
+	r.registerAlias(handlers.OciPushHandler, ociHandler)
 	return r
 }
 
@@ -136,10 +136,10 @@ func (r *Registry) mustGetHandlerFromProto(output *gen.Output) handlers.Handler 
 		outputType = string(handlers.FileHandler)
 	case *gen.Output_Directory:
 		outputType = string(handlers.DirHandler)
-	case *gen.Output_DockerImage:
-		// docker:: and oci-push:: both share the docker handler instance;
-		// the "docker" key resolves either way.
-		outputType = string(handlers.DockerHandler)
+	case *gen.Output_OciImage:
+		// oci:: and oci-push:: share one handler instance; the "oci" key
+		// resolves either way.
+		outputType = string(handlers.OCIHandler)
 	default:
 		panic(fmt.Errorf("unknown output kind: %T", output.Kind))
 	}
@@ -353,7 +353,7 @@ func validateOciPushImageIdentity(target *model.Target, outputs []*gen.Output) e
 	}
 	var entries []pushEntry
 	for _, out := range outputs {
-		img := out.GetDockerImage()
+		img := out.GetOciImage()
 		if img == nil || img.GetPushDestination() == "" {
 			continue
 		}
@@ -438,11 +438,11 @@ func getOutputDefinitionFromProto(output *gen.Output) (string, error) {
 		return model.NewOutput(string(handlers.FileHandler), outputKind.File.GetPath()).String(), nil
 	case *gen.Output_Directory:
 		return model.NewOutput(string(handlers.DirHandler), outputKind.Directory.GetPath()).String(), nil
-	case *gen.Output_DockerImage:
-		if dest := outputKind.DockerImage.GetPushDestination(); dest != "" {
+	case *gen.Output_OciImage:
+		if dest := outputKind.OciImage.GetPushDestination(); dest != "" {
 			return model.NewOutput(string(handlers.OciPushHandler), dest).String(), nil
 		}
-		return model.NewOutput(string(handlers.DockerHandler), outputKind.DockerImage.GetLocalTag()).String(), nil
+		return model.NewOutput(string(handlers.OCIHandler), outputKind.OciImage.GetLocalTag()).String(), nil
 	default:
 		return "", fmt.Errorf("unknown output kind: %T", output.Kind)
 	}

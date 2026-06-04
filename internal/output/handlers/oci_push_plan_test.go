@@ -28,7 +28,7 @@ type pushResult struct {
 	err     error
 }
 
-func (f *fakeImagePusher) PushImage(_ context.Context, image *gen.DockerImageOutput, destination string, _ *worker.ProgressTracker) (bool, error) {
+func (f *fakeImagePusher) PushImage(_ context.Context, image *gen.OCIImageOutput, destination string, _ *worker.ProgressTracker) (bool, error) {
 	f.calls = append(f.calls, pushCall{destination: destination, imageID: image.GetImageId()})
 	return f.res.skipped, f.res.err
 }
@@ -46,7 +46,7 @@ func newTestProgress(t *testing.T) *worker.ProgressTracker {
 func newTestPlan(pusher ImagePusher, reporter *PushReporter, destination string) *ociPushPlan {
 	return &ociPushPlan{
 		pusher:      pusher,
-		dockerOut:   &gen.DockerImageOutput{ImageId: "sha256:abc"},
+		dockerOut:   &gen.OCIImageOutput{ImageId: "sha256:abc"},
 		destination: destination,
 		targetLabel: "//pkg:tgt",
 		reporter:    reporter,
@@ -123,10 +123,10 @@ func TestDockerOutputHandler_AttachPushPlan_OciPushType(t *testing.T) {
 	target := newTestTarget(t, "tgt")
 	output := model.NewOutput(string(OciPushHandler), "repo/image:1")
 	prepared := &PreparedOutput{
-		Output:    &gen.Output{Kind: &gen.Output_DockerImage{DockerImage: &gen.DockerImageOutput{LocalTag: "x", ImageId: "sha256:abc"}}},
+		Output:    &gen.Output{Kind: &gen.Output_OciImage{OciImage: &gen.OCIImageOutput{LocalTag: "x", ImageId: "sha256:abc"}}},
 		WritePlan: NewNopWritePlan(),
 	}
-	image := prepared.Output.GetDockerImage()
+	image := prepared.Output.GetOciImage()
 
 	h := &DockerOutputHandler{pushEnabled: func() bool { return false }, pushReporter: NewPushReporter(nil)}
 	h.maybeAttachPushPlan(prepared, image, output, target)

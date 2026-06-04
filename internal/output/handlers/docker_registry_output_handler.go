@@ -28,7 +28,7 @@ import (
 // DockerRegistryOutputHandler writes Docker images to and loads them from a registry specified by configuration.
 type DockerRegistryOutputHandler struct {
 	cas          *caching.Cas
-	config       config.DockerConfig
+	config       config.OCIConfig
 	dockerClient *client.Client
 
 	pushReporter *PushReporter
@@ -83,7 +83,7 @@ func (d *dockerRegistryWritePlan) Cleanup(ctx context.Context) error {
 // NewDockerRegistryOutputHandler creates a new DockerRegistryOutputHandler.
 func NewDockerRegistryOutputHandler(
 	cas *caching.Cas,
-	cfg config.DockerConfig,
+	cfg config.OCIConfig,
 	pushReporter *PushReporter,
 	pushEnabled func() bool,
 ) *DockerRegistryOutputHandler {
@@ -99,7 +99,7 @@ func NewDockerRegistryOutputHandler(
 }
 
 func (d *DockerRegistryOutputHandler) Type() HandlerType {
-	return DockerHandler
+	return OCIHandler
 }
 
 func (d *DockerRegistryOutputHandler) Hash(ctx context.Context, target model.Target, output model.Output) (string, error) {
@@ -133,7 +133,7 @@ func (d *DockerRegistryOutputHandler) lazyClient() (*client.Client, error) {
 // PushImage copies the cached image from the configured cache registry to
 // destination. Both refs are real registries served over HTTPS; auth flows
 // through the ambient docker keychain.
-func (d *DockerRegistryOutputHandler) PushImage(ctx context.Context, image *gen.DockerImageOutput, destination string, _ *worker.ProgressTracker) (bool, error) {
+func (d *DockerRegistryOutputHandler) PushImage(ctx context.Context, image *gen.OCIImageOutput, destination string, _ *worker.ProgressTracker) (bool, error) {
 	imageID := image.GetImageId()
 	if imageID == "" {
 		return false, fmt.Errorf("cache write did not populate image_id for push to %s", destination)
@@ -183,8 +183,8 @@ func (d *DockerRegistryOutputHandler) Write(
 	}
 
 	genOutput := &gen.Output{
-		Kind: &gen.Output_DockerImage{
-			DockerImage: &gen.DockerImageOutput{
+		Kind: &gen.Output_OciImage{
+			OciImage: &gen.OCIImageOutput{
 				LocalTag:  localImageName,
 				RemoteTag: remoteCacheImageName,
 				ImageId:   inspect.ID,
@@ -201,11 +201,11 @@ func (d *DockerRegistryOutputHandler) Write(
 	}
 
 	prepared := &PreparedOutput{Output: genOutput, WritePlan: writePlan}
-	d.maybeAttachPushPlan(prepared, genOutput.GetDockerImage(), output, target)
+	d.maybeAttachPushPlan(prepared, genOutput.GetOciImage(), output, target)
 	return prepared, nil
 }
 
-func (d *DockerRegistryOutputHandler) maybeAttachPushPlan(prepared *PreparedOutput, image *gen.DockerImageOutput, output model.Output, target model.Target) {
+func (d *DockerRegistryOutputHandler) maybeAttachPushPlan(prepared *PreparedOutput, image *gen.OCIImageOutput, output model.Output, target model.Target) {
 	if output.Type != string(OciPushHandler) {
 		return
 	}
@@ -251,12 +251,12 @@ func (d *DockerRegistryOutputHandler) Load(
 	output *gen.Output,
 	tracker *worker.ProgressTracker,
 ) error {
-	dockerImage := output.GetDockerImage()
+	dockerImage := output.GetOciImage()
 	if dockerImage.GetMode() != gen.ImageMode_REGISTRY {
 		return fmt.Errorf("cannot restore %s docker cache as registry cache is configured", dockerImage.GetMode())
 	}
-	localImageName := output.GetDockerImage().GetLocalTag()
-	imageId := output.GetDockerImage().GetImageId()
+	localImageName := output.GetOciImage().GetLocalTag()
+	imageId := output.GetOciImage().GetImageId()
 
 	logger := console.GetLogger(ctx)
 
@@ -277,7 +277,7 @@ func (d *DockerRegistryOutputHandler) Load(
 		return nil
 	}
 
-	remoteImageName := output.GetDockerImage().GetRemoteTag()
+	remoteImageName := output.GetOciImage().GetRemoteTag()
 	logger.Debugf("pulling Docker image %s from registry", remoteImageName)
 
 	// Build the RegistryAuth header from ~/.docker/config.json / helpers
@@ -318,7 +318,7 @@ func (d *DockerRegistryOutputHandler) Load(
 // maybePushOnLoad fires the same push the write path does, but for cache hits.
 // Errors are warned and recorded but not returned — a transient push failure
 // must not invalidate a successful cache restore.
-func (d *DockerRegistryOutputHandler) maybePushOnLoad(ctx context.Context, target model.Target, image *gen.DockerImageOutput, tracker *worker.ProgressTracker) {
+func (d *DockerRegistryOutputHandler) maybePushOnLoad(ctx context.Context, target model.Target, image *gen.OCIImageOutput, tracker *worker.ProgressTracker) {
 	if !d.pushEnabled() || image.GetPushDestination() == "" {
 		return
 	}

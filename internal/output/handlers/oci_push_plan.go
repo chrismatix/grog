@@ -15,14 +15,14 @@ import (
 // on dockerOut by the time Execute runs.
 type ociPushPlan struct {
 	pusher      ImagePusher
-	dockerOut   *gen.DockerImageOutput
+	dockerOut   *gen.OCIImageOutput
 	destination string
 	targetLabel string
 	reporter    *PushReporter
 }
 
 // newOciPushPlan is the canonical constructor used by both docker handlers.
-func newOciPushPlan(pusher ImagePusher, image *gen.DockerImageOutput, destination, targetLabel string, reporter *PushReporter) *ociPushPlan {
+func newOciPushPlan(pusher ImagePusher, image *gen.OCIImageOutput, destination, targetLabel string, reporter *PushReporter) *ociPushPlan {
 	return &ociPushPlan{
 		pusher:      pusher,
 		dockerOut:   image,
