@@ -30,9 +30,6 @@ type DockerRegistryOutputHandler struct {
 	cas          *caching.Cas
 	config       config.OCIConfig
 	dockerClient *client.Client
-
-	pushReporter *PushReporter
-	pushEnabled  func() bool
 }
 
 // dockerRegistryWritePlan pushes a pre-tagged Docker image to the configured remote
@@ -84,17 +81,10 @@ func (d *dockerRegistryWritePlan) Cleanup(ctx context.Context) error {
 func NewDockerRegistryOutputHandler(
 	cas *caching.Cas,
 	cfg config.OCIConfig,
-	pushReporter *PushReporter,
-	pushEnabled func() bool,
 ) *DockerRegistryOutputHandler {
-	if pushEnabled == nil {
-		pushEnabled = func() bool { return false }
-	}
 	return &DockerRegistryOutputHandler{
-		cas:          cas,
-		config:       cfg,
-		pushReporter: pushReporter,
-		pushEnabled:  pushEnabled,
+		cas:    cas,
+		config: cfg,
 	}
 }
 
@@ -200,23 +190,7 @@ func (d *DockerRegistryOutputHandler) Write(
 		targetLabel:     target.Label.String(),
 	}
 
-	prepared := &PreparedOutput{Output: genOutput, WritePlan: writePlan}
-	d.maybeAttachPushPlan(prepared, genOutput.GetOciImage(), output, target)
-	return prepared, nil
-}
-
-func (d *DockerRegistryOutputHandler) maybeAttachPushPlan(prepared *PreparedOutput, image *gen.OCIImageOutput, output model.Output, target model.Target) {
-	if output.Type != string(OciPushHandler) {
-		return
-	}
-	image.PushDestination = output.Identifier
-	if !d.pushEnabled() {
-		return
-	}
-	prepared.WritePlan = &CompositeWritePlan{Plans: []OutputWritePlan{
-		prepared.WritePlan,
-		newOciPushPlan(d, image, output.Identifier, target.Label.String(), d.pushReporter),
-	}}
+	return &PreparedOutput{Output: genOutput, WritePlan: writePlan}, nil
 }
 
 func makeRegistryAuth(ref string) (string, error) {
@@ -273,7 +247,6 @@ func (d *DockerRegistryOutputHandler) Load(
 			return fmt.Errorf("failed to tag existing image %q as %q: %w", imageId, localImageName, err)
 		}
 		logger.Debugf("image %s already exists in local Docker daemon, skipping pull", localImageName)
-		d.maybePushOnLoad(ctx, target, dockerImage, tracker)
 		return nil
 	}
 
@@ -311,18 +284,7 @@ func (d *DockerRegistryOutputHandler) Load(
 	}
 
 	logger.Debugf("successfully loaded Docker image %s from registry tag %s", localImageName, remoteImageName)
-	d.maybePushOnLoad(ctx, target, dockerImage, tracker)
 	return nil
-}
-
-// maybePushOnLoad fires the same push the write path does, but for cache hits.
-// Errors are warned and recorded but not returned — a transient push failure
-// must not invalidate a successful cache restore.
-func (d *DockerRegistryOutputHandler) maybePushOnLoad(ctx context.Context, target model.Target, image *gen.OCIImageOutput, tracker *worker.ProgressTracker) {
-	if !d.pushEnabled() || image.GetPushDestination() == "" {
-		return
-	}
-	_ = newOciPushPlan(d, image, image.GetPushDestination(), target.Label.String(), d.pushReporter).Execute(ctx, tracker)
 }
 
 // dockerLayerProgress holds per-layer tracking state for bridging JSON progress.

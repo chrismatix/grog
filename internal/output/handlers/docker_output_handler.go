@@ -36,23 +36,15 @@ type DockerOutputHandler struct {
 	dockerClient *client.Client
 	dockerErr    error
 
-	// proxy is the loopback OCI registry. Lazily started on first push so that
-	// runs without docker targets pay no cost.
+	// proxy is the loopback OCI registry.
 	proxyInit sync.Once
 	proxy     *ociproxy.Registry
 	proxyErr  error
-
-	pushReporter *PushReporter
-	pushEnabled  func() bool
 }
 
-// NewDockerOutputHandler creates a new DockerOutputHandler. The Docker client
-// and the in-process registry are both created lazily on first use.
-func NewDockerOutputHandler(_ context.Context, cas *caching.Cas, pushReporter *PushReporter, pushEnabled func() bool) *DockerOutputHandler {
-	if pushEnabled == nil {
-		pushEnabled = func() bool { return false }
-	}
-	return &DockerOutputHandler{cas: cas, pushReporter: pushReporter, pushEnabled: pushEnabled}
+// NewDockerOutputHandler creates a new DockerOutputHandler.
+func NewDockerOutputHandler(_ context.Context, cas *caching.Cas) *DockerOutputHandler {
+	return &DockerOutputHandler{cas: cas}
 }
 
 // Type returns the type of the handler.
@@ -162,26 +154,7 @@ func (d *DockerOutputHandler) Write(
 		targetLabel:    target.Label.String(),
 	}
 
-	prepared := &PreparedOutput{Output: genOutput, WritePlan: plan}
-	d.maybeAttachPushPlan(prepared, dockerImageOutput, output, target)
-	return prepared, nil
-}
-
-// maybeAttachPushPlan chains an ociPushPlan behind the cache plan when the
-// output was declared as oci-push:: and --push is enabled. The cache plan
-// fills in image_id and manifest_digest first, then the push plan reads them.
-func (d *DockerOutputHandler) maybeAttachPushPlan(prepared *PreparedOutput, image *gen.OCIImageOutput, output model.Output, target model.Target) {
-	if output.Type != string(OciPushHandler) {
-		return
-	}
-	image.PushDestination = output.Identifier
-	if !d.pushEnabled() {
-		return
-	}
-	prepared.WritePlan = &CompositeWritePlan{Plans: []OutputWritePlan{
-		prepared.WritePlan,
-		newOciPushPlan(d, image, output.Identifier, target.Label.String(), d.pushReporter),
-	}}
+	return &PreparedOutput{Output: genOutput, WritePlan: plan}, nil
 }
 
 // Load restores a previously cached image into the local Docker daemon by
@@ -225,7 +198,6 @@ func (d *DockerOutputHandler) Load(
 				return fmt.Errorf("failed to tag existing image %q as %q: %w", imageID, localImageName, err)
 			}
 			logger.Debugf("image %s already present locally, skipped pull", localImageName)
-			d.maybePushOnLoad(ctx, target, dockerImage, tracker)
 			return nil
 		}
 	}
@@ -256,18 +228,7 @@ func (d *DockerOutputHandler) Load(
 	}
 
 	logger.Debugf("successfully loaded Docker image %s from cache", localImageName)
-	d.maybePushOnLoad(ctx, target, dockerImage, tracker)
 	return nil
-}
-
-// maybePushOnLoad fires the same push the write path does, but for cache hits.
-// Errors are warned and recorded but not returned — a transient push failure
-// must not invalidate a successful cache restore.
-func (d *DockerOutputHandler) maybePushOnLoad(ctx context.Context, target model.Target, image *gen.OCIImageOutput, tracker *worker.ProgressTracker) {
-	if !d.pushEnabled() || image.GetPushDestination() == "" {
-		return
-	}
-	_ = newOciPushPlan(d, image, image.GetPushDestination(), target.Label.String(), d.pushReporter).Execute(ctx, tracker)
 }
 
 // PushImage copies the cached image from the loopback proxy to the destination

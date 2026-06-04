@@ -72,24 +72,13 @@ func NewRegistry(
 
 	var ociHandler handlers.Handler
 	if config.Global.OCI.Backend == "registry" {
-		ociHandler = handlers.NewDockerRegistryOutputHandler(cas, config.Global.OCI, pushReporter, pushEnabled)
+		ociHandler = handlers.NewDockerRegistryOutputHandler(cas, config.Global.OCI)
 	} else {
-		ociHandler = handlers.NewDockerOutputHandler(ctx, cas, pushReporter, pushEnabled)
+		ociHandler = handlers.NewDockerOutputHandler(ctx, cas)
 	}
-	// The oci handler serves both oci:: and oci-push:: — it branches on
-	// output.Type internally to decide whether to chain a push plan.
 	r.Register(ociHandler)
-	r.registerAlias(handlers.OciPushHandler, ociHandler)
+	r.Register(handlers.NewOciPushOutputHandler(ociHandler, pushReporter, pushEnabled))
 	return r
-}
-
-// registerAlias maps a second handler type to an already-registered handler
-// instance. Used to give the docker handler both "docker" and "oci-push" as
-// routing keys without inventing a wrapper struct.
-func (r *Registry) registerAlias(alias handlers.HandlerType, handler handlers.Handler) {
-	r.handlerMutex.Lock()
-	defer r.handlerMutex.Unlock()
-	r.handlers[string(alias)] = handler
 }
 
 func (r *Registry) PushReporter() *handlers.PushReporter {
@@ -131,15 +120,18 @@ func (r *Registry) Register(handler handlers.Handler) {
 // GetHandler retrieves a handler by type.
 func (r *Registry) mustGetHandlerFromProto(output *gen.Output) handlers.Handler {
 	var outputType string
-	switch output.Kind.(type) {
+	switch kind := output.Kind.(type) {
 	case *gen.Output_File:
 		outputType = string(handlers.FileHandler)
 	case *gen.Output_Directory:
 		outputType = string(handlers.DirHandler)
 	case *gen.Output_OciImage:
-		// oci:: and oci-push:: share one handler instance; the "oci" key
-		// resolves either way.
-		outputType = string(handlers.OCIHandler)
+		// Routing key follows the proto's push_destination: present = oci-push.
+		if kind.OciImage.GetPushDestination() != "" {
+			outputType = string(handlers.OciPushHandler)
+		} else {
+			outputType = string(handlers.OCIHandler)
+		}
 	default:
 		panic(fmt.Errorf("unknown output kind: %T", output.Kind))
 	}
