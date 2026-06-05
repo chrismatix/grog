@@ -46,6 +46,8 @@ type Registry struct {
 	outputHashCache map[string]map[model.Output]string
 
 	pushReporter *handlers.PushReporter
+	pushEnabled  func() bool
+	imagePusher  handlers.ImagePusher
 }
 
 // NewRegistry creates a new registry with default handlers.
@@ -77,8 +79,50 @@ func NewRegistry(
 		ociHandler = handlers.NewDockerOutputHandler(ctx, cas, config.Global.OCI.InsecureRegistries)
 	}
 	r.Register(ociHandler)
-	r.Register(handlers.NewOciPushOutputHandler(ociHandler, pushReporter, pushEnabled))
+	// The oci handler also pushes images; record the ImagePusher facet so
+	// the per-target push hook can find it without re-traversing handlers.
+	pusher, ok := ociHandler.(handlers.ImagePusher)
+	if !ok {
+		panic(fmt.Sprintf("oci handler %T does not implement ImagePusher", ociHandler))
+	}
+	r.imagePusher = pusher
+	r.pushEnabled = pushEnabled
 	return r
+}
+
+// buildPushPlans assembles one push plan per (oci output, destination) for
+// every entry in target.OciPush. Returns an error if a key references a name
+// that is not produced by the target's oci:: outputs — that's a recipe bug.
+func (r *Registry) buildPushPlans(target *model.Target, outputs []*gen.Output) ([]handlers.OutputWritePlan, error) {
+	if len(target.OciPush) == 0 {
+		return nil, nil
+	}
+	var plans []handlers.OutputWritePlan
+	for localName, destinations := range target.OciPush {
+		ociImage := findOciImageByLocalTag(outputs, localName)
+		if ociImage == nil {
+			return nil, fmt.Errorf("%s: oci_push key %q does not match any oci:: output", target.Label, localName)
+		}
+		for _, dest := range destinations {
+			plans = append(plans, handlers.NewOciPushPlan(
+				r.imagePusher, ociImage, dest, target.Label.String(), r.pushReporter,
+			))
+		}
+	}
+	return plans, nil
+}
+
+func findOciImageByLocalTag(outputs []*gen.Output, localTag string) *gen.OCIImageOutput {
+	for _, out := range outputs {
+		img := out.GetOciImage()
+		if img == nil {
+			continue
+		}
+		if img.GetLocalTag() == localTag {
+			return img
+		}
+	}
+	return nil
 }
 
 func (r *Registry) PushReporter() *handlers.PushReporter {
@@ -120,18 +164,13 @@ func (r *Registry) Register(handler handlers.Handler) {
 // GetHandler retrieves a handler by type.
 func (r *Registry) mustGetHandlerFromProto(output *gen.Output) handlers.Handler {
 	var outputType string
-	switch kind := output.Kind.(type) {
+	switch output.Kind.(type) {
 	case *gen.Output_File:
 		outputType = string(handlers.FileHandler)
 	case *gen.Output_Directory:
 		outputType = string(handlers.DirHandler)
 	case *gen.Output_OciImage:
-		// Routing key follows the proto's push_destination: present = oci-push.
-		if kind.OciImage.GetPushDestination() != "" {
-			outputType = string(handlers.OciPushHandler)
-		} else {
-			outputType = string(handlers.OCIHandler)
-		}
+		outputType = string(handlers.OCIHandler)
 	default:
 		panic(fmt.Errorf("unknown output kind: %T", output.Kind))
 	}
@@ -199,8 +238,15 @@ func (r *Registry) PrepareOutputs(
 		}
 	}
 
-	if err := validateOciPushImageIdentity(target, targetOutputs); err != nil {
-		return nil, err
+	// Append a push plan per (oci output, destination) for any oci_push entry
+	// declared on the target. Each plan runs after the cache plans so that
+	// image_id and manifest_digest are populated before it tries to source.
+	if r.pushEnabled != nil && r.pushEnabled() {
+		pushPlans, err := r.buildPushPlans(target, targetOutputs)
+		if err != nil {
+			return nil, err
+		}
+		writePlans = append(writePlans, pushPlans...)
 	}
 
 	outputHash, err := getOutputHash(targetOutputs)
@@ -311,6 +357,20 @@ func (r *Registry) LoadOutputs(
 		return err
 	}
 
+	// Fire pushes for every oci_push entry on the current target. The cached
+	// proto only carries the local image; destinations come from the live
+	// target. Push errors are recorded to the reporter but never propagated
+	// — a transient registry hiccup must not invalidate a cache restore.
+	if r.pushEnabled != nil && r.pushEnabled() && len(target.OciPush) > 0 {
+		plans, err := r.buildPushPlans(target, targetResult.Outputs)
+		if err != nil {
+			return err
+		}
+		for _, plan := range plans {
+			_ = plan.Execute(ctx, progress)
+		}
+	}
+
 	logger.Debugf("%s: outputs loaded", target.Label)
 	target.OutputsLoaded = true
 	target.OutputHash = targetResult.OutputHash
@@ -331,38 +391,6 @@ func ensureBinOutputExecutable(target *model.Target) error {
 	)
 	if err := os.Chmod(binOutputPath, 0755); err != nil {
 		return fmt.Errorf("failed to mark bin_output executable for %s: %w", target.Label, err)
-	}
-	return nil
-}
-
-// validateOciPushImageIdentity enforces that every oci-push:: output on a
-// target points at the same image-id — the recipe must tag one image under
-// every declared destination.
-func validateOciPushImageIdentity(target *model.Target, outputs []*gen.Output) error {
-	type pushEntry struct {
-		destination string
-		imageID     string
-	}
-	var entries []pushEntry
-	for _, out := range outputs {
-		img := out.GetOciImage()
-		if img == nil || img.GetPushDestination() == "" {
-			continue
-		}
-		entries = append(entries, pushEntry{
-			destination: img.GetPushDestination(),
-			imageID:     img.GetImageId(),
-		})
-	}
-	if len(entries) < 2 {
-		return nil
-	}
-	firstID := entries[0].imageID
-	for _, e := range entries[1:] {
-		if e.imageID != firstID {
-			return fmt.Errorf("%s: oci-push:: outputs must resolve to the same local image but %q has image %s and %q has image %s — tag both destinations to the same docker image-id in the recipe",
-				target.Label, entries[0].destination, firstID, e.destination, e.imageID)
-		}
 	}
 	return nil
 }
@@ -431,9 +459,6 @@ func getOutputDefinitionFromProto(output *gen.Output) (string, error) {
 	case *gen.Output_Directory:
 		return model.NewOutput(string(handlers.DirHandler), outputKind.Directory.GetPath()).String(), nil
 	case *gen.Output_OciImage:
-		if dest := outputKind.OciImage.GetPushDestination(); dest != "" {
-			return model.NewOutput(string(handlers.OciPushHandler), dest).String(), nil
-		}
 		return model.NewOutput(string(handlers.OCIHandler), outputKind.OciImage.GetLocalTag()).String(), nil
 	default:
 		return "", fmt.Errorf("unknown output kind: %T", output.Kind)

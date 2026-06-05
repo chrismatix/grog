@@ -85,7 +85,7 @@ func hashTargetDefinition(target model.Target, dependencyHashes []string, extraA
 
 func hasDockerOutput(target model.Target) bool {
 	for _, output := range target.AllOutputs() {
-		if output.Type == "oci" || output.Type == "oci-push" {
+		if output.Type == "oci" {
 			return true
 		}
 	}

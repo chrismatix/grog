@@ -43,7 +43,7 @@ type Handler interface {
 // ImagePusher is the optional capability oci output handlers implement to
 // ship a cached image to a user-facing registry. The handler reads its own
 // cache state to resolve a source ref and copies it daemon-free to the
-// destination. Called by the oci-push:: write/load paths.
+// destination. Driven by target.OciPush entries after Write/Load.
 type ImagePusher interface {
 	PushImage(ctx context.Context, image *gen.OCIImageOutput, destination string, tracker *worker.ProgressTracker) (skipped bool, err error)
 }
@@ -51,10 +51,9 @@ type ImagePusher interface {
 type HandlerType string
 
 const (
-	FileHandler    HandlerType = "file"
-	DirHandler     HandlerType = "dir"
-	OCIHandler     HandlerType = "oci"
-	OciPushHandler HandlerType = "oci-push"
+	FileHandler HandlerType = "file"
+	DirHandler  HandlerType = "dir"
+	OCIHandler  HandlerType = "oci"
 )
 
 // KnownHandlerTypes This is necessary so that we can statically check for handler type without having
@@ -63,5 +62,4 @@ var KnownHandlerTypes = []HandlerType{
 	FileHandler,
 	DirHandler,
 	OCIHandler,
-	OciPushHandler,
 }

@@ -1,6 +1,52 @@
 package loading
 
-import "grog/internal/model"
+import (
+	"encoding/json"
+	"fmt"
+
+	"grog/internal/model"
+
+	"gopkg.in/yaml.v3"
+)
+
+// ociPushDestinations holds the value side of TargetDTO.OciPush: one or
+// more remote tags. Authors can write a scalar for the common single-
+// destination case and a list for multi-destination; both deserialise here.
+type ociPushDestinations []string
+
+func (o *ociPushDestinations) UnmarshalYAML(node *yaml.Node) error {
+	switch node.Kind {
+	case yaml.ScalarNode:
+		*o = []string{node.Value}
+		return nil
+	case yaml.SequenceNode:
+		dst := make([]string, 0, len(node.Content))
+		for _, item := range node.Content {
+			if item.Kind != yaml.ScalarNode {
+				return fmt.Errorf("oci_push destination must be a string, got %v", item.Kind)
+			}
+			dst = append(dst, item.Value)
+		}
+		*o = dst
+		return nil
+	default:
+		return fmt.Errorf("oci_push destination must be a string or list of strings")
+	}
+}
+
+func (o *ociPushDestinations) UnmarshalJSON(data []byte) error {
+	var single string
+	if err := json.Unmarshal(data, &single); err == nil {
+		*o = []string{single}
+		return nil
+	}
+	var list []string
+	if err := json.Unmarshal(data, &list); err != nil {
+		return fmt.Errorf("oci_push destination must be a string or list of strings: %w", err)
+	}
+	*o = list
+	return nil
+}
 
 // TargetDTO is used for deserializing a target in a loader.
 // The target is used internally is in model.Target.
@@ -11,7 +57,11 @@ type TargetDTO struct {
 	Inputs        []string `json:"inputs,omitempty" yaml:"inputs,omitempty" pkl:"inputs" starlark:"inputs"`
 	ExcludeInputs []string `json:"exclude_inputs,omitempty" yaml:"exclude_inputs,omitempty" pkl:"exclude_inputs" starlark:"exclude_inputs"`
 	Outputs       []string `json:"outputs,omitempty" yaml:"outputs,omitempty" pkl:"outputs" starlark:"outputs"`
-	BinOutput     string   `json:"bin_output" yaml:"bin_output" pkl:"bin_output" starlark:"bin_output"`
+	// OciPush is a map from an oci:: output's local name to its remote
+	// destination(s). A scalar value is normalised to a single-entry slice
+	// at parse time so YAML and pkl can both write `name: "repo:tag"`.
+	OciPush   map[string]ociPushDestinations `json:"oci_push,omitempty" yaml:"oci_push,omitempty" pkl:"oci_push" starlark:"oci_push"`
+	BinOutput string                         `json:"bin_output" yaml:"bin_output" pkl:"bin_output" starlark:"bin_output"`
 
 	OutputChecks []model.OutputCheck `json:"output_checks,omitempty" yaml:"output_checks,omitempty" pkl:"output_checks" starlark:"output_checks"`
 

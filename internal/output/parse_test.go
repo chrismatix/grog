@@ -25,8 +25,10 @@ func TestParseOutput(t *testing.T) {
 			expected: model.NewOutput("oci", "my-image:tag"),
 		},
 		{
-			input:    "oci-push::us-east1-docker.pkg.dev/proj/repo/image:1.2.3",
-			expected: model.NewOutput("oci-push", "us-east1-docker.pkg.dev/proj/repo/image:1.2.3"),
+			// oci-push:: is no longer a known output type — push targets live
+			// on target.oci_push, not in the outputs list.
+			input:       "oci-push::us-east1-docker.pkg.dev/proj/repo/image:1.2.3",
+			expectError: true,
 		},
 		{
 			input:       "unknown::foo",

@@ -70,7 +70,7 @@ var BuildCmd = &cobra.Command{
 }
 
 func AddBuildCmd(rootCmd *cobra.Command) {
-	BuildCmd.Flags().Bool("push", false, "Push oci-push:: outputs to their declared remote tags after a successful build")
+	BuildCmd.Flags().Bool("push", false, "Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build")
 	_ = viper.BindPFlag("push", BuildCmd.Flags().Lookup("push"))
 	rootCmd.AddCommand(BuildCmd)
 }

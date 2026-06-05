@@ -25,11 +25,16 @@ type Target struct {
 	// The file in which this target was defined
 	SourceFilePath string `json:"-"`
 
-	Command              string              `json:"command"`
-	Dependencies         []label.TargetLabel `json:"dependencies,omitempty"`
-	Inputs               []string            `json:"inputs,omitempty"`
-	ExcludeInputs        []string            `json:"exclude_inputs,omitempty"`
-	Outputs              []Output            `json:"outputs,omitempty"`
+	Command       string              `json:"command"`
+	Dependencies  []label.TargetLabel `json:"dependencies,omitempty"`
+	Inputs        []string            `json:"inputs,omitempty"`
+	ExcludeInputs []string            `json:"exclude_inputs,omitempty"`
+	Outputs       []Output            `json:"outputs,omitempty"`
+	// OciPush maps the local name of an oci:: output to one or more remote
+	// destinations to ship it to when grog build runs with --push. Excluded
+	// from the change hash on purpose: changing only the destination tags
+	// (e.g. a version bump) reuses the cached image.
+	OciPush              map[string][]string `json:"oci_push,omitempty" yaml:"oci_push,omitempty" pkl:"oci_push"`
 	Platforms            []string            `json:"platforms,omitempty" yaml:"platforms,omitempty" pkl:"platforms"`
 	Tags                 []string            `json:"tags,omitempty"`
 	Fingerprint          map[string]string   `json:"fingerprint,omitempty"`

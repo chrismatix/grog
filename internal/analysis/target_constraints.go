@@ -40,6 +40,9 @@ func CheckTargetConstraints(logger *console.Logger, nodeMap model.BuildNodeMap) 
 		outputsError := checkOutputsAreWithinRepository(target)
 		errs = append(errs, outputsError...)
 
+		ociPushErrs := checkOciPushReferences(target)
+		errs = append(errs, ociPushErrs...)
+
 		if target.IsTest() && target.Command == "" {
 			errs = append(errs, fmt.Errorf("target %s is a test target but has no command", target.Label))
 		}
@@ -143,6 +146,30 @@ func checkInputPathsRelative(target *model.Target) (errs []error) {
 	}
 
 	return
+}
+
+// checkOciPushReferences verifies that every key in target.OciPush matches the
+// identifier of an oci:: output produced by the same target — otherwise --push
+// would have nothing to ship.
+func checkOciPushReferences(target *model.Target) (errs []error) {
+	if len(target.OciPush) == 0 {
+		return nil
+	}
+	available := make(map[string]struct{}, len(target.Outputs))
+	for _, out := range target.AllOutputs() {
+		if out.Type == "oci" {
+			available[out.Identifier] = struct{}{}
+		}
+	}
+	for localName := range target.OciPush {
+		if _, ok := available[localName]; !ok {
+			errs = append(errs, fmt.Errorf(
+				"target %s: oci_push key %q does not match any oci:: output",
+				target.Label, localName,
+			))
+		}
+	}
+	return errs
 }
 
 const relativePrefix = ".." + string(filepath.Separator)

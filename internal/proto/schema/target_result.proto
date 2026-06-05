@@ -41,9 +41,8 @@ message OCIImageOutput {
   // Digest of the config blob stored in CAS (filesystem backend).
   Digest config_digest = 6;
   // Field 7 was reserved for layer_digests; intentionally removed.
-
-  // Remote tag to ship to under --push. Empty for plain oci:: outputs.
-  string push_destination = 8;
+  // Field 8 was reserved for push_destination; push targets now live on
+  // target.OciPush, not on the cached output proto.
 }
 
 message Output {

@@ -90,6 +90,14 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 			targetPlatforms = append([]string{}, pkg.DefaultPlatforms...)
 		}
 
+		var ociPush map[string][]string
+		if len(target.OciPush) > 0 {
+			ociPush = make(map[string][]string, len(target.OciPush))
+			for local, dst := range target.OciPush {
+				ociPush[local] = []string(dst)
+			}
+		}
+
 		targets[targetLabel] = &model.Target{
 			SourceFilePath:       pkg.SourceFilePath,
 			Label:                targetLabel,
@@ -99,6 +107,7 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 			UnresolvedInputs:     target.Inputs,
 			ExcludeInputs:        target.ExcludeInputs,
 			Outputs:              parsedOutputs,
+			OciPush:              ociPush,
 			BinOutput:            parsedBinOutput,
 			Platforms:            targetPlatforms,
 			OutputChecks:         target.OutputChecks,
