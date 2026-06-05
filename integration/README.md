@@ -38,9 +38,6 @@ To update a single test fixture you can run `make test update={test case name}`
 
 ## Gated scenarios
 
-Some scenarios require external resources and are skipped by default:
-
-| Gate env var             | Purpose                                                                                                                                                                                                    |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `REQUIRES_CREDENTIALS=1` | Scenarios that talk to a cloud registry/cache (e.g. GAR) and need ambient credentials.                                                                                                                     |
-| `REQUIRES_DOCKER=1`      | Scenarios that spin up local containers via `docker run` or `docker compose` — currently the `oci-push::` smoke and cross-repo tests. Requires a working local Docker daemon and free TCP ports 5555–5557. |
+Scenarios that talk to a cloud registry/cache (e.g. GAR) are skipped
+unless `REQUIRES_CREDENTIALS=1` is set, so the default `make test` run
+does not depend on ambient cloud credentials.

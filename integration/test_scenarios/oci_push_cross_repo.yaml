@@ -1,6 +1,5 @@
 name: OCI Push Cross-Repo
 repo: oci_push_cross_repo
-requires_docker: true
 cases:
   # Spin up the two-registry topology. The compose down on the way out
   # cleans both containers; we still rm -f first to recover from a

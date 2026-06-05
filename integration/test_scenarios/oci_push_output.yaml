@@ -1,6 +1,5 @@
 name: OCI Push Smoke Test
 repo: oci_push_output
-requires_docker: true
 cases:
   # Bring up a throwaway distribution registry on 127.0.0.1:5555. `docker
   # rm -f` first makes the case idempotent across re-runs that left the
