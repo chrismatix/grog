@@ -8,8 +8,7 @@ import (
 	"grog/internal/console"
 )
 
-// PushReport captures the outcome of a single oci-push:: push attempt.
-// Skipped means the HEAD probe matched and no bytes were sent.
+// PushReport is the outcome of one push. Skipped means the HEAD probe matched.
 type PushReport struct {
 	TargetLabel string
 	Destination string
@@ -17,9 +16,7 @@ type PushReport struct {
 	Err         error
 }
 
-// PushReporter accumulates PushReport entries and carries the build-level
-// abort flag that --fail-fast trips. One instance per build, owned by the
-// output Registry and shared across all docker handlers.
+// PushReporter aggregates PushReport entries and carries the --fail-fast abort.
 type PushReporter struct {
 	failFast func() bool
 
@@ -48,8 +45,7 @@ func (p *PushReporter) Record(report PushReport) {
 	}
 }
 
-// Aborted reports whether a prior fail-fast failure has tripped the abort.
-// Push plans check this before issuing a copy.
+// Aborted is true once a fail-fast failure has tripped the abort.
 func (p *PushReporter) Aborted() bool {
 	if p == nil {
 		return false
@@ -88,8 +84,8 @@ func (p *PushReporter) HasFailures() bool {
 	return false
 }
 
-// RenderSummary logs the per-push counts and per-entry detail and reports
-// whether any push failed. Nil/empty reporter renders nothing.
+// RenderSummary prints the per-push counts plus one line per entry and
+// returns whether any push failed.
 func (p *PushReporter) RenderSummary(logger *console.Logger) bool {
 	if p == nil {
 		return false

@@ -1,6 +1,5 @@
-// Package oci_push performs daemon-free registry-to-registry image copies via
-// go-containerregistry. Used by oci output handlers to ship cached images to
-// oci-push:: destinations.
+// Package oci_push performs daemon-free registry-to-registry image copies
+// via go-containerregistry.
 package oci_push
 
 import (
@@ -18,23 +17,15 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 )
 
-// Options control a single Copy call. Plain-HTTP access for either side is
-// the caller's decision — Copy applies name.Insecure when these flags are set
-// and never auto-detects from the URL.
+// Options control a single Copy call. Plain-HTTP is opt-in per side; Copy
+// never auto-detects insecurity from the URL.
 type Options struct {
-	// SourceInsecure permits plain-HTTP access for the source ref.
-	SourceInsecure bool
-
-	// DestinationInsecure permits plain-HTTP access for the destination ref.
-	// Callers compute this from their configured insecure_registries list.
+	SourceInsecure      bool
 	DestinationInsecure bool
 
-	// MaxAttempts caps total tries; transient errors are retried up to this
-	// count with exponential backoff. Defaults to 3.
-	MaxAttempts int
-
-	// InitialBackoff is the wait before the first retry; doubles per
-	// attempt. Defaults to 500ms.
+	// MaxAttempts caps total tries (default 3); InitialBackoff is the wait
+	// before the first retry, doubling per attempt (default 500ms).
+	MaxAttempts    int
 	InitialBackoff time.Duration
 }
 
@@ -129,11 +120,8 @@ func isTransient(err error) bool {
 	return !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
 }
 
-// wrapInsecureHint annotates a push failure with a pointer at
-// oci.insecure_registries when the failure looks like an HTTPS attempt against
-// a plain-HTTP server. Only fires when the caller did NOT already mark the
-// destination as insecure — once the user has opted in, the wrong hint would
-// just be noise.
+// wrapInsecureHint points the user at oci.insecure_registries when the
+// failure looks like an HTTPS attempt against a plain-HTTP server.
 func wrapInsecureHint(destination string, destinationInsecure bool, err error) error {
 	if destinationInsecure || !looksLikeTLSToHTTP(err) {
 		return err
@@ -144,11 +132,7 @@ func wrapInsecureHint(destination string, destinationInsecure bool, err error) e
 	)
 }
 
-// looksLikeTLSToHTTP matches the canonical errors Go's TLS client emits when
-// it tries to handshake against a server that immediately responds in plain
-// HTTP. Catching these specifically (rather than any push error) keeps the
-// hint useful: a true auth/network failure on an HTTPS registry still surfaces
-// its own message.
+// looksLikeTLSToHTTP matches the canonical TLS-on-HTTP errors.
 func looksLikeTLSToHTTP(err error) bool {
 	if err == nil {
 		return false

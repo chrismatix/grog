@@ -9,7 +9,6 @@ Examples:
 
 Flags:
   -h, --help   help for build
-      --push   Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
 
 Global Flags:
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
@@ -28,6 +27,7 @@ Global Flags:
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar

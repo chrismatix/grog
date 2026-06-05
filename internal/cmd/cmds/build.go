@@ -11,7 +11,6 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 
 	"grog/internal/analysis"
 	"grog/internal/caching"
@@ -70,8 +69,6 @@ var BuildCmd = &cobra.Command{
 }
 
 func AddBuildCmd(rootCmd *cobra.Command) {
-	BuildCmd.Flags().Bool("push", false, "Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build")
-	_ = viper.BindPFlag("push", BuildCmd.Flags().Lookup("push"))
 	rootCmd.AddCommand(BuildCmd)
 }
 
@@ -224,15 +221,27 @@ func RunBuildAndAfter(
 			cacheHits)
 	}
 
-	// Run the callback (e.g. `grog run` binaries) in parallel with any
-	// outstanding async cache writes.
+	// When --push is set AND we have a follow-on callback (e.g. `grog run`
+	// binaries), the callback may consume the pushed image, so make sure
+	// pushes have finished before invoking it. Otherwise we keep the
+	// original parallelism: callback overlaps with async cache writes.
 	var afterBuildErr error
+	pushBeforeAfter := config.Global.Push && afterBuildSuccess != nil
+	if pushBeforeAfter {
+		executor.WaitForAsyncWrites(ctx)
+	}
 	if afterBuildSuccess != nil && buildOK {
 		releaseWorkspaceLock()
-		afterBuildErr = afterBuildSuccess(executor)
+		if pushBeforeAfter && registry.PushReporter().HasFailures() {
+			logger.Errorf("Skipping post-build callback because one or more pushes failed.")
+		} else {
+			afterBuildErr = afterBuildSuccess(executor)
+		}
 	}
 
-	executor.WaitForAsyncWrites(ctx)
+	if !pushBeforeAfter {
+		executor.WaitForAsyncWrites(ctx)
+	}
 
 	pushHadFailures := registry.PushReporter().RenderSummary(logger)
 

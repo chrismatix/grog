@@ -56,6 +56,7 @@ Reference for the `grog` CLI.
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -109,7 +110,6 @@ grog build [flags]
 
 ```text
   -h, --help   help for build
-      --push   Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
 ```
 
 ### Options inherited from parent commands
@@ -131,6 +131,7 @@ grog build [flags]
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -188,6 +189,7 @@ grog build-and-test [flags]
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -249,6 +251,7 @@ grog changes [flags]
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -304,6 +307,7 @@ grog check [flags]
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -362,6 +366,7 @@ grog clean [flags]
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -423,6 +428,7 @@ grog deps [flags]
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -496,6 +502,7 @@ grog explain-changes [flags]
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -558,6 +565,7 @@ grog graph [flags]
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -614,6 +622,7 @@ grog info [flags]
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -673,6 +682,7 @@ grog list [flags]
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -731,6 +741,7 @@ grog logs [flags]
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -788,6 +799,7 @@ grog owners [flags]
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -849,6 +861,7 @@ grog rdeps [flags]
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -908,6 +921,7 @@ grog run [flags]
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -967,6 +981,7 @@ grog taint [flags]
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -1027,6 +1042,7 @@ grog test [flags]
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -1072,6 +1088,7 @@ View, analyze, and export build execution traces for performance analysis and da
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -1134,6 +1151,7 @@ grog traces export [flags]
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -1192,6 +1210,7 @@ grog traces list [flags]
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -1245,6 +1264,7 @@ grog traces prune [flags]
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -1296,6 +1316,7 @@ grog traces pull [flags]
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -1350,6 +1371,7 @@ grog traces show <trace-id> [flags]
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -1408,6 +1430,7 @@ grog traces stats [flags]
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -1463,6 +1486,7 @@ grog version [flags]
       --platform string               Force a specific platform in the form os/arch
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar

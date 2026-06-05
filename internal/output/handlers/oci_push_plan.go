@@ -9,10 +9,8 @@ import (
 	"grog/internal/worker"
 )
 
-// OciPushPlan ships the cached image to a user-facing destination by invoking
-// the oci handler's own PushImage. When chained behind a cache write plan,
-// the cache plan has already populated image_id / manifest_digest on dockerOut
-// by the time Execute runs.
+// OciPushPlan ships a cached image to a user-facing destination via the oci
+// handler's PushImage.
 type OciPushPlan struct {
 	pusher      ImagePusher
 	dockerOut   *gen.OCIImageOutput
@@ -21,8 +19,6 @@ type OciPushPlan struct {
 	reporter    *PushReporter
 }
 
-// NewOciPushPlan constructs the canonical push plan; used by the registry
-// when assembling write plans and by the cache-hit hook on Load.
 func NewOciPushPlan(pusher ImagePusher, image *gen.OCIImageOutput, destination, targetLabel string, reporter *PushReporter) *OciPushPlan {
 	return &OciPushPlan{
 		pusher:      pusher,

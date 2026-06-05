@@ -117,6 +117,10 @@ func configureRoot() bool {
 	RootCmd.PersistentFlags().Bool("fail-fast", false, "Fail fast on first error")
 	_ = viper.BindPFlag("fail_fast", RootCmd.PersistentFlags().Lookup("fail-fast"))
 
+	// push (used by grog build and grog run)
+	RootCmd.PersistentFlags().Bool("push", false, "Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build")
+	_ = viper.BindPFlag("push", RootCmd.PersistentFlags().Lookup("push"))
+
 	// skip_workspace_lock
 	RootCmd.PersistentFlags().Bool("skip-workspace-lock", false, "Skip the workspace level lock (DANGEROUS: may corrupt the cache)")
 	_ = viper.BindPFlag("skip_workspace_lock", RootCmd.PersistentFlags().Lookup("skip-workspace-lock"))
