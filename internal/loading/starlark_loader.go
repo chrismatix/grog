@@ -193,6 +193,7 @@ func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *st
 	var envVars *starlark.Dict
 	var timeout string
 	var concurrencyGroup string
+	var ociPush *starlark.Dict
 
 	// Parse keyword arguments
 	if err := starlark.UnpackArgs("target", args, kwargs,
@@ -210,6 +211,7 @@ func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *st
 		"environment_variables?", &envVars,
 		"timeout?", &timeout,
 		"concurrency_group?", &concurrencyGroup,
+		"oci_push?", &ociPush,
 	); err != nil {
 		return nil, err
 	}
@@ -314,6 +316,14 @@ func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *st
 		target.ConcurrencyGroup = concurrencyGroup
 	}
 
+	if ociPush != nil {
+		push, err := starlarkDictToOciPush(ociPush)
+		if err != nil {
+			return nil, fmt.Errorf("oci_push: %w", err)
+		}
+		target.OciPush = push
+	}
+
 	c.targets = append(c.targets, target)
 	return starlark.None, nil
 }
@@ -397,6 +407,32 @@ func starlarkListToStringSlice(list *starlark.List) ([]string, error) {
 			return nil, fmt.Errorf("expected string, got %s", val.Type())
 		}
 		result = append(result, string(str))
+	}
+	return result, nil
+}
+
+// starlarkDictToOciPush converts an oci_push dict where each value is either
+// a single destination string or a list of strings. The DTO normalises
+// scalars to a single-element list so downstream code only deals with []string.
+func starlarkDictToOciPush(dict *starlark.Dict) (map[string]ociPushDestinations, error) {
+	result := make(map[string]ociPushDestinations, dict.Len())
+	for _, item := range dict.Items() {
+		key, ok := item[0].(starlark.String)
+		if !ok {
+			return nil, fmt.Errorf("oci_push key must be string, got %s", item[0].Type())
+		}
+		switch v := item[1].(type) {
+		case starlark.String:
+			result[string(key)] = ociPushDestinations{string(v)}
+		case *starlark.List:
+			dst, err := starlarkListToStringSlice(v)
+			if err != nil {
+				return nil, fmt.Errorf("oci_push[%q]: %w", string(key), err)
+			}
+			result[string(key)] = dst
+		default:
+			return nil, fmt.Errorf("oci_push[%q] must be string or list of strings, got %s", string(key), v.Type())
+		}
 	}
 	return result, nil
 }

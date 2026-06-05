@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -348,6 +349,42 @@ create_target()
 				pkg.Targets[0].Command, expectedPath)
 		}
 	})
+}
+
+func TestStarlarkLoader_OciPush(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWorkspaceRoot := config.Global.WorkspaceRoot
+	config.Global.WorkspaceRoot = tmpDir
+	defer func() { config.Global.WorkspaceRoot = oldWorkspaceRoot }()
+
+	build := filepath.Join(tmpDir, "BUILD.star")
+	if err := os.WriteFile(build, []byte(`target(
+    name = "app",
+    command = "docker build -t app .",
+    outputs = ["oci::app"],
+    oci_push = {
+        "app": "registry.org/app:1.0.0",
+        "worker": ["registry.org/worker:1.0.0", "registry.org/worker:latest"],
+    },
+)
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	pkg, _, err := (StarlarkLoader{}).Load(context.Background(), build)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(pkg.Targets) != 1 {
+		t.Fatalf("expected 1 target, got %d", len(pkg.Targets))
+	}
+	push := pkg.Targets[0].OciPush
+	if got, want := push["app"], (ociPushDestinations{"registry.org/app:1.0.0"}); !reflect.DeepEqual(got, want) {
+		t.Errorf("scalar destination not normalised: %v", got)
+	}
+	if got, want := push["worker"], (ociPushDestinations{"registry.org/worker:1.0.0", "registry.org/worker:latest"}); !reflect.DeepEqual(got, want) {
+		t.Errorf("list destinations preserved wrong: %v, want %v", got, want)
+	}
 }
 
 func TestStarlarkLoader_StdlibModules(t *testing.T) {

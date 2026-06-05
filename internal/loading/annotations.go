@@ -17,5 +17,6 @@ type grogAnnotation struct {
 	scriptAnnotation `yaml:",inline"`
 
 	// script annotations cannot have outputs
-	Outputs []string `yaml:"outputs"`
+	Outputs []string                       `yaml:"outputs"`
+	OciPush map[string]ociPushDestinations `yaml:"oci_push"`
 }
