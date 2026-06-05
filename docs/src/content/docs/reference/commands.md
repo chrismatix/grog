@@ -109,6 +109,7 @@ grog build [flags]
 
 ```text
   -h, --help   help for build
+      --push   Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
 ```
 
 ### Options inherited from parent commands

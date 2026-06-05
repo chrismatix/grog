@@ -137,6 +137,149 @@ targets:
       go test -tags=integration ./tests/...
 ```
 
+## Pushing images
+
+`oci::` outputs are _cache_ declarations. To also ship an image to a user-facing
+registry (Artifact Registry, GHCR, ECR, an internal Harbor, etc.), add an
+`oci_push` block to the target and run `grog build --push`:
+
+```yaml
+targets:
+  - name: build_api_image
+    inputs:
+      - Dockerfile
+      - src/**/*.go
+    command: docker build -t api-service .
+    outputs:
+      - oci::api-service # cache concern
+    oci_push: # ship concern
+      api-service: us-east1-docker.pkg.dev/proj/api:${GIT_SHA}
+```
+
+Run it with:
+
+```sh
+grog build --push :build_api_image
+```
+
+Cache misses build the image, cache it, and ship it. Cache hits skip the build,
+restore the image, and (still) ship it — the destination is HEAD-probed first
+and the push is short-circuited when the registry already holds the same
+digest.
+
+### How destinations are spelled
+
+- **Key** — must match the identifier of an `oci::` output on the same target.
+  Grog fails the build before execution if a key has no matching output.
+- **Value** — one destination string for the common case, or a list for
+  multi-destination:
+
+```yaml
+oci_push:
+  api: us-east1-docker.pkg.dev/proj/api:1.2.3 # single
+  worker: # multi
+    - us-east1-docker.pkg.dev/proj/worker:1.2.3
+    - us-east1-docker.pkg.dev/proj/worker:latest
+```
+
+The tag side typically interpolates an environment variable (`${GIT_SHA}`,
+`${VERSION}`, ...). Grog reads the environment at invocation time so CI sets
+it once per run.
+
+### What the cache key includes
+
+Only the **outputs** list participates in the cache hash. `oci_push` is
+explicitly excluded, which means:
+
+- **Version bumps reuse the cache.** Changing `repo/api:1.0.0` → `repo/api:1.0.1`
+  in `oci_push` doesn't invalidate the build. The cached image is restored and
+  re-pushed under the new tag.
+- **Adding a new destination doesn't rebuild.** Adding a `:latest` mirror to
+  `oci_push` re-uses the cached image and ships it to the new tag too.
+- **Adding or removing an `oci::` output _does_ invalidate.** That changes the
+  set of artifacts the target produces, which is correctly a cache-key change.
+
+### Transitive scope
+
+`--push` applies transitively across the selection. `grog build --push //services/api`
+pushes every `oci_push` entry on `//services/api` **and** on every transitive
+dependency. A failed sidecar push is therefore visible in the same build run.
+
+### Pushing without rebuilding
+
+A redeploy of the same image to a new tag becomes:
+
+```sh
+GIT_SHA=2026-05-30 grog build --push :build_api_image  # builds, ships :2026-05-30
+GIT_SHA=2026-06-01 grog build --push :build_api_image  # cache-hits, ships :2026-06-01
+```
+
+Both invocations push; the second one doesn't rebuild.
+
+### Failure model
+
+- Push failures retry on transient errors (5xx, 408, 429, network).
+- 4xx errors (auth, validation) fail without retry.
+- `--fail-fast` short-circuits remaining pushes after the first failure.
+- Without `--fail-fast`, the build collects per-push outcomes and exits non-zero
+  if any push failed. The summary looks like:
+
+```text
+INFO: Pushes: 2 pushed, 1 already current, 1 failed.
+INFO:   PUSHED //services/api -> registry/api:1.2.3
+INFO:   PUSHED //services/worker -> registry/worker:1.2.3
+INFO:   CURRENT //services/cron -> registry/cron:1.2.3
+ERROR:   FAILED //services/gateway -> registry/gateway:1.2.3: <error>
+```
+
+### Insecure registries
+
+By default Grog pushes over HTTPS. To allow plain HTTP destinations (local
+registries, internal hosts without TLS) declare them in `grog.toml`:
+
+```toml
+[oci]
+insecure_registries = ["127.0.0.1:5000", "registry.internal"]
+```
+
+Entries can be host-only (matches any port) or `host:port` (matches that port
+exactly). Mirrors Docker's own `insecure-registries` model. If a push fails
+with a TLS handshake error against an undeclared host, the error message
+includes a hint pointing at this config knob.
+
+### Auth
+
+Push uses the ambient Docker keychain — Grog reads `~/.docker/config.json`
+just like `docker push` does. In CI, run your registry's normal login step
+(`gcloud auth configure-docker`, `aws ecr get-login-password | docker login`,
+`docker login ghcr.io`, etc.) before `grog build --push`.
+
+### Multi-platform images
+
+Multi-platform manifest lists are not first-class yet. The recommended pattern
+is one cache target per platform with distinct local names, each with its own
+`oci_push` entry, and a downstream target that composes the manifest list with
+`docker manifest`:
+
+```yaml
+- name: api_amd64
+  command: docker buildx build --platform=linux/amd64 -t api-amd64 .
+  outputs:
+    - oci::api-amd64
+  oci_push:
+    api-amd64: registry/api:${VERSION}-amd64
+
+- name: api_arm64
+  command: docker buildx build --platform=linux/arm64 -t api-arm64 .
+  outputs:
+    - oci::api-arm64
+  oci_push:
+    api-arm64: registry/api:${VERSION}-arm64
+```
+
+Distinct local names also sidestep the macOS Docker tag collision where a
+single tag can't simultaneously reference two architectures.
+
 ## Multi-platform Docker Images
 
 For building multi-platform Docker images, see the [Multi-platform Builds](/topics/multi-platform-builds) guide.
