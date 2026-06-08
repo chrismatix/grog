@@ -236,7 +236,7 @@ func (d *DockerOutputHandler) Load(
 // PushImage copies the cached image from the loopback proxy to the destination
 // registry. The proxy is started on demand by Write/Load and stays up until
 // the registry's Close. Source is always loopback (insecure HTTP).
-func (d *DockerOutputHandler) PushImage(ctx context.Context, image *gen.OCIImageOutput, destination string, _ *worker.ProgressTracker) (bool, error) {
+func (d *DockerOutputHandler) PushImage(ctx context.Context, image *gen.OCIImageOutput, destination string, tracker *worker.ProgressTracker) (bool, error) {
 	proxy, err := d.ensureProxy(ctx)
 	if err != nil {
 		return false, err
@@ -247,11 +247,14 @@ func (d *DockerOutputHandler) PushImage(ctx context.Context, image *gen.OCIImage
 		return false, fmt.Errorf("cache write did not populate image identity for push to %s", destination)
 	}
 	src := fmt.Sprintf("%s/%s@%s", proxy.Addr(), loopbackRepoName(imageID), manifestDigest)
+	bridge := newPushProgressBridge(ctx, tracker, fmt.Sprintf("pushing %s", destination))
+	defer bridge.stop()
 	return oci_push.Copy(ctx, src, destination, oci_push.Options{
 		// Source is grog's own loopback proxy — structurally HTTP, not
 		// something the user opts in to.
 		SourceInsecure:      true,
 		DestinationInsecure: matchesInsecureRegistry(destination, d.insecureRegistries),
+		Progress:            bridge.channel(),
 	})
 }
 

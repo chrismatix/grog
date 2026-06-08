@@ -27,6 +27,12 @@ type Options struct {
 	// before the first retry, doubling per attempt (default 500ms).
 	MaxAttempts    int
 	InitialBackoff time.Duration
+
+	// Progress, if non-nil, receives go-containerregistry's per-blob
+	// progress events while remote.Write is uploading. The caller owns
+	// closing the channel: Copy never closes it. Sending blocks the
+	// uploader, so the channel must be buffered or drained promptly.
+	Progress chan<- v1.Update
 }
 
 // Copy ships an image from source to destination. Returns (skipped, nil) when
@@ -72,7 +78,7 @@ func Copy(ctx context.Context, source, destination string, opts Options) (bool, 
 	backoff := opts.InitialBackoff
 	var lastErr error
 	for attempt := 1; attempt <= opts.MaxAttempts; attempt++ {
-		err := writeImage(ctx, dstRef, srcImg)
+		err := writeImage(ctx, dstRef, srcImg, opts.Progress)
 		if err == nil {
 			return false, nil
 		}
@@ -90,11 +96,15 @@ func Copy(ctx context.Context, source, destination string, opts Options) (bool, 
 	return false, wrapInsecureHint(destination, opts.DestinationInsecure, lastErr)
 }
 
-func writeImage(ctx context.Context, dst name.Reference, img v1.Image) error {
-	return remote.Write(dst, img,
+func writeImage(ctx context.Context, dst name.Reference, img v1.Image, progress chan<- v1.Update) error {
+	writeOpts := []remote.Option{
 		remote.WithContext(ctx),
 		remote.WithAuthFromKeychain(authn.DefaultKeychain),
-	)
+	}
+	if progress != nil {
+		writeOpts = append(writeOpts, remote.WithProgress(progress))
+	}
+	return remote.Write(dst, img, writeOpts...)
 }
 
 func parseRef(ref string, insecure bool) (name.Reference, error) {
