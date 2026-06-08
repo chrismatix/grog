@@ -1,0 +1,8 @@
+# fs backend so the test does not need a remote cache registry. The
+# loopback ociproxy serves as the push source via OCI Distribution.
+[oci]
+backend = "fs"
+# Both the live smoke registry on 5555 and the unbound port 5560 used by
+# the :fail target are HTTP-only loopback endpoints; declare them so
+# pushes do not go via HTTPS.
+insecure_registries = ["127.0.0.1:5555", "127.0.0.1:5560"]

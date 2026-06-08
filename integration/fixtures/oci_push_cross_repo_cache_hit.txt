@@ -1,0 +1,8 @@
+INFO: 1 package loaded, 2 targets configured.
+INFO: Selected 2 targets.
+INFO: //:cross_host DONE (cached)
+INFO: //:same_host  DONE (cached)
+INFO: Build completed successfully. 2 targets completed (2 cache hits).
+INFO: Pushes: 0 pushed, 2 already current, 0 failed.
+INFO:   CURRENT //:cross_host -> 127.0.0.1:5557/prod/cross:1
+INFO:   CURRENT //:same_host -> 127.0.0.1:5556/prod/same:1

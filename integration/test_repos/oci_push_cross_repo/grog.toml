@@ -1,0 +1,10 @@
+# Use the registry backend so the cache itself lives on a real OCI
+# Distribution registry — the docker-compose-managed one on 127.0.0.1:5556.
+# This is what makes the same-host blob-mount fast path observable: when
+# the user pushes to a destination on the same registry as the cache,
+# layers are mounted instead of streamed.
+[oci]
+backend = "registry"
+registry = "127.0.0.1:5556/grog-cache"
+# Cache and remote registries both serve HTTP only.
+insecure_registries = ["127.0.0.1:5556", "127.0.0.1:5557"]

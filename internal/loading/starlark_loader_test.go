@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -299,6 +300,44 @@ target(name = "arch", command = GROG_ARCH)
 		}
 	})
 
+	t.Run("GROG_WORKSPACE_ROOT and GROG_GIT_HASH predeclared", func(t *testing.T) {
+		// The loader env must mirror the target command env: anything available
+		// to a target command at exec time should be readable at load time too.
+		// Authors interpolating GROG_GIT_HASH into oci_push destinations rely on
+		// this — without it, every destination would resolve to the same string
+		// and pushes would clobber each other.
+		tmpDir := t.TempDir()
+
+		oldConfig := config.Global
+		defer func() { config.Global = oldConfig }()
+		config.Global.WorkspaceRoot = tmpDir
+
+		buildFile := filepath.Join(tmpDir, "BUILD.star")
+		script := `target(name = "ws", command = GROG_WORKSPACE_ROOT)
+target(name = "hash", command = GROG_GIT_HASH)
+`
+		if err := os.WriteFile(buildFile, []byte(script), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		pkg, _, err := (StarlarkLoader{}).Load(context.Background(), buildFile)
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		targetsByName := make(map[string]*TargetDTO)
+		for _, target := range pkg.Targets {
+			targetsByName[target.Name] = target
+		}
+		if got := targetsByName["ws"].Command; got != tmpDir {
+			t.Errorf("GROG_WORKSPACE_ROOT = %q, want %q", got, tmpDir)
+		}
+		// Git hash can be empty (not in a git repo) or a real hash; either way
+		// the variable must be defined so the script doesn't NameError.
+		if _, ok := targetsByName["hash"]; !ok {
+			t.Errorf("GROG_GIT_HASH target not registered — variable undefined")
+		}
+	})
+
 	t.Run("available in loaded star modules", func(t *testing.T) {
 		// Bug caught: GROG_ENV_FILE injected into the main BUILD.star predeclared
 		// dict but not into the loadModule predeclared dict, making it undefined
@@ -348,6 +387,42 @@ create_target()
 				pkg.Targets[0].Command, expectedPath)
 		}
 	})
+}
+
+func TestStarlarkLoader_OciPush(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWorkspaceRoot := config.Global.WorkspaceRoot
+	config.Global.WorkspaceRoot = tmpDir
+	defer func() { config.Global.WorkspaceRoot = oldWorkspaceRoot }()
+
+	build := filepath.Join(tmpDir, "BUILD.star")
+	if err := os.WriteFile(build, []byte(`target(
+    name = "app",
+    command = "docker build -t app .",
+    outputs = ["oci::app"],
+    oci_push = {
+        "app": "registry.org/app:1.0.0",
+        "worker": ["registry.org/worker:1.0.0", "registry.org/worker:latest"],
+    },
+)
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	pkg, _, err := (StarlarkLoader{}).Load(context.Background(), build)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(pkg.Targets) != 1 {
+		t.Fatalf("expected 1 target, got %d", len(pkg.Targets))
+	}
+	push := pkg.Targets[0].OciPush
+	if got, want := push["app"], (ociPushDestinations{"registry.org/app:1.0.0"}); !reflect.DeepEqual(got, want) {
+		t.Errorf("scalar destination not normalised: %v", got)
+	}
+	if got, want := push["worker"], (ociPushDestinations{"registry.org/worker:1.0.0", "registry.org/worker:latest"}); !reflect.DeepEqual(got, want) {
+		t.Errorf("list destinations preserved wrong: %v, want %v", got, want)
+	}
 }
 
 func TestStarlarkLoader_StdlibModules(t *testing.T) {

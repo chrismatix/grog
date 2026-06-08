@@ -1,0 +1,86 @@
+name: OCI Push Smoke Test
+repo: oci_push_output
+cases:
+  # Bring up a throwaway distribution registry on 127.0.0.1:5555. `docker
+  # rm -f` first makes the case idempotent across re-runs that left the
+  # container behind. We --rm the new one so test teardown is the
+  # process exit even if the final cleanup step does not run.
+  - name: start_smoke_registry
+    setup_command: |
+      docker rm -f grog-smoke-registry >/dev/null 2>&1 || true
+      # Pull with retries. Docker Hub is flaky from GitHub Actions, and
+      # `docker run` will eat the failure with a confusing "could not start"
+      # message; pulling explicitly + retrying surfaces the real cause and
+      # shrugs off transient Hub timeouts.
+      pulled=0
+      for _ in $(seq 1 5); do
+        if docker pull registry:2 >/dev/null 2>&1; then
+          pulled=1
+          break
+        fi
+        sleep 5
+      done
+      if [ "$pulled" -ne 1 ]; then
+        echo "could not pull registry:2 after retries" >&2
+        exit 1
+      fi
+      docker run -d --rm --name grog-smoke-registry -p 5555:5555 \
+        -e REGISTRY_HTTP_ADDR=0.0.0.0:5555 \
+        registry:2 >/dev/null
+      # Wait for the registry's /v2/ probe to start answering before the
+      # build pushes — without this the first --push may race the
+      # container's startup and fail the smoke test for the wrong reason.
+      for _ in $(seq 1 30); do
+        if curl -fsS http://127.0.0.1:5555/v2/ >/dev/null 2>&1; then
+          exit 0
+        fi
+        sleep 0.5
+      done
+      echo "registry did not start in time" >&2
+      exit 1
+
+  # First push: build is cold, image is freshly produced and shipped.
+  # The summary should report 1 pushed, 0 already current, 0 failed.
+  - name: oci_push_fresh_build
+    grog_args:
+      - build
+      - --push
+      - :smoke
+
+  # Second push: cache hit on the build, but the destination probe sees
+  # the same digest and skips the network. Summary should report 1
+  # already current.
+  - name: oci_push_cache_hit_destination_current
+    grog_args:
+      - build
+      - --push
+      - :smoke
+
+  # Verify the registry actually holds the manifest grog claims it
+  # pushed. A 200 from /v2/.../manifests/<tag> proves the push landed.
+  # Skip the fixture: the output is a one-shot success log, not the
+  # build summary the framework compares to.
+  - name: verify_registry_has_manifest
+    setup_command: |
+      curl -fsS -o /dev/null \
+        -H 'Accept: application/vnd.oci.image.manifest.v1+json' \
+        http://127.0.0.1:5555/v2/grog-smoke/image/manifests/1.0.0
+
+  # Push to a port nothing is listening on; the build itself succeeds but
+  # the push fails and the summary reports the destination + the underlying
+  # network error.
+  - name: oci_push_failed_push
+    grog_args:
+      - build
+      - --push
+      - :fail
+    expect_fail: true
+
+  - name: stop_smoke_registry
+    setup_command: |
+      docker rm -f grog-smoke-registry >/dev/null 2>&1 || true
+      # The recipe leaves a 127.0.0.1:5555/... tag on the local daemon
+      # (per design Q9: no local-tag cleanup). Remove it here so the
+      # test machine does not accumulate tags across runs.
+      docker rmi 127.0.0.1:5555/grog-smoke/image:1.0.0 >/dev/null 2>&1 || true
+      docker rmi 127.0.0.1:5560/grog-smoke/fail:1.0.0 >/dev/null 2>&1 || true

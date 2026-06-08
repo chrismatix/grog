@@ -221,15 +221,29 @@ func RunBuildAndAfter(
 			cacheHits)
 	}
 
-	// Run the callback (e.g. `grog run` binaries) in parallel with any
-	// outstanding async cache writes.
+	// When --push is set AND we have a follow-on callback (e.g. `grog run`
+	// binaries), the callback may consume the pushed image, so make sure
+	// pushes have finished before invoking it. Otherwise we keep the
+	// original parallelism: callback overlaps with async cache writes.
 	var afterBuildErr error
+	pushBeforeAfter := config.Global.Push && afterBuildSuccess != nil
+	if pushBeforeAfter {
+		executor.WaitForAsyncWrites(ctx)
+	}
 	if afterBuildSuccess != nil && buildOK {
 		releaseWorkspaceLock()
-		afterBuildErr = afterBuildSuccess(executor)
+		if pushBeforeAfter && registry.PushReporter().HasFailures() {
+			logger.Errorf("Skipping post-build callback because one or more pushes failed.")
+		} else {
+			afterBuildErr = afterBuildSuccess(executor)
+		}
 	}
 
-	executor.WaitForAsyncWrites(ctx)
+	if !pushBeforeAfter {
+		executor.WaitForAsyncWrites(ctx)
+	}
+
+	pushHadFailures := registry.PushReporter().RenderSummary(logger)
 
 	// Close output handlers (notably the loopback docker registry) only after
 	// async writes have drained. Closing earlier would tear the proxy down
@@ -351,6 +365,10 @@ func RunBuildAndAfter(
 
 	if afterBuildErr != nil {
 		logger.Fatalf("%v", afterBuildErr)
+	}
+
+	if pushHadFailures {
+		os.Exit(1)
 	}
 }
 

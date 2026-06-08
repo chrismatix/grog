@@ -3,7 +3,7 @@ title: Docker (OCI) Outputs
 description: Learn how to cache and manage Docker / OCI container images in your Grog build process for faster builds and deployments.
 ---
 
-import { Aside } from "@astrojs/starlight/components";
+import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
 
 <Aside title="Why 'OCI'?">
   Grog uses the `oci::` prefix and an `[oci]` config section because the manifest format and
@@ -136,6 +136,96 @@ targets:
       # Run tests against the image
       go test -tags=integration ./tests/...
 ```
+
+## Pushing images
+
+`oci::` outputs are _cache_ declarations. To also ship an image to a user-facing
+registry, add an `oci_push` block to the target and run `grog build --push`.
+
+`oci_push` keys must match the local name of an `oci::` output on the same
+target; values are one destination or a list for multi-destination. Tag
+interpolation works best in Starlark and Pkl, where you can substitute Grog's
+predeclared `GROG_GIT_HASH` variable directly into the destination string
+(YAML has no built-in interpolation, so you'd have to template the file
+yourself).
+
+<Tabs>
+  <TabItem label="Starlark">
+
+```starlark
+# BUILD.star
+target(
+    name = "build_api_image",
+    command = "docker build -t api-service .",
+    inputs = ["Dockerfile", "src/**/*.go"],
+    outputs = ["oci::api-service"],
+    oci_push = {
+        "api-service": "us-east1-docker.pkg.dev/proj/api:" + GROG_GIT_HASH,
+    },
+)
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```Pkl
+amends "package://grog.build/releases/<version>/grog@<version>#/package.pkl"
+
+targets {
+  new {
+    name = "build_api_image"
+    command = "docker build -t api-service ."
+    inputs { "Dockerfile" ; "src/**/*.go" }
+    outputs { "oci::api-service" }
+    oci_push {
+      ["api-service"] {
+        "us-east1-docker.pkg.dev/proj/api:\(read("env:GROG_GIT_HASH").text)"
+      }
+    }
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
+
+Then run it with:
+
+```sh
+grog build --push :build_api_image
+```
+
+Cache misses build the image, cache it, and ship it. Cache hits skip the build,
+restore the image, and still ship it — the destination is HEAD-probed first
+and the push is short-circuited when the registry already holds the same
+digest. `--push` applies transitively across the build selection, so a
+`grog build --push //services/api` invocation ships every `oci_push` entry on
+`//services/api` and on every dependency it reached.
+
+The `oci_push` map is **not** part of the cache key, so bumping the tag in
+your destination string reuses the cached image and only re-runs the push.
+
+### Insecure registries
+
+By default Grog pushes over HTTPS. To allow plain HTTP destinations (local
+registries, internal hosts without TLS) declare them in `grog.toml`:
+
+```toml
+[oci]
+insecure_registries = ["127.0.0.1:5000", "registry.internal"]
+```
+
+Entries can be host-only (matches any port) or `host:port` (matches that port
+exactly). Mirrors Docker's own `insecure-registries` model. If a push fails
+with a TLS handshake error against an undeclared host, the error message
+includes a hint pointing at this config knob.
+
+### Auth
+
+Push uses the ambient Docker keychain — Grog reads `~/.docker/config.json`
+just like `docker push` does. In CI, run your registry's normal login step
+(`gcloud auth configure-docker`, `aws ecr get-login-password | docker login`,
+`docker login ghcr.io`, etc.) before `grog build --push`.
 
 ## Multi-platform Docker Images
 

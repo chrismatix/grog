@@ -205,7 +205,7 @@ type OCIImageOutput struct {
 	// Digest of the serialized manifest stored in CAS (filesystem backend).
 	ManifestDigest *Digest `protobuf:"bytes,5,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"`
 	// Digest of the config blob stored in CAS (filesystem backend).
-	ConfigDigest *Digest `protobuf:"bytes,6,opt,name=config_digest,json=configDigest,proto3" json:"config_digest,omitempty"` // Field 7 was reserved for layer_digests; intentionally removed.
+	ConfigDigest *Digest `protobuf:"bytes,6,opt,name=config_digest,json=configDigest,proto3" json:"config_digest,omitempty"`
 }
 
 func (x *OCIImageOutput) Reset() {

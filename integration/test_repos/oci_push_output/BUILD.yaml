@@ -1,0 +1,27 @@
+targets:
+  - name: smoke
+    # Pin the platform so the image-id is reproducible across machines —
+    # without this the fs-cache hit path would not be exercised
+    # deterministically by the second --push run in the scenario.
+    command: |
+      docker buildx build --platform=linux/amd64 -t grog-smoke-image .
+    inputs:
+      - script.sh
+      - Dockerfile
+    outputs:
+      - oci::grog-smoke-image
+    oci_push:
+      grog-smoke-image: 127.0.0.1:5555/grog-smoke/image:1.0.0
+
+  # Builds the same image but pushes to a port nothing is listening on,
+  # exercising the failure path of the push summary.
+  - name: fail
+    command: |
+      docker buildx build --platform=linux/amd64 -t grog-smoke-fail .
+    inputs:
+      - script.sh
+      - Dockerfile
+    outputs:
+      - oci::grog-smoke-fail
+    oci_push:
+      grog-smoke-fail: 127.0.0.1:5560/grog-smoke/fail:1.0.0

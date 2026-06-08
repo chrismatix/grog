@@ -104,6 +104,22 @@ Examples:
 - `dir::dist/assets/` - A directory output
 - `oci::myregistry.com/myimage:tag` - An OCI container image (built by `docker build`, `podman build`, etc.)
 
+### oci_push
+
+A map from the local name of an `oci::` output to one or more remote registry destinations to ship it to under `grog build --push`. See [Docker (OCI) Outputs › Pushing images](/topics/docker-outputs#pushing-images) for the full story; the short version:
+
+```yaml
+outputs:
+  - oci::api
+oci_push:
+  api: registry.org/api:${VERSION} # single destination
+  worker: # multi-destination
+    - registry.org/worker:${VERSION}
+    - registry.org/worker:latest
+```
+
+The destination tag is **not** part of the cache key, so bumping `${VERSION}` reuses the cached image and only re-runs the push.
+
 ### dependencies
 
 Other targets that must be built before this one, specified as labels. Labels can reference:

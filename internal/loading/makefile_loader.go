@@ -131,6 +131,7 @@ func (p *makefileParser) handleTarget(
 		Dependencies: annotation.Dependencies,
 		Inputs:       annotation.Inputs,
 		Outputs:      annotation.Outputs,
+		OciPush:      annotation.OciPush,
 		Tags:         annotation.Tags,
 	}
 

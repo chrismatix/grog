@@ -40,7 +40,6 @@ message OCIImageOutput {
   Digest manifest_digest = 5;
   // Digest of the config blob stored in CAS (filesystem backend).
   Digest config_digest = 6;
-  // Field 7 was reserved for layer_digests; intentionally removed.
 }
 
 message Output {

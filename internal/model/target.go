@@ -30,6 +30,7 @@ type Target struct {
 	Inputs               []string            `json:"inputs,omitempty"`
 	ExcludeInputs        []string            `json:"exclude_inputs,omitempty"`
 	Outputs              []Output            `json:"outputs,omitempty"`
+	OciPush              map[string][]string `json:"oci_push,omitempty" yaml:"oci_push,omitempty" pkl:"oci_push"`
 	Platforms            []string            `json:"platforms,omitempty" yaml:"platforms,omitempty" pkl:"platforms"`
 	Tags                 []string            `json:"tags,omitempty"`
 	Fingerprint          map[string]string   `json:"fingerprint,omitempty"`

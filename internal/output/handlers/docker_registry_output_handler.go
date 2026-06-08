@@ -18,6 +18,7 @@ import (
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/model"
+	"grog/internal/oci_push"
 	"grog/internal/proto/gen"
 	"grog/internal/worker"
 
@@ -79,11 +80,11 @@ func (d *dockerRegistryWritePlan) Cleanup(ctx context.Context) error {
 // NewDockerRegistryOutputHandler creates a new DockerRegistryOutputHandler.
 func NewDockerRegistryOutputHandler(
 	cas *caching.Cas,
-	config config.OCIConfig,
+	cfg config.OCIConfig,
 ) *DockerRegistryOutputHandler {
 	return &DockerRegistryOutputHandler{
 		cas:    cas,
-		config: config,
+		config: cfg,
 	}
 }
 
@@ -117,6 +118,21 @@ func (d *DockerRegistryOutputHandler) lazyClient() (*client.Client, error) {
 	}
 	d.dockerClient = dockerClient
 	return d.dockerClient, nil
+}
+
+// PushImage copies the cached image from the configured cache registry to
+// destination. Auth flows through the ambient docker keychain; either side
+// can be tagged plain-HTTP via oci.insecure_registries.
+func (d *DockerRegistryOutputHandler) PushImage(ctx context.Context, image *gen.OCIImageOutput, destination string, _ *worker.ProgressTracker) (bool, error) {
+	imageID := image.GetImageId()
+	if imageID == "" {
+		return false, fmt.Errorf("cache write did not populate image_id for push to %s", destination)
+	}
+	src := d.cacheImageName(imageID)
+	return oci_push.Copy(ctx, src, destination, oci_push.Options{
+		SourceInsecure:      matchesInsecureRegistry(src, d.config.InsecureRegistries),
+		DestinationInsecure: matchesInsecureRegistry(destination, d.config.InsecureRegistries),
+	})
 }
 
 func (d *DockerRegistryOutputHandler) cacheImageName(digest string) string {
@@ -178,10 +194,7 @@ func (d *DockerRegistryOutputHandler) Write(
 		targetLabel:     target.Label.String(),
 	}
 
-	return &PreparedOutput{
-		Output:    genOutput,
-		WritePlan: writePlan,
-	}, nil
+	return &PreparedOutput{Output: genOutput, WritePlan: writePlan}, nil
 }
 
 func makeRegistryAuth(ref string) (string, error) {

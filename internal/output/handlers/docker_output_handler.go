@@ -10,6 +10,7 @@ import (
 	"grog/internal/caching"
 	"grog/internal/console"
 	"grog/internal/model"
+	"grog/internal/oci_push"
 	"grog/internal/ociproxy"
 	"grog/internal/proto/gen"
 	"grog/internal/worker"
@@ -35,17 +36,17 @@ type DockerOutputHandler struct {
 	dockerClient *client.Client
 	dockerErr    error
 
-	// proxy is the loopback OCI registry. Lazily started on first push so that
-	// runs without docker targets pay no cost.
+	// proxy is the loopback OCI registry.
 	proxyInit sync.Once
 	proxy     *ociproxy.Registry
 	proxyErr  error
+
+	insecureRegistries []string
 }
 
-// NewDockerOutputHandler creates a new DockerOutputHandler. The Docker client
-// and the in-process registry are both created lazily on first use.
-func NewDockerOutputHandler(_ context.Context, cas *caching.Cas) *DockerOutputHandler {
-	return &DockerOutputHandler{cas: cas}
+// NewDockerOutputHandler creates a new DockerOutputHandler.
+func NewDockerOutputHandler(_ context.Context, cas *caching.Cas, insecureRegistries []string) *DockerOutputHandler {
+	return &DockerOutputHandler{cas: cas, insecureRegistries: insecureRegistries}
 }
 
 // Type returns the type of the handler.
@@ -155,10 +156,7 @@ func (d *DockerOutputHandler) Write(
 		targetLabel:    target.Label.String(),
 	}
 
-	return &PreparedOutput{
-		Output:    genOutput,
-		WritePlan: plan,
-	}, nil
+	return &PreparedOutput{Output: genOutput, WritePlan: plan}, nil
 }
 
 // Load restores a previously cached image into the local Docker daemon by
@@ -233,6 +231,28 @@ func (d *DockerOutputHandler) Load(
 
 	logger.Debugf("successfully loaded Docker image %s from cache", localImageName)
 	return nil
+}
+
+// PushImage copies the cached image from the loopback proxy to the destination
+// registry. The proxy is started on demand by Write/Load and stays up until
+// the registry's Close. Source is always loopback (insecure HTTP).
+func (d *DockerOutputHandler) PushImage(ctx context.Context, image *gen.OCIImageOutput, destination string, _ *worker.ProgressTracker) (bool, error) {
+	proxy, err := d.ensureProxy(ctx)
+	if err != nil {
+		return false, err
+	}
+	manifestDigest := image.GetManifestDigest().GetHash()
+	imageID := image.GetImageId()
+	if manifestDigest == "" || imageID == "" {
+		return false, fmt.Errorf("cache write did not populate image identity for push to %s", destination)
+	}
+	src := fmt.Sprintf("%s/%s@%s", proxy.Addr(), loopbackRepoName(imageID), manifestDigest)
+	return oci_push.Copy(ctx, src, destination, oci_push.Options{
+		// Source is grog's own loopback proxy — structurally HTTP, not
+		// something the user opts in to.
+		SourceInsecure:      true,
+		DestinationInsecure: matchesInsecureRegistry(destination, d.insecureRegistries),
+	})
 }
 
 // dockerImageWritePlan defers the actual `docker push` to the cache-write phase.

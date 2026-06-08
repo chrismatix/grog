@@ -35,3 +35,9 @@ cases:
 Run the integration tests with `make test`.
 
 To update a single test fixture you can run `make test update={test case name}`
+
+## Gated scenarios
+
+Scenarios that talk to a cloud registry/cache (e.g. GAR) are skipped
+unless `REQUIRES_CREDENTIALS=1` is set, so the default `make test` run
+does not depend on ambient cloud credentials.

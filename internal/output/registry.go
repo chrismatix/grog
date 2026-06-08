@@ -44,6 +44,10 @@ type Registry struct {
 	hashCache       map[string]string
 	outputHashMutex sync.RWMutex
 	outputHashCache map[string]map[model.Output]string
+
+	pushReporter *handlers.PushReporter
+	pushEnabled  func() bool
+	imagePusher  handlers.ImagePusher
 }
 
 // NewRegistry creates a new registry with default handlers.
@@ -51,6 +55,9 @@ func NewRegistry(
 	ctx context.Context,
 	cas *caching.Cas,
 ) *Registry {
+	pushReporter := handlers.NewPushReporter(func() bool { return config.Global.FailFast })
+	pushEnabled := func() bool { return config.Global.Push }
+
 	r := &Registry{
 		handlers:        make(map[string]handlers.Handler),
 		targetMutexMap:  maps.NewMutexMap(),
@@ -59,21 +66,67 @@ func NewRegistry(
 		pool: pond.NewPool(
 			runtime.NumCPU() * 2,
 		),
+		pushReporter: pushReporter,
 	}
 
-	// Register built-in handlers
 	r.Register(handlers.NewFileOutputHandler(cas))
 	r.Register(handlers.NewDirectoryOutputHandler(cas))
 
-	dockerBackend := config.Global.OCI.Backend
-	if dockerBackend == "registry" {
-		r.Register(handlers.NewDockerRegistryOutputHandler(cas, config.Global.OCI))
+	var ociHandler handlers.Handler
+	if config.Global.OCI.Backend == "registry" {
+		ociHandler = handlers.NewDockerRegistryOutputHandler(cas, config.Global.OCI)
 	} else {
-		// The backend setting is validated in the config package
-		// so we can assume it's either "registry" or "fs"
-		r.Register(handlers.NewDockerOutputHandler(ctx, cas))
+		ociHandler = handlers.NewDockerOutputHandler(ctx, cas, config.Global.OCI.InsecureRegistries)
 	}
+	r.Register(ociHandler)
+	// The oci handler also pushes images; record the ImagePusher facet so
+	// the per-target push hook can find it without re-traversing handlers.
+	pusher, ok := ociHandler.(handlers.ImagePusher)
+	if !ok {
+		panic(fmt.Sprintf("oci handler %T does not implement ImagePusher", ociHandler))
+	}
+	r.imagePusher = pusher
+	r.pushEnabled = pushEnabled
 	return r
+}
+
+// buildPushPlans assembles one push plan per (oci output, destination) for
+// every entry in target.OciPush. Returns an error if a key references a name
+// that is not produced by the target's oci:: outputs — that's a recipe bug.
+func (r *Registry) buildPushPlans(target *model.Target, outputs []*gen.Output) ([]handlers.OutputWritePlan, error) {
+	if len(target.OciPush) == 0 {
+		return nil, nil
+	}
+	var plans []handlers.OutputWritePlan
+	for localName, destinations := range target.OciPush {
+		ociImage := findOciImageByLocalTag(outputs, localName)
+		if ociImage == nil {
+			return nil, fmt.Errorf("%s: oci_push key %q does not match any oci:: output", target.Label, localName)
+		}
+		for _, dest := range destinations {
+			plans = append(plans, handlers.NewOciPushPlan(
+				r.imagePusher, ociImage, dest, target.Label.String(), r.pushReporter,
+			))
+		}
+	}
+	return plans, nil
+}
+
+func findOciImageByLocalTag(outputs []*gen.Output, localTag string) *gen.OCIImageOutput {
+	for _, out := range outputs {
+		img := out.GetOciImage()
+		if img == nil {
+			continue
+		}
+		if img.GetLocalTag() == localTag {
+			return img
+		}
+	}
+	return nil
+}
+
+func (r *Registry) PushReporter() *handlers.PushReporter {
+	return r.pushReporter
 }
 
 // Close releases resources held by output handlers (notably the in-process
@@ -111,7 +164,6 @@ func (r *Registry) Register(handler handlers.Handler) {
 // GetHandler retrieves a handler by type.
 func (r *Registry) mustGetHandlerFromProto(output *gen.Output) handlers.Handler {
 	var outputType string
-
 	switch output.Kind.(type) {
 	case *gen.Output_File:
 		outputType = string(handlers.FileHandler)
@@ -122,7 +174,6 @@ func (r *Registry) mustGetHandlerFromProto(output *gen.Output) handlers.Handler 
 	default:
 		panic(fmt.Errorf("unknown output kind: %T", output.Kind))
 	}
-
 	return r.mustGetHandler(outputType)
 }
 
@@ -185,6 +236,17 @@ func (r *Registry) PrepareOutputs(
 		if preparedOutput.WritePlan != nil {
 			writePlans = append(writePlans, preparedOutput.WritePlan)
 		}
+	}
+
+	// Append a push plan per (oci output, destination) for any oci_push entry
+	// declared on the target. Each plan runs after the cache plans so that
+	// image_id and manifest_digest are populated before it tries to source.
+	if r.pushEnabled != nil && r.pushEnabled() {
+		pushPlans, err := r.buildPushPlans(target, targetOutputs)
+		if err != nil {
+			return nil, err
+		}
+		writePlans = append(writePlans, pushPlans...)
 	}
 
 	outputHash, err := getOutputHash(targetOutputs)
@@ -293,6 +355,20 @@ func (r *Registry) LoadOutputs(
 
 	if err := ensureBinOutputExecutable(target); err != nil {
 		return err
+	}
+
+	// Fire pushes for every oci_push entry on the current target. The cached
+	// proto only carries the local image; destinations come from the live
+	// target. Push errors are recorded to the reporter but never propagated
+	// — a transient registry hiccup must not invalidate a cache restore.
+	if r.pushEnabled != nil && r.pushEnabled() && len(target.OciPush) > 0 {
+		plans, err := r.buildPushPlans(target, targetResult.Outputs)
+		if err != nil {
+			return err
+		}
+		for _, plan := range plans {
+			_ = plan.Execute(ctx, progress)
+		}
 	}
 
 	logger.Debugf("%s: outputs loaded", target.Label)

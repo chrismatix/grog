@@ -40,6 +40,14 @@ type Handler interface {
 	Load(ctx context.Context, target model.Target, output *gen.Output, tracker *worker.ProgressTracker) error
 }
 
+// ImagePusher is the optional capability oci output handlers implement to
+// ship a cached image to a user-facing registry. The handler reads its own
+// cache state to resolve a source ref and copies it daemon-free to the
+// destination. Driven by target.OciPush entries after Write/Load.
+type ImagePusher interface {
+	PushImage(ctx context.Context, image *gen.OCIImageOutput, destination string, tracker *worker.ProgressTracker) (skipped bool, err error)
+}
+
 type HandlerType string
 
 const (

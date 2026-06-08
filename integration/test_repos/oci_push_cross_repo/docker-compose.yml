@@ -1,0 +1,25 @@
+# Brings up two throwaway OCI Distribution registries on disjoint loopback
+# ports. The grog test scenario points the cache backend at the first one
+# (5556) and pushes to both — one destination on the same host as the cache
+# (exercises cross-repo blob mount) and one on the second host (exercises
+# the byte-streaming fallback).
+#
+# Containers are removed on `docker-compose down` and the bind ports are
+# loopback-only so this is safe to run on a developer workstation alongside
+# other work.
+services:
+  cache-registry:
+    image: registry:2
+    container_name: grog-cross-repo-cache
+    ports:
+      - "127.0.0.1:5556:5556"
+    environment:
+      REGISTRY_HTTP_ADDR: 0.0.0.0:5556
+
+  remote-registry:
+    image: registry:2
+    container_name: grog-cross-repo-remote
+    ports:
+      - "127.0.0.1:5557:5557"
+    environment:
+      REGISTRY_HTTP_ADDR: 0.0.0.0:5557

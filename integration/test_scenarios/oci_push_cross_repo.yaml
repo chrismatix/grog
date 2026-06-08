@@ -1,0 +1,75 @@
+name: OCI Push Cross-Repo
+repo: oci_push_cross_repo
+cases:
+  # Spin up the two-registry topology. The compose down on the way out
+  # cleans both containers; we still rm -f first to recover from a
+  # previous run that aborted before teardown.
+  - name: start_cross_repo_registries
+    setup_command: |
+      docker compose down --remove-orphans >/dev/null 2>&1 || true
+      # Pre-pull with retries; docker compose's implicit pull eats Hub
+      # timeouts as opaque "container did not start" errors otherwise.
+      pulled=0
+      for _ in $(seq 1 5); do
+        if docker pull registry:2 >/dev/null 2>&1; then
+          pulled=1
+          break
+        fi
+        sleep 5
+      done
+      if [ "$pulled" -ne 1 ]; then
+        echo "could not pull registry:2 after retries" >&2
+        exit 1
+      fi
+      docker compose up -d >/dev/null
+      for port in 5556 5557; do
+        ok=0
+        for _ in $(seq 1 30); do
+          if curl -fsS http://127.0.0.1:${port}/v2/ >/dev/null 2>&1; then
+            ok=1
+            break
+          fi
+          sleep 0.5
+        done
+        if [ "${ok}" -ne 1 ]; then
+          echo "registry on port ${port} did not start in time" >&2
+          exit 1
+        fi
+      done
+
+  # Build both targets. The summary should attribute one push per target:
+  # two pushed, zero already current, zero failed.
+  - name: oci_push_cross_repo_fresh
+    grog_args:
+      - build
+      - --push
+      - //...
+
+  # Re-run: cache hits across the board, both destinations probe-skip via
+  # HEAD because the digests already match. This is the assertion that
+  # makes redeployment of an unchanged image free under --push.
+  - name: oci_push_cross_repo_cache_hit
+    grog_args:
+      - build
+      - --push
+      - //...
+
+  # Confirm both registries hold the manifest at the expected tag.
+  # Without this step the test could pass on a green build summary even
+  # if the push happened to log success without actually landing bytes.
+  - name: verify_same_host_destination
+    setup_command: |
+      curl -fsS -o /dev/null \
+        -H 'Accept: application/vnd.oci.image.manifest.v1+json' \
+        http://127.0.0.1:5556/v2/prod/same/manifests/1
+  - name: verify_cross_host_destination
+    setup_command: |
+      curl -fsS -o /dev/null \
+        -H 'Accept: application/vnd.oci.image.manifest.v1+json' \
+        http://127.0.0.1:5557/v2/prod/cross/manifests/1
+
+  - name: stop_cross_repo_registries
+    setup_command: |
+      docker compose down --remove-orphans >/dev/null 2>&1 || true
+      docker rmi 127.0.0.1:5556/prod/same:1 >/dev/null 2>&1 || true
+      docker rmi 127.0.0.1:5557/prod/cross:1 >/dev/null 2>&1 || true
