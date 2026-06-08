@@ -57,6 +57,7 @@ Reference for the `grog` CLI.
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --since string                  Git ref for Docker layer-cache seed-donor selection (e.g. HEAD~1 or origin/main). Empty auto-detects the merge-base with the upstream default branch.
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -65,24 +66,26 @@ Reference for the `grog` CLI.
 
 ### See also
 
-- [`grog build`](#grog-build) - Loads the user configuration and executes build targets.
-- [`grog build-and-test`](#grog-build-and-test) - Loads the user configuration and executes build and test targets.
-- [`grog changes`](#grog-changes) - Lists targets whose inputs have been modified since a given commit.
-- [`grog check`](#grog-check) - Loads the build graph and runs basic consistency checks.
-- [`grog clean`](#grog-clean) - Removes all cached artifacts.
-- [`grog deps`](#grog-deps) - Lists (transitive) dependencies of a target.
-- [`grog explain-changes`](#grog-explain-changes) - Renders the chain of targets affected by changes since a git ref as a tree.
-- [`grog graph`](#grog-graph) - Outputs the target dependency graph.
-- [`grog info`](#grog-info) - Prints information about the grog cli and workspace.
-- [`grog list`](#grog-list) - Lists targets by pattern.
-- [`grog logs`](#grog-logs) - Print the latest log file for the given target.
-- [`grog owners`](#grog-owners) - Lists targets that own the specified files as inputs.
-- [`grog rdeps`](#grog-rdeps) - Lists (transitive) dependants (reverse dependencies) of a target.
-- [`grog run`](#grog-run) - Builds and runs one or more targets' binary outputs.
-- [`grog taint`](#grog-taint) - Taints targets by pattern to force execution regardless of cache status.
-- [`grog test`](#grog-test) - Loads the user configuration and executes test targets.
-- [`grog traces`](#grog-traces) - View and manage build execution traces.
-- [`grog version`](#grog-version) - Print the version info.
+* [`grog build`](#grog-build) - Loads the user configuration and executes build targets.
+* [`grog build-and-test`](#grog-build-and-test) - Loads the user configuration and executes build and test targets.
+* [`grog changes`](#grog-changes) - Lists targets whose inputs have been modified since a given commit.
+* [`grog check`](#grog-check) - Loads the build graph and runs basic consistency checks.
+* [`grog clean`](#grog-clean) - Removes all cached artifacts.
+* [`grog deps`](#grog-deps) - Lists (transitive) dependencies of a target.
+* [`grog explain-changes`](#grog-explain-changes) - Renders the chain of targets affected by changes since a git ref as a tree.
+* [`grog graph`](#grog-graph) - Outputs the target dependency graph.
+* [`grog info`](#grog-info) - Prints information about the grog cli and workspace.
+* [`grog list`](#grog-list) - Lists targets by pattern.
+* [`grog logs`](#grog-logs) - Print the latest log file for the given target.
+* [`grog owners`](#grog-owners) - Lists targets that own the specified files as inputs.
+* [`grog rdeps`](#grog-rdeps) - Lists (transitive) dependants (reverse dependencies) of a target.
+* [`grog run`](#grog-run) - Builds and runs one or more targets' binary outputs.
+* [`grog taint`](#grog-taint) - Taints targets by pattern to force execution regardless of cache status.
+* [`grog test`](#grog-test) - Loads the user configuration and executes test targets.
+* [`grog traces`](#grog-traces) - View and manage build execution traces.
+* [`grog version`](#grog-version) - Print the version info.
+
+
 
 ---
 
@@ -132,6 +135,7 @@ grog build [flags]
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --since string                  Git ref for Docker layer-cache seed-donor selection (e.g. HEAD~1 or origin/main). Empty auto-detects the merge-base with the upstream default branch.
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -140,7 +144,9 @@ grog build [flags]
 
 ### See also
 
-- [`grog`](#grog)
+* [`grog`](#grog)
+
+
 
 ---
 
@@ -190,6 +196,7 @@ grog build-and-test [flags]
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --since string                  Git ref for Docker layer-cache seed-donor selection (e.g. HEAD~1 or origin/main). Empty auto-detects the merge-base with the upstream default branch.
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -198,7 +205,9 @@ grog build-and-test [flags]
 
 ### See also
 
-- [`grog`](#grog)
+* [`grog`](#grog)
+
+
 
 ---
 
@@ -260,7 +269,9 @@ grog changes [flags]
 
 ### See also
 
-- [`grog`](#grog)
+* [`grog`](#grog)
+
+
 
 ---
 
@@ -308,6 +319,7 @@ grog check [flags]
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --since string                  Git ref for Docker layer-cache seed-donor selection (e.g. HEAD~1 or origin/main). Empty auto-detects the merge-base with the upstream default branch.
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -316,7 +328,9 @@ grog check [flags]
 
 ### See also
 
-- [`grog`](#grog)
+* [`grog`](#grog)
+
+
 
 ---
 
@@ -367,6 +381,7 @@ grog clean [flags]
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --since string                  Git ref for Docker layer-cache seed-donor selection (e.g. HEAD~1 or origin/main). Empty auto-detects the merge-base with the upstream default branch.
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -375,7 +390,9 @@ grog clean [flags]
 
 ### See also
 
-- [`grog`](#grog)
+* [`grog`](#grog)
+
+
 
 ---
 
@@ -429,6 +446,7 @@ grog deps [flags]
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --since string                  Git ref for Docker layer-cache seed-donor selection (e.g. HEAD~1 or origin/main). Empty auto-detects the merge-base with the upstream default branch.
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -437,7 +455,9 @@ grog deps [flags]
 
 ### See also
 
-- [`grog`](#grog)
+* [`grog`](#grog)
+
+
 
 ---
 
@@ -511,7 +531,9 @@ grog explain-changes [flags]
 
 ### See also
 
-- [`grog`](#grog)
+* [`grog`](#grog)
+
+
 
 ---
 
@@ -566,6 +588,7 @@ grog graph [flags]
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --since string                  Git ref for Docker layer-cache seed-donor selection (e.g. HEAD~1 or origin/main). Empty auto-detects the merge-base with the upstream default branch.
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -574,7 +597,9 @@ grog graph [flags]
 
 ### See also
 
-- [`grog`](#grog)
+* [`grog`](#grog)
+
+
 
 ---
 
@@ -623,6 +648,7 @@ grog info [flags]
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --since string                  Git ref for Docker layer-cache seed-donor selection (e.g. HEAD~1 or origin/main). Empty auto-detects the merge-base with the upstream default branch.
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -631,7 +657,9 @@ grog info [flags]
 
 ### See also
 
-- [`grog`](#grog)
+* [`grog`](#grog)
+
+
 
 ---
 
@@ -683,6 +711,7 @@ grog list [flags]
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --since string                  Git ref for Docker layer-cache seed-donor selection (e.g. HEAD~1 or origin/main). Empty auto-detects the merge-base with the upstream default branch.
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -691,7 +720,9 @@ grog list [flags]
 
 ### See also
 
-- [`grog`](#grog)
+* [`grog`](#grog)
+
+
 
 ---
 
@@ -742,6 +773,7 @@ grog logs [flags]
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --since string                  Git ref for Docker layer-cache seed-donor selection (e.g. HEAD~1 or origin/main). Empty auto-detects the merge-base with the upstream default branch.
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -750,7 +782,9 @@ grog logs [flags]
 
 ### See also
 
-- [`grog`](#grog)
+* [`grog`](#grog)
+
+
 
 ---
 
@@ -800,6 +834,7 @@ grog owners [flags]
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --since string                  Git ref for Docker layer-cache seed-donor selection (e.g. HEAD~1 or origin/main). Empty auto-detects the merge-base with the upstream default branch.
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -808,7 +843,9 @@ grog owners [flags]
 
 ### See also
 
-- [`grog`](#grog)
+* [`grog`](#grog)
+
+
 
 ---
 
@@ -862,6 +899,7 @@ grog rdeps [flags]
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --since string                  Git ref for Docker layer-cache seed-donor selection (e.g. HEAD~1 or origin/main). Empty auto-detects the merge-base with the upstream default branch.
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -870,7 +908,9 @@ grog rdeps [flags]
 
 ### See also
 
-- [`grog`](#grog)
+* [`grog`](#grog)
+
+
 
 ---
 
@@ -922,6 +962,7 @@ grog run [flags]
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --since string                  Git ref for Docker layer-cache seed-donor selection (e.g. HEAD~1 or origin/main). Empty auto-detects the merge-base with the upstream default branch.
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -930,7 +971,9 @@ grog run [flags]
 
 ### See also
 
-- [`grog`](#grog)
+* [`grog`](#grog)
+
+
 
 ---
 
@@ -982,6 +1025,7 @@ grog taint [flags]
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --since string                  Git ref for Docker layer-cache seed-donor selection (e.g. HEAD~1 or origin/main). Empty auto-detects the merge-base with the upstream default branch.
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -990,7 +1034,9 @@ grog taint [flags]
 
 ### See also
 
-- [`grog`](#grog)
+* [`grog`](#grog)
+
+
 
 ---
 
@@ -1043,6 +1089,7 @@ grog test [flags]
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --since string                  Git ref for Docker layer-cache seed-donor selection (e.g. HEAD~1 or origin/main). Empty auto-detects the merge-base with the upstream default branch.
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -1051,7 +1098,9 @@ grog test [flags]
 
 ### See also
 
-- [`grog`](#grog)
+* [`grog`](#grog)
+
+
 
 ---
 
@@ -1089,6 +1138,7 @@ View, analyze, and export build execution traces for performance analysis and da
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --since string                  Git ref for Docker layer-cache seed-donor selection (e.g. HEAD~1 or origin/main). Empty auto-detects the merge-base with the upstream default branch.
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -1097,13 +1147,15 @@ View, analyze, and export build execution traces for performance analysis and da
 
 ### See also
 
-- [`grog`](#grog)
-- [`grog traces export`](#grog-traces-export) - Export traces for dashboard integration.
-- [`grog traces list`](#grog-traces-list) - List recent build traces.
-- [`grog traces prune`](#grog-traces-prune) - Delete traces older than a specified duration.
-- [`grog traces pull`](#grog-traces-pull) - Download remote traces to local cache for querying.
-- [`grog traces show`](#grog-traces-show) - Show details of a specific trace.
-- [`grog traces stats`](#grog-traces-stats) - Show aggregate statistics across recent traces.
+* [`grog`](#grog)
+* [`grog traces export`](#grog-traces-export) - Export traces for dashboard integration.
+* [`grog traces list`](#grog-traces-list) - List recent build traces.
+* [`grog traces prune`](#grog-traces-prune) - Delete traces older than a specified duration.
+* [`grog traces pull`](#grog-traces-pull) - Download remote traces to local cache for querying.
+* [`grog traces show`](#grog-traces-show) - Show details of a specific trace.
+* [`grog traces stats`](#grog-traces-stats) - Show aggregate statistics across recent traces.
+
+
 
 ---
 
@@ -1160,7 +1212,9 @@ grog traces export [flags]
 
 ### See also
 
-- [`grog traces`](#grog-traces) - View and manage build execution traces.
+* [`grog traces`](#grog-traces) - View and manage build execution traces.
+
+
 
 ---
 
@@ -1219,7 +1273,9 @@ grog traces list [flags]
 
 ### See also
 
-- [`grog traces`](#grog-traces) - View and manage build execution traces.
+* [`grog traces`](#grog-traces) - View and manage build execution traces.
+
+
 
 ---
 
@@ -1265,6 +1321,7 @@ grog traces prune [flags]
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --since string                  Git ref for Docker layer-cache seed-donor selection (e.g. HEAD~1 or origin/main). Empty auto-detects the merge-base with the upstream default branch.
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -1273,7 +1330,9 @@ grog traces prune [flags]
 
 ### See also
 
-- [`grog traces`](#grog-traces) - View and manage build execution traces.
+* [`grog traces`](#grog-traces) - View and manage build execution traces.
+
+
 
 ---
 
@@ -1317,6 +1376,7 @@ grog traces pull [flags]
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --since string                  Git ref for Docker layer-cache seed-donor selection (e.g. HEAD~1 or origin/main). Empty auto-detects the merge-base with the upstream default branch.
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -1325,7 +1385,9 @@ grog traces pull [flags]
 
 ### See also
 
-- [`grog traces`](#grog-traces) - View and manage build execution traces.
+* [`grog traces`](#grog-traces) - View and manage build execution traces.
+
+
 
 ---
 
@@ -1372,6 +1434,7 @@ grog traces show <trace-id> [flags]
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --since string                  Git ref for Docker layer-cache seed-donor selection (e.g. HEAD~1 or origin/main). Empty auto-detects the merge-base with the upstream default branch.
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -1380,7 +1443,9 @@ grog traces show <trace-id> [flags]
 
 ### See also
 
-- [`grog traces`](#grog-traces) - View and manage build execution traces.
+* [`grog traces`](#grog-traces) - View and manage build execution traces.
+
+
 
 ---
 
@@ -1431,6 +1496,7 @@ grog traces stats [flags]
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --since string                  Git ref for Docker layer-cache seed-donor selection (e.g. HEAD~1 or origin/main). Empty auto-detects the merge-base with the upstream default branch.
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -1439,7 +1505,9 @@ grog traces stats [flags]
 
 ### See also
 
-- [`grog traces`](#grog-traces) - View and manage build execution traces.
+* [`grog traces`](#grog-traces) - View and manage build execution traces.
+
+
 
 ---
 
@@ -1487,6 +1555,7 @@ grog version [flags]
       --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
       --profile string                Select a configuration profile to use
       --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --since string                  Git ref for Docker layer-cache seed-donor selection (e.g. HEAD~1 or origin/main). Empty auto-detects the merge-base with the upstream default branch.
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
@@ -1495,6 +1564,8 @@ grog version [flags]
 
 ### See also
 
-- [`grog`](#grog)
+* [`grog`](#grog)
+
+
 
 ###### Auto generated by spf13/cobra

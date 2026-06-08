@@ -205,6 +205,33 @@ digest. `--push` applies transitively across the build selection, so a
 The `oci_push` map is **not** part of the cache key, so bumping the tag in
 your destination string reuses the cached image and only re-runs the push.
 
+### Layer cache reuse
+
+Declaring `oci_push` for an `oci::` output also changes how Grog **caches** that
+image, so that a `docker build` after a cache miss can reuse unchanged layers
+(`apt-get`, `pip install`, `npm ci`, …) from the previous build.
+
+- **Declared cache repository.** The cache image is stored in the repository
+  from the output's `oci_push` destination — the part before the tag. Grog tags
+  it with the build platform and the target's content hash,
+  `<repo>:<platform>-<change-hash>`, ignoring your deploy tag. Because the
+  repository is declared (not synthesised from the target label), the set of
+  cache repositories is explicit and enumerable — convenient when a registry
+  such as ECR requires repositories to be created ahead of time.
+- **Content-addressed identity.** The tag changes whenever an input changes, so
+  a stale image is never restored as the cache. An output **without** `oci_push`
+  keeps the default content-addressed naming (one repository per image digest).
+- **Seeding on a cache miss.** Before building, Grog pulls the image the same
+  target produced at an earlier commit and loads it into the local daemon so its
+  layers are available to `docker build`. The earlier commit is chosen by
+  `--since` (the same ref you pass to `grog changes`: `origin/<base>` on a pull
+  request, `HEAD~1` on a push to your default branch). When `--since` is omitted,
+  Grog auto-detects the merge-base with the upstream default branch and falls
+  back to `HEAD~1`. Seeding is best-effort: if the prior image cannot be found
+  (first build, shallow clone, no ref), the build simply runs without a warm
+  layer cache. The seed image only warms layers — it is never restored as the
+  build result — so a missed seed costs build time but never correctness.
+
 ### Insecure registries
 
 By default Grog pushes over HTTPS. To allow plain HTTP destinations (local
