@@ -16,6 +16,7 @@ import (
 	"grog/internal/proto/gen"
 	"grog/internal/worker"
 	"path/filepath"
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -50,6 +51,15 @@ type Executor struct {
 	deferAsyncWait   bool
 	asyncDrained     bool
 	rerunGroup       singleflight.Group
+
+	// cacheSeedRef is the resolved git ref used to locate Docker layer-cache
+	// seed donors, and cacheSeedRefOK reports whether one was resolved. Both
+	// are computed once per Execute run (seedRefOnce) since they shell out to
+	// git. gitRoot is the repository root used to read input files at the ref.
+	seedRefOnce    sync.Once
+	cacheSeedRef   string
+	cacheSeedRefOK bool
+	gitRoot        string
 }
 
 func NewExecutor(
@@ -442,13 +452,61 @@ func (e *Executor) getTaskFunc(
 			target.DepLoadTime = time.Since(depLoadStart)
 		}
 
-		// Seed Docker layer caches before executing the build command.
-		// On a cache miss for a target with docker outputs, this pulls the
-		// previous image into the local daemon so its layers can be reused.
-		e.registry.SeedLayerCaches(ctx, target, update)
+		// Seed Docker layer caches before executing the build command. On a
+		// cache miss for a target with declared oci_push cache repos, this
+		// pulls the prior content-addressed image into the local daemon so its
+		// layers can be reused by `docker build`.
+		e.registry.SeedLayerCaches(ctx, target, e.priorChangeHashForSeed(ctx, target), update)
 
 		return e.executeTarget(ctx, target, binToolPaths, outputIdentifiers, transitiveOutputs, taggedOutputs, update, isTainted)
 	}
+}
+
+// priorChangeHashForSeed returns the change hash the target's inputs would have
+// produced at the configured seed ref, used to locate a Docker layer-cache seed
+// donor. It returns "" when seeding cannot apply: the target declares no
+// oci_push cache repos, no seed ref could be resolved (e.g. shallow clone), or
+// the recomputation fails. Seeding is best-effort, so all such cases simply skip
+// the seed rather than failing the build.
+func (e *Executor) priorChangeHashForSeed(ctx context.Context, target *model.Target) string {
+	if len(target.OciPush) == 0 {
+		return ""
+	}
+
+	seedRef, gitRoot, ok := e.resolveSeedRef(ctx)
+	if !ok {
+		return ""
+	}
+
+	priorHash, err := e.targetHasher.PriorChangeHashAtRef(target, gitRoot, seedRef)
+	if err != nil {
+		console.GetLogger(ctx).Debugf("%s: could not compute prior change hash at %s for seeding: %v",
+			target.Label, seedRef, err)
+		return ""
+	}
+	return priorHash
+}
+
+// resolveSeedRef resolves (once per run) the git ref and repository root used
+// for layer-cache seeding. The boolean is false when no usable ref or git root
+// could be determined, in which case callers skip seeding.
+func (e *Executor) resolveSeedRef(ctx context.Context) (string, string, bool) {
+	e.seedRefOnce.Do(func() {
+		gitRoot, err := config.GetGitRoot()
+		if err != nil {
+			console.GetLogger(ctx).Debugf("layer-cache seeding disabled: not a git repository: %v", err)
+			return
+		}
+		ref, ok := config.ResolveCacheSeedRef(config.Global.CacheSeedRef)
+		if !ok {
+			console.GetLogger(ctx).Debugf("layer-cache seeding disabled: could not resolve a seed ref")
+			return
+		}
+		e.gitRoot = gitRoot
+		e.cacheSeedRef = ref
+		e.cacheSeedRefOK = true
+	})
+	return e.cacheSeedRef, e.gitRoot, e.cacheSeedRefOK
 }
 
 func formatTargetResultForDebug(targetResult *gen.TargetResult) string {

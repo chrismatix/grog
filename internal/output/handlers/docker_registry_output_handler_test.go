@@ -7,313 +7,219 @@ import (
 	"testing"
 )
 
-func TestCacheImageName_ContentMode(t *testing.T) {
+// withRegistryConfig sets up a handler with a registry and pins the workspace
+// root and platform so cache names are deterministic across the test run.
+func withRegistryConfig(t *testing.T) *DockerRegistryOutputHandler {
+	t.Helper()
 	origRoot := config.Global.WorkspaceRoot
 	config.Global.WorkspaceRoot = "/home/user/myproject"
 	t.Cleanup(func() { config.Global.WorkspaceRoot = origRoot })
 
-	handler := &DockerRegistryOutputHandler{
+	origOS, origArch := config.Global.OS, config.Global.Arch
+	config.Global.OS, config.Global.Arch = "linux", "amd64"
+	t.Cleanup(func() { config.Global.OS, config.Global.Arch = origOS, origArch })
+
+	return &DockerRegistryOutputHandler{
 		config: config.OCIConfig{
-			Registry:  "123456.dkr.ecr.us-west-2.amazonaws.com",
-			CacheMode: config.OCICacheModeContent,
+			Registry: "123456.dkr.ecr.us-west-2.amazonaws.com",
 		},
 	}
+}
+
+func TestCacheImageName_Declared_IsContentAddressedTag(t *testing.T) {
+	handler := withRegistryConfig(t)
 
 	target := model.Target{
-		Label: label.TargetLabel{Package: "services/api", Name: "build_image"},
+		Label:      label.TargetLabel{Package: "services/api", Name: "build_image"},
+		OciPush:    map[string][]string{"api": {"registry.org/api:${GIT_SHA}"}},
+		Outputs:    []model.Output{{Type: "oci", Identifier: "api"}},
+		ChangeHash: "deadbeef",
 	}
 
-	got := handler.cacheImageName(target, "sha256:abcdef1234567890")
-	// Content mode: should use the digest (without sha256: prefix) in the name.
+	// The declared destination's repository is used verbatim; the deploy tag is
+	// dropped and replaced with grog's platform-qualified content hash.
+	got := handler.cacheImageName(target, "api", "sha256:ignored")
+	want := "registry.org/api:linux-amd64-deadbeef"
+	if got != want {
+		t.Fatalf("declared cache name:\n  got  %q\n  want %q", got, want)
+	}
+}
+
+func TestCacheImageName_Declared_NewChangeHashYieldsNewTag(t *testing.T) {
+	handler := withRegistryConfig(t)
+
+	target := model.Target{
+		Label:   label.TargetLabel{Package: "services/api", Name: "build_image"},
+		OciPush: map[string][]string{"api": {"registry.org/api:latest"}},
+		Outputs: []model.Output{{Type: "oci", Identifier: "api"}},
+	}
+
+	target.ChangeHash = "aaaa"
+	first := handler.cacheImageName(target, "api", "sha256:same")
+	target.ChangeHash = "bbbb"
+	second := handler.cacheImageName(target, "api", "sha256:same")
+
+	// A changed input (new ChangeHash) must produce a different, immutable tag
+	// so a stale image can never be restored as the cache.
+	if first == second {
+		t.Fatalf("expected distinct tags per ChangeHash, both got %q", first)
+	}
+	if want := "registry.org/api:linux-amd64-aaaa"; first != want {
+		t.Fatalf("first:\n  got  %q\n  want %q", first, want)
+	}
+	if want := "registry.org/api:linux-amd64-bbbb"; second != want {
+		t.Fatalf("second:\n  got  %q\n  want %q", second, want)
+	}
+}
+
+func TestCacheImageName_Declared_DistinctPerPlatform(t *testing.T) {
+	handler := withRegistryConfig(t)
+
+	target := model.Target{
+		Label:      label.TargetLabel{Package: "services/api", Name: "build_image"},
+		OciPush:    map[string][]string{"api": {"registry.org/api:v1"}},
+		Outputs:    []model.Output{{Type: "oci", Identifier: "api"}},
+		ChangeHash: "cafe",
+	}
+
+	config.Global.OS, config.Global.Arch = "linux", "amd64"
+	amd64Name := handler.cacheImageName(target, "api", "")
+	config.Global.OS, config.Global.Arch = "linux", "arm64"
+	arm64Name := handler.cacheImageName(target, "api", "")
+
+	if amd64Name == arm64Name {
+		t.Fatalf("expected distinct names per platform, both got %q", amd64Name)
+	}
+	if want := "registry.org/api:linux-amd64-cafe"; amd64Name != want {
+		t.Fatalf("amd64:\n  got  %q\n  want %q", amd64Name, want)
+	}
+	if want := "registry.org/api:linux-arm64-cafe"; arm64Name != want {
+		t.Fatalf("arm64:\n  got  %q\n  want %q", arm64Name, want)
+	}
+}
+
+func TestCacheImageName_NoDeclaration_FallsBackToContentAddressed(t *testing.T) {
+	handler := withRegistryConfig(t)
+
+	target := model.Target{
+		Label:   label.TargetLabel{Package: "services/api", Name: "build_image"},
+		Outputs: []model.Output{{Type: "oci", Identifier: "api"}},
+		// No OciPush declared for "api".
+		ChangeHash: "deadbeef",
+	}
+
+	got := handler.cacheImageName(target, "api", "sha256:abcdef1234567890")
 	prefix := config.GetWorkspaceCachePrefix("/home/user/myproject")
 	want := "123456.dkr.ecr.us-west-2.amazonaws.com/" + prefix + "-abcdef1234567890"
 	if got != want {
-		t.Fatalf("content mode:\n  got  %q\n  want %q", got, want)
+		t.Fatalf("content-addressed fallback:\n  got  %q\n  want %q", got, want)
 	}
 }
 
-func TestCacheImageName_TargetMode(t *testing.T) {
-	origRoot := config.Global.WorkspaceRoot
-	config.Global.WorkspaceRoot = "/home/user/myproject"
-	t.Cleanup(func() { config.Global.WorkspaceRoot = origRoot })
-
-	origOS, origArch := config.Global.OS, config.Global.Arch
-	config.Global.OS, config.Global.Arch = "linux", "amd64"
-	t.Cleanup(func() { config.Global.OS, config.Global.Arch = origOS, origArch })
-
-	handler := &DockerRegistryOutputHandler{
-		config: config.OCIConfig{
-			Registry:  "123456.dkr.ecr.us-west-2.amazonaws.com",
-			CacheMode: config.OCICacheModeTarget,
-		},
-	}
+func TestCacheImageName_NoDeclaration_DifferentDigestsDiffer(t *testing.T) {
+	handler := withRegistryConfig(t)
 
 	target := model.Target{
-		Label: label.TargetLabel{Package: "services/api", Name: "build_image"},
+		Label:   label.TargetLabel{Package: "services/api", Name: "build_image"},
+		Outputs: []model.Output{{Type: "oci", Identifier: "api"}},
 	}
 
-	got := handler.cacheImageName(target, "sha256:abcdef1234567890")
-	// Target mode: should use the sanitized target label (not the digest), with
-	// the build platform as the tag so multi-arch builds do not collide.
-	prefix := config.GetWorkspaceCachePrefix("/home/user/myproject")
-	want := "123456.dkr.ecr.us-west-2.amazonaws.com/" + prefix + "-services-api-build_image:linux-amd64"
-	if got != want {
-		t.Fatalf("target mode:\n  got  %q\n  want %q", got, want)
-	}
-}
-
-func TestCacheImageName_TargetMode_StableAcrossDigests(t *testing.T) {
-	origRoot := config.Global.WorkspaceRoot
-	config.Global.WorkspaceRoot = "/home/user/myproject"
-	t.Cleanup(func() { config.Global.WorkspaceRoot = origRoot })
-
-	origOS, origArch := config.Global.OS, config.Global.Arch
-	config.Global.OS, config.Global.Arch = "linux", "amd64"
-	t.Cleanup(func() { config.Global.OS, config.Global.Arch = origOS, origArch })
-
-	handler := &DockerRegistryOutputHandler{
-		config: config.OCIConfig{
-			Registry:  "123456.dkr.ecr.us-west-2.amazonaws.com",
-			CacheMode: config.OCICacheModeTarget,
-		},
-	}
-
-	target := model.Target{
-		Label: label.TargetLabel{Package: "services/api", Name: "build_image"},
-	}
-
-	// Two different digests should produce the same cache image name in target mode.
-	name1 := handler.cacheImageName(target, "sha256:aaaa")
-	name2 := handler.cacheImageName(target, "sha256:bbbb")
-	if name1 != name2 {
-		t.Fatalf("target mode should produce stable names across digests:\n  digest1: %q\n  digest2: %q", name1, name2)
-	}
-}
-
-func TestCacheImageName_TargetMode_DistinctPerPlatform(t *testing.T) {
-	origRoot := config.Global.WorkspaceRoot
-	config.Global.WorkspaceRoot = "/home/user/myproject"
-	t.Cleanup(func() { config.Global.WorkspaceRoot = origRoot })
-
-	origOS, origArch := config.Global.OS, config.Global.Arch
-	t.Cleanup(func() { config.Global.OS, config.Global.Arch = origOS, origArch })
-
-	handler := &DockerRegistryOutputHandler{
-		config: config.OCIConfig{
-			Registry:  "123456.dkr.ecr.us-west-2.amazonaws.com",
-			CacheMode: config.OCICacheModeTarget,
-		},
-	}
-
-	target := model.Target{
-		Label: label.TargetLabel{Package: "services/api", Name: "build_image"},
-	}
-
-	// The same target built for two architectures must produce distinct image
-	// names. Otherwise concurrent multi-arch builds share one mutable tag and
-	// clobber each other's layer cache.
-	config.Global.OS, config.Global.Arch = "linux", "amd64"
-	amd64Name := handler.cacheImageName(target, "")
-	config.Global.OS, config.Global.Arch = "linux", "arm64"
-	arm64Name := handler.cacheImageName(target, "")
-
-	if amd64Name == arm64Name {
-		t.Fatalf("target mode should produce distinct names per platform: both got %q", amd64Name)
-	}
-
-	prefix := config.GetWorkspaceCachePrefix("/home/user/myproject")
-	wantAMD64 := "123456.dkr.ecr.us-west-2.amazonaws.com/" + prefix + "-services-api-build_image:linux-amd64"
-	if amd64Name != wantAMD64 {
-		t.Fatalf("amd64:\n  got  %q\n  want %q", amd64Name, wantAMD64)
-	}
-	wantARM64 := "123456.dkr.ecr.us-west-2.amazonaws.com/" + prefix + "-services-api-build_image:linux-arm64"
-	if arm64Name != wantARM64 {
-		t.Fatalf("arm64:\n  got  %q\n  want %q", arm64Name, wantARM64)
-	}
-}
-
-func TestCacheImageName_ContentMode_DifferentDigests(t *testing.T) {
-	origRoot := config.Global.WorkspaceRoot
-	config.Global.WorkspaceRoot = "/home/user/myproject"
-	t.Cleanup(func() { config.Global.WorkspaceRoot = origRoot })
-
-	handler := &DockerRegistryOutputHandler{
-		config: config.OCIConfig{
-			Registry:  "123456.dkr.ecr.us-west-2.amazonaws.com",
-			CacheMode: config.OCICacheModeContent,
-		},
-	}
-
-	target := model.Target{
-		Label: label.TargetLabel{Package: "services/api", Name: "build_image"},
-	}
-
-	// Two different digests should produce different cache image names in content mode.
-	name1 := handler.cacheImageName(target, "sha256:aaaa")
-	name2 := handler.cacheImageName(target, "sha256:bbbb")
+	name1 := handler.cacheImageName(target, "api", "sha256:aaaa")
+	name2 := handler.cacheImageName(target, "api", "sha256:bbbb")
 	if name1 == name2 {
-		t.Fatalf("content mode should produce different names for different digests: both got %q", name1)
+		t.Fatalf("content-addressed fallback should differ per digest, both got %q", name1)
 	}
 }
 
-func TestCacheImageName_DefaultCacheModeIsContent(t *testing.T) {
-	origRoot := config.Global.WorkspaceRoot
-	config.Global.WorkspaceRoot = "/home/user/myproject"
-	t.Cleanup(func() { config.Global.WorkspaceRoot = origRoot })
-
-	// Empty CacheMode should behave like content mode (the default).
-	handler := &DockerRegistryOutputHandler{
-		config: config.OCIConfig{
-			Registry:  "123456.dkr.ecr.us-west-2.amazonaws.com",
-			CacheMode: "",
-		},
-	}
-
-	target := model.Target{
-		Label: label.TargetLabel{Package: "pkg", Name: "tgt"},
-	}
-
-	name1 := handler.cacheImageName(target, "sha256:aaaa")
-	name2 := handler.cacheImageName(target, "sha256:bbbb")
-	if name1 == name2 {
-		t.Fatalf("empty cache_mode should default to content-addressed: both got %q", name1)
-	}
-}
-
-func TestCacheImageName_TargetMode_RootPackage(t *testing.T) {
-	origRoot := config.Global.WorkspaceRoot
-	config.Global.WorkspaceRoot = "/home/user/myproject"
-	t.Cleanup(func() { config.Global.WorkspaceRoot = origRoot })
-
-	origOS, origArch := config.Global.OS, config.Global.Arch
-	config.Global.OS, config.Global.Arch = "linux", "amd64"
-	t.Cleanup(func() { config.Global.OS, config.Global.Arch = origOS, origArch })
-
-	handler := &DockerRegistryOutputHandler{
-		config: config.OCIConfig{
-			Registry:  "123456.dkr.ecr.us-west-2.amazonaws.com",
-			CacheMode: config.OCICacheModeTarget,
-		},
-	}
-
-	// Target at root package (empty package path).
-	target := model.Target{
-		Label: label.TargetLabel{Package: "", Name: "build_image"},
-	}
-
-	got := handler.cacheImageName(target, "")
-	prefix := config.GetWorkspaceCachePrefix("/home/user/myproject")
-	want := "123456.dkr.ecr.us-west-2.amazonaws.com/" + prefix + "--build_image:linux-amd64"
-	if got != want {
-		t.Fatalf("root package:\n  got  %q\n  want %q", got, want)
-	}
-}
-
-func TestSeedLayerCache_NoopInContentMode(t *testing.T) {
-	handler := &DockerRegistryOutputHandler{
-		config: config.OCIConfig{
-			CacheMode: config.OCICacheModeContent,
-		},
-	}
-
-	target := model.Target{
-		Label: label.TargetLabel{Package: "pkg", Name: "tgt"},
-	}
-
-	// SeedLayerCache should return nil immediately in content mode
-	// without touching the Docker client (which is nil here -- would panic if called).
-	if err := handler.SeedLayerCache(nil, target, nil); err != nil {
-		t.Fatalf("expected nil error in content mode, got %v", err)
-	}
-}
-
-func TestSeedLayerCache_NoopWithEmptyCacheMode(t *testing.T) {
-	handler := &DockerRegistryOutputHandler{
-		config: config.OCIConfig{
-			CacheMode: "",
-		},
-	}
-
-	target := model.Target{
-		Label: label.TargetLabel{Package: "pkg", Name: "tgt"},
-	}
-
-	// Empty cache mode defaults to content mode -- should be a no-op.
-	if err := handler.SeedLayerCache(nil, target, nil); err != nil {
-		t.Fatalf("expected nil error with empty cache mode, got %v", err)
-	}
-}
-
-func TestSeedLayerCache_NoopWhenPrebuildLayerFetchDisabled(t *testing.T) {
-	disabled := false
-	handler := &DockerRegistryOutputHandler{
-		config: config.OCIConfig{
-			CacheMode:          config.OCICacheModeTarget,
-			PrebuildLayerFetch: &disabled,
-		},
-	}
-
-	target := model.Target{
-		Label: label.TargetLabel{Package: "pkg", Name: "tgt"},
-	}
-
-	// Target mode with prebuild_layer_fetch explicitly disabled -- should be a no-op.
-	if err := handler.SeedLayerCache(nil, target, nil); err != nil {
-		t.Fatalf("expected nil error with prebuild_layer_fetch=false, got %v", err)
-	}
-}
-
-func TestIsPrebuildLayerFetchEnabled(t *testing.T) {
-	boolPtr := func(v bool) *bool { return &v }
-
+func TestDeclaredCacheRepo(t *testing.T) {
 	tests := []struct {
-		name      string
-		cacheMode string
-		prefetch  *bool
-		want      bool
+		name       string
+		ociPush    map[string][]string
+		identifier string
+		want       string
 	}{
 		{
-			name:      "target mode, unset defaults to true",
-			cacheMode: config.OCICacheModeTarget,
-			prefetch:  nil,
-			want:      true,
+			name:       "destination with deploy tag drops the tag",
+			ociPush:    map[string][]string{"api": {"registry.org/api:${GIT_SHA}"}},
+			identifier: "api",
+			want:       "registry.org/api",
 		},
 		{
-			name:      "target mode, explicitly true",
-			cacheMode: config.OCICacheModeTarget,
-			prefetch:  boolPtr(true),
-			want:      true,
+			name:       "destination without a tag is unchanged",
+			ociPush:    map[string][]string{"api": {"registry.org/team/api"}},
+			identifier: "api",
+			want:       "registry.org/team/api",
 		},
 		{
-			name:      "target mode, explicitly false",
-			cacheMode: config.OCICacheModeTarget,
-			prefetch:  boolPtr(false),
-			want:      false,
+			name:       "host port preserved, only final tag stripped",
+			ociPush:    map[string][]string{"api": {"localhost:5000/api:v2"}},
+			identifier: "api",
+			want:       "localhost:5000/api",
 		},
 		{
-			name:      "content mode, unset defaults to false",
-			cacheMode: config.OCICacheModeContent,
-			prefetch:  nil,
-			want:      false,
+			name:       "first destination wins for multi-destination",
+			ociPush:    map[string][]string{"api": {"registry.org/api:v1", "mirror.org/api:v1"}},
+			identifier: "api",
+			want:       "registry.org/api",
 		},
 		{
-			name:      "empty mode, unset defaults to false",
-			cacheMode: "",
-			prefetch:  nil,
-			want:      false,
+			name:       "no declaration returns empty",
+			ociPush:    map[string][]string{"other": {"registry.org/other:v1"}},
+			identifier: "api",
+			want:       "",
+		},
+		{
+			name:       "nil map returns empty",
+			ociPush:    nil,
+			identifier: "api",
+			want:       "",
 		},
 	}
 
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
-			dockerConfig := config.OCIConfig{
-				CacheMode:          testCase.cacheMode,
-				PrebuildLayerFetch: testCase.prefetch,
-			}
-			got := dockerConfig.IsPrebuildLayerFetchEnabled()
+			target := model.Target{OciPush: testCase.ociPush}
+			got := declaredCacheRepo(target, testCase.identifier)
 			if got != testCase.want {
-				t.Fatalf("IsPrebuildLayerFetchEnabled() = %v, want %v", got, testCase.want)
+				t.Fatalf("declaredCacheRepo() = %q, want %q", got, testCase.want)
 			}
 		})
+	}
+}
+
+func TestRepoWithoutTag(t *testing.T) {
+	tests := []struct {
+		reference string
+		want      string
+	}{
+		{"registry.org/api:tag", "registry.org/api"},
+		{"registry.org/api", "registry.org/api"},
+		{"localhost:5000/api:v2", "localhost:5000/api"},
+		{"localhost:5000/api", "localhost:5000/api"},
+		{"registry.org/team/sub/api:1.2.3", "registry.org/team/sub/api"},
+		{"123456.dkr.ecr.us-west-2.amazonaws.com/repo:linux-amd64", "123456.dkr.ecr.us-west-2.amazonaws.com/repo"},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.reference, func(t *testing.T) {
+			if got := repoWithoutTag(testCase.reference); got != testCase.want {
+				t.Fatalf("repoWithoutTag(%q) = %q, want %q", testCase.reference, got, testCase.want)
+			}
+		})
+	}
+}
+
+func TestSeedLayerCache_NoopWhenPriorHashEmpty(t *testing.T) {
+	handler := &DockerRegistryOutputHandler{config: config.OCIConfig{}}
+	target := model.Target{
+		Label:   label.TargetLabel{Package: "pkg", Name: "tgt"},
+		OciPush: map[string][]string{"img": {"registry.org/img:v1"}},
+		Outputs: []model.Output{{Type: "oci", Identifier: "img"}},
+	}
+
+	// With an empty prior change hash there is no donor to pull, so SeedLayerCache
+	// must return immediately without touching the Docker client (nil here --
+	// would panic if dereferenced).
+	if err := handler.SeedLayerCache(nil, target, "", nil); err != nil {
+		t.Fatalf("expected nil error when prior hash is empty, got %v", err)
 	}
 }

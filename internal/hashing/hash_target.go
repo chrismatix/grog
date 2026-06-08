@@ -27,6 +27,41 @@ func GetTargetChangeHash(target model.Target, dependencyHashes []string, extraAr
 	return fmt.Sprintf("%s_%s", targetDefinitionHash, inputContentHash), err
 }
 
+// GetTargetChangeHashAtRef computes a target's change hash as its input files
+// existed at gitRef, reusing the supplied dependencyHashes for the definition
+// component. It reproduces GetTargetChangeHash exactly when the at-ref input
+// contents and the dependency hashes match those of a build at that ref, so the
+// result identifies the cache image a prior build would have produced.
+//
+// gitRoot is the repository root (for resolving repo-relative paths). The
+// dependency hashes are taken as given rather than recomputed at the ref: a
+// drifted dependency only changes which prior image is identified (a missed
+// seed, degrading to a cold build), never correctness, because this hash is
+// used solely to locate a layer-cache donor and never to restore a result.
+func GetTargetChangeHashAtRef(
+	target model.Target,
+	dependencyHashes []string,
+	extraArgs []string,
+	gitRoot string,
+	gitRef string,
+) (string, error) {
+	targetDefinitionHash, err := hashTargetDefinition(target, dependencyHashes, extraArgs)
+	if err != nil {
+		return "", err
+	}
+	if len(target.Inputs) == 0 {
+		return targetDefinitionHash, nil
+	}
+
+	absolutePackagePath := config.GetPathAbsoluteToWorkspaceRoot(target.Label.Package)
+	inputContentHash, err := HashFilesAtRef(gitRoot, gitRef, absolutePackagePath, target.Inputs)
+	if err != nil {
+		return "", fmt.Errorf("failed hashing input files %s for target %s at ref %s: %w",
+			strings.Join(target.Inputs, ","), target.Label, gitRef, err)
+	}
+	return fmt.Sprintf("%s_%s", targetDefinitionHash, inputContentHash), nil
+}
+
 // hashTargetDefinition computes the configured hash of a single file.
 func hashTargetDefinition(target model.Target, dependencyHashes []string, extraArgs []string) (string, error) {
 	hasher := GetHasher()

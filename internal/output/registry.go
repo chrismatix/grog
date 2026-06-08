@@ -380,9 +380,15 @@ func (r *Registry) LoadOutputs(
 // SeedLayerCaches calls SeedLayerCache on any handler that implements
 // LayerCacheSeeder for the target's outputs. This pulls previous images
 // into the local Docker daemon before a build so their layers can be reused.
+// SeedLayerCaches calls SeedLayerCache on any handler that implements
+// LayerCacheSeeder for the target's outputs. This pulls prior images
+// into the local Docker daemon before a build so their layers can be reused.
+// priorChangeHash identifies the same target's content at an earlier git ref
+// and is forwarded to the seeder to locate the immutable cache image to pull.
 func (r *Registry) SeedLayerCaches(
 	ctx context.Context,
 	target *model.Target,
+	priorChangeHash string,
 	update worker.StatusFunc,
 ) {
 	logger := console.GetLogger(ctx)
@@ -407,7 +413,7 @@ func (r *Registry) SeedLayerCaches(
 			0,
 			update,
 		)
-		if err := seeder.SeedLayerCache(ctx, *target, progress); err != nil {
+		if err := seeder.SeedLayerCache(ctx, *target, priorChangeHash, progress); err != nil {
 			// Layer cache seeding is best-effort; log and continue.
 			logger.Debugf("%s: layer cache seed failed (non-fatal): %v", target.Label, err)
 		}

@@ -49,11 +49,17 @@ type ImagePusher interface {
 }
 
 // LayerCacheSeeder is an optional interface that output handlers may implement
-// to seed build-time caches before a target's command executes. This is used by
-// the Docker registry handler to pull a previous image's layers into the local
-// daemon so that subsequent docker build commands can reuse them.
+// to seed build-time caches before a target's command executes. The Docker
+// registry handler implements it to pull a prior image's layers into the local
+// daemon so that the subsequent `docker build` can reuse them.
+//
+// priorChangeHash identifies the content of the same target at an earlier git
+// ref (see hashing.TargetHasher.PriorChangeHashAtRef). The handler pulls the
+// immutable, content-addressed cache image tagged with that hash. An empty
+// priorChangeHash means no prior content could be determined (e.g. first build,
+// shallow clone) and the handler should treat seeding as a no-op.
 type LayerCacheSeeder interface {
-	SeedLayerCache(ctx context.Context, target model.Target, tracker *worker.ProgressTracker) error
+	SeedLayerCache(ctx context.Context, target model.Target, priorChangeHash string, tracker *worker.ProgressTracker) error
 }
 
 type HandlerType string

@@ -121,6 +121,10 @@ func configureRoot() bool {
 	RootCmd.PersistentFlags().Bool("push", false, "Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build")
 	_ = viper.BindPFlag("push", RootCmd.PersistentFlags().Lookup("push"))
 
+	// since (git ref for Docker layer-cache seeding)
+	RootCmd.PersistentFlags().String("since", "", "Git ref for Docker layer-cache seed-donor selection (e.g. HEAD~1 or origin/main). Empty auto-detects the merge-base with the upstream default branch.")
+	_ = viper.BindPFlag("since", RootCmd.PersistentFlags().Lookup("since"))
+
 	// skip_workspace_lock
 	RootCmd.PersistentFlags().Bool("skip-workspace-lock", false, "Skip the workspace level lock (DANGEROUS: may corrupt the cache)")
 	_ = viper.BindPFlag("skip_workspace_lock", RootCmd.PersistentFlags().Lookup("skip-workspace-lock"))

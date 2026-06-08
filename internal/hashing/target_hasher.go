@@ -65,3 +65,28 @@ func (t *TargetHasher) SetTargetChangeHash(target *model.Target) error {
 	target.ChangeHash = changeHash
 	return nil
 }
+
+// PriorChangeHashAtRef computes target's change hash as its input files existed
+// at gitRef, for locating a layer-cache seed donor. It reuses each dependency's
+// current OutputHash rather than recomputing the dependency graph at the ref:
+// the result is used solely to find a donor image to warm `docker build`'s
+// layer cache, so a drifted dependency or definition only misses the donor
+// (cold build), never restores an incorrect result.
+//
+// gitRoot is the repository root used to resolve repo-relative input paths.
+func (t *TargetHasher) PriorChangeHashAtRef(target *model.Target, gitRoot, gitRef string) (string, error) {
+	t.targetMutexMap.Lock(target.Label.String())
+	defer t.targetMutexMap.Unlock(target.Label.String())
+
+	dependencies := t.graph.GetDependencies(target)
+	dependencyHashes := make([]string, len(target.Dependencies))
+	for index, dependency := range dependencies {
+		targetDependency, ok := dependency.(*model.Target)
+		if !ok {
+			continue
+		}
+		dependencyHashes[index] = targetDependency.OutputHash
+	}
+
+	return GetTargetChangeHashAtRef(*target, dependencyHashes, t.extraArgs, gitRoot, gitRef)
+}

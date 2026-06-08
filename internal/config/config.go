@@ -102,6 +102,14 @@ type WorkspaceConfig struct {
 
 	Push bool `mapstructure:"push"`
 
+	// CacheSeedRef is an optional git ref used to locate Docker layer-cache
+	// seed donors. On a cache miss, grog recomputes a target's change hash as
+	// its inputs existed at this ref and pulls that immutable cache image to
+	// warm the build's layer cache. Empty means "auto-detect" (the merge-base
+	// with the upstream default branch, then HEAD~1). Set by the --since flag;
+	// CI typically passes the same ref it uses for `grog changes`.
+	CacheSeedRef string `mapstructure:"since"`
+
 	// Environment Variables
 	EnvironmentVariables     map[string]string `mapstructure:"environment_variables"`
 	EnvironmentVariablesFile string            `mapstructure:"environment_variables_file"`
@@ -192,20 +200,6 @@ func (w WorkspaceConfig) Validate() error {
 		(w.OCI.Backend != OCIBackendFS && w.OCI.Backend != OCIBackendRegistry) {
 		return fmt.Errorf("invalid oci backend: %s. Must be either %s or %s",
 			w.OCI.Backend, OCIBackendFS, OCIBackendRegistry)
-	}
-
-	switch w.OCI.CacheMode {
-	case "", OCICacheModeContent, OCICacheModeTarget:
-	default:
-		return fmt.Errorf("invalid oci cache_mode: %s. Must be either %q or %q",
-			w.OCI.CacheMode, OCICacheModeContent, OCICacheModeTarget)
-	}
-
-	// prebuild_layer_fetch requires target-based naming to have a stable
-	// image to pull.
-	if w.OCI.PrebuildLayerFetch != nil && *w.OCI.PrebuildLayerFetch &&
-		w.OCI.CacheMode != OCICacheModeTarget {
-		return fmt.Errorf("prebuild_layer_fetch requires cache_mode = %q", OCICacheModeTarget)
 	}
 
 	// assert that tags and exclude tags do not overlap
@@ -324,16 +318,6 @@ const (
 	OCIBackendRegistry = "registry"
 )
 
-const (
-	// OCICacheModeContent names cache images by content digest (default).
-	// Each unique image gets its own registry repo.
-	OCICacheModeContent = "content"
-
-	// OCICacheModeTarget names cache images by target label (stable).
-	// One registry repo per target, enabling Docker layer cache reuse across builds.
-	OCICacheModeTarget = "target"
-)
-
 type OCIConfig struct {
 	Backend string `mapstructure:"backend"`
 
@@ -348,28 +332,4 @@ type OCIConfig struct {
 	// docker daemon's insecure-registries config so a user already familiar
 	// with that knob has no new mental model.
 	InsecureRegistries []string `mapstructure:"insecure_registries"`
-
-	// CacheMode controls how registry cache images are named.
-	// "content" (default): one repo per unique image digest.
-	// "target": one repo per target label, producing stable, predictable
-	// registry repository names.
-	CacheMode string `mapstructure:"cache_mode"`
-
-	// PrebuildLayerFetch controls whether grog pulls the previous image
-	// for a target into the local Docker daemon before building, so that
-	// Docker's layer cache can reuse unchanged layers. Only effective when
-	// CacheMode is "target". Defaults to true when CacheMode is "target".
-	// Set to false if you handle layer caching yourself (e.g. via
-	// --cache-from in your build command).
-	PrebuildLayerFetch *bool `mapstructure:"prebuild_layer_fetch"`
-}
-
-// IsPrebuildLayerFetchEnabled returns whether layer cache seeding is active.
-// When PrebuildLayerFetch is nil (unset), it defaults to true in target mode.
-func (d OCIConfig) IsPrebuildLayerFetchEnabled() bool {
-	if d.PrebuildLayerFetch != nil {
-		return *d.PrebuildLayerFetch
-	}
-	// Default: enabled in target mode, disabled otherwise.
-	return d.CacheMode == OCICacheModeTarget
 }
