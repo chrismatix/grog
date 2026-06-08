@@ -7,6 +7,20 @@ cases:
   - name: start_cross_repo_registries
     setup_command: |
       docker compose down --remove-orphans >/dev/null 2>&1 || true
+      # Pre-pull with retries; docker compose's implicit pull eats Hub
+      # timeouts as opaque "container did not start" errors otherwise.
+      pulled=0
+      for _ in $(seq 1 5); do
+        if docker pull registry:2 >/dev/null 2>&1; then
+          pulled=1
+          break
+        fi
+        sleep 5
+      done
+      if [ "$pulled" -ne 1 ]; then
+        echo "could not pull registry:2 after retries" >&2
+        exit 1
+      fi
       docker compose up -d >/dev/null
       for port in 5556 5557; do
         ok=0

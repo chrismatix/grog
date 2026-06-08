@@ -8,6 +8,22 @@ cases:
   - name: start_smoke_registry
     setup_command: |
       docker rm -f grog-smoke-registry >/dev/null 2>&1 || true
+      # Pull with retries. Docker Hub is flaky from GitHub Actions, and
+      # `docker run` will eat the failure with a confusing "could not start"
+      # message; pulling explicitly + retrying surfaces the real cause and
+      # shrugs off transient Hub timeouts.
+      pulled=0
+      for _ in $(seq 1 5); do
+        if docker pull registry:2 >/dev/null 2>&1; then
+          pulled=1
+          break
+        fi
+        sleep 5
+      done
+      if [ "$pulled" -ne 1 ]; then
+        echo "could not pull registry:2 after retries" >&2
+        exit 1
+      fi
       docker run -d --rm --name grog-smoke-registry -p 5555:5555 \
         -e REGISTRY_HTTP_ADDR=0.0.0.0:5555 \
         registry:2 >/dev/null
