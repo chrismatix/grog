@@ -19,6 +19,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"golang.org/x/sync/singleflight"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -48,6 +49,7 @@ type Executor struct {
 	asyncWaitTime    time.Duration
 	deferAsyncWait   bool
 	asyncDrained     bool
+	rerunGroup       singleflight.Group
 }
 
 func NewExecutor(
@@ -638,23 +640,8 @@ func (e *Executor) LoadDependencyOutputs(
 	)
 	for _, dep := range e.graph.GetTargetDependencies(target) {
 		localDep := dep
-		// Function to re-run a dependency in case we
-		rerunDependency := func() error {
-			binTools, binToolErr := e.getBinToolPaths(localDep)
-			if binToolErr != nil {
-				return binToolErr
-			}
-
-			outputIdentifiers := e.getDependencyOutputIdentifiers(localDep)
-			transitiveOutputs := e.getTransitiveOutputs(localDep)
-			taggedOutputs := e.getTransitiveOutputsByTag(localDep)
-
-			update(worker.Status(fmt.Sprintf("%s: re-running dependency %s (load_outputs=minimal)", target.Label, localDep.Label)))
-			_, executionErr := e.executeTarget(ctx, localDep, binTools, outputIdentifiers, transitiveOutputs, taggedOutputs, update, false)
-			if executionErr != nil {
-				return executionErr
-			}
-			return nil
+		if localDep.OutputsLoaded {
+			continue
 		}
 
 		targetResult, err := e.targetCache.Load(ctx, localDep.ChangeHash)
@@ -673,22 +660,45 @@ func (e *Executor) LoadDependencyOutputs(
 			loadErr = err
 		}
 
-		if loadErr != nil || localDep.SkipsCache() {
-			logger.Debugf(
-				"%s: failed to load output for dependency %s (re-running): loadErr=%v no-cache=%t",
-				target.Label,
-				localDep.Label,
-				loadErr,
-				localDep.SkipsCache(),
-			)
-			// In this case we need to also recursively re-load the dependencies of the dependency
-			if recursiveLoadErr := e.LoadDependencyOutputs(ctx, localDep, update); recursiveLoadErr != nil {
-				return recursiveLoadErr
-			}
+		if loadErr == nil && !localDep.SkipsCache() {
+			continue
+		}
 
-			if rerunError := rerunDependency(); rerunError != nil {
-				return rerunError
+		logger.Debugf(
+			"%s: failed to load output for dependency %s (re-running): loadErr=%v no-cache=%t",
+			target.Label,
+			localDep.Label,
+			loadErr,
+			localDep.SkipsCache(),
+		)
+
+		// Multiple downstream targets may concurrently hit this branch for the
+		// same dep. Without dedup, each fires its own executeTarget → its own
+		// async cache write, racing on the loopback Docker tag (one Cleanup
+		// removes the tag from under the others) and the GCS target-cache
+		// object (concurrent writes trip the per-object 429 mutation limit).
+		_, rerunErr, _ := e.rerunGroup.Do(localDep.Label.String(), func() (any, error) {
+			if localDep.OutputsLoaded {
+				return nil, nil
 			}
+			if recursiveLoadErr := e.LoadDependencyOutputs(ctx, localDep, update); recursiveLoadErr != nil {
+				return nil, recursiveLoadErr
+			}
+			binTools, binToolErr := e.getBinToolPaths(localDep)
+			if binToolErr != nil {
+				return nil, binToolErr
+			}
+			outputIdentifiers := e.getDependencyOutputIdentifiers(localDep)
+			transitiveOutputs := e.getTransitiveOutputs(localDep)
+			taggedOutputs := e.getTransitiveOutputsByTag(localDep)
+			update(worker.Status(fmt.Sprintf("%s: re-running dependency %s (load_outputs=minimal)", target.Label, localDep.Label)))
+			if _, executionErr := e.executeTarget(ctx, localDep, binTools, outputIdentifiers, transitiveOutputs, taggedOutputs, update, false); executionErr != nil {
+				return nil, executionErr
+			}
+			return nil, nil
+		})
+		if rerunErr != nil {
+			return rerunErr
 		}
 	}
 

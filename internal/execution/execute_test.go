@@ -1,11 +1,18 @@
 package execution
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"io"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"grog/internal/caching"
+	"grog/internal/caching/backends"
 	"grog/internal/config"
 	"grog/internal/dag"
 	"grog/internal/label"
@@ -345,6 +352,131 @@ func TestGetTransitiveOutputsEmptyForNoAncestors(t *testing.T) {
 
 	if len(result) != 0 {
 		t.Errorf("expected empty slice for target with no ancestors, got %v", result)
+	}
+}
+
+// countingTargetBackend records every Get on the "target" namespace so we can
+// assert LoadDependencyOutputs never even consulted the cache for a dep that
+// finished building earlier in this session.
+type countingTargetBackend struct {
+	getCalls atomic.Int64
+}
+
+func (c *countingTargetBackend) TypeName() string { return "counting" }
+
+func (c *countingTargetBackend) Get(_ context.Context, path, _ string) (io.ReadCloser, error) {
+	if path == "target" {
+		c.getCalls.Add(1)
+	}
+	return io.NopCloser(bytes.NewReader(nil)), errors.New("not found")
+}
+
+func (c *countingTargetBackend) Set(context.Context, string, string, io.Reader) error { return nil }
+func (c *countingTargetBackend) Delete(context.Context, string, string) error         { return nil }
+func (c *countingTargetBackend) Exists(context.Context, string, string) (bool, error) {
+	return false, nil
+}
+func (c *countingTargetBackend) Size(context.Context, string, string) (int64, error) { return 0, nil }
+func (c *countingTargetBackend) BeginWrite(context.Context) (backends.StagedWriter, error) {
+	return nil, errors.New("BeginWrite not implemented")
+}
+func (c *countingTargetBackend) ListKeys(context.Context, string, string) ([]string, error) {
+	return nil, nil
+}
+
+// TestLoadDependencyOutputsSkipsAlreadyLoadedDeps is the regression test for
+// the rate-limit-burst bug: when a dep's OnTargetComplete has already set
+// OutputsLoaded=true (synchronously, before the async cache write was even
+// scheduled), downstream targets calling LoadDependencyOutputs must NOT
+// attempt a targetCache.Load and must NOT call rerunDependency. Otherwise
+// every downstream re-executes the same dep, racing on the Docker loopback
+// tag (Cleanup removes the tag mid-push) and the GCS target-cache object
+// (concurrent writes trip the 429 mutation limit).
+func TestLoadDependencyOutputsSkipsAlreadyLoadedDeps(t *testing.T) {
+	prev := config.Global
+	config.Global = config.WorkspaceConfig{WorkspaceRoot: "/ws"}
+	t.Cleanup(func() { config.Global = prev })
+
+	dep := &model.Target{
+		Label:         label.TargetLabel{Package: "pkg", Name: "dep"},
+		ChangeHash:    "dep-hash",
+		OutputsLoaded: true,
+	}
+	root := &model.Target{
+		Label:        label.TargetLabel{Package: "pkg", Name: "root"},
+		Dependencies: []label.TargetLabel{dep.Label},
+	}
+
+	graph := dag.NewDirectedGraphFromTargets(root, dep)
+	graph.AddEdge(dep, root)
+
+	backend := &countingTargetBackend{}
+	executor := &Executor{
+		graph:       graph,
+		targetCache: caching.NewTargetResultCache(backend),
+	}
+
+	if err := executor.LoadDependencyOutputs(context.Background(), root, func(worker.StatusUpdate) {}); err != nil {
+		t.Fatalf("LoadDependencyOutputs returned error: %v", err)
+	}
+	if got := backend.getCalls.Load(); got != 0 {
+		t.Fatalf("expected 0 target-cache Get calls for an already-loaded dep, got %d", got)
+	}
+}
+
+// TestLoadDependencyOutputsDedupsConcurrentReruns verifies that when several
+// downstream targets concurrently fall into the rerun branch for the same
+// dep — because its target cache hasn't landed yet — only one rerun fires.
+// Without dedup each downstream submits its own async cache write, producing
+// the 429 burst the bug report shows.
+func TestLoadDependencyOutputsDedupsConcurrentReruns(t *testing.T) {
+	prev := config.Global
+	config.Global = config.WorkspaceConfig{WorkspaceRoot: "/ws"}
+	t.Cleanup(func() { config.Global = prev })
+
+	depLabel := label.TargetLabel{Package: "pkg", Name: "dep"}
+	executor := &Executor{}
+
+	var rerunCount atomic.Int64
+	firstInFlight := make(chan struct{})
+	releaseFirst := make(chan struct{})
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, _, _ = executor.rerunGroup.Do(depLabel.String(), func() (any, error) {
+			rerunCount.Add(1)
+			close(firstInFlight)
+			<-releaseFirst
+			return nil, nil
+		})
+	}()
+
+	<-firstInFlight
+
+	const followers = 4
+	for i := 0; i < followers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _, _ = executor.rerunGroup.Do(depLabel.String(), func() (any, error) {
+				rerunCount.Add(1)
+				return nil, nil
+			})
+		}()
+	}
+
+	// Give followers time to register as waiters on the in-flight call before
+	// we release it; otherwise a follower may not enter Do until after the
+	// first call completes, in which case singleflight starts a fresh call
+	// and the dedup we want to assert never gets exercised.
+	time.Sleep(50 * time.Millisecond)
+	close(releaseFirst)
+	wg.Wait()
+
+	if got := rerunCount.Load(); got != 1 {
+		t.Fatalf("expected exactly 1 rerun for %d concurrent callers, got %d", followers+1, got)
 	}
 }
 
