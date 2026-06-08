@@ -1,10 +1,75 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestMustFindWorkspaceRoot_Success(t *testing.T) {
+	tmp := t.TempDir()
+	resolved, err := filepath.EvalSymlinks(tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(resolved, "grog.toml"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sub := filepath.Join(resolved, "a", "b")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cwd, _ := os.Getwd()
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+	if err := os.Chdir(sub); err != nil {
+		t.Fatal(err)
+	}
+	if got := MustFindWorkspaceRoot(); got != resolved {
+		t.Fatalf("got %q want %q", got, resolved)
+	}
+}
+
+func TestGetPathRelativeToWorkspaceRoot(t *testing.T) {
+	prev := Global
+	Global = WorkspaceConfig{WorkspaceRoot: "/repo"}
+	t.Cleanup(func() { Global = prev })
+	rel, err := GetPathRelativeToWorkspaceRoot("/repo/pkg/sub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rel != filepath.Join("pkg", "sub") {
+		t.Fatalf("got %q", rel)
+	}
+	if _, err := GetPathRelativeToWorkspaceRoot("/elsewhere/x"); err == nil {
+		t.Fatal("want err")
+	}
+}
+
+func TestGetPathAbsoluteToWorkspaceRoot(t *testing.T) {
+	prev := Global
+	Global = WorkspaceConfig{WorkspaceRoot: "/repo"}
+	t.Cleanup(func() { Global = prev })
+	if got := GetPathAbsoluteToWorkspaceRoot("a/b"); got != filepath.Join("/repo", "a", "b") {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestGetPackagePath(t *testing.T) {
+	prev := Global
+	Global = WorkspaceConfig{WorkspaceRoot: "/repo"}
+	t.Cleanup(func() { Global = prev })
+	pkg, err := GetPackagePath("/repo/pkg/a/file.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pkg != filepath.Join("pkg", "a") {
+		t.Fatalf("got %q", pkg)
+	}
+	if _, err := GetPackagePath("/elsewhere/x"); err == nil {
+		t.Fatal("want err")
+	}
+}
 
 func TestGetWorkspaceCachePrefix_IsPathUnique(t *testing.T) {
 	// Logs and the workspace lock rely on this prefix staying unique per

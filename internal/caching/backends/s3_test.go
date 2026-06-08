@@ -6,6 +6,7 @@ import (
 	"errors"
 	"grog/internal/config"
 	"io"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -234,6 +235,148 @@ func TestS3Cache_MethodCalls(t *testing.T) {
 	_, err = cache.Exists(ctx, "path", "key2")
 	assert.NoError(t, err)
 	assert.Equal(t, 1, mockClient.objectExistsCalls, "Exists should call ObjectExists once")
+}
+
+func TestS3Cache_Size(t *testing.T) {
+	ctx := context.Background()
+	mockClient := newMockS3Client()
+	mockClient.objects["prefix/workspace/path/key"] = []byte("hello world")
+
+	cache, err := NewS3CacheWithClient(ctx, config.S3CacheConfig{
+		Bucket: "test-bucket",
+		Prefix: "prefix",
+	}, mockClient)
+	assert.NoError(t, err)
+	cache.workspacePrefix = "workspace"
+
+	size, err := cache.Size(ctx, "path", "key")
+	assert.NoError(t, err)
+	assert.Equal(t, int64(11), size)
+
+	_, err = cache.Size(ctx, "path", "missing")
+	assert.Error(t, err)
+}
+
+func TestS3Cache_BeginWriteCommit(t *testing.T) {
+	ctx := context.Background()
+	mockClient := newMockS3Client()
+
+	cache, err := NewS3CacheWithClient(ctx, config.S3CacheConfig{
+		Bucket:      "test-bucket",
+		Prefix:      "prefix",
+		SharedCache: true,
+	}, mockClient)
+	assert.NoError(t, err)
+
+	sw, err := cache.BeginWrite(ctx)
+	assert.NoError(t, err)
+
+	payload := []byte("staged content")
+	_, err = sw.Write(payload)
+	assert.NoError(t, err)
+
+	err = sw.Commit(ctx, "path", "final-key")
+	assert.NoError(t, err)
+
+	assert.Equal(t, payload, mockClient.objects["prefix/path/final-key"])
+
+	for k := range mockClient.objects {
+		if strings.Contains(k, s3StagingPath) {
+			t.Fatalf("staging key still present after commit: %s", k)
+		}
+	}
+
+	err = sw.Commit(ctx, "path", "other")
+	assert.Error(t, err)
+}
+
+func TestS3Cache_BeginWriteCancel(t *testing.T) {
+	ctx := context.Background()
+	mockClient := newMockS3Client()
+
+	cache, err := NewS3CacheWithClient(ctx, config.S3CacheConfig{
+		Bucket:      "test-bucket",
+		SharedCache: true,
+	}, mockClient)
+	assert.NoError(t, err)
+
+	sw, err := cache.BeginWrite(ctx)
+	assert.NoError(t, err)
+	_, _ = sw.Write([]byte("partial"))
+
+	_ = sw.Cancel(ctx)
+
+	for k := range mockClient.objects {
+		if strings.Contains(k, s3StagingPath) {
+			t.Fatalf("staging key still present after cancel: %s", k)
+		}
+	}
+
+	err = sw.Cancel(ctx)
+	assert.NoError(t, err)
+}
+
+func TestS3Cache_BeginWriteCommitFailsOnCopyError(t *testing.T) {
+	ctx := context.Background()
+	mockClient := &failingCopyS3Client{mockS3Client: newMockS3Client()}
+
+	cache, err := NewS3CacheWithClient(ctx, config.S3CacheConfig{
+		Bucket:      "test-bucket",
+		SharedCache: true,
+	}, mockClient)
+	assert.NoError(t, err)
+
+	sw, err := cache.BeginWrite(ctx)
+	assert.NoError(t, err)
+	_, err = sw.Write([]byte("data"))
+	assert.NoError(t, err)
+	err = sw.Commit(ctx, "p", "k")
+	assert.Error(t, err)
+}
+
+func TestS3Cache_BeginWriteCommitFailsOnUploadError(t *testing.T) {
+	ctx := context.Background()
+	mockClient := &failingPutS3Client{mockS3Client: newMockS3Client()}
+
+	cache, err := NewS3CacheWithClient(ctx, config.S3CacheConfig{
+		Bucket:      "test-bucket",
+		SharedCache: true,
+	}, mockClient)
+	assert.NoError(t, err)
+
+	sw, err := cache.BeginWrite(ctx)
+	assert.NoError(t, err)
+	_, _ = sw.Write([]byte("data"))
+	err = sw.Commit(ctx, "p", "k")
+	assert.Error(t, err)
+}
+
+func TestS3Cache_ListKeys_NonAdapter(t *testing.T) {
+	ctx := context.Background()
+	mockClient := newMockS3Client()
+
+	cache, err := NewS3CacheWithClient(ctx, config.S3CacheConfig{
+		Bucket:      "test-bucket",
+		SharedCache: true,
+	}, mockClient)
+	assert.NoError(t, err)
+
+	keys, err := cache.ListKeys(ctx, "path", "")
+	assert.NoError(t, err)
+	assert.Nil(t, keys)
+}
+
+type failingCopyS3Client struct{ *mockS3Client }
+
+func (f *failingCopyS3Client) CopyObject(ctx context.Context, bucket, srcKey, destKey string) error {
+	return errors.New("copy failed")
+}
+
+type failingPutS3Client struct{ *mockS3Client }
+
+func (f *failingPutS3Client) PutObject(ctx context.Context, bucket, key string, body io.Reader) error {
+	_, _ = io.ReadAll(body)
+	return errors.New("put failed")
 }
 
 func TestS3Cache_SharedCache(t *testing.T) {

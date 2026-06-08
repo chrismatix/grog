@@ -608,6 +608,171 @@ func (m *beginWriteAwareMock) BeginWrite(_ context.Context) (StagedWriter, error
 	return m.writer, nil
 }
 
+func TestRemoteWrapper_GetFS(t *testing.T) {
+	fs := &FileSystemCache{workspaceCacheDir: t.TempDir()}
+	rw := NewRemoteWrapper(fs, &mockCacheBackend{})
+	if rw.GetFS() != fs {
+		t.Fatal("GetFS did not return wrapped fs")
+	}
+}
+
+func TestRemoteWrapper_TypeName(t *testing.T) {
+	rw := NewRemoteWrapper(&FileSystemCache{}, &mockCacheBackend{typeName: "myremote"})
+	if rw.TypeName() != "myremote" {
+		t.Fatalf("TypeName = %q want myremote", rw.TypeName())
+	}
+}
+
+func TestRemoteWrapper_ListKeysDelegates(t *testing.T) {
+	called := false
+	rw := NewRemoteWrapper(&FileSystemCache{workspaceCacheDir: t.TempDir()}, &listingMockBackend{
+		mockCacheBackend: &mockCacheBackend{},
+		listFunc: func(ctx context.Context, path, suffix string) ([]string, error) {
+			called = true
+			return []string{"x"}, nil
+		},
+	})
+	keys, err := rw.ListKeys(context.Background(), "p", "")
+	if err != nil || len(keys) != 1 || !called {
+		t.Fatalf("ListKeys delegation failed: keys=%v err=%v called=%v", keys, err, called)
+	}
+}
+
+func TestRemoteWrapper_Size(t *testing.T) {
+	ctx := context.Background()
+	t.Run("local hit", func(t *testing.T) {
+		fs := &FileSystemCache{workspaceCacheDir: t.TempDir()}
+		if err := fs.Set(ctx, "p", "k", strings.NewReader("hello")); err != nil {
+			t.Fatal(err)
+		}
+		rw := NewRemoteWrapper(fs, &mockCacheBackend{
+			sizeFunc: func(ctx context.Context, path, key string) (int64, error) {
+				t.Fatal("remote.Size should not be called")
+				return 0, nil
+			},
+		})
+		size, err := rw.Size(ctx, "p", "k")
+		if err != nil || size != 5 {
+			t.Fatalf("size=%d err=%v", size, err)
+		}
+	})
+
+	t.Run("falls back to remote", func(t *testing.T) {
+		fs := &FileSystemCache{workspaceCacheDir: t.TempDir()}
+		rw := NewRemoteWrapper(fs, &mockCacheBackend{
+			sizeFunc: func(ctx context.Context, path, key string) (int64, error) {
+				return 99, nil
+			},
+		})
+		size, err := rw.Size(ctx, "p", "k")
+		if err != nil || size != 99 {
+			t.Fatalf("size=%d err=%v", size, err)
+		}
+	})
+}
+
+func TestRemoteWrapper_BeginWriteFSError(t *testing.T) {
+	fs := &FileSystemCache{
+		workspaceCacheDir: t.TempDir(),
+		sharedCasDir:      string([]byte{0}),
+	}
+	rw := NewRemoteWrapper(fs, &beginWriteAwareMock{
+		mockCacheBackend: &mockCacheBackend{},
+		writer:           &remoteWrapperTestStagedWriter{},
+	})
+	if _, err := rw.BeginWrite(context.Background()); err == nil {
+		t.Fatal("expected fs BeginWrite to fail")
+	}
+}
+
+type failingBeginWriteMock struct {
+	*mockCacheBackend
+}
+
+func (m *failingBeginWriteMock) BeginWrite(_ context.Context) (StagedWriter, error) {
+	return nil, errors.New("remote begin failed")
+}
+
+func TestRemoteWrapper_BeginWriteRemoteError(t *testing.T) {
+	fs := &FileSystemCache{
+		workspaceCacheDir: t.TempDir(),
+		sharedCasDir:      t.TempDir(),
+	}
+	rw := NewRemoteWrapper(fs, &failingBeginWriteMock{mockCacheBackend: &mockCacheBackend{}})
+	if _, err := rw.BeginWrite(context.Background()); err == nil {
+		t.Fatal("expected remote BeginWrite error")
+	}
+}
+
+type failingCommitStagedWriter struct {
+	remoteWrapperTestStagedWriter
+	commitErr error
+}
+
+func (w *failingCommitStagedWriter) Commit(_ context.Context, path, key string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.commitErr != nil {
+		return w.commitErr
+	}
+	w.committed = true
+	w.commitTo = path + "/" + key
+	return nil
+}
+
+func TestRemoteWrapper_CommitRemoteFails(t *testing.T) {
+	ctx := context.Background()
+	fs := &FileSystemCache{
+		workspaceCacheDir: t.TempDir(),
+		sharedCasDir:      t.TempDir(),
+	}
+	cap := &failingCommitStagedWriter{commitErr: errors.New("remote commit fail")}
+	rw := &RemoteWrapper{fs: fs, remote: &beginWriteAwareMock{
+		mockCacheBackend: &mockCacheBackend{},
+		writer:           cap,
+	}}
+
+	sw, err := rw.BeginWrite(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sw.Write([]byte("data")); err != nil {
+		t.Fatal(err)
+	}
+	if err := sw.Commit(ctx, "cas", "sha256:abc"); err == nil {
+		t.Fatal("expected commit error")
+	}
+}
+
+func TestRemoteWrapper_DoubleCommit(t *testing.T) {
+	ctx := context.Background()
+	fs := &FileSystemCache{
+		workspaceCacheDir: t.TempDir(),
+		sharedCasDir:      t.TempDir(),
+	}
+	cap := &remoteWrapperTestStagedWriter{}
+	rw := &RemoteWrapper{fs: fs, remote: &beginWriteAwareMock{
+		mockCacheBackend: &mockCacheBackend{},
+		writer:           cap,
+	}}
+	sw, err := rw.BeginWrite(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sw.Write([]byte("data")); err != nil {
+		t.Fatal(err)
+	}
+	if err := sw.Commit(ctx, "cas", "sha256:abc"); err != nil {
+		t.Fatal(err)
+	}
+	if err := sw.Commit(ctx, "cas", "sha256:def"); err == nil {
+		t.Fatal("expected second commit to fail")
+	}
+	if err := sw.Cancel(ctx); err != nil {
+		t.Fatalf("Cancel after Commit: %v", err)
+	}
+}
+
 func must[T any](v T, err error) T {
 	if err != nil {
 		panic(err)

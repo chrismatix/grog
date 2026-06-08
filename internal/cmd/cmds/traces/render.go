@@ -9,8 +9,9 @@ import (
 	"grog/internal/console"
 )
 
-// styled returns true if lipgloss rendering should be used.
-func styled() bool {
+// styled returns true if lipgloss rendering should be used. Stored as a
+// variable so tests can swap it to force a code path.
+var styled = func() bool {
 	return console.UseTea()
 }
 

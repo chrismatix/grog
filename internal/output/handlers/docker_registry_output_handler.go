@@ -28,14 +28,14 @@ import (
 type DockerRegistryOutputHandler struct {
 	cas          *caching.Cas
 	config       config.OCIConfig
-	dockerClient *client.Client
+	dockerClient DockerClient
 }
 
 // dockerRegistryWritePlan pushes a pre-tagged Docker image to the configured remote
 // registry. The image is tagged with a cache-specific name during Write(); this plan
 // pushes that tag and Cleanup removes it from the local daemon to avoid polluting it.
 type dockerRegistryWritePlan struct {
-	dockerClient    *client.Client
+	dockerClient    DockerClient
 	remoteImageName string
 	localImageName  string
 	targetLabel     string
@@ -87,6 +87,20 @@ func NewDockerRegistryOutputHandler(
 	}
 }
 
+// NewDockerRegistryOutputHandlerWithClient creates a handler with a pre-built Docker client.
+// Intended for tests.
+func NewDockerRegistryOutputHandlerWithClient(
+	cas *caching.Cas,
+	config config.OCIConfig,
+	dockerClient DockerClient,
+) *DockerRegistryOutputHandler {
+	return &DockerRegistryOutputHandler{
+		cas:          cas,
+		config:       config,
+		dockerClient: dockerClient,
+	}
+}
+
 func (d *DockerRegistryOutputHandler) Type() HandlerType {
 	return OCIHandler
 }
@@ -107,7 +121,7 @@ func (d *DockerRegistryOutputHandler) Hash(ctx context.Context, target model.Tar
 }
 
 // lazyClient creates a new Docker client on demand.
-func (d *DockerRegistryOutputHandler) lazyClient() (*client.Client, error) {
+func (d *DockerRegistryOutputHandler) lazyClient() (DockerClient, error) {
 	if d.dockerClient != nil {
 		return d.dockerClient, nil
 	}

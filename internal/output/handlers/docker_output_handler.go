@@ -31,14 +31,15 @@ type DockerOutputHandler struct {
 	cas *caching.Cas
 
 	// dockerClient is created lazily on first use; sync.Once protects construction.
+	// Pre-set in tests via NewDockerOutputHandlerWithClient to bypass the daemon.
 	dockerInit   sync.Once
-	dockerClient *client.Client
+	dockerClient DockerClient
 	dockerErr    error
 
 	// proxy is the loopback OCI registry. Lazily started on first push so that
-	// runs without docker targets pay no cost.
+	// runs without docker targets pay no cost. Pre-set in tests.
 	proxyInit sync.Once
-	proxy     *ociproxy.Registry
+	proxy     LoopbackRegistry
 	proxyErr  error
 }
 
@@ -48,12 +49,21 @@ func NewDockerOutputHandler(_ context.Context, cas *caching.Cas) *DockerOutputHa
 	return &DockerOutputHandler{cas: cas}
 }
 
+// NewDockerOutputHandlerWithClient creates a handler with a pre-built client
+// and loopback registry, skipping lazy initialisation. Intended for tests.
+func NewDockerOutputHandlerWithClient(cas *caching.Cas, dockerClient DockerClient, registry LoopbackRegistry) *DockerOutputHandler {
+	return &DockerOutputHandler{cas: cas, dockerClient: dockerClient, proxy: registry}
+}
+
 // Type returns the type of the handler.
 func (d *DockerOutputHandler) Type() HandlerType {
 	return OCIHandler
 }
 
-func (d *DockerOutputHandler) ensureClient() (*client.Client, error) {
+func (d *DockerOutputHandler) ensureClient() (DockerClient, error) {
+	if d.dockerClient != nil {
+		return d.dockerClient, nil
+	}
 	d.dockerInit.Do(func() {
 		cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 		if err != nil {
@@ -65,7 +75,10 @@ func (d *DockerOutputHandler) ensureClient() (*client.Client, error) {
 	return d.dockerClient, d.dockerErr
 }
 
-func (d *DockerOutputHandler) ensureProxy(ctx context.Context) (*ociproxy.Registry, error) {
+func (d *DockerOutputHandler) ensureProxy(ctx context.Context) (LoopbackRegistry, error) {
+	if d.proxy != nil {
+		return d.proxy, nil
+	}
 	d.proxyInit.Do(func() {
 		reg, err := ociproxy.New(ctx, d.cas)
 		if err != nil {
@@ -240,8 +253,8 @@ func (d *DockerOutputHandler) Load(
 // to record the manifest digest the daemon produced — that's how Load later knows
 // which manifest to pull.
 type dockerImageWritePlan struct {
-	dockerClient *client.Client
-	proxy        *ociproxy.Registry
+	dockerClient DockerClient
+	proxy        LoopbackRegistry
 
 	// output is the same pointer that lives in PreparedTargetResult.TargetResult.Outputs[i].
 	// Execute mutates its ManifestDigest field; the cache writer persists the

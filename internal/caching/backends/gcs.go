@@ -21,12 +21,97 @@ import (
 // cache key.
 const gcsStagingPath = ".uploads"
 
+// GCSClient defines the operations GCSCache needs against Google Cloud Storage.
+// Wrapping the SDK behind an interface lets the cache logic be unit-tested
+// against a mock, matching the pattern S3Client / AzureBlobClient already use.
+type GCSClient interface {
+	// NewReader opens a streaming reader for an object.
+	NewReader(ctx context.Context, bucket, object string) (io.ReadCloser, error)
+
+	// NewWriter opens a streaming writer for an object. The returned writer must
+	// be Closed to finalize the upload.
+	NewWriter(ctx context.Context, bucket, object string) io.WriteCloser
+
+	// Delete removes the named object.
+	Delete(ctx context.Context, bucket, object string) error
+
+	// Attrs returns the object's size, returning storage.ErrObjectNotExist if
+	// the object is absent.
+	Attrs(ctx context.Context, bucket, object string) (size int64, err error)
+
+	// Copy copies srcObject to dstObject within the same bucket.
+	Copy(ctx context.Context, bucket, srcObject, dstObject string) error
+
+	// List enumerates object names matching prefix; the iterator yields
+	// iterator.Done when exhausted.
+	List(ctx context.Context, bucket, prefix string) GCSObjectIterator
+}
+
+// GCSObjectIterator yields object names; satisfied by *storage.ObjectIterator.
+type GCSObjectIterator interface {
+	// NextName returns the next object's name or iterator.Done when exhausted.
+	NextName() (string, error)
+}
+
+// GCSStorageAdapter adapts cloud.google.com/go/storage to GCSClient.
+type GCSStorageAdapter struct {
+	client *storage.Client
+}
+
+// NewGCSStorageAdapter creates a new adapter for the cloud.google.com/go/storage client.
+func NewGCSStorageAdapter(client *storage.Client) *GCSStorageAdapter {
+	return &GCSStorageAdapter{client: client}
+}
+
+func (a *GCSStorageAdapter) NewReader(ctx context.Context, bucket, object string) (io.ReadCloser, error) {
+	return a.client.Bucket(bucket).Object(object).NewReader(ctx)
+}
+
+func (a *GCSStorageAdapter) NewWriter(ctx context.Context, bucket, object string) io.WriteCloser {
+	return a.client.Bucket(bucket).Object(object).NewWriter(ctx)
+}
+
+func (a *GCSStorageAdapter) Delete(ctx context.Context, bucket, object string) error {
+	return a.client.Bucket(bucket).Object(object).Delete(ctx)
+}
+
+func (a *GCSStorageAdapter) Attrs(ctx context.Context, bucket, object string) (int64, error) {
+	attrs, err := a.client.Bucket(bucket).Object(object).Attrs(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return attrs.Size, nil
+}
+
+func (a *GCSStorageAdapter) Copy(ctx context.Context, bucket, srcObject, dstObject string) error {
+	src := a.client.Bucket(bucket).Object(srcObject)
+	dst := a.client.Bucket(bucket).Object(dstObject)
+	_, err := dst.CopierFrom(src).Run(ctx)
+	return err
+}
+
+func (a *GCSStorageAdapter) List(ctx context.Context, bucket, prefix string) GCSObjectIterator {
+	return &gcsIteratorAdapter{it: a.client.Bucket(bucket).Objects(ctx, &storage.Query{Prefix: prefix})}
+}
+
+type gcsIteratorAdapter struct {
+	it *storage.ObjectIterator
+}
+
+func (g *gcsIteratorAdapter) NextName() (string, error) {
+	attrs, err := g.it.Next()
+	if err != nil {
+		return "", err
+	}
+	return attrs.Name, nil
+}
+
 // GCSCache implements the CacheBackend interface using Google Cloud Storage.
 type GCSCache struct {
 	bucketName      string
 	prefix          string
 	workspacePrefix string
-	client          *storage.Client
+	client          GCSClient
 	logger          *console.Logger
 }
 
@@ -34,7 +119,7 @@ func (gcs *GCSCache) TypeName() string {
 	return "gcs"
 }
 
-// NewGCSCache creates a new GCS cache.
+// NewGCSCache creates a new GCS cache backed by the real Google Cloud Storage client.
 func NewGCSCache(
 	ctx context.Context,
 	cacheConfig config.GCSCacheConfig,
@@ -43,14 +128,27 @@ func NewGCSCache(
 		return nil, fmt.Errorf("GCS bucket name is not set")
 	}
 
-	client, err := storage.NewClient(ctx)
+	storageClient, err := storage.NewClient(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client: %w", err)
 	}
+	adapter := NewGCSStorageAdapter(storageClient)
+	return NewGCSCacheWithClient(ctx, cacheConfig, adapter)
+}
+
+// NewGCSCacheWithClient creates a new GCS cache with a provided client.
+// This is useful for testing with a mock client.
+func NewGCSCacheWithClient(
+	ctx context.Context,
+	cacheConfig config.GCSCacheConfig,
+	client GCSClient,
+) (*GCSCache, error) {
+	if cacheConfig.Bucket == "" {
+		return nil, fmt.Errorf("GCS bucket name is not set")
+	}
+
 	prefix := cacheConfig.Prefix
-	if prefix == "" {
-		prefix = ""
-	} else {
+	if prefix != "" {
 		prefix = strings.Trim(prefix, "/")
 	}
 
@@ -58,10 +156,8 @@ func NewGCSCache(
 	var workspacePrefix string
 
 	if cacheConfig.SharedCache {
-		// If shared cache is enabled treat prefix as the workspace root
 		workspacePrefix = ""
 	} else {
-		// If shared cache is disabled, use the full path hash
 		workspacePrefix = strings.Trim(config.GetWorkspaceCachePrefix(workspaceDir), "/")
 	}
 
@@ -101,7 +197,7 @@ func (gcs *GCSCache) Get(ctx context.Context, path, key string) (io.ReadCloser, 
 	gcsPath := gcs.buildPath(path, key)
 	logger.Tracef("Getting file from GCS for path: %s", gcsPath)
 
-	rc, err := gcs.client.Bucket(gcs.bucketName).Object(gcsPath).NewReader(ctx)
+	rc, err := gcs.client.NewReader(ctx, gcs.bucketName, gcsPath)
 	if err != nil {
 		logger.Tracef("Failed to get file from GCS for path: %s, key: %s: %v", path, key, err)
 		return nil, fmt.Errorf("failed to create reader: %w", err)
@@ -116,16 +212,13 @@ func (gcs *GCSCache) Set(ctx context.Context, path, key string, content io.Reade
 	gcsPath := gcs.buildPath(path, key)
 	logger.Tracef("Setting file in GCS for path: %s", gcsPath)
 
-	wc := gcs.client.Bucket(gcs.bucketName).Object(gcsPath).NewWriter(ctx)
-
+	wc := gcs.client.NewWriter(ctx, gcs.bucketName, gcsPath)
 	if _, err := io.Copy(wc, content); err != nil {
 		return fmt.Errorf("failed to copy data to GCS: %w", err)
 	}
-
 	if err := wc.Close(); err != nil {
 		return fmt.Errorf("failed to close writer: %w", err)
 	}
-
 	return nil
 }
 
@@ -135,26 +228,24 @@ func (gcs *GCSCache) Delete(ctx context.Context, path string, key string) error 
 	gcsPath := gcs.buildPath(path, key)
 	logger.Tracef("Deleting file from GCS for path: %s", gcsPath)
 
-	err := gcs.client.Bucket(gcs.bucketName).Object(gcsPath).Delete(ctx)
-	if err != nil {
+	if err := gcs.client.Delete(ctx, gcs.bucketName, gcsPath); err != nil {
 		return fmt.Errorf("failed to delete object: %w", err)
 	}
-
 	return nil
 }
 
 // BeginWrite opens a streaming upload to a staging object under .uploads/<uuid>.
 // On Commit, the staging object is server-side copied to its final
-// content-addressed key via Object.CopierFrom and the staging object is
-// deleted. No bytes pass through grog twice.
+// content-addressed key and the staging object is deleted. No bytes pass
+// through grog twice.
 //
-// The ctx passed here lives for the entire upload session — it's captured
-// inside *storage.Writer which uses it to drive the resumable upload — so
-// callers must pass a context that outlives all subsequent Write calls
-// (e.g. the ociproxy registry's session ctx, not an HTTP request ctx).
+// The ctx passed here lives for the entire upload session — it is captured
+// inside the writer that drives the resumable upload — so callers must pass a
+// context that outlives all subsequent Write calls (e.g. the ociproxy
+// registry's session ctx, not an HTTP request ctx).
 func (gcs *GCSCache) BeginWrite(ctx context.Context) (StagedWriter, error) {
 	stagingKey := gcs.buildPath(gcsStagingPath, uuid.NewString())
-	wc := gcs.client.Bucket(gcs.bucketName).Object(stagingKey).NewWriter(ctx)
+	wc := gcs.client.NewWriter(ctx, gcs.bucketName, stagingKey)
 	return &gcsStagedWriter{
 		client:     gcs.client,
 		bucket:     gcs.bucketName,
@@ -165,14 +256,14 @@ func (gcs *GCSCache) BeginWrite(ctx context.Context) (StagedWriter, error) {
 }
 
 // gcsStagedWriter is the StagedWriter implementation for GCS. The streaming
-// resumable upload is owned by *storage.Writer (which captures the ctx from
-// BeginWrite internally); Commit promotes the staging object via a
-// server-side rewrite using Object.CopierFrom.
+// resumable upload is owned by the underlying writer (which captures the ctx
+// from BeginWrite internally); Commit promotes the staging object via a
+// server-side copy.
 type gcsStagedWriter struct {
-	client     *storage.Client
+	client     GCSClient
 	bucket     string
 	stagingKey string
-	writer     *storage.Writer
+	writer     io.WriteCloser
 	buildPath  func(path, key string) string
 
 	mu       sync.Mutex
@@ -192,16 +283,13 @@ func (w *gcsStagedWriter) Commit(ctx context.Context, path, key string) error {
 	w.finished = true
 	w.mu.Unlock()
 
-	// Closing the writer flushes and finalizes the resumable upload.
 	if err := w.writer.Close(); err != nil {
 		_ = w.cleanupStaging(ctx)
 		return fmt.Errorf("close staging writer: %w", err)
 	}
 
 	finalKey := w.buildPath(path, key)
-	src := w.client.Bucket(w.bucket).Object(w.stagingKey)
-	dst := w.client.Bucket(w.bucket).Object(finalKey)
-	if _, err := dst.CopierFrom(src).Run(ctx); err != nil {
+	if err := w.client.Copy(ctx, w.bucket, w.stagingKey, finalKey); err != nil {
 		_ = w.cleanupStaging(ctx)
 		return fmt.Errorf("copy staging -> final: %w", err)
 	}
@@ -219,20 +307,12 @@ func (w *gcsStagedWriter) Cancel(ctx context.Context) error {
 	w.finished = true
 	w.mu.Unlock()
 
-	// Aborting the resumable upload — *storage.Writer doesn't expose a
-	// dedicated abort, but Close on a writer that hasn't been fully written
-	// to ends the upload session. Any partial object is deleted below.
 	_ = w.writer.Close()
 	return w.cleanupStaging(ctx)
 }
 
 func (w *gcsStagedWriter) cleanupStaging(ctx context.Context) error {
-	if err := w.client.Bucket(w.bucket).Object(w.stagingKey).Delete(ctx); err != nil {
-		// Not fatal — orphan staging objects can be cleaned up by a GCS
-		// lifecycle rule on the .uploads/ prefix.
-		return err
-	}
-	return nil
+	return w.client.Delete(ctx, w.bucket, w.stagingKey)
 }
 
 // Size returns the byte size of an object in GCS via Object.Attrs (a metadata
@@ -242,11 +322,11 @@ func (gcs *GCSCache) Size(ctx context.Context, path, key string) (int64, error) 
 	gcsPath := gcs.buildPath(path, key)
 	logger.Tracef("Sizing object in GCS for path: %s", gcsPath)
 
-	attrs, err := gcs.client.Bucket(gcs.bucketName).Object(gcsPath).Attrs(ctx)
+	size, err := gcs.client.Attrs(ctx, gcs.bucketName, gcsPath)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get object attrs: %w", err)
 	}
-	return attrs.Size, nil
+	return size, nil
 }
 
 // Exists checks if a file exists in GCS.
@@ -255,7 +335,7 @@ func (gcs *GCSCache) Exists(ctx context.Context, path string, key string) (bool,
 	gcsPath := gcs.buildPath(path, key)
 	logger.Tracef("Checking existence of file in GCS for path: %s", gcsPath)
 
-	_, err := gcs.client.Bucket(gcs.bucketName).Object(gcsPath).Attrs(ctx)
+	_, err := gcs.client.Attrs(ctx, gcs.bucketName, gcsPath)
 	if errors.Is(err, storage.ErrObjectNotExist) {
 		logger.Tracef("File does not exist: %s", gcsPath)
 		return false, nil
@@ -263,7 +343,6 @@ func (gcs *GCSCache) Exists(ctx context.Context, path string, key string) (bool,
 	if err != nil {
 		return false, err
 	}
-
 	return true, nil
 }
 
@@ -274,20 +353,18 @@ func (gcs *GCSCache) ListKeys(ctx context.Context, path string, suffix string) (
 		fullPath += "/"
 	}
 
-	it := gcs.client.Bucket(gcs.bucketName).Objects(ctx, &storage.Query{
-		Prefix: fullPath,
-	})
+	it := gcs.client.List(ctx, gcs.bucketName, fullPath)
 
 	var keys []string
 	for {
-		attrs, err := it.Next()
+		name, err := it.NextName()
 		if err == iterator.Done {
 			break
 		}
 		if err != nil {
 			return nil, err
 		}
-		key := strings.TrimPrefix(attrs.Name, fullPath)
+		key := strings.TrimPrefix(name, fullPath)
 		if suffix == "" || strings.HasSuffix(key, suffix) {
 			keys = append(keys, key)
 		}

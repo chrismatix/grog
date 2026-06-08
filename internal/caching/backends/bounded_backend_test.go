@@ -3,6 +3,7 @@ package backends
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"strings"
 	"sync"
@@ -249,4 +250,200 @@ func TestDefaultIOConcurrency_ClampedRange(t *testing.T) {
 		t.Fatalf("DefaultIOConcurrency() = %d, want in [%d, %d]",
 			got, defaultIOConcurrencyMin, defaultIOConcurrencyMax)
 	}
+}
+
+func TestBoundedBackend_InnerAndTypeName(t *testing.T) {
+	withGlobalIOConcurrency(t, 4)
+	inner := &mockCacheBackend{typeName: "inner-name"}
+	bb := NewBoundedBackend(inner)
+	if got := bb.Inner(); got != inner {
+		t.Fatalf("Inner() = %v, want %v", got, inner)
+	}
+	if got := bb.TypeName(); got != "inner-name" {
+		t.Fatalf("TypeName() = %q, want inner-name", got)
+	}
+}
+
+func TestBoundedBackend_DelegationCalls(t *testing.T) {
+	withGlobalIOConcurrency(t, 4)
+	ctx := context.Background()
+
+	deleteCalled := false
+	existsCalled := false
+	sizeCalled := false
+	listCalled := false
+
+	inner := &mockCacheBackend{
+		deleteFunc: func(ctx context.Context, path, key string) error {
+			deleteCalled = true
+			return nil
+		},
+		existsFunc: func(ctx context.Context, path, key string) (bool, error) {
+			existsCalled = true
+			return true, nil
+		},
+		sizeFunc: func(ctx context.Context, path, key string) (int64, error) {
+			sizeCalled = true
+			return 42, nil
+		},
+	}
+
+	listingMock := &listingMockBackend{
+		mockCacheBackend: inner,
+		listFunc: func(ctx context.Context, path, suffix string) ([]string, error) {
+			listCalled = true
+			return []string{"a", "b"}, nil
+		},
+	}
+
+	bb := NewBoundedBackend(listingMock)
+
+	if err := bb.Delete(ctx, "p", "k"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if !deleteCalled {
+		t.Fatal("Delete not delegated")
+	}
+
+	exists, err := bb.Exists(ctx, "p", "k")
+	if err != nil || !exists {
+		t.Fatalf("Exists: %v, %v", exists, err)
+	}
+	if !existsCalled {
+		t.Fatal("Exists not delegated")
+	}
+
+	size, err := bb.Size(ctx, "p", "k")
+	if err != nil || size != 42 {
+		t.Fatalf("Size: %d, %v", size, err)
+	}
+	if !sizeCalled {
+		t.Fatal("Size not delegated")
+	}
+
+	keys, err := bb.ListKeys(ctx, "p", "")
+	if err != nil || len(keys) != 2 {
+		t.Fatalf("ListKeys: %v, %v", keys, err)
+	}
+	if !listCalled {
+		t.Fatal("ListKeys not delegated")
+	}
+}
+
+func TestBoundedBackend_DelegationPropagatesErrors(t *testing.T) {
+	withGlobalIOConcurrency(t, 4)
+	ctx := context.Background()
+	wantErr := errors.New("inner failure")
+
+	inner := &mockCacheBackend{
+		deleteFunc: func(ctx context.Context, path, key string) error { return wantErr },
+		existsFunc: func(ctx context.Context, path, key string) (bool, error) {
+			return false, wantErr
+		},
+		sizeFunc: func(ctx context.Context, path, key string) (int64, error) {
+			return 0, wantErr
+		},
+	}
+	listingMock := &listingMockBackend{
+		mockCacheBackend: inner,
+		listFunc: func(ctx context.Context, path, suffix string) ([]string, error) {
+			return nil, wantErr
+		},
+	}
+	bb := NewBoundedBackend(listingMock)
+
+	if err := bb.Delete(ctx, "p", "k"); !errors.Is(err, wantErr) {
+		t.Fatalf("Delete err = %v", err)
+	}
+	if _, err := bb.Exists(ctx, "p", "k"); !errors.Is(err, wantErr) {
+		t.Fatalf("Exists err = %v", err)
+	}
+	if _, err := bb.Size(ctx, "p", "k"); !errors.Is(err, wantErr) {
+		t.Fatalf("Size err = %v", err)
+	}
+	if _, err := bb.ListKeys(ctx, "p", ""); !errors.Is(err, wantErr) {
+		t.Fatalf("ListKeys err = %v", err)
+	}
+}
+
+func TestBoundedBackend_ContextCancelledOnAcquire(t *testing.T) {
+	withGlobalIOConcurrency(t, 1)
+
+	inner := &mockCacheBackend{
+		deleteFunc: func(ctx context.Context, path, key string) error { return nil },
+		existsFunc: func(ctx context.Context, path, key string) (bool, error) {
+			return false, nil
+		},
+		sizeFunc: func(ctx context.Context, path, key string) (int64, error) { return 0, nil },
+		setFunc: func(ctx context.Context, path, key string, content io.Reader) error {
+			return nil
+		},
+		getFunc: func(ctx context.Context, path, key string) (io.ReadCloser, error) {
+			return io.NopCloser(strings.NewReader("")), nil
+		},
+	}
+	listingMock := &listingMockBackend{
+		mockCacheBackend: inner,
+		listFunc: func(ctx context.Context, path, suffix string) ([]string, error) {
+			return nil, nil
+		},
+	}
+	bb := NewBoundedBackend(listingMock)
+
+	rc, err := bb.Get(context.Background(), "p", "k")
+	if err != nil {
+		t.Fatalf("prime acquire: %v", err)
+	}
+	defer rc.Close()
+
+	cancelCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if _, err := bb.Get(cancelCtx, "p", "k"); err == nil {
+		t.Fatal("Get with cancelled ctx should fail")
+	}
+	if err := bb.Set(cancelCtx, "p", "k", strings.NewReader("x")); err == nil {
+		t.Fatal("Set with cancelled ctx should fail")
+	}
+	if err := bb.Delete(cancelCtx, "p", "k"); err == nil {
+		t.Fatal("Delete with cancelled ctx should fail")
+	}
+	if _, err := bb.Exists(cancelCtx, "p", "k"); err == nil {
+		t.Fatal("Exists with cancelled ctx should fail")
+	}
+	if _, err := bb.Size(cancelCtx, "p", "k"); err == nil {
+		t.Fatal("Size with cancelled ctx should fail")
+	}
+	if _, err := bb.ListKeys(cancelCtx, "p", ""); err == nil {
+		t.Fatal("ListKeys with cancelled ctx should fail")
+	}
+}
+
+func TestBoundedBackend_GetReleasesOnInnerError(t *testing.T) {
+	withGlobalIOConcurrency(t, 1)
+	inner := &mockCacheBackend{
+		getFunc: func(ctx context.Context, path, key string) (io.ReadCloser, error) {
+			return nil, errors.New("inner get fail")
+		},
+	}
+	bb := NewBoundedBackend(inner)
+
+	if _, err := bb.Get(context.Background(), "p", "k"); err == nil {
+		t.Fatal("expected error")
+	}
+	if _, err := bb.Get(context.Background(), "p", "k"); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+type listingMockBackend struct {
+	*mockCacheBackend
+	listFunc func(ctx context.Context, path, suffix string) ([]string, error)
+}
+
+func (m *listingMockBackend) ListKeys(ctx context.Context, path, suffix string) ([]string, error) {
+	if m.listFunc != nil {
+		return m.listFunc(ctx, path, suffix)
+	}
+	return nil, nil
 }

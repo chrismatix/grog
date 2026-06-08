@@ -5,8 +5,10 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/stretchr/testify/assert"
 
 	"grog/internal/config"
@@ -270,6 +272,156 @@ func TestAzureCache_EmptyContainer(t *testing.T) {
 	}, mockClient)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "azure container name is not set")
+}
+
+func TestAzureCache_Size(t *testing.T) {
+	ctx := context.Background()
+	mockClient := newMockAzureBlobClient()
+	mockClient.objects["prefix/workspace/path/key"] = []byte("hello world")
+
+	cache, err := NewAzureCacheWithClient(ctx, config.AzureCacheConfig{
+		Container: "test-container",
+		Prefix:    "prefix",
+	}, mockClient)
+	assert.NoError(t, err)
+	cache.workspacePrefix = "workspace"
+
+	size, err := cache.Size(ctx, "path", "key")
+	assert.NoError(t, err)
+	assert.Equal(t, int64(11), size)
+
+	_, err = cache.Size(ctx, "path", "missing")
+	assert.Error(t, err)
+}
+
+func TestAzureCache_BeginWriteCommit(t *testing.T) {
+	ctx := context.Background()
+	mockClient := newMockAzureBlobClient()
+
+	cache, err := NewAzureCacheWithClient(ctx, config.AzureCacheConfig{
+		Container:   "test-container",
+		Prefix:      "prefix",
+		SharedCache: true,
+	}, mockClient)
+	assert.NoError(t, err)
+
+	sw, err := cache.BeginWrite(ctx)
+	assert.NoError(t, err)
+	payload := []byte("azure staged")
+	_, err = sw.Write(payload)
+	assert.NoError(t, err)
+
+	err = sw.Commit(ctx, "p", "k")
+	assert.NoError(t, err)
+	assert.Equal(t, payload, mockClient.objects["prefix/p/k"])
+
+	for k := range mockClient.objects {
+		if strings.Contains(k, azureStagingPath) {
+			t.Fatalf("staging blob present after commit: %s", k)
+		}
+	}
+
+	err = sw.Commit(ctx, "p", "k2")
+	assert.Error(t, err)
+}
+
+func TestAzureCache_BeginWriteCancel(t *testing.T) {
+	ctx := context.Background()
+	mockClient := newMockAzureBlobClient()
+
+	cache, err := NewAzureCacheWithClient(ctx, config.AzureCacheConfig{
+		Container:   "test-container",
+		SharedCache: true,
+	}, mockClient)
+	assert.NoError(t, err)
+
+	sw, err := cache.BeginWrite(ctx)
+	assert.NoError(t, err)
+	_, _ = sw.Write([]byte("partial"))
+
+	_ = sw.Cancel(ctx)
+
+	for k := range mockClient.objects {
+		if strings.Contains(k, azureStagingPath) {
+			t.Fatalf("staging blob present after cancel: %s", k)
+		}
+	}
+
+	err = sw.Cancel(ctx)
+	assert.NoError(t, err)
+}
+
+func TestAzureCache_BeginWriteCommitFailsOnCopy(t *testing.T) {
+	ctx := context.Background()
+	mockClient := &failingCopyAzureClient{mockAzureBlobClient: newMockAzureBlobClient()}
+
+	cache, err := NewAzureCacheWithClient(ctx, config.AzureCacheConfig{
+		Container:   "test-container",
+		SharedCache: true,
+	}, mockClient)
+	assert.NoError(t, err)
+
+	sw, err := cache.BeginWrite(ctx)
+	assert.NoError(t, err)
+	_, _ = sw.Write([]byte("data"))
+	err = sw.Commit(ctx, "p", "k")
+	assert.Error(t, err)
+}
+
+func TestAzureCache_BeginWriteCommitFailsOnUpload(t *testing.T) {
+	ctx := context.Background()
+	mockClient := &failingUploadAzureClient{mockAzureBlobClient: newMockAzureBlobClient()}
+
+	cache, err := NewAzureCacheWithClient(ctx, config.AzureCacheConfig{
+		Container:   "test-container",
+		SharedCache: true,
+	}, mockClient)
+	assert.NoError(t, err)
+
+	sw, err := cache.BeginWrite(ctx)
+	assert.NoError(t, err)
+	_, _ = sw.Write([]byte("data"))
+	err = sw.Commit(ctx, "p", "k")
+	assert.Error(t, err)
+}
+
+func TestAzureCache_ListKeys_NonAdapter(t *testing.T) {
+	ctx := context.Background()
+	mockClient := newMockAzureBlobClient()
+
+	cache, err := NewAzureCacheWithClient(ctx, config.AzureCacheConfig{
+		Container:   "test-container",
+		SharedCache: true,
+	}, mockClient)
+	assert.NoError(t, err)
+
+	keys, err := cache.ListKeys(ctx, "path", "")
+	assert.NoError(t, err)
+	assert.Nil(t, keys)
+}
+
+func TestAzureCache_IsBlobNotFoundError(t *testing.T) {
+	assert.True(t, isBlobNotFoundError(errors.New("---RESPONSE 404 Not Found---")))
+	assert.True(t, isBlobNotFoundError(errors.New("error code: BlobNotFound")))
+	assert.False(t, isBlobNotFoundError(errors.New("some other error")))
+}
+
+func TestNewAzureBlobAdapter(t *testing.T) {
+	a := NewAzureBlobAdapter(&azblob.Client{})
+	assert.NotNil(t, a)
+}
+
+type failingCopyAzureClient struct{ *mockAzureBlobClient }
+
+func (f *failingCopyAzureClient) CopyBlob(ctx context.Context, container, srcBlob, destBlob string) error {
+	return errors.New("copy failed")
+}
+
+type failingUploadAzureClient struct{ *mockAzureBlobClient }
+
+func (f *failingUploadAzureClient) UploadBlob(ctx context.Context, container, blob string, body io.Reader) error {
+	_, _ = io.ReadAll(body)
+	return errors.New("upload failed")
 }
 
 func TestAzureCache_BuildPath(t *testing.T) {
