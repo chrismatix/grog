@@ -329,6 +329,8 @@ Removes all cached artifacts.
 Removes cached artifacts from the workspace or the entire grog cache.
 By default, the target cache and the workspace's logs/lockfile are cleaned. Since the target cache is shared across checkouts of the same repo, running clean affects other workspaces pointing at the same GROG_ROOT. Use the --expunge flag to remove every grog cache directory (CAS included).
 
+Because the cache is shared across checkouts, clean refuses to run while another grog build is in progress in any checkout that uses the same GROG_ROOT — deleting cache entries out from under a running build can make it fail when it reads an output it had already recorded as a cache hit. Pass --force to clean anyway.
+
 ```text
 grog clean [flags]
 ```
@@ -344,6 +346,7 @@ grog clean [flags]
 
 ```text
   -e, --expunge   Expunge all cached artifacts
+  -f, --force     Clean even if other grog builds are running
   -h, --help      help for clean
 ```
 
