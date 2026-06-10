@@ -201,6 +201,7 @@ func buildOTLPResourceSpans(trace *BuildTrace) otlpResourceSpans {
 			{Key: "grog.cache_hit_count", Value: intVal(int64(trace.Build.CacheHitCount))},
 			{Key: "grog.failure_count", Value: intVal(int64(trace.Build.FailureCount))},
 			{Key: "grog.is_ci", Value: boolVal(trace.Build.IsCI)},
+			{Key: "grog.requested_patterns", Value: stringVal(trace.Build.RequestedPatterns)},
 		},
 		Status: &otlpStatus{Code: 1},
 	}
