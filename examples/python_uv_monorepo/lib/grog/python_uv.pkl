@@ -1,0 +1,89 @@
+/// PythonUvImage — build a Python service image by installing directly from the
+/// resolved uv.lock, in change-frequency-ordered Docker layers.
+///
+/// Two targets per service:
+///   <prefix>stage  — runs uv_image_stage.py to produce build/uv/ (the
+///                    third-party pylock + workspace source trees) as the
+///                    docker build context.
+///   <prefix>image  — docker build of the 3-layer Dockerfile. Layer 1
+///                    (third-party deps) is keyed on a deterministic pylock,
+///                    so it is a real layer-cache hit when deps are unchanged;
+///                    a workspace-lib or service-code change only rebuilds the
+///                    cheap lower layers.
+module python_uv
+
+import "@grog/package.pkl"
+
+local const is_mac = read("env:GROG_OS") == "darwin"
+
+local const arch_to_whl_tag = new Mapping {
+  ["amd64"] = "x86_64"
+  ["arm64"] = "aarch64"
+}
+
+class PythonUvImage {
+  local self = this
+
+  /// Docker image tag / output name.
+  name: String
+
+  /// Prod arch for the image (e.g. "amd64").
+  deploy_arch: String
+
+  /// Optional target-name prefix so a package can host several images.
+  name_prefix: String = ""
+
+  /// Dockerfile to build (relative to the package dir).
+  dockerfile: String = "Dockerfile"
+
+  /// Sources whose change should rebuild the image (the service's own package).
+  app_sources: Listing<String>
+
+  /// Workspace deps. Declared as grog dependencies so the stage target re-runs
+  /// when any first-party source changes; the staging script discovers the
+  /// concrete paths from `uv export` at run time.
+  app_dependencies: Listing<String>
+
+  tags: Listing<String> = new Listing<String> {}
+
+  fixed targets: Listing<package.Target> = new Listing<package.Target> {
+    new {
+      name = "\(self.name_prefix)stage"
+      command =
+        "uv run --script \"$GROG_WORKSPACE_ROOT/lib/grog/uv_image_stage.py\" \(arch_to_whl_tag[self.deploy_arch])"
+      inputs {
+        ...self.app_sources
+      }
+      dependencies {
+        "//:uv.lock"
+        "//lib/grog:uv_image_stage"
+        ...self.app_dependencies
+      }
+      outputs {
+        "dir::build/uv"
+      }
+      tags = self.tags
+    }
+
+    new {
+      name = "\(self.name_prefix)image"
+      command =
+        "docker build --platform=linux/\(self.deploy_arch) -f \(self.dockerfile) -t \(self.name) ."
+      dependencies {
+        ":\(self.name_prefix)stage"
+      }
+      inputs {
+        self.dockerfile
+      }
+      outputs {
+        "docker::\(self.name)"
+      }
+      platforms {
+        when (!is_mac) {
+          "linux/\(self.deploy_arch)"
+        }
+      }
+      tags = self.tags
+    }
+  }
+}

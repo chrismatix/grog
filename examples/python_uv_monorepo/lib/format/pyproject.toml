@@ -1,0 +1,17 @@
+[project]
+name = "format"
+version = "0.1.0"
+description = "Sarcastic text formatter library"
+readme = "README.md"
+dependencies = ["emoji>=2.14.1"]
+
+[build-system]
+requires = ["uv_build>=0.9.6,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "format"
+module-root = ""
+
+[dependency-groups]
+dev = ["pytest>=8.3.5"]

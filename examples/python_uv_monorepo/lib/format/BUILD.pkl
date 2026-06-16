@@ -1,0 +1,23 @@
+amends "@grog/package.pkl"
+
+targets {
+  // Internal Python libraries don't have a build step — this source target
+  // just exposes the sources so other packages can listen for changes.
+  new {
+    name = "format"
+    inputs {
+      "format/*.py"
+    }
+  }
+
+  new {
+    name = "test"
+    command = "uv run pytest"
+    inputs {
+      "tests/*.py"
+    }
+    dependencies {
+      ":format"
+    }
+  }
+}

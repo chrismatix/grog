@@ -1,0 +1,13 @@
+amends "@grog/package.pkl"
+
+targets {
+  new {
+    name = "uv.lock"
+    inputs {
+      "uv.lock"
+    }
+    outputs {
+      "uv.lock"
+    }
+  }
+}
