@@ -76,7 +76,7 @@ class PythonUvImage {
         self.dockerfile
       }
       outputs {
-        "docker::\(self.name)"
+        "oci::\(self.name)"
       }
       platforms {
         when (!is_mac) {
