@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"sync"
 	"sync/atomic"
 
 	"grog/internal/caching"
@@ -503,20 +502,15 @@ func (d *DirectoryOutputHandler) Load(
 
 	// Concurrent CAS reads are bounded process-wide by the BoundedBackend
 	// wrapper inside cas.Load.
-	var waitGroup sync.WaitGroup
-	errChan := make(chan error, len(tree.Children))
+	group, groupCtx := errgroup.WithContext(ctx)
 	// Recursively load the directory structure
-	if err := d.loadDirectoryRecursive(ctx, dirPath, tree.Root, childrenMap, progress, &waitGroup, errChan); err != nil {
+	if err := d.loadDirectoryRecursive(groupCtx, dirPath, tree.Root, childrenMap, progress, group); err != nil {
 		return fmt.Errorf("failed to load directory structure: %w", err)
 	}
 
-	// Wait for all goroutines to finish
-	waitGroup.Wait()
-	close(errChan)
-	for err := range errChan {
-		if err != nil {
-			return err
-		}
+	// Wait for all file downloads to finish
+	if err := group.Wait(); err != nil {
+		return err
 	}
 
 	if progress != nil {
@@ -533,23 +527,22 @@ func (d *DirectoryOutputHandler) loadDirectoryRecursive(
 	dir *gen.Directory,
 	childrenMap map[string]*gen.Directory,
 	progress *worker.ProgressTracker,
-	waitGroup *sync.WaitGroup,
-	errChan chan error,
+	group *errgroup.Group,
 ) error {
 	// Create all files
 	for _, fileNode := range dir.Files {
 		filePath := filepath.Join(path, fileNode.Name)
+		digest := fileNode.Digest.Hash
+		isExecutable := fileNode.IsExecutable
 
-		waitGroup.Add(1)
 		// Fetch file contents from CAS
-		go func(filePath string, digest string) {
-			defer waitGroup.Done()
+		group.Go(func() error {
 			console.GetLogger(ctx).Debugf("loading file for directory output %s from digest %s", filePath, digest)
-			err := d.downloadFile(ctx, digest, filePath, fileNode.IsExecutable, progress)
-			if err != nil {
-				errChan <- fmt.Errorf("failed to download file %s: %v", filePath, err)
+			if err := d.downloadFile(ctx, digest, filePath, isExecutable, progress); err != nil {
+				return fmt.Errorf("failed to download file %s: %w", filePath, err)
 			}
-		}(filePath, fileNode.Digest.Hash)
+			return nil
+		})
 	}
 
 	// Create all subdirectories
@@ -568,7 +561,7 @@ func (d *DirectoryOutputHandler) loadDirectoryRecursive(
 		}
 
 		// Recursively load the subdirectory
-		if err := d.loadDirectoryRecursive(ctx, subDirPath, childDir, childrenMap, progress, waitGroup, errChan); err != nil {
+		if err := d.loadDirectoryRecursive(ctx, subDirPath, childDir, childrenMap, progress, group); err != nil {
 			return err
 		}
 	}
