@@ -20,6 +20,7 @@ Reference for the `grog` CLI.
 - [`grog info`](#grog-info)
 - [`grog list`](#grog-list)
 - [`grog logs`](#grog-logs)
+- [`grog lsp`](#grog-lsp)
 - [`grog owners`](#grog-owners)
 - [`grog rdeps`](#grog-rdeps)
 - [`grog run`](#grog-run)
@@ -76,6 +77,7 @@ Reference for the `grog` CLI.
 - [`grog info`](#grog-info) - Prints information about the grog cli and workspace.
 - [`grog list`](#grog-list) - Lists targets by pattern.
 - [`grog logs`](#grog-logs) - Print the latest log file for the given target.
+- [`grog lsp`](#grog-lsp) - Start the grog language server
 - [`grog owners`](#grog-owners) - Lists targets that own the specified files as inputs.
 - [`grog rdeps`](#grog-rdeps) - Lists (transitive) dependants (reverse dependencies) of a target.
 - [`grog run`](#grog-run) - Builds and runs one or more targets' binary outputs.
@@ -720,6 +722,56 @@ grog logs [flags]
 ```text
   -h, --help        help for logs
   -p, --path-only   Only print out the path of the target logs
+```
+
+### Options inherited from parent commands
+
+```text
+  -a, --all-platforms                 Select all platforms (bypasses platform selectors)
+      --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
+      --color string                  Set color output (yes, no, or auto) (default "auto")
+      --debug                         Enable debug logging
+      --disable-default-shell-flags   Do not prepend "set -eu" to target commands
+      --disable-progress-tracker      Disable progress tracking updates
+      --disable-tea                   Disable interactive TUI (Bubble Tea)
+      --enable-cache                  Enable cache (default true)
+      --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
+      --fail-fast                     Fail fast on first error
+      --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
+      --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
+      --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
+      --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
+      --stream-logs                   Forward all target build/test logs to stdout/-err
+      --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+  -v, --verbose count                 Set verbosity level (-v, -vv)
+```
+
+### See also
+
+- [`grog`](#grog)
+
+---
+
+## grog lsp
+
+Start the grog language server
+
+### Synopsis
+
+Start the grog language server for BUILD.star, BUILD.yaml, and BUILD.yml files.
+
+```text
+grog lsp [flags]
+```
+
+### Options
+
+```text
+  -h, --help   help for lsp
 ```
 
 ### Options inherited from parent commands

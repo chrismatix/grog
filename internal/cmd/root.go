@@ -26,7 +26,7 @@ var RootCmd = &cobra.Command{
 	// PersistentPreRunE runs before any subcommand's Run, after flags are parsed.
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if cmd.Flags().Changed("help") || cmd.Flags().Changed("version") ||
-			cmd.Name() == "help" || isCompletionCmd(cmd) {
+			cmd.Name() == "help" || cmd.Name() == "lsp" || isCompletionCmd(cmd) {
 			return nil
 		}
 
@@ -193,6 +193,7 @@ func configureRoot() bool {
 	RootCmd.AddCommand(cmds.InfoCmd)
 	RootCmd.AddCommand(cmds.CheckCmd)
 	RootCmd.AddCommand(cmds.TaintCmd)
+	RootCmd.AddCommand(cmds.LspCmd)
 	cmds.AddRunCmd(RootCmd)
 	cmds.AddGraphCmd(RootCmd)
 	cmds.AddCleanCmd(RootCmd)
