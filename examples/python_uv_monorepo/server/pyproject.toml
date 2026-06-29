@@ -1,0 +1,24 @@
+[project]
+name = "server"
+version = "0.1.0"
+description = "Sarcastic FastAPI server"
+readme = "README.md"
+dependencies = ["fastapi==0.115.11", "format", "httpx==0.28.1", "uvicorn==0.34.0", "demo-proto"]
+
+[build-system]
+requires = ["uv_build>=0.9.6,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "server"
+module-root = ""
+
+[tool.uv.sources]
+format = { workspace = true }
+demo-proto = { workspace = true }
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[dependency-groups]
+dev = ["pytest>=8.3.5"]

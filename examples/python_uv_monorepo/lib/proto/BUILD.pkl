@@ -1,0 +1,14 @@
+amends "@grog/package.pkl"
+
+targets {
+  new {
+    name = "proto"
+    command = "./build_proto.sh"
+    inputs {
+      "schema/*"
+    }
+    outputs {
+      "dir::pb/"
+    }
+  }
+}

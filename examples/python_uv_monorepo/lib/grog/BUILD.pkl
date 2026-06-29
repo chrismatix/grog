@@ -1,0 +1,12 @@
+amends "@grog/package.pkl"
+
+targets {
+  // Source target so PythonUvImage stage targets re-run when the shared
+  // staging script changes (see python_uv.pkl).
+  new {
+    name = "uv_image_stage"
+    inputs {
+      "uv_image_stage.py"
+    }
+  }
+}

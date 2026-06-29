@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "resolvedDependencies": {
+    "package://github.com/chrismatix/grog/releases/download/v0.21.0/grog@0": {
+      "type": "remote",
+      "uri": "projectpackage://github.com/chrismatix/grog/releases/download/v0.21.0/grog@0.21.0",
+      "checksums": {
+        "sha256": "bf75a83106c197064fdf261be211f907ad7e2f60a540c838f7f1717fce1f476e"
+      }
+    }
+  }
+}
