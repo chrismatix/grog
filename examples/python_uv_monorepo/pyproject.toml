@@ -1,0 +1,13 @@
+[project]
+name = "uv-grog-monorepo"
+version = "0.1.0"
+description = "uv workspace monorepo packaged into per-service Docker images by grog (no pex)"
+readme = "README.md"
+requires-python = "==3.12.11"
+dependencies = []
+
+[tool.uv.workspace]
+members = ["server", "lib/format", "cli", "lib/proto"]
+
+[dependency-groups]
+dev = ["pytest>=8.3.5", "tomli>=2.2.1", "grpcio-tools>=1.67.1"]

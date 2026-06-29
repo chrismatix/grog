@@ -1,0 +1,41 @@
+amends "@grog/package.pkl"
+
+import ".../lib/grog/python_uv.pkl"
+
+local sources =
+  List(
+    "server/**/*.py",
+    "pyproject.toml",
+  )
+
+local deps =
+  List(
+    "//lib/format",
+    "//lib/proto",
+  )
+
+targets {
+  ...new python_uv.PythonUvImage {
+    deploy_arch = "amd64"
+    name = "server"
+
+    app_sources {
+      ...sources
+    }
+    app_dependencies {
+      ...deps
+    }
+  }.targets
+
+  new {
+    name = "test"
+    command = "uv run pytest"
+    inputs {
+      ...sources
+      "tests/*.py"
+    }
+    dependencies {
+      ...deps
+    }
+  }
+}

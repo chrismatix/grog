@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // mockCacheBackend is a simple mock for CacheBackend to simulate failures.
@@ -182,6 +183,85 @@ func TestDirectoryOutputHandler_Write_FailsOnCacheWrite(t *testing.T) {
 	}
 	if err := result.WritePlan.Cleanup(ctx); err != nil {
 		t.Fatalf("cleanup failed: %v", err)
+	}
+}
+
+// treeOnlyBackend serves a single tree digest from an inner backend but fails
+// every other Get, simulating file downloads erroring out during a restore.
+type treeOnlyBackend struct {
+	backends.CacheBackend
+	treeHash string
+}
+
+func (b *treeOnlyBackend) Get(ctx context.Context, path, key string) (io.ReadCloser, error) {
+	if key == b.treeHash {
+		return b.CacheBackend.Get(ctx, path, key)
+	}
+	return nil, errors.New("simulated download failure")
+}
+
+// TestDirectoryOutputHandler_Load_FileDownloadError_NoDeadlock reproduces issue
+// #169: a flat directory (no subdirectories) whose file downloads fail must
+// return an error rather than deadlocking forever in Load.
+func TestDirectoryOutputHandler_Load_FileDownloadError_NoDeadlock(t *testing.T) {
+	ctx := context.Background()
+
+	rootDir := t.TempDir()
+	config.Global = config.WorkspaceConfig{Root: rootDir, WorkspaceRoot: rootDir}
+
+	cacheBackend, err := backends.NewFileSystemCache(ctx)
+	if err != nil {
+		t.Fatalf("failed to create cache backend: %v", err)
+	}
+	cas := caching.NewCas(cacheBackend)
+	handler := handlers.NewDirectoryOutputHandler(cas)
+
+	target := model.Target{Label: label.TL("pkg", "target"), ChangeHash: "hash"}
+	output := model.NewOutput("dir", "out")
+
+	dirPath := filepath.Join(rootDir, "pkg", "out")
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+	for i := 0; i < 64; i++ {
+		name := filepath.Join(dirPath, "file"+string(rune('a'+i%26))+string(rune('0'+i/26)))
+		if err := os.WriteFile(name, []byte("content"+string(rune('0'+i%10))), 0644); err != nil {
+			t.Fatalf("failed to write file: %v", err)
+		}
+	}
+
+	dirOutput, err := handler.Write(ctx, target, output, nil)
+	if err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+	if err := dirOutput.WritePlan.Execute(ctx, nil); err != nil {
+		t.Fatalf("WritePlan.Execute failed: %v", err)
+	}
+
+	// Remove the local directory so Load's dedup check misses and it proceeds
+	// to download files from the cache.
+	if err := os.RemoveAll(dirPath); err != nil {
+		t.Fatalf("failed to remove local directory: %v", err)
+	}
+
+	failingCas := caching.NewCas(&treeOnlyBackend{
+		CacheBackend: cacheBackend,
+		treeHash:     dirOutput.Output.GetDirectory().GetTreeDigest().Hash,
+	})
+	failingHandler := handlers.NewDirectoryOutputHandler(failingCas)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- failingHandler.Load(ctx, target, dirOutput.Output, nil)
+	}()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected Load to fail when file downloads error, got nil")
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("Load deadlocked: did not return within 30s")
 	}
 }
 

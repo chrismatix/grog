@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package demo;
+
+// Minimal demo schema for generating Python protobuf stubs
+message SarcasticRequest {
+  string text = 1;
+}
+
+message SarcasticResponse {
+  string original = 1;
+  string sarcastic = 2;
+}
+
+service Sarcasm {
+  rpc Convert(SarcasticRequest) returns (SarcasticResponse);
+}

@@ -1,0 +1,25 @@
+amends "@grog/package.pkl"
+
+import ".../lib/grog/python_uv.pkl"
+
+local sources =
+  List(
+    "cli/**/*.py",
+    "pyproject.toml",
+  )
+
+local deps = List("//lib/format")
+
+targets {
+  ...new python_uv.PythonUvImage {
+    deploy_arch = "amd64"
+    name = "cli"
+
+    app_sources {
+      ...sources
+    }
+    app_dependencies {
+      ...deps
+    }
+  }.targets
+}
