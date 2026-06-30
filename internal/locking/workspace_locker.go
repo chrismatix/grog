@@ -8,6 +8,7 @@ import (
 	"grog/internal/console"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -103,6 +104,70 @@ func (wl *WorkspaceLocker) Lock(ctx context.Context) error {
 // Unlock releases the workspace lock.
 func (wl *WorkspaceLocker) Unlock() error {
 	return os.Remove(wl.lockFilePath)
+}
+
+// ActiveLock describes a workspace lock that is currently held by a live
+// process. It is returned by FindActiveLocks so callers (such as the clean
+// command) can report which builds would be disrupted by a destructive
+// operation on the shared cache.
+type ActiveLock struct {
+	// ProcessID is the PID recorded in the lock file.
+	ProcessID int
+	// Command is the command line recorded in the lock file, if any. It may
+	// be empty for lock files written in the legacy PID-only format.
+	Command string
+	// LockFilePath is the absolute path of the lock file on disk.
+	LockFilePath string
+}
+
+// FindActiveLocks scans the grog root directory for workspace lock files held
+// by live processes. Each checkout stores its lock file at
+// "$GROG_ROOT/<prefix>/lockfile" (see config.WorkspaceConfig.GetWorkspaceRootDir),
+// so this walks one level below grogRoot and inspects every "lockfile" it
+// finds. Lock files whose recorded process is no longer running are treated as
+// stale and skipped, mirroring the stale-lock handling in Lock. The returned
+// slice is sorted by lock file path for deterministic output.
+func FindActiveLocks(grogRoot string) ([]ActiveLock, error) {
+	entries, err := os.ReadDir(grogRoot)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("could not read grog root %q: %w", grogRoot, err)
+	}
+
+	var activeLocks []ActiveLock
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		lockFilePath := filepath.Join(grogRoot, entry.Name(), "lockfile")
+		data, readError := os.ReadFile(lockFilePath)
+		if readError != nil {
+			// A missing lock file is the common case for non-workspace
+			// directories (cas, cache, traces, ...); ignore it. Other read
+			// errors are skipped too so a single unreadable file does not
+			// abort the whole scan.
+			continue
+		}
+		processID, command, parseError := parseLockFileContents(string(data))
+		if parseError != nil {
+			continue
+		}
+		if !processRunning(processID) {
+			continue
+		}
+		activeLocks = append(activeLocks, ActiveLock{
+			ProcessID:    processID,
+			Command:      command,
+			LockFilePath: lockFilePath,
+		})
+	}
+
+	slices.SortFunc(activeLocks, func(a, b ActiveLock) int {
+		return strings.Compare(a.LockFilePath, b.LockFilePath)
+	})
+	return activeLocks, nil
 }
 
 func processRunning(pid int) bool {
