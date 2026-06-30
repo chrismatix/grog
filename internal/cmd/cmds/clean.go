@@ -1,10 +1,12 @@
 package cmds
 
 import (
+	"fmt"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/locking"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -33,22 +35,25 @@ Because the cache is shared across checkouts, clean refuses to run while another
 				logger.Fatalf("Clean failed: could not check for running builds: %v", err)
 			}
 			if len(activeLocks) > 0 {
-				logger.Errorf(
-					"Refusing to clean: %d grog build(s) using this cache (%s) are still running:",
+				var message strings.Builder
+				fmt.Fprintf(
+					&message,
+					"Refusing to clean: %d grog build(s) using this cache (%s) are still running:\n",
 					len(activeLocks),
 					config.Global.Root,
 				)
 				for _, lock := range activeLocks {
 					if lock.Command != "" {
-						logger.Errorf("  PID %d: %s", lock.ProcessID, lock.Command)
+						fmt.Fprintf(&message, "  PID %d: %s\n", lock.ProcessID, lock.Command)
 					} else {
-						logger.Errorf("  PID %d", lock.ProcessID)
+						fmt.Fprintf(&message, "  PID %d\n", lock.ProcessID)
 					}
 				}
-				logger.Fatalf(
+				message.WriteString(
 					"Cleaning the shared cache now could corrupt those builds. " +
 						"Wait for them to finish, or pass --force to clean anyway.",
 				)
+				logger.Fatal(message.String())
 			}
 		}
 
