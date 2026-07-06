@@ -1,0 +1,9 @@
+targets:
+  # binary_requires_push makes `grog run` of this binary fail unless --push is set
+  - name: release_tool
+    inputs:
+      - bin_tool.sh
+    bin_output: bin_tool.sh
+    binary_requires_push: true
+    tags:
+      - "no-cache"

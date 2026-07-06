@@ -12,6 +12,9 @@ class Target {
   exclude_inputs: Listing<String>(isDistinct)
   outputs: Listing<String>(isDistinct)
   bin_output: String?
+  // binary_requires_push makes `grog run` of this binary target fail unless
+  // the --push flag is set.
+  binary_requires_push: Boolean?
   output_checks: Listing<output_check>?
   timeout: String?
 
