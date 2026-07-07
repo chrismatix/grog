@@ -425,6 +425,44 @@ func TestStarlarkLoader_OciPush(t *testing.T) {
 	}
 }
 
+func TestStarlarkLoader_BinaryRequiresPush(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWorkspaceRoot := config.Global.WorkspaceRoot
+	config.Global.WorkspaceRoot = tmpDir
+	defer func() { config.Global.WorkspaceRoot = oldWorkspaceRoot }()
+
+	build := filepath.Join(tmpDir, "BUILD.star")
+	if err := os.WriteFile(build, []byte(`target(
+    name = "release",
+    command = "echo build",
+    bin_output = "release.sh",
+    binary_requires_push = True,
+)
+target(
+    name = "regular",
+    command = "echo build",
+    bin_output = "regular.sh",
+)
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	pkg, _, err := (StarlarkLoader{}).Load(context.Background(), build)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	byName := map[string]*TargetDTO{}
+	for _, target := range pkg.Targets {
+		byName[target.Name] = target
+	}
+	if !byName["release"].BinaryRequiresPush {
+		t.Errorf("expected release.BinaryRequiresPush to be true")
+	}
+	if byName["regular"].BinaryRequiresPush {
+		t.Errorf("expected regular.BinaryRequiresPush to default to false")
+	}
+}
+
 func TestStarlarkLoader_StdlibModules(t *testing.T) {
 	tmpDir := t.TempDir()
 

@@ -109,6 +109,7 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 			Outputs:              parsedOutputs,
 			OciPush:              ociPush,
 			BinOutput:            parsedBinOutput,
+			BinaryRequiresPush:   target.BinaryRequiresPush,
 			Platforms:            targetPlatforms,
 			OutputChecks:         target.OutputChecks,
 			Tags:                 target.Tags,

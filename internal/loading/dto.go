@@ -60,8 +60,9 @@ type TargetDTO struct {
 	// OciPush is a map from an oci:: output's local name to its remote
 	// destination(s). A scalar value is normalised to a single-entry slice
 	// at parse time so YAML and pkl can both write `name: "repo:tag"`.
-	OciPush   map[string]ociPushDestinations `json:"oci_push,omitempty" yaml:"oci_push,omitempty" pkl:"oci_push" starlark:"oci_push"`
-	BinOutput string                         `json:"bin_output" yaml:"bin_output" pkl:"bin_output" starlark:"bin_output"`
+	OciPush            map[string]ociPushDestinations `json:"oci_push,omitempty" yaml:"oci_push,omitempty" pkl:"oci_push" starlark:"oci_push"`
+	BinOutput          string                         `json:"bin_output" yaml:"bin_output" pkl:"bin_output" starlark:"bin_output"`
+	BinaryRequiresPush bool                           `json:"binary_requires_push,omitempty" yaml:"binary_requires_push,omitempty" pkl:"binary_requires_push" starlark:"binary_requires_push"`
 
 	OutputChecks []model.OutputCheck `json:"output_checks,omitempty" yaml:"output_checks,omitempty" pkl:"output_checks" starlark:"output_checks"`
 

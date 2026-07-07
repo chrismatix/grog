@@ -31,6 +31,7 @@ Grog uses this information to ensure incremental, cached, and parallel builds.
 | `tags`                  | `string[]`               | Metadata tags that affect target behavior (e.g., "no-cache", "testonly")                         |
 | `fingerprint`           | `Record<string, string>` | Extra identity inputs used to invalidate the target's cache entry                                |
 | `bin_output`            | `Output`                 | Specifically identifies a binary output from the target                                          |
+| `binary_requires_push`  | `boolean`                | When `true`, `grog run` of this binary fails unless the `--push` flag is set                     |
 | `timeout`               | `string`                 | Maximum time allowed for the target command to run                                               |
 | `environment_variables` | `Record<string, string>` | Additional environment variables set when running the target                                     |
 | `concurrency_group`     | `string`                 | Name of a concurrency group. Members compete for the group's capacity (default `1` = serialized) |
@@ -119,6 +120,15 @@ oci_push:
 ```
 
 The destination tag is **not** part of the cache key, so bumping `${VERSION}` reuses the cached image and only re-runs the push.
+
+### binary_requires_push
+
+When set to `true`, running the target's binary with `grog run` fails unless the `--push` flag is provided. This is useful for release-style binaries whose side effects (publishing artifacts, deploying) should only happen on an explicit `grog run --push`.
+
+```yaml
+bin_output: ./release.sh
+binary_requires_push: true
+```
 
 ### dependencies
 

@@ -174,6 +174,7 @@ func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *st
 	var excludeInputs *starlark.List
 	var outputs *starlark.List
 	var binOutput string
+	var binaryRequiresPush bool
 	var outputChecks *starlark.List
 	var tags *starlark.List
 	var fingerprint *starlark.Dict
@@ -192,6 +193,7 @@ func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *st
 		"exclude_inputs?", &excludeInputs,
 		"outputs?", &outputs,
 		"bin_output?", &binOutput,
+		"binary_requires_push?", &binaryRequiresPush,
 		"output_checks?", &outputChecks,
 		"tags?", &tags,
 		"fingerprint?", &fingerprint,
@@ -249,6 +251,8 @@ func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *st
 	if binOutput != "" {
 		target.BinOutput = binOutput
 	}
+
+	target.BinaryRequiresPush = binaryRequiresPush
 
 	// Convert output_checks
 	if outputChecks != nil {

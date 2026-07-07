@@ -220,6 +220,7 @@ func resolveRunTarget(logger *console.Logger, graph *dag.DirectedTargetGraph, ta
 		if !typed.HasBinOutput() {
 			logger.Fatalf("target %s does not have a binary output.", targetLabel)
 		}
+		checkBinaryRequiresPush(logger, typed)
 		return typed
 	case *model.Alias:
 		resolvedNode := graph.GetNodes()[typed.Actual]
@@ -230,11 +231,18 @@ func resolveRunTarget(logger *console.Logger, graph *dag.DirectedTargetGraph, ta
 		if !resolvedTarget.HasBinOutput() {
 			logger.Fatalf("target %s does not have a binary output.", typed.Actual)
 		}
+		checkBinaryRequiresPush(logger, resolvedTarget)
 		return resolvedTarget
 	default:
 		logger.Fatalf("%s is not a target", targetLabel)
 	}
 	return nil
+}
+
+func checkBinaryRequiresPush(logger *console.Logger, target *model.Target) {
+	if target.BinaryRequiresPush && !config.Global.Push {
+		logger.Fatalf("target %s requires the --push flag to run", target.Label)
+	}
 }
 
 func runTargetBinaries(ctx context.Context, logger *console.Logger, runTargets []*model.Target, userCommandArgs []string) error {

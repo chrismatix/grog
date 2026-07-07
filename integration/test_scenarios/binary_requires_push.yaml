@@ -1,0 +1,16 @@
+name: Binary requires push
+repo: binary_requires_push
+cases:
+  - name: run_without_push_fails
+    grog_args:
+      - run
+      - //:release_tool
+    expect_fail: true
+    skip_fixture: true
+
+  - name: run_with_push_works
+    grog_args:
+      - run
+      - --push
+      - //:release_tool
+    skip_fixture: true

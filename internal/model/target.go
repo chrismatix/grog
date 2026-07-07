@@ -47,6 +47,8 @@ type Target struct {
 	UnresolvedInputs []string `json:"-"`
 	// BinOutput is always a path to a binary file
 	BinOutput Output `json:"bin_output"`
+	// BinaryRequiresPush makes `grog run` of this binary target fail unless --push is set.
+	BinaryRequiresPush bool `json:"binary_requires_push,omitempty"`
 	// Whether this target is selected for execution.
 	IsSelected bool `json:"is_selected,omitempty"`
 	// Whether the outputs for this target were already loaded in the current execution
