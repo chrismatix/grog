@@ -169,7 +169,7 @@ checksum = "sha256:20d2ceafb4ed41b96b879010927b28bc92a5be57a7c1801ce365a9ca51d32
 url = "https://dl.google.com/go/go1.26.3.windows-amd64.zip"
 
 [[tools."go:golang.org/x/tools/cmd/goimports"]]
-version = "0.45.0"
+version = "0.48.0"
 backend = "go:golang.org/x/tools/cmd/goimports"
 
 [[tools."go:google.golang.org/protobuf/cmd/protoc-gen-go"]]
@@ -263,39 +263,39 @@ conda_deps = [
 ]
 
 [[tools.node]]
-version = "24.16.0"
+version = "24.18.0"
 backend = "core:node"
 
 [tools.node."platforms.linux-arm64"]
-checksum = "sha256:589f5b6dd4fcfee4dfda73013903c966abaa8abd93dbc9d436544e472b4f0e74"
-url = "https://nodejs.org/dist/v24.16.0/node-v24.16.0-linux-arm64.tar.gz"
+checksum = "sha256:6b4484c2190274175df9aa8f28e2d758a819cb1c1fe6ab481e2f95b463ab8508"
+url = "https://nodejs.org/dist/v24.18.0/node-v24.18.0-linux-arm64.tar.gz"
 
 [tools.node."platforms.linux-arm64-musl"]
-checksum = "sha256:85dde27aa73503b03dadfa0410a800067b4e3f702fb7fcaa3beaf284dfcc69e9"
-url = "https://unofficial-builds.nodejs.org/download/release/v24.16.0/node-v24.16.0-linux-arm64-musl.tar.gz"
+checksum = "sha256:b1c6c2dc31b46dd8fb2322f4fe75b07e775c5120bc37251deeea28f529d4567b"
+url = "https://unofficial-builds.nodejs.org/download/release/v24.18.0/node-v24.18.0-linux-arm64-musl.tar.gz"
 
 [tools.node."platforms.linux-x64"]
-checksum = "sha256:2faf6a387e9b62b888e21c54f01249fb27537ffecf1842f29f4c919d0a59a0ff"
-url = "https://nodejs.org/dist/v24.16.0/node-v24.16.0-linux-x64.tar.gz"
+checksum = "sha256:783130984963db7ba9cbd01089eaf2c2efb055c7c1693c943174b967b3050cb8"
+url = "https://nodejs.org/dist/v24.18.0/node-v24.18.0-linux-x64.tar.gz"
 
 [tools.node."platforms.linux-x64-musl"]
-checksum = "sha256:50df5d8d474892d4f7b906167df36f77f5b93908f63dc532dc568219cab65841"
-url = "https://unofficial-builds.nodejs.org/download/release/v24.16.0/node-v24.16.0-linux-x64-musl.tar.gz"
+checksum = "sha256:ea58409911e141ec6b19d9178efa2d9185a13295005b1cbf5521b3157eed1d95"
+url = "https://unofficial-builds.nodejs.org/download/release/v24.18.0/node-v24.18.0-linux-x64-musl.tar.gz"
 
 [tools.node."platforms.macos-arm64"]
-checksum = "sha256:39189dab4eeb15706c424af0ac08a3044c9e48f7db12a7d77f6b7aafc7dd5df6"
-url = "https://nodejs.org/dist/v24.16.0/node-v24.16.0-darwin-arm64.tar.gz"
+checksum = "sha256:e1a97e14c99c803e96c7339403282ea05a499c32f8d83defe9ef5ec66f979ed1"
+url = "https://nodejs.org/dist/v24.18.0/node-v24.18.0-darwin-arm64.tar.gz"
 
 [tools.node."platforms.macos-x64"]
-checksum = "sha256:298b4c7b3cb80765c8703e42b90324a4ece3b6634947b89e769c3c980ab55185"
-url = "https://nodejs.org/dist/v24.16.0/node-v24.16.0-darwin-x64.tar.gz"
+checksum = "sha256:dfd0dbd3e721503434df7b7205e719f61b3a3a31b2bcf9729b8b91fea240f080"
+url = "https://nodejs.org/dist/v24.18.0/node-v24.18.0-darwin-x64.tar.gz"
 
 [tools.node."platforms.windows-x64"]
-checksum = "sha256:edaca9bd58ec8e92037dac4e877d52f6b8f430b81c18b57e264b4e2fb111cd56"
-url = "https://nodejs.org/dist/v24.16.0/node-v24.16.0-win-x64.zip"
+checksum = "sha256:0ae68406b42d7725661da979b1403ec9926da205c6770827f33aac9d8f26e821"
+url = "https://nodejs.org/dist/v24.18.0/node-v24.18.0-win-x64.zip"
 
 [[tools."npm:oxfmt"]]
-version = "0.51.0"
+version = "0.58.0"
 backend = "npm:oxfmt"
 
 [[tools.pkl]]
@@ -331,111 +331,120 @@ checksum = "sha256:a8834481667325b44c539dbb758d7365a16389070f343c04b639bbe525ede
 url = "https://github.com/apple/pkl/releases/download/0.31.1/pkl-windows-amd64.exe"
 
 [[tools.podman]]
-version = "5.8.2"
+version = "6.0.1"
 backend = "github:containers/podman"
 
 [tools.podman."platforms.linux-arm64"]
-checksum = "sha256:7c93faf3cdfa25f920bfcdc2e7d449a4224dd3e618eff08bf88456d70b471535"
-url = "https://github.com/podman-container-tools/podman/releases/download/v5.8.2/podman-remote-static-linux_arm64.tar.gz"
-url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/396393574"
+checksum = "sha256:e0329d3c1df622ae39e1ae42fc9c5de787ec7b086dfad44143f956e7079617d0"
+url = "https://github.com/podman-container-tools/podman/releases/download/v6.0.1/podman-remote-static-linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/470621691"
 
 [tools.podman."platforms.linux-arm64-musl"]
-checksum = "sha256:7c93faf3cdfa25f920bfcdc2e7d449a4224dd3e618eff08bf88456d70b471535"
-url = "https://github.com/podman-container-tools/podman/releases/download/v5.8.2/podman-remote-static-linux_arm64.tar.gz"
-url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/396393574"
+checksum = "sha256:e0329d3c1df622ae39e1ae42fc9c5de787ec7b086dfad44143f956e7079617d0"
+url = "https://github.com/podman-container-tools/podman/releases/download/v6.0.1/podman-remote-static-linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/470621691"
 
 [tools.podman."platforms.linux-x64"]
-checksum = "sha256:88f7c21e8399a8f5edd1ef7b5c2e12b29706d0a4f24463f264a0e88d887ebbbf"
-url = "https://github.com/podman-container-tools/podman/releases/download/v5.8.2/podman-remote-static-linux_amd64.tar.gz"
-url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/396393573"
+checksum = "sha256:f9e286224269e1db91892a9fceda92f844046ab5118f65dd815ab387cae24c6d"
+url = "https://github.com/podman-container-tools/podman/releases/download/v6.0.1/podman-remote-static-linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/470621689"
 
 [tools.podman."platforms.linux-x64-musl"]
-checksum = "sha256:88f7c21e8399a8f5edd1ef7b5c2e12b29706d0a4f24463f264a0e88d887ebbbf"
-url = "https://github.com/podman-container-tools/podman/releases/download/v5.8.2/podman-remote-static-linux_amd64.tar.gz"
-url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/396393573"
+checksum = "sha256:f9e286224269e1db91892a9fceda92f844046ab5118f65dd815ab387cae24c6d"
+url = "https://github.com/podman-container-tools/podman/releases/download/v6.0.1/podman-remote-static-linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/470621689"
 
 [tools.podman."platforms.macos-arm64"]
-checksum = "sha256:2379bcb0bf320df5deccf84115337109d3f9051f7d017948ee68a92ce932e798"
-url = "https://github.com/podman-container-tools/podman/releases/download/v5.8.2/podman-remote-release-darwin_arm64.zip"
-url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/396393567"
-
-[tools.podman."platforms.macos-x64"]
-checksum = "sha256:8c54f845651fd606512debd509a273f7a8d20e6ab0adb372a46863608275aa78"
-url = "https://github.com/podman-container-tools/podman/releases/download/v5.8.2/podman-remote-release-darwin_amd64.zip"
-url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/396393565"
+checksum = "sha256:4f2d2def65a5afe02fd56756e519bca328c02712c92ada07510b488c68051b95"
+url = "https://github.com/podman-container-tools/podman/releases/download/v6.0.1/podman-remote-release-darwin_arm64.zip"
+url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/470621667"
 
 [tools.podman."platforms.windows-x64"]
-checksum = "sha256:1b60aae4bd4879c3932c283d2070bb87116ec1f0ab3a4a98eff7e65f318f9e4e"
-url = "https://github.com/podman-container-tools/podman/releases/download/v5.8.2/podman-remote-release-windows_amd64.zip"
-url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/396393568"
+checksum = "sha256:127d02930ac25c80088817502e833916cd3ee1ed1e771dbd42a4ce81b2e0d415"
+url = "https://github.com/podman-container-tools/podman/releases/download/v6.0.1/podman-remote-release-windows_amd64.zip"
+url_api = "https://api.github.com/repos/podman-container-tools/podman/releases/assets/470621670"
 
 [[tools.prek]]
-version = "0.4.2"
+version = "0.4.9"
 backend = "aqua:j178/prek"
 
 [tools.prek."platforms.linux-arm64"]
-checksum = "sha256:ceb234ca2e65ae3f726a04071778f851aa4fbee1a03f80e3783730a0905937fa"
-url = "https://github.com/j178/prek/releases/download/v0.4.2/prek-aarch64-unknown-linux-musl.tar.gz"
+checksum = "sha256:adcd6d3b2c6d2314525c214ead1a3584de3ea3dfd608262d60711c3dde4d5e82"
+url = "https://github.com/j178/prek/releases/download/v0.4.9/prek-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/j178/prek/releases/assets/473433142"
 provenance = "github-attestations"
 
 [tools.prek."platforms.linux-arm64-musl"]
-checksum = "sha256:ceb234ca2e65ae3f726a04071778f851aa4fbee1a03f80e3783730a0905937fa"
-url = "https://github.com/j178/prek/releases/download/v0.4.2/prek-aarch64-unknown-linux-musl.tar.gz"
+checksum = "sha256:adcd6d3b2c6d2314525c214ead1a3584de3ea3dfd608262d60711c3dde4d5e82"
+url = "https://github.com/j178/prek/releases/download/v0.4.9/prek-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/j178/prek/releases/assets/473433142"
 provenance = "github-attestations"
 
 [tools.prek."platforms.linux-x64"]
-checksum = "sha256:8966aac61df423e4188b05dce904982cdb07de57efb0c2bb83057a97ada64549"
-url = "https://github.com/j178/prek/releases/download/v0.4.2/prek-x86_64-unknown-linux-musl.tar.gz"
+checksum = "sha256:22545eee5091ce233192bc97c6edb7f045081ec615e4649633d5ffad97937658"
+url = "https://github.com/j178/prek/releases/download/v0.4.9/prek-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/j178/prek/releases/assets/473433205"
 provenance = "github-attestations"
 
 [tools.prek."platforms.linux-x64-musl"]
-checksum = "sha256:8966aac61df423e4188b05dce904982cdb07de57efb0c2bb83057a97ada64549"
-url = "https://github.com/j178/prek/releases/download/v0.4.2/prek-x86_64-unknown-linux-musl.tar.gz"
+checksum = "sha256:22545eee5091ce233192bc97c6edb7f045081ec615e4649633d5ffad97937658"
+url = "https://github.com/j178/prek/releases/download/v0.4.9/prek-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/j178/prek/releases/assets/473433205"
 provenance = "github-attestations"
 
 [tools.prek."platforms.macos-arm64"]
-checksum = "sha256:9ea984611f3830e86d3f49b289dc34e9f2750009b9a04ee1d21e893b32df5a04"
-url = "https://github.com/j178/prek/releases/download/v0.4.2/prek-aarch64-apple-darwin.tar.gz"
+checksum = "sha256:d6d705468c95ac01a9768da952645385a8e3cb93ec9a105f9f0f7bd177ae3867"
+url = "https://github.com/j178/prek/releases/download/v0.4.9/prek-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/j178/prek/releases/assets/473433139"
 provenance = "github-attestations"
 
 [tools.prek."platforms.macos-x64"]
-checksum = "sha256:e9784e6d120bd6811afdbb9805b500342e184b72603d7cda06cd222cfd7a6ad6"
-url = "https://github.com/j178/prek/releases/download/v0.4.2/prek-x86_64-apple-darwin.tar.gz"
+checksum = "sha256:86ce383f8d40ae874e432fe6db04c2253cf2bed2cd74e67c8e3bc4b16e158471"
+url = "https://github.com/j178/prek/releases/download/v0.4.9/prek-x86_64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/j178/prek/releases/assets/473433192"
 provenance = "github-attestations"
 
 [tools.prek."platforms.windows-x64"]
-checksum = "sha256:6b571c5100ebbaf868dc3c209f39ceb4ec16d6f1f297ee9fbdde013fc8b777f7"
-url = "https://github.com/j178/prek/releases/download/v0.4.2/prek-x86_64-pc-windows-msvc.zip"
+checksum = "sha256:e49a7c8fedb4f16038556e19c8bf7a68ffae46445ef693b28c1fa461f03df2c7"
+url = "https://github.com/j178/prek/releases/download/v0.4.9/prek-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/j178/prek/releases/assets/473433196"
 provenance = "github-attestations"
 
 [[tools.shfmt]]
-version = "3.12.0"
+version = "3.13.1"
 backend = "aqua:mvdan/sh"
 
 [tools.shfmt."platforms.linux-arm64"]
-checksum = "sha256:5f3fe3fa6a9f766e6a182ba79a94bef8afedafc57db0b1ad32b0f67fae971ba4"
-url = "https://github.com/mvdan/sh/releases/download/v3.12.0/shfmt_v3.12.0_linux_arm64"
+checksum = "sha256:32d92acaa5cd8abb29fc49dac123dc412442d5713967819d8af2c29f1b3857c7"
+url = "https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_linux_arm64"
+url_api = "https://api.github.com/repos/mvdan/sh/releases/assets/390322859"
 
 [tools.shfmt."platforms.linux-arm64-musl"]
-checksum = "sha256:5f3fe3fa6a9f766e6a182ba79a94bef8afedafc57db0b1ad32b0f67fae971ba4"
-url = "https://github.com/mvdan/sh/releases/download/v3.12.0/shfmt_v3.12.0_linux_arm64"
+checksum = "sha256:32d92acaa5cd8abb29fc49dac123dc412442d5713967819d8af2c29f1b3857c7"
+url = "https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_linux_arm64"
+url_api = "https://api.github.com/repos/mvdan/sh/releases/assets/390322859"
 
 [tools.shfmt."platforms.linux-x64"]
-checksum = "sha256:d9fbb2a9c33d13f47e7618cf362a914d029d02a6df124064fff04fd688a745ea"
-url = "https://github.com/mvdan/sh/releases/download/v3.12.0/shfmt_v3.12.0_linux_amd64"
+checksum = "sha256:fb096c5d1ac6beabbdbaa2874d025badb03ee07929f0c9ff67563ce8c75398b1"
+url = "https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_linux_amd64"
+url_api = "https://api.github.com/repos/mvdan/sh/releases/assets/390322866"
 
 [tools.shfmt."platforms.linux-x64-musl"]
-checksum = "sha256:d9fbb2a9c33d13f47e7618cf362a914d029d02a6df124064fff04fd688a745ea"
-url = "https://github.com/mvdan/sh/releases/download/v3.12.0/shfmt_v3.12.0_linux_amd64"
+checksum = "sha256:fb096c5d1ac6beabbdbaa2874d025badb03ee07929f0c9ff67563ce8c75398b1"
+url = "https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_linux_amd64"
+url_api = "https://api.github.com/repos/mvdan/sh/releases/assets/390322866"
 
 [tools.shfmt."platforms.macos-arm64"]
-checksum = "sha256:d903802e0ce3ecbc82b98512f55ba370b0d37a93f3f78de394f5b657052b33dd"
-url = "https://github.com/mvdan/sh/releases/download/v3.12.0/shfmt_v3.12.0_darwin_arm64"
+checksum = "sha256:9680526be4a66ea1ffe988ed08af58e1400fe1e4f4aef5bd88b20bb9b3da33f8"
+url = "https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_darwin_arm64"
+url_api = "https://api.github.com/repos/mvdan/sh/releases/assets/390322881"
 
 [tools.shfmt."platforms.macos-x64"]
-checksum = "sha256:c31548693de6584e6164b7ed5fbb7b4a083f2d937ca94b4e0ddf59aa461a85e4"
-url = "https://github.com/mvdan/sh/releases/download/v3.12.0/shfmt_v3.12.0_darwin_amd64"
+checksum = "sha256:6feedafc72915794163114f512348e2437d080d0047ef8b8fa2ec63b575f12af"
+url = "https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_darwin_amd64"
+url_api = "https://api.github.com/repos/mvdan/sh/releases/assets/390322886"
 
 [tools.shfmt."platforms.windows-x64"]
-checksum = "sha256:c8bda517ba1c640ce4a715c0fa665439ddbe4357ba5e9b77b0e51e70e2b9c94b"
-url = "https://github.com/mvdan/sh/releases/download/v3.12.0/shfmt_v3.12.0_windows_amd64.exe"
+checksum = "sha256:60cd368533d0ad73fa86d93d5bbf95ef40587245ce684ed138c1b31557b5fe97"
+url = "https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_windows_amd64.exe"
+url_api = "https://api.github.com/repos/mvdan/sh/releases/assets/390322844"
