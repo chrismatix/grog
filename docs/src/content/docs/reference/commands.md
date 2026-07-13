@@ -71,7 +71,7 @@ Reference for the `grog` CLI.
 - [`grog check`](#grog-check) - Loads the build graph and runs basic consistency checks.
 - [`grog clean`](#grog-clean) - Removes all cached artifacts.
 - [`grog deps`](#grog-deps) - Lists (transitive) dependencies of a target.
-- [`grog explain-changes`](#grog-explain-changes) - Renders the chain of targets affected by changes since a git ref as a tree.
+- [`grog explain-changes`](#grog-explain-changes) - Renders the chain of targets affected by changes since a revision as a tree.
 - [`grog graph`](#grog-graph) - Outputs the target dependency graph.
 - [`grog info`](#grog-info) - Prints information about the grog cli and workspace.
 - [`grog list`](#grog-list) - Lists targets by pattern.
@@ -208,7 +208,7 @@ Lists targets whose inputs have been modified since a given commit.
 
 ### Synopsis
 
-Identifies targets that need to be rebuilt due to changes in their input files since a specified git commit.
+Identifies targets that need to be rebuilt due to changes in their input files since a specified Git commit or Jujutsu revision.
 Can optionally include transitive dependents of changed targets to find all affected targets.
 
 ```text
@@ -220,7 +220,7 @@ grog changes [flags]
 ```text
   grog changes --since=HEAD~1                      # Show targets changed in the last commit
   grog changes --since=main --dependents=transitive  # Show targets changed since main branch, including dependents
-  grog changes --since=v1.0.0 --target-type=test     # Show only test targets changed since git tag v1.0.0
+  grog changes --since=v1.0.0 --target-type=test     # Show only test targets changed since Git tag v1.0.0
 ```
 
 ### Options
@@ -228,7 +228,7 @@ grog changes [flags]
 ```text
       --dependents string    Whether to include dependents of changed targets (none or transitive) (default "none")
   -h, --help                 help for changes
-      --since string         Git ref (commit or branch) to compare against
+      --since string         Git ref or Jujutsu revision to compare against
       --target-type string   Filter targets by type (all, test, no_test, bin_output) (default "all")
 ```
 
@@ -446,11 +446,11 @@ grog deps [flags]
 
 ## grog explain-changes
 
-Renders the chain of targets affected by changes since a git ref as a tree.
+Renders the chain of targets affected by changes since a revision as a tree.
 
 ### Synopsis
 
-Shows, as a tree, how file changes since a given git ref propagate through the dependency graph.
+Shows, as a tree, how file changes since a given Git ref or Jujutsu revision propagate through the dependency graph.
 
 By default the tree is rooted on the leaf consumers of the change — i.e. the top-level targets
 (binaries, tests, etc.) that ultimately depend on the changed code — and walks back through their
@@ -483,7 +483,7 @@ grog explain-changes [flags]
       --files-first    Flip the tree to root on the changed files and walk downstream through the directly-affected targets to their transitive dependents.
   -h, --help           help for explain-changes
       --show-files     Include the changed input files in the tree. By default files are leaves under the directly-affected targets; with --files-first they are tree roots. Use --show-files=false to omit them. (default true)
-      --since string   Git ref (commit or branch) to compare against
+      --since string   Git ref or Jujutsu revision to compare against
 ```
 
 ### Options inherited from parent commands
