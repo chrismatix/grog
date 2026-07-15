@@ -1,6 +1,7 @@
 package cmds
 
 import (
+	"grog/internal/cmd/flagtypes"
 	"grog/internal/completions"
 	"grog/internal/config"
 	"grog/internal/console"
@@ -12,9 +13,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var rDepsOptions struct {
+var rDepsOptions = struct {
 	transitive bool
-	targetType string
+	targetType *flagtypes.Enum
+}{
+	targetType: flagtypes.NewEnum("all", "test", "no_test", "bin_output"),
 }
 
 var RDepsCmd = &cobra.Command{
@@ -58,7 +61,7 @@ Dependants can be filtered by target type using the --target-type flag.`,
 			rDeps = graph.GetDependants(target)
 		}
 
-		targetTypeFilter, err := selection.StringToTargetTypeSelection(rDepsOptions.targetType)
+		targetTypeFilter, err := selection.StringToTargetTypeSelection(rDepsOptions.targetType.Value)
 		if err != nil {
 			logger.Fatalf(err.Error())
 		}
@@ -77,10 +80,9 @@ func AddRDepsCmd(rootCmd *cobra.Command) {
 		false,
 		"Include all transitive dependants of the target")
 
-	RDepsCmd.Flags().StringVar(
-		&rDepsOptions.targetType,
+	RDepsCmd.Flags().Var(
+		rDepsOptions.targetType,
 		"target-type",
-		"all",
 		"Filter targets by type (all, test, no_test, bin_output)")
 
 	rootCmd.AddCommand(RDepsCmd)

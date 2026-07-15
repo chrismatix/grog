@@ -1,6 +1,7 @@
 package cmds
 
 import (
+	"grog/internal/cmd/flagtypes"
 	"grog/internal/completions"
 	"grog/internal/config"
 	"grog/internal/console"
@@ -11,8 +12,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var listOptions struct {
-	targetType string
+var listOptions = struct {
+	targetType *flagtypes.Enum
+}{
+	targetType: flagtypes.NewEnum("all", "test", "no_test", "bin_output"),
 }
 
 var ListCmd = &cobra.Command{
@@ -52,7 +55,7 @@ var ListCmd = &cobra.Command{
 
 		graph := loading.MustLoadGraphForQuery(ctx, logger)
 
-		targetTypeFilter, err := selection.StringToTargetTypeSelection(listOptions.targetType)
+		targetTypeFilter, err := selection.StringToTargetTypeSelection(listOptions.targetType.Value)
 		if err != nil {
 			logger.Fatalf(err.Error())
 		}
@@ -66,10 +69,9 @@ var ListCmd = &cobra.Command{
 var listCmdConfigured = configureListCmd()
 
 func configureListCmd() bool {
-	ListCmd.Flags().StringVar(
-		&listOptions.targetType,
+	ListCmd.Flags().Var(
+		listOptions.targetType,
 		"target-type",
-		"all",
 		"Filter targets by type (all, test, no_test, bin_output)")
 	return true
 }

@@ -1,6 +1,7 @@
 package cmds
 
 import (
+	"grog/internal/cmd/flagtypes"
 	"grog/internal/completions"
 	"grog/internal/config"
 	"grog/internal/console"
@@ -12,9 +13,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var depsOptions struct {
+var depsOptions = struct {
 	transitive bool
-	targetType string
+	targetType *flagtypes.Enum
+}{
+	targetType: flagtypes.NewEnum("all", "test", "no_test", "bin_output"),
 }
 
 var DepsCmd = &cobra.Command{
@@ -59,7 +62,7 @@ Dependencies can be filtered by target type using the --target-type flag.`,
 		}
 
 		// Filter by target type
-		targetTypeFilter, err := selection.StringToTargetTypeSelection(depsOptions.targetType)
+		targetTypeFilter, err := selection.StringToTargetTypeSelection(depsOptions.targetType.Value)
 		if err != nil {
 			logger.Fatalf(err.Error())
 		}
@@ -78,10 +81,9 @@ func AddDepsCmd(rootCmd *cobra.Command) {
 		false,
 		"Include all transitive dependencies of the target")
 
-	DepsCmd.Flags().StringVar(
-		&depsOptions.targetType,
+	DepsCmd.Flags().Var(
+		depsOptions.targetType,
 		"target-type",
-		"all",
 		"Filter targets by type (all, test, no_test, bin_output)")
 
 	rootCmd.AddCommand(DepsCmd)

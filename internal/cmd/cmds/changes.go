@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"grog/internal/analysis"
+	"grog/internal/cmd/flagtypes"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/label"
@@ -18,10 +19,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var changesOptions struct {
+var changesOptions = struct {
 	since      string
-	dependents string
-	targetType string
+	dependents *flagtypes.Enum
+	targetType *flagtypes.Enum
+}{
+	dependents: flagtypes.NewEnum("none", "transitive"),
+	targetType: flagtypes.NewEnum("all", "test", "no_test", "bin_output"),
 }
 
 var ChangesCmd = &cobra.Command{
@@ -32,17 +36,9 @@ Can optionally include transitive dependents of changed targets to find all affe
 	Example: `  grog changes --since=HEAD~1                      # Show targets changed in the last commit
   grog changes --since=main --dependents=transitive  # Show targets changed since main branch, including dependents
   grog changes --since=v1.0.0 --target-type=test     # Show only test targets changed since Git tag v1.0.0`,
-	Args: cobra.MaximumNArgs(0),
+	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := console.SetupCommand()
-
-		if changesOptions.since == "" {
-			logger.Fatalf("--since flag is required")
-		}
-
-		if changesOptions.dependents != "none" && changesOptions.dependents != "transitive" {
-			logger.Fatalf("--dependents must be either 'none' or 'transitive'")
-		}
 
 		// Get changed files using git or jj
 		changedFiles, err := getChangedFiles(changesOptions.since)
@@ -102,7 +98,7 @@ Can optionally include transitive dependents of changed targets to find all affe
 
 		// Get dependents if requested
 		var resultTargets []*model.Target
-		if changesOptions.dependents == "transitive" {
+		if changesOptions.dependents.Value == "transitive" {
 			// Get all transitive dependents of the matching nodes
 			for _, target := range matchingTargets {
 				resultTargets = append(resultTargets, target)
@@ -126,7 +122,7 @@ Can optionally include transitive dependents of changed targets to find all affe
 			}
 		}
 
-		targetTypeFilter, err := selection.StringToTargetTypeSelection(changesOptions.targetType)
+		targetTypeFilter, err := selection.StringToTargetTypeSelection(changesOptions.targetType.Value)
 		if err != nil {
 			logger.Fatalf(err.Error())
 		}
@@ -264,23 +260,26 @@ func containsFile(files []string, file string) bool {
 }
 
 func AddChangesCmd(rootCmd *cobra.Command) {
-	ChangesCmd.Flags().StringVar(
+	flags := ChangesCmd.Flags()
+
+	flags.StringVar(
 		&changesOptions.since,
 		"since",
 		"",
 		"Git ref or Jujutsu revision to compare against")
 
-	ChangesCmd.Flags().StringVar(
-		&changesOptions.dependents,
+	flags.Var(
+		changesOptions.dependents,
 		"dependents",
-		"none",
 		"Whether to include dependents of changed targets (none or transitive)")
 
-	ChangesCmd.Flags().StringVar(
-		&changesOptions.targetType,
+	flags.Var(
+		changesOptions.targetType,
 		"target-type",
-		"all",
 		"Filter targets by type (all, test, no_test, bin_output)")
 
+	if err := ChangesCmd.MarkFlagRequired("since"); err != nil {
+		panic(err)
+	}
 	rootCmd.AddCommand(ChangesCmd)
 }
