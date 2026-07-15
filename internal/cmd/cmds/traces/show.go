@@ -12,12 +12,13 @@ import (
 	"github.com/charmbracelet/lipgloss/table"
 	"github.com/spf13/cobra"
 
+	"grog/internal/cmd/flagtypes"
 	"grog/internal/console"
 	"grog/internal/tracing"
 )
 
 var (
-	showSortBy string
+	showSortBy = flagtypes.NewEnum("total", "command", "queue", "hash")
 	showTop    int
 )
 
@@ -37,7 +38,7 @@ var showCmd = &cobra.Command{
 			logger.Fatalf("failed to load trace: %v", err)
 		}
 
-		sortSpans(trace.Spans, showSortBy)
+		sortSpans(trace.Spans, showSortBy.Value)
 
 		printBuildSummary(&trace.Build)
 		printSpanTable(trace.Spans)
@@ -45,7 +46,7 @@ var showCmd = &cobra.Command{
 }
 
 func registerShowCmd() {
-	showCmd.Flags().StringVar(&showSortBy, "sort-by", "total", "Sort targets by: total, command, queue, hash")
+	showCmd.Flags().Var(showSortBy, "sort-by", "Sort targets by: total, command, queue, hash")
 	showCmd.Flags().IntVar(&showTop, "top", 0, "Show only the N slowest targets (0 = all)")
 	Cmd.AddCommand(showCmd)
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss/table"
 	"github.com/spf13/cobra"
 
+	"grog/internal/cmd/flagtypes"
 	"grog/internal/console"
 	"grog/internal/tracing"
 )
@@ -18,7 +19,7 @@ import (
 var (
 	listLimit        int
 	listSince        string
-	listCommand      string
+	listCommand      = flagtypes.NewEnum("", "build", "test", "run")
 	listFailuresOnly bool
 )
 
@@ -35,7 +36,7 @@ var listCmd = &cobra.Command{
 		store := getStore(ctx, logger)
 		defer store.Close()
 
-		command, err := normalizeCommand(listCommand)
+		command, err := normalizeCommand(listCommand.Value)
 		if err != nil {
 			logger.Fatalf("%v", err)
 		}
@@ -119,7 +120,7 @@ var listCmd = &cobra.Command{
 func registerListCmd() {
 	listCmd.Flags().IntVar(&listLimit, "limit", 20, "Maximum number of traces to display")
 	listCmd.Flags().StringVar(&listSince, "since", "", "Only show traces after this date (YYYY-MM-DD)")
-	listCmd.Flags().StringVar(&listCommand, "command", "", "Filter by command type (build, test, run)")
+	listCmd.Flags().Var(listCommand, "command", "Filter by command type (build, test, run)")
 	listCmd.Flags().BoolVar(&listFailuresOnly, "failures-only", false, "Only show traces with failures")
 	Cmd.AddCommand(listCmd)
 }

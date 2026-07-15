@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"grog/internal/cmd/cmds"
 	"grog/internal/cmd/cmds/traces"
+	"grog/internal/cmd/flagtypes"
 	"grog/internal/config"
 	"grog/internal/console"
 	"maps"
@@ -99,7 +100,7 @@ func configureRoot() bool {
 
 	// Options:
 	// color
-	RootCmd.PersistentFlags().String("color", "auto", "Set color output (yes, no, or auto)")
+	RootCmd.PersistentFlags().Var(flagtypes.NewEnum("auto", "yes", "no"), "color", "Set color output (yes, no, or auto)")
 	_ = viper.BindPFlag("color", RootCmd.PersistentFlags().Lookup("color"))
 	viper.SetDefault("color", "auto")
 
@@ -110,7 +111,7 @@ func configureRoot() bool {
 	_ = viper.BindPFlag("verbose", RootCmd.PersistentFlags().Lookup("verbose"))
 
 	// log_level
-	RootCmd.PersistentFlags().String("log-level", "", "Set log level (trace, debug, info, warn, error)")
+	RootCmd.PersistentFlags().Var(flagtypes.NewEnum("", "trace", "debug", "info", "warn", "error"), "log-level", "Set log level (trace, debug, info, warn, error)")
 	_ = viper.BindPFlag("log_level", RootCmd.PersistentFlags().Lookup("log-level"))
 
 	// fail_fast
@@ -142,7 +143,7 @@ func configureRoot() bool {
 	_ = viper.BindPFlag("stream_logs", RootCmd.PersistentFlags().Lookup("stream-logs"))
 
 	// output_mode
-	RootCmd.PersistentFlags().String("output-mode", "terse", "Build output style: terse (one line per target) or detailed (stream each target's lifecycle)")
+	RootCmd.PersistentFlags().Var(flagtypes.NewEnum("terse", "detailed"), "output-mode", "Build output style: terse (one line per target) or detailed (stream each target's lifecycle)")
 	_ = viper.BindPFlag("output_mode", RootCmd.PersistentFlags().Lookup("output-mode"))
 	viper.SetDefault("output_mode", "terse")
 
@@ -157,7 +158,7 @@ func configureRoot() bool {
 	viper.SetDefault("disable_default_shell_flags", false)
 
 	// load_outputs
-	RootCmd.PersistentFlags().String("load-outputs", "all", "Level of output loading for cached targets. One of: all, minimal.")
+	RootCmd.PersistentFlags().Var(flagtypes.NewEnum("all", "minimal"), "load-outputs", "Level of output loading for cached targets. One of: all, minimal.")
 	_ = viper.BindPFlag("load_outputs", RootCmd.PersistentFlags().Lookup("load-outputs"))
 	viper.SetDefault("load_outputs", "all")
 

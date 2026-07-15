@@ -7,12 +7,13 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"grog/internal/cmd/flagtypes"
 	"grog/internal/console"
 	"grog/internal/tracing"
 )
 
 var (
-	exportFormat string
+	exportFormat = flagtypes.NewEnum("jsonl", "otel")
 	exportOutput string
 	exportLimit  int
 	exportSince  string
@@ -58,7 +59,7 @@ var exportCmd = &cobra.Command{
 			w = f
 		}
 
-		switch exportFormat {
+		switch exportFormat.Value {
 		case "jsonl":
 			if err := tracing.ExportJSONL(ctx, store, entries, w); err != nil {
 				logger.Fatalf("export failed: %v", err)
@@ -67,14 +68,12 @@ var exportCmd = &cobra.Command{
 			if err := tracing.ExportOTLP(ctx, store, entries, w); err != nil {
 				logger.Fatalf("export failed: %v", err)
 			}
-		default:
-			logger.Fatalf("unknown format %q: use jsonl or otel", exportFormat)
 		}
 	},
 }
 
 func registerExportCmd() {
-	exportCmd.Flags().StringVar(&exportFormat, "format", "jsonl", "Export format: jsonl or otel")
+	exportCmd.Flags().Var(exportFormat, "format", "Export format: jsonl or otel")
 	exportCmd.Flags().StringVar(&exportOutput, "output", "", "Output file (default: stdout)")
 	exportCmd.Flags().IntVar(&exportLimit, "limit", 0, "Maximum number of traces to export (0 = all)")
 	exportCmd.Flags().StringVar(&exportSince, "since", "", "Only export traces after this date (YYYY-MM-DD)")

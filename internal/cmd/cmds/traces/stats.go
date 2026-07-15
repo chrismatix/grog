@@ -8,14 +8,15 @@ import (
 	"github.com/charmbracelet/lipgloss/table"
 	"github.com/spf13/cobra"
 
+	"grog/internal/cmd/flagtypes"
 	"grog/internal/console"
 	"grog/internal/tracing"
 )
 
 var (
 	statsLimit       int
-	statsCommandType string
-	statsCI          string
+	statsCommandType = flagtypes.NewEnum("all", "build", "test")
+	statsCI          = flagtypes.NewEnum("all", "true", "false")
 	statsDetailed    bool
 )
 
@@ -32,11 +33,11 @@ var statsCmd = &cobra.Command{
 		store := getStore(ctx, logger)
 		defer store.Close()
 
-		command, err := normalizeStatsCommandType(statsCommandType)
+		command, err := normalizeStatsCommandType(statsCommandType.Value)
 		if err != nil {
 			logger.Fatalf("%v", err)
 		}
-		isCI, err := normalizeStatsCI(statsCI)
+		isCI, err := normalizeStatsCI(statsCI.Value)
 		if err != nil {
 			logger.Fatalf("%v", err)
 		}
@@ -70,8 +71,8 @@ var statsCmd = &cobra.Command{
 
 func registerStatsCmd() {
 	statsCmd.Flags().IntVar(&statsLimit, "limit", 20, "Number of recent traces to aggregate")
-	statsCmd.Flags().StringVar(&statsCommandType, "command-type", "all", "Filter by build command type (build, test, all)")
-	statsCmd.Flags().StringVar(&statsCI, "ci", "all", "Filter by CI origin (true, false, all)")
+	statsCmd.Flags().Var(statsCommandType, "command-type", "Filter by build command type (build, test, all)")
+	statsCmd.Flags().Var(statsCI, "ci", "Filter by CI origin (true, false, all)")
 	statsCmd.Flags().BoolVar(&statsDetailed, "detailed", false, "Load full traces for per-target analysis")
 	Cmd.AddCommand(statsCmd)
 }

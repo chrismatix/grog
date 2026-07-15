@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"grog/internal/analysis"
+	"grog/internal/cmd/flagtypes"
 	"grog/internal/completions"
 	"grog/internal/config"
 	"grog/internal/dag"
@@ -21,10 +22,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var graphOptions struct {
-	output               string
+var graphOptions = struct {
+	output               *flagtypes.Enum
 	mermaidInputsAsNodes bool
 	transitive           bool
+}{
+	output: flagtypes.NewEnum("tree", "json", "mermaid"),
 }
 
 var GraphCmd = &cobra.Command{
@@ -86,7 +89,7 @@ Supports tree, JSON, and Mermaid diagram output formats. By default, only direct
 
 		subgraph := graph.GetSelectedSubgraph()
 
-		switch graphOptions.output {
+		switch graphOptions.output.Value {
 		case "mermaid":
 			printMermaidDiagram(subgraph)
 		case "tree":
@@ -97,8 +100,6 @@ Supports tree, JSON, and Mermaid diagram output formats. By default, only direct
 				logger.Fatalf("could not marshal graph to json: %v", err)
 			}
 			fmt.Println(string(jsonData))
-		default:
-			logger.Fatalf("unknown output format: %s", graphOptions.output)
 		}
 	},
 }
@@ -111,7 +112,7 @@ func AddGraphCmd(cmd *cobra.Command) {
 		false,
 		"Include all transitive dependencies of the selected targets.")
 
-	GraphCmd.Flags().StringVarP(&graphOptions.output, "output", "o", "tree", "Output format. One of: tree, json, mermaid.")
+	GraphCmd.Flags().VarP(graphOptions.output, "output", "o", "Output format. One of: tree, json, mermaid.")
 	GraphCmd.Flags().BoolVarP(&graphOptions.mermaidInputsAsNodes, "mermaid-inputs-as-nodes", "m", false, "Render inputs as nodes in mermaid graphs.")
 
 	cmd.AddCommand(GraphCmd)
