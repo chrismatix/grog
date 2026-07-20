@@ -55,7 +55,38 @@ func CheckTargetConstraints(logger *console.Logger, nodeMap model.BuildNodeMap) 
 	dependencyConstraintErrors := checkDependencyConstraints(nodeMap)
 	errs = append(errs, dependencyConstraintErrors...)
 
-	return
+	resourceConstraintErrors := checkResourceConstraints(nodeMap)
+	errs = append(errs, resourceConstraintErrors...)
+
+	return errs
+}
+
+// checkResourceConstraints validates resource nodes: a resource may depend on
+// regular targets (e.g. an image build) or other resources, but never on test
+// targets.
+func checkResourceConstraints(nodeMap model.BuildNodeMap) (errs []error) {
+	for _, node := range nodeMap.NodesAlphabetically() {
+		resource, isResource := node.(*model.Resource)
+		if !isResource {
+			continue
+		}
+
+		for _, dependencyLabel := range resource.Dependencies {
+			dependencyTarget := resolveDependencyTarget(nodeMap, dependencyLabel)
+			if dependencyTarget == nil {
+				continue
+			}
+
+			if dependencyTarget.IsTest() {
+				errs = append(errs, fmt.Errorf("%s depends on %s which is a test target",
+					resource.Label,
+					dependencyTarget.Label,
+				))
+			}
+		}
+	}
+
+	return errs
 }
 
 func checkDependencyConstraints(nodeMap model.BuildNodeMap) (errs []error) {

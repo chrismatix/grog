@@ -1,0 +1,13 @@
+name: build resources
+repo: resources
+cases:
+  # Both consumers share the resource: it starts once, exports flow into the
+  # target commands, and it is torn down at the end of the run.
+  - name: build_starts_resource_once
+    grog_args:
+      - build
+
+  # A fully cached build never starts the resource.
+  - name: cached_build_skips_resource
+    grog_args:
+      - build

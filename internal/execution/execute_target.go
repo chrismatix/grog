@@ -71,6 +71,7 @@ func executeTarget(
 	outputIdentifiers OutputIdentifierMap,
 	transitiveOutputs []string,
 	taggedOutputs TransitiveTaggedOutputs,
+	resourceEnvironment []string,
 	streamLogs bool,
 ) error {
 	if target.Timeout > 0 {
@@ -79,7 +80,7 @@ func executeTarget(
 		defer cancel()
 	}
 
-	cmdOut, err := runTargetCommand(ctx, target, binToolPaths, outputIdentifiers, transitiveOutputs, taggedOutputs, target.Command, streamLogs)
+	cmdOut, err := runTargetCommand(ctx, target, binToolPaths, outputIdentifiers, transitiveOutputs, taggedOutputs, resourceEnvironment, target.Command, streamLogs)
 
 	if err != nil {
 		if ctx.Err() != nil {
@@ -111,6 +112,7 @@ func runTargetCommand(
 	outputIdentifiers OutputIdentifierMap,
 	transitiveOutputs []string,
 	taggedOutputs TransitiveTaggedOutputs,
+	resourceEnvironment []string,
 	command string,
 	streamLogs bool,
 ) ([]byte, error) {
@@ -137,7 +139,7 @@ func runTargetCommand(
 	cmd.WaitDelay = 1 * time.Second // cancellation grace time
 
 	// Attach env variables to the existing environment
-	cmd.Env = GetExtendedTargetEnv(ctx, target)
+	cmd.Env = append(GetExtendedTargetEnv(ctx, target), resourceEnvironment...)
 	cmd.Dir = executionPath
 
 	targetLogs := logs.NewTargetLogFile(*target)

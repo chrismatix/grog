@@ -34,10 +34,25 @@ class Target {
   concurrency_group: String?
 }
 
+class Resource {
+  name: String
+  // up starts the resource and must return once it is running (daemonized).
+  up: String
+  down: String?
+  // ready is polled until it exits 0 before dependents may run.
+  ready: String?
+  timeout: String?
+  // exports are environment variables published to directly dependent targets.
+  exports: Mapping<String, String>?
+  dependencies: Listing<String>(isDistinct)
+}
+
 default_platforms: Listing<String>(isDistinct)?
 
 targets: Listing<Target>(isDistinctBy((it) -> it.name))
 
 aliases: Listing<alias>(isDistinctBy((it) -> it.name))?
+
+resources: Listing<Resource>(isDistinctBy((it) -> it.name))?
 
 environments: Listing<alias>(isDistinctBy((it) -> it.name))?

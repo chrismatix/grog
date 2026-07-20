@@ -137,6 +137,8 @@ Other targets that must be built before this one, specified as labels. Labels ca
 - Targets in the same package: `:target_name`
 - Targets in other packages: `//path/to/package:target_name`
 
+Dependencies may also point at [build resources](/topics/build-resources) — long-running helpers like a shared test database that Grog starts before the target runs and tears down after the build.
+
 ### platforms
 
 A list of platform identifiers that restrict where this target can be executed.

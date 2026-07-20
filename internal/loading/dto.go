@@ -80,6 +80,18 @@ type AliasDTO struct {
 	Actual string `json:"actual" yaml:"actual" pkl:"actual" starlark:"actual"`
 }
 
+// ResourceDTO is used for deserializing a resource in a loader.
+// The resource used internally is model.Resource.
+type ResourceDTO struct {
+	Name         string            `json:"name" yaml:"name" pkl:"name" starlark:"name"`
+	Up           string            `json:"up" yaml:"up" pkl:"up" starlark:"up"`
+	Down         string            `json:"down,omitempty" yaml:"down,omitempty" pkl:"down" starlark:"down"`
+	Ready        string            `json:"ready,omitempty" yaml:"ready,omitempty" pkl:"ready" starlark:"ready"`
+	Timeout      string            `json:"timeout,omitempty" yaml:"timeout,omitempty" pkl:"timeout" starlark:"timeout"`
+	Exports      map[string]string `json:"exports,omitempty" yaml:"exports,omitempty" pkl:"exports" starlark:"exports"`
+	Dependencies []string          `json:"dependencies,omitempty" yaml:"dependencies,omitempty" pkl:"dependencies" starlark:"dependencies"`
+}
+
 type EnvironmentDTO struct {
 	Name         string   `json:"name" yaml:"name" pkl:"name" starlark:"name"`
 	Type         string   `json:"type" yaml:"type" pkl:"type" starlark:"type"`
@@ -96,6 +108,7 @@ type PackageDTO struct {
 
 	Targets      []*TargetDTO      `json:"targets" yaml:"targets" pkl:"targets" starlark:"targets"`
 	Aliases      []*AliasDTO       `json:"aliases" yaml:"aliases" pkl:"aliases" starlark:"aliases"`
+	Resources    []*ResourceDTO    `json:"resources" yaml:"resources" pkl:"resources" starlark:"resources"`
 	Environments []*EnvironmentDTO `json:"environments" yaml:"environments" pkl:"environments" starlark:"environments"`
 
 	// DefaultPlatforms specifies the platform selectors at the package level.

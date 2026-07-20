@@ -23,10 +23,11 @@ func (sl StarlarkLoader) Matches(fileName string) bool {
 	return fileName == "BUILD.star" || fileName == "BUILD.bzl"
 }
 
-// starlarkPackageCollector holds the collected targets, aliases, and environments.
+// starlarkPackageCollector holds the collected targets, aliases, resources, and environments.
 type starlarkPackageCollector struct {
 	targets          []*TargetDTO
 	aliases          []*AliasDTO
+	resources        []*ResourceDTO
 	environments     []*EnvironmentDTO
 	defaultPlatforms []string
 }
@@ -44,6 +45,7 @@ func (sl StarlarkLoader) Load(ctx context.Context, filePath string) (PackageDTO,
 	collector := &starlarkPackageCollector{
 		targets:      make([]*TargetDTO, 0),
 		aliases:      make([]*AliasDTO, 0),
+		resources:    make([]*ResourceDTO, 0),
 		environments: make([]*EnvironmentDTO, 0),
 	}
 
@@ -57,6 +59,7 @@ func (sl StarlarkLoader) Load(ctx context.Context, filePath string) (PackageDTO,
 	predeclared := starlark.StringDict{
 		"target":      starlark.NewBuiltin("target", collector.targetBuiltin),
 		"alias":       starlark.NewBuiltin("alias", collector.aliasBuiltin),
+		"resource":    starlark.NewBuiltin("resource", collector.resourceBuiltin),
 		"environment": starlark.NewBuiltin("environment", collector.environmentBuiltin),
 		"json":        json.Module,
 		"math":        math.Module,
@@ -83,6 +86,7 @@ func (sl StarlarkLoader) Load(ctx context.Context, filePath string) (PackageDTO,
 	packageDTO := PackageDTO{
 		Targets:          collector.targets,
 		Aliases:          collector.aliases,
+		Resources:        collector.resources,
 		Environments:     collector.environments,
 		DefaultPlatforms: collector.defaultPlatforms,
 	}
@@ -338,6 +342,56 @@ func (c *starlarkPackageCollector) aliasBuiltin(thread *starlark.Thread, fn *sta
 	}
 
 	c.aliases = append(c.aliases, alias)
+	return starlark.None, nil
+}
+
+// resourceBuiltin implements the resource() function in Starlark.
+func (c *starlarkPackageCollector) resourceBuiltin(thread *starlark.Thread, fn *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var name string
+	var up string
+	var down string
+	var ready string
+	var timeout string
+	var exports *starlark.Dict
+	var dependencies *starlark.List
+
+	if err := starlark.UnpackArgs("resource", args, kwargs,
+		"name", &name,
+		"up", &up,
+		"down?", &down,
+		"ready?", &ready,
+		"timeout?", &timeout,
+		"exports?", &exports,
+		"dependencies?", &dependencies,
+	); err != nil {
+		return nil, err
+	}
+
+	resource := &ResourceDTO{
+		Name:    name,
+		Up:      up,
+		Down:    down,
+		Ready:   ready,
+		Timeout: timeout,
+	}
+
+	if exports != nil {
+		exportMap, err := starlarkDictToStringMap(exports)
+		if err != nil {
+			return nil, fmt.Errorf("exports: %w", err)
+		}
+		resource.Exports = exportMap
+	}
+
+	if dependencies != nil {
+		deps, err := starlarkListToStringSlice(dependencies)
+		if err != nil {
+			return nil, fmt.Errorf("dependencies: %w", err)
+		}
+		resource.Dependencies = deps
+	}
+
+	c.resources = append(c.resources, resource)
 	return starlark.None, nil
 }
 

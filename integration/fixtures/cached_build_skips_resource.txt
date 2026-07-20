@@ -1,0 +1,5 @@
+INFO: 1 package loaded, 2 targets configured.
+INFO: Selected 2 targets.
+INFO: //:consumer_one DONE (cached)
+INFO: //:consumer_two DONE (cached)
+INFO: Build completed successfully. 2 targets completed (2 cache hits).
