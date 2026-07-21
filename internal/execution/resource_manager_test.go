@@ -235,3 +235,150 @@ func TestTeardownAllRunsForPartiallyFailedStart(t *testing.T) {
 		t.Fatalf("expected down to run for partially started resource: %v", err)
 	}
 }
+
+// TestEnsureResourcesStartedIsAtMostOnceAcrossSequentialConsumers guards
+// against relying on singleflight as a cache: it only collapses calls that
+// overlap in time, so a consumer arriving after the first start finished must
+// still not re-run up.
+func TestEnsureResourcesStartedIsAtMostOnceAcrossSequentialConsumers(t *testing.T) {
+	tmpDir := setupResourceTestWorkspace(t)
+	countFile := filepath.Join(tmpDir, "starts.log")
+
+	resource := &model.Resource{
+		Label: label.TargetLabel{Package: "pkg", Name: "db"},
+		Up:    "echo up >> " + countFile,
+	}
+	firstConsumer := &model.Target{
+		Label:        label.TargetLabel{Package: "pkg", Name: "first"},
+		Dependencies: []label.TargetLabel{resource.Label},
+	}
+	secondConsumer := &model.Target{
+		Label:        label.TargetLabel{Package: "pkg", Name: "second"},
+		Dependencies: []label.TargetLabel{resource.Label},
+	}
+	graph := newResourceTestGraph(t, resource, firstConsumer, secondConsumer)
+	for _, consumer := range []*model.Target{firstConsumer, secondConsumer} {
+		if err := graph.AddEdge(resource, consumer); err != nil {
+			t.Fatalf("failed to add edge: %v", err)
+		}
+	}
+
+	manager := NewResourceManager()
+	for _, consumer := range []*model.Target{firstConsumer, secondConsumer} {
+		if _, err := manager.EnsureResourcesStarted(context.Background(), graph, consumer, noopStatus); err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+	}
+
+	content, err := os.ReadFile(countFile)
+	if err != nil {
+		t.Fatalf("failed to read start counter: %v", err)
+	}
+	if got := strings.Count(string(content), "up"); got != 1 {
+		t.Fatalf("expected exactly one up invocation across sequential consumers, got %d", got)
+	}
+}
+
+// TestEnsureResourcesStartedStartsResourceDependencies verifies that a
+// resource depending on another resource brings its dependency up first, can
+// read its exports, and is torn down before it.
+func TestEnsureResourcesStartedStartsResourceDependencies(t *testing.T) {
+	tmpDir := setupResourceTestWorkspace(t)
+	orderFile := filepath.Join(tmpDir, "order.log")
+
+	database := &model.Resource{
+		Label:   label.TargetLabel{Package: "pkg", Name: "database"},
+		Up:      "echo database_up >> " + orderFile,
+		Down:    "echo database_down >> " + orderFile,
+		Exports: map[string]string{"DB_DSN": "postgres://local"},
+	}
+	migrations := &model.Resource{
+		Label:        label.TargetLabel{Package: "pkg", Name: "migrations"},
+		Up:           `echo "migrations_up:$DB_DSN" >> ` + orderFile,
+		Down:         `echo "migrations_down:$DB_DSN" >> ` + orderFile,
+		Dependencies: []label.TargetLabel{database.Label},
+	}
+	target := &model.Target{
+		Label:        label.TargetLabel{Package: "pkg", Name: "consumer"},
+		Dependencies: []label.TargetLabel{migrations.Label},
+	}
+	graph := newResourceTestGraph(t, database, migrations, target)
+	if err := graph.AddEdge(database, migrations); err != nil {
+		t.Fatalf("failed to add edge: %v", err)
+	}
+	if err := graph.AddEdge(migrations, target); err != nil {
+		t.Fatalf("failed to add edge: %v", err)
+	}
+
+	manager := NewResourceManager()
+	targetExports, err := manager.EnsureResourcesStarted(context.Background(), graph, target, noopStatus)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	manager.TeardownAll(context.Background())
+
+	content, err := os.ReadFile(orderFile)
+	if err != nil {
+		t.Fatalf("failed to read order log: %v", err)
+	}
+	lines := strings.Fields(string(content))
+	want := []string{
+		"database_up",
+		"migrations_up:postgres://local",
+		"migrations_down:postgres://local",
+		"database_down",
+	}
+	if len(lines) != len(want) {
+		t.Fatalf("expected %v, got %v", want, lines)
+	}
+	for i, wantLine := range want {
+		if lines[i] != wantLine {
+			t.Fatalf("expected %v, got %v", want, lines)
+		}
+	}
+
+	// The target only declared :migrations, so it must not inherit the
+	// database's exports.
+	if strings.Contains(strings.Join(targetExports, "\n"), "DB_DSN") {
+		t.Errorf("expected target not to inherit transitive resource exports, got %v", targetExports)
+	}
+}
+
+// TestTeardownAfterReadyTimeoutHasExports verifies that a resource whose up
+// succeeded but whose ready probe timed out still tears down with its dynamic
+// exports available, so cleanup can address the started instance.
+func TestTeardownAfterReadyTimeoutHasExports(t *testing.T) {
+	tmpDir := setupResourceTestWorkspace(t)
+	downFile := filepath.Join(tmpDir, "down.log")
+
+	resource := &model.Resource{
+		Label:   label.TargetLabel{Package: "pkg", Name: "db"},
+		Up:      `echo "CONTAINER_ID=abc123" >> "$GROG_RESOURCE_EXPORTS_FILE"`,
+		Ready:   "false",
+		Down:    `echo "removed:$CONTAINER_ID" >> ` + downFile,
+		Timeout: 300 * time.Millisecond,
+	}
+	target := &model.Target{
+		Label:        label.TargetLabel{Package: "pkg", Name: "consumer"},
+		Dependencies: []label.TargetLabel{resource.Label},
+	}
+	graph := newResourceTestGraph(t, resource, target)
+	if err := graph.AddEdge(resource, target); err != nil {
+		t.Fatalf("failed to add edge: %v", err)
+	}
+
+	manager := NewResourceManager()
+	if _, err := manager.EnsureResourcesStarted(context.Background(), graph, target, noopStatus); err == nil {
+		t.Fatal("expected ready timeout error")
+	}
+
+	manager.TeardownAll(context.Background())
+
+	content, err := os.ReadFile(downFile)
+	if err != nil {
+		t.Fatalf("failed to read down log: %v", err)
+	}
+	if strings.TrimSpace(string(content)) != "removed:abc123" {
+		t.Fatalf("expected down to see the dynamic export, got %q", string(content))
+	}
+}

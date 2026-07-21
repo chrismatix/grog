@@ -36,15 +36,15 @@ Targets depend on resources through the ordinary `dependencies` list. When `inte
 
 ## Fields Reference
 
-| Field          | Type                     | Description                                                                                   |
-| -------------- | ------------------------ | --------------------------------------------------------------------------------------------- |
-| `name`         | `string`                 | Unique identifier for the resource within its package                                         |
-| `up`           | `string`                 | Command that starts the resource. Must return once the resource is running (daemonize it)     |
-| `down`         | `string`                 | Optional command that stops the resource                                                      |
-| `ready`        | `string`                 | Optional probe command, polled until it exits `0` before dependents run                       |
-| `timeout`      | `string`                 | Bounds the start phase (`up` + `ready` polling) and, separately, `down`. Defaults to `5m`     |
-| `exports`      | `Record<string, string>` | Environment variables published to the commands of directly dependent targets                 |
-| `dependencies` | `label[]`                | Targets built before the resource starts (e.g. an image build) — test targets are not allowed |
+| Field          | Type                     | Description                                                                                      |
+| -------------- | ------------------------ | ------------------------------------------------------------------------------------------------ |
+| `name`         | `string`                 | Unique identifier for the resource within its package                                            |
+| `up`           | `string`                 | Command that starts the resource. Must return once the resource is running (daemonize it)        |
+| `down`         | `string`                 | Optional command that stops the resource                                                         |
+| `ready`        | `string`                 | Optional probe command, polled until it exits `0` before dependents run                          |
+| `timeout`      | `string`                 | Bounds the start phase (`up` + `ready` polling) and, separately, `down`. Defaults to `5m`        |
+| `exports`      | `Record<string, string>` | Environment variables published to the commands of directly dependent targets                    |
+| `dependencies` | `label[]`                | Targets built, and resources started, before this resource starts — test targets are not allowed |
 
 ## Lifecycle
 
@@ -54,6 +54,24 @@ Targets depend on resources through the ordinary `dependencies` list. When `inte
 4. When the build finishes — successfully, with failures, or interrupted — `down` runs for every started resource in reverse start order.
 
 If `up` fails or `ready` times out, every dependent target that needed the resource fails; `down` still runs at the end of the build so partial starts are cleaned up.
+
+## Composing resources
+
+A resource may depend on another resource. Grog starts dependencies first and tears them down last, and the dependency's exports are available to the dependent resource's `up`, `ready`, and `down` commands:
+
+```yaml
+resources:
+  - name: database
+    up: ...
+    exports:
+      DB_DSN: postgres://127.0.0.1:5432/app
+
+  - name: migrations
+    dependencies: [":database"]
+    up: migrate --database "$DB_DSN" up
+```
+
+Exports only flow one level: a target depending on `:migrations` sees the exports of `:migrations`, not those of `:database`. Declare both dependencies if the target needs both.
 
 ## Dynamic exports
 

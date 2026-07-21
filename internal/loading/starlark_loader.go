@@ -139,6 +139,7 @@ func (sl StarlarkLoader) loadModule(thread *starlark.Thread, module string, curr
 	predeclared := starlark.StringDict{
 		"target":      starlark.NewBuiltin("target", collector.targetBuiltin),
 		"alias":       starlark.NewBuiltin("alias", collector.aliasBuiltin),
+		"resource":    starlark.NewBuiltin("resource", collector.resourceBuiltin),
 		"environment": starlark.NewBuiltin("environment", collector.environmentBuiltin),
 		"json":        json.Module,
 		"math":        math.Module,

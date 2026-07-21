@@ -38,16 +38,28 @@ type ResourceManager struct {
 	// exports holds the resolved KEY=VALUE environment pairs per resource,
 	// including dynamic exports written by the up command.
 	exports map[string][]string
+	// dependencyExports holds the exports a resource inherits from the
+	// resources it depends on. Kept separate from exports so that dependent
+	// targets only ever see the exports of the resources they declare.
+	dependencyExports map[string][]string
+	// startResults memoizes the terminal outcome of each start attempt.
+	// singleflight only dedupes calls that overlap in time, so consumers
+	// reaching a resource after its start finished must be served from here to
+	// keep the at-most-once guarantee.
+	startResults map[string]error
 }
 
 func NewResourceManager() *ResourceManager {
 	return &ResourceManager{
-		exports: make(map[string][]string),
+		exports:           make(map[string][]string),
+		dependencyExports: make(map[string][]string),
+		startResults:      make(map[string]error),
 	}
 }
 
 // EnsureResourcesStarted starts every resource the target directly depends on
-// (unless already running) and returns the combined exported environment.
+// (and, transitively, the resources those depend on) unless already running,
+// and returns the exported environment of the target's direct resources.
 func (m *ResourceManager) EnsureResourcesStarted(
 	ctx context.Context,
 	graph *dag.DirectedTargetGraph,
@@ -62,7 +74,7 @@ func (m *ResourceManager) EnsureResourcesStarted(
 		}
 
 		update(worker.Status(fmt.Sprintf("%s: waiting for resource %s", target.Label, resource.Label)))
-		if err := m.ensureStarted(ctx, resource); err != nil {
+		if err := m.ensureStarted(ctx, graph, resource); err != nil {
 			return nil, fmt.Errorf("resource %s required by %s: %w", resource.Label, target.Label, err)
 		}
 
@@ -73,20 +85,77 @@ func (m *ResourceManager) EnsureResourcesStarted(
 	return combinedExports, nil
 }
 
-// ensureStarted runs the resource's up command and ready probe exactly once
-// across all concurrent callers; later callers share the first result.
-func (m *ResourceManager) ensureStarted(ctx context.Context, resource *model.Resource) error {
-	_, err, _ := m.startGroup.Do(resource.Label.String(), func() (any, error) {
+// ensureStarted starts the resource exactly once for the whole invocation:
+// singleflight collapses concurrent callers and startResults serves callers
+// that arrive after the start already finished.
+func (m *ResourceManager) ensureStarted(
+	ctx context.Context,
+	graph *dag.DirectedTargetGraph,
+	resource *model.Resource,
+) error {
+	resourceLabel := resource.Label.String()
+	if startErr, isStarted := m.startResult(resourceLabel); isStarted {
+		return startErr
+	}
+
+	_, err, _ := m.startGroup.Do(resourceLabel, func() (any, error) {
+		// A start may have completed between the check above and this call
+		// acquiring the singleflight slot.
+		if startErr, isStarted := m.startResult(resourceLabel); isStarted {
+			return nil, startErr
+		}
+
+		startErr := m.startWithDependencies(ctx, graph, resource)
+
 		m.mutex.Lock()
-		m.started = append(m.started, resource)
+		m.startResults[resourceLabel] = startErr
 		m.mutex.Unlock()
 
-		return nil, m.start(ctx, resource)
+		return nil, startErr
 	})
 	return err
 }
 
-func (m *ResourceManager) start(ctx context.Context, resource *model.Resource) error {
+func (m *ResourceManager) startResult(resourceLabel string) (error, bool) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	startErr, isStarted := m.startResults[resourceLabel]
+	return startErr, isStarted
+}
+
+// startWithDependencies starts the resources this resource depends on before
+// registering and starting it, so that a resource always comes up after the
+// resources it needs and is torn down before them.
+func (m *ResourceManager) startWithDependencies(
+	ctx context.Context,
+	graph *dag.DirectedTargetGraph,
+	resource *model.Resource,
+) error {
+	var dependencyExports []string
+	for _, dependency := range graph.GetDependencies(resource) {
+		dependencyResource, isResource := dependency.(*model.Resource)
+		if !isResource {
+			continue
+		}
+
+		if err := m.ensureStarted(ctx, graph, dependencyResource); err != nil {
+			return fmt.Errorf("resource dependency %s: %w", dependencyResource.Label, err)
+		}
+
+		m.mutex.Lock()
+		dependencyExports = append(dependencyExports, m.exports[dependencyResource.Label.String()]...)
+		m.mutex.Unlock()
+	}
+
+	m.mutex.Lock()
+	m.started = append(m.started, resource)
+	m.dependencyExports[resource.Label.String()] = dependencyExports
+	m.mutex.Unlock()
+
+	return m.start(ctx, resource, dependencyExports)
+}
+
+func (m *ResourceManager) start(ctx context.Context, resource *model.Resource, dependencyExports []string) error {
 	logger := console.GetLogger(ctx)
 	startTime := time.Now()
 
@@ -101,7 +170,7 @@ func (m *ResourceManager) start(ctx context.Context, resource *model.Resource) e
 	_ = exportsFile.Close()
 	defer os.Remove(exportsFilePath)
 
-	baseEnvironment := m.resourceEnv(resource)
+	baseEnvironment := append(m.resourceEnv(resource), dependencyExports...)
 	upEnvironment := append(append([]string{}, baseEnvironment...), "GROG_RESOURCE_EXPORTS_FILE="+exportsFilePath)
 
 	output, err := m.runHookCommand(startContext, resource, resource.Up, upEnvironment)
@@ -114,16 +183,19 @@ func (m *ResourceManager) start(ctx context.Context, resource *model.Resource) e
 		return err
 	}
 
+	// Publish exports before probing readiness: a resource whose up succeeded
+	// but whose ready probe timed out still has to be torn down, and its down
+	// command may need the dynamically exported container id or port.
+	m.mutex.Lock()
+	m.exports[resource.Label.String()] = resolvedExports
+	m.mutex.Unlock()
+
 	if resource.Ready != "" {
 		readyEnvironment := append(append([]string{}, baseEnvironment...), resolvedExports...)
 		if err := m.pollReady(startContext, resource, readyEnvironment); err != nil {
 			return err
 		}
 	}
-
-	m.mutex.Lock()
-	m.exports[resource.Label.String()] = resolvedExports
-	m.mutex.Unlock()
 
 	if config.Global.DisableNonDeterministicLogging {
 		logger.Infof("Resource %s started.", resource.Label)
@@ -170,7 +242,8 @@ func (m *ResourceManager) TeardownAll(ctx context.Context) {
 
 		downContext, cancel := context.WithTimeout(ctx, resource.GetTimeout())
 		m.mutex.Lock()
-		environment := append(m.resourceEnv(resource), m.exports[resource.Label.String()]...)
+		environment := append(m.resourceEnv(resource), m.dependencyExports[resource.Label.String()]...)
+		environment = append(environment, m.exports[resource.Label.String()]...)
 		m.mutex.Unlock()
 
 		output, err := m.runHookCommand(downContext, resource, resource.Down, environment)
