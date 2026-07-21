@@ -7,9 +7,15 @@ import (
 	"strings"
 )
 
-func runOutputChecks(ctx context.Context, target *model.Target, binToolPaths BinToolMap, outputIdentifiers OutputIdentifierMap) error {
+func runOutputChecks(
+	ctx context.Context,
+	target *model.Target,
+	binToolPaths BinToolMap,
+	outputIdentifiers OutputIdentifierMap,
+	resourceEnvironment []string,
+) error {
 	for _, check := range target.OutputChecks {
-		output, err := runTargetCommand(ctx, target, binToolPaths, outputIdentifiers, nil, nil, nil, check.Command, false)
+		output, err := runTargetCommand(ctx, target, binToolPaths, outputIdentifiers, nil, nil, resourceEnvironment, check.Command, false)
 		if err != nil {
 			return fmt.Errorf("output check failed for target %s: %w\ncommand %s",
 				target.Label, err, check.Command)

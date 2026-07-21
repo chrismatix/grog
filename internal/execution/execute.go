@@ -381,7 +381,7 @@ func (e *Executor) getTaskFunc(
 			logger.Debugf("%s: loaded target result %s", target.Label, formatTargetResultForDebug(targetResult))
 		}
 
-		outputCheckErr := runOutputChecks(ctx, target, binToolPaths, outputIdentifiers)
+		outputCheckErr := runOutputChecks(ctx, target, binToolPaths, outputIdentifiers, nil)
 		if outputCheckErr != nil {
 			logger.Debugf("running target due to output check error: %v", outputCheckErr)
 		}
@@ -513,8 +513,8 @@ func (e *Executor) executeTarget(
 
 	startTime := time.Now()
 	var err error
+	var resourceEnvironment []string
 	if target.Command != "" {
-		var resourceEnvironment []string
 		resourceEnvironment, err = e.resourceManager.EnsureResourcesStarted(ctx, e.graph, target, update)
 		if err == nil {
 			update(worker.Status(fmt.Sprintf("%s: running \"%s\"", target.Label, target.CommandEllipsis())))
@@ -539,7 +539,7 @@ func (e *Executor) executeTarget(
 	}
 
 	// Run output checks again to see if they match now
-	if outputCheckErr := runOutputChecks(ctx, target, binToolPaths, outputIdentifiers); outputCheckErr != nil {
+	if outputCheckErr := runOutputChecks(ctx, target, binToolPaths, outputIdentifiers, resourceEnvironment); outputCheckErr != nil {
 		return dag.CacheMiss, outputCheckErr
 	}
 

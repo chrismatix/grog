@@ -1,22 +1,46 @@
 package hashing
 
-import "grog/internal/model"
+import (
+	"sort"
+	"strconv"
 
-// GetResourceIdentity returns a short stable identifier for a resource derived
-// from its label and definition. Editing the definition changes the identity,
-// so lifecycle commands built on it (e.g. container names) never adopt an
-// instance started from a stale definition.
+	"grog/internal/model"
+)
+
+// GetResourceIdentity returns a short stable identifier derived from the
+// resource's complete behavior-affecting definition.
 func GetResourceIdentity(resource model.Resource) string {
 	hasher := GetHasher()
-	_, _ = hasher.WriteString(resource.Label.String())
-	_, _ = hasher.WriteString(resource.Up)
-	_, _ = hasher.WriteString(resource.Down)
-	_, _ = hasher.WriteString(resource.Ready)
-	_, _ = hasher.WriteString(sortedKeyValue(resource.Exports))
+	writeResourceIdentityValue(hasher, resource.Label.String())
+	writeResourceIdentityValue(hasher, resource.Up)
+	writeResourceIdentityValue(hasher, resource.Down)
+	writeResourceIdentityValue(hasher, resource.Ready)
+	writeResourceIdentityValue(hasher, resource.GetTimeout().String())
+	writeResourceIdentityValue(hasher, strconv.Itoa(len(resource.Dependencies)))
+	for _, dependency := range resource.Dependencies {
+		writeResourceIdentityValue(hasher, dependency.String())
+	}
+
+	exportKeys := make([]string, 0, len(resource.Exports))
+	for key := range resource.Exports {
+		exportKeys = append(exportKeys, key)
+	}
+	sort.Strings(exportKeys)
+	writeResourceIdentityValue(hasher, strconv.Itoa(len(exportKeys)))
+	for _, key := range exportKeys {
+		writeResourceIdentityValue(hasher, key)
+		writeResourceIdentityValue(hasher, resource.Exports[key])
+	}
 
 	sum := hasher.SumString()
 	if len(sum) > 12 {
 		return sum[:12]
 	}
 	return sum
+}
+
+func writeResourceIdentityValue(hasher Hasher, value string) {
+	_, _ = hasher.WriteString(strconv.Itoa(len(value)))
+	_, _ = hasher.WriteString(":")
+	_, _ = hasher.WriteString(value)
 }

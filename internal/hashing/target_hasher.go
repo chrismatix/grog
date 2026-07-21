@@ -42,8 +42,8 @@ func (t *TargetHasher) SetTargetChangeHash(target *model.Target) error {
 
 	// Collect the OutputHash values of all dependencies
 	dependencies := t.graph.GetDependencies(target)
-	dependencyHashes := make([]string, len(target.Dependencies))
-	for index, dependency := range dependencies {
+	dependencyHashes := make([]string, 0, len(dependencies))
+	for _, dependency := range dependencies {
 		targetDependency, ok := dependency.(*model.Target)
 		if !ok {
 			// Only consider dependencies that are targets
@@ -55,7 +55,7 @@ func (t *TargetHasher) SetTargetChangeHash(target *model.Target) error {
 			return fmt.Errorf("dependency %s of %s has no output hash", targetDependency.Label, target.Label)
 		}
 
-		dependencyHashes[index] = targetDependency.OutputHash
+		dependencyHashes = append(dependencyHashes, targetDependency.OutputHash)
 	}
 
 	changeHash, err := GetTargetChangeHash(*target, dependencyHashes, t.extraArgs)

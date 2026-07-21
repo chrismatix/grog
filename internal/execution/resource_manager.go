@@ -3,11 +3,13 @@ package execution
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
 	"os"
 	"os/exec"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -31,7 +33,10 @@ import (
 type ResourceManager struct {
 	startGroup singleflight.Group
 
-	mutex sync.Mutex
+	mutex          sync.Mutex
+	startCondition *sync.Cond
+	activeStarts   int
+	tearingDown    bool
 	// started holds resources in start order; a resource is registered before
 	// its up command runs so that partial starts are still torn down.
 	started []*model.Resource
@@ -50,11 +55,13 @@ type ResourceManager struct {
 }
 
 func NewResourceManager() *ResourceManager {
-	return &ResourceManager{
+	manager := &ResourceManager{
 		exports:           make(map[string][]string),
 		dependencyExports: make(map[string][]string),
 		startResults:      make(map[string]error),
 	}
+	manager.startCondition = sync.NewCond(&manager.mutex)
+	return manager
 }
 
 // EnsureResourcesStarted starts every resource the target directly depends on
@@ -68,8 +75,8 @@ func (m *ResourceManager) EnsureResourcesStarted(
 ) ([]string, error) {
 	var combinedExports []string
 	for _, dependency := range graph.GetDependencies(target) {
-		resource, ok := dependency.(*model.Resource)
-		if !ok {
+		resource := resolveResourceDependency(graph, dependency)
+		if resource == nil {
 			continue
 		}
 
@@ -105,15 +112,37 @@ func (m *ResourceManager) ensureStarted(
 			return nil, startErr
 		}
 
-		startErr := m.startWithDependencies(ctx, graph, resource)
+		if beginErr := m.beginStart(); beginErr != nil {
+			m.mutex.Lock()
+			m.startResults[resourceLabel] = beginErr
+			m.mutex.Unlock()
+			return nil, beginErr
+		}
 
-		m.mutex.Lock()
-		m.startResults[resourceLabel] = startErr
-		m.mutex.Unlock()
+		startErr := m.startWithDependencies(ctx, graph, resource)
+		m.finishStart(resourceLabel, startErr)
 
 		return nil, startErr
 	})
 	return err
+}
+
+func (m *ResourceManager) beginStart() error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	if m.tearingDown {
+		return context.Canceled
+	}
+	m.activeStarts++
+	return nil
+}
+
+func (m *ResourceManager) finishStart(resourceLabel string, startErr error) {
+	m.mutex.Lock()
+	m.startResults[resourceLabel] = startErr
+	m.activeStarts--
+	m.startCondition.Broadcast()
+	m.mutex.Unlock()
 }
 
 func (m *ResourceManager) startResult(resourceLabel string) (error, bool) {
@@ -133,8 +162,8 @@ func (m *ResourceManager) startWithDependencies(
 ) error {
 	var dependencyExports []string
 	for _, dependency := range graph.GetDependencies(resource) {
-		dependencyResource, isResource := dependency.(*model.Resource)
-		if !isResource {
+		dependencyResource := resolveResourceDependency(graph, dependency)
+		if dependencyResource == nil {
 			continue
 		}
 
@@ -155,9 +184,35 @@ func (m *ResourceManager) startWithDependencies(
 	return m.start(ctx, resource, dependencyExports)
 }
 
+func resolveResourceDependency(graph *dag.DirectedTargetGraph, dependency model.BuildNode) *model.Resource {
+	visitedLabels := make(map[string]struct{})
+	for dependency != nil {
+		dependencyLabel := dependency.GetLabel().String()
+		if _, visited := visitedLabels[dependencyLabel]; visited {
+			return nil
+		}
+		visitedLabels[dependencyLabel] = struct{}{}
+
+		switch typedDependency := dependency.(type) {
+		case *model.Resource:
+			return typedDependency
+		case *model.Alias:
+			dependency = graph.GetNodes()[typedDependency.Actual]
+		default:
+			return nil
+		}
+	}
+	return nil
+}
+
 func (m *ResourceManager) start(ctx context.Context, resource *model.Resource, dependencyExports []string) error {
 	logger := console.GetLogger(ctx)
 	startTime := time.Now()
+	resourceLabel := resource.Label.String()
+
+	m.mutex.Lock()
+	m.exports[resourceLabel] = exportsEnvironment(resource.Exports)
+	m.mutex.Unlock()
 
 	startContext, cancel := context.WithTimeout(ctx, resource.GetTimeout())
 	defer cancel()
@@ -173,22 +228,22 @@ func (m *ResourceManager) start(ctx context.Context, resource *model.Resource, d
 	baseEnvironment := append(m.resourceEnv(resource), dependencyExports...)
 	upEnvironment := append(append([]string{}, baseEnvironment...), "GROG_RESOURCE_EXPORTS_FILE="+exportsFilePath)
 
-	output, err := m.runHookCommand(startContext, resource, resource.Up, upEnvironment)
-	if err != nil {
-		return fmt.Errorf("up command failed: %w\noutput: %s", err, string(output))
-	}
-
-	resolvedExports, err := m.resolveExports(resource, exportsFilePath)
-	if err != nil {
-		return err
-	}
-
-	// Publish exports before probing readiness: a resource whose up succeeded
-	// but whose ready probe timed out still has to be torn down, and its down
-	// command may need the dynamically exported container id or port.
+	output, upErr := m.runHookCommand(startContext, resource, resource.Up, upEnvironment)
+	resolvedExports, exportsErr := m.resolveExports(resource, exportsFilePath)
 	m.mutex.Lock()
-	m.exports[resource.Label.String()] = resolvedExports
+	m.exports[resourceLabel] = resolvedExports
 	m.mutex.Unlock()
+
+	if upErr != nil {
+		upCommandErr := fmt.Errorf("up command failed: %w\noutput: %s", upErr, string(output))
+		if exportsErr != nil {
+			return errors.Join(upCommandErr, exportsErr)
+		}
+		return upCommandErr
+	}
+	if exportsErr != nil {
+		return exportsErr
+	}
 
 	if resource.Ready != "" {
 		readyEnvironment := append(append([]string{}, baseEnvironment...), resolvedExports...)
@@ -229,13 +284,16 @@ func (m *ResourceManager) pollReady(ctx context.Context, resource *model.Resourc
 // Idempotent: a second call is a no-op.
 func (m *ResourceManager) TeardownAll(ctx context.Context) {
 	m.mutex.Lock()
-	started := m.started
+	m.tearingDown = true
+	for m.activeStarts > 0 {
+		m.startCondition.Wait()
+	}
+	started := append([]*model.Resource(nil), m.started...)
 	m.started = nil
 	m.mutex.Unlock()
 
 	logger := console.GetLogger(ctx)
-	for i := len(started) - 1; i >= 0; i-- {
-		resource := started[i]
+	for _, resource := range slices.Backward(started) {
 		if resource.Down == "" {
 			continue
 		}
@@ -307,7 +365,7 @@ func (m *ResourceManager) resolveExports(resource *model.Resource, exportsFilePa
 
 	content, err := os.ReadFile(exportsFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read exports file: %w", err)
+		return exportsEnvironment(merged), fmt.Errorf("failed to read exports file: %w", err)
 	}
 	for line := range strings.SplitSeq(string(content), "\n") {
 		line = strings.TrimSpace(line)
@@ -316,22 +374,25 @@ func (m *ResourceManager) resolveExports(resource *model.Resource, exportsFilePa
 		}
 		key, value, found := strings.Cut(line, "=")
 		if !found || key == "" {
-			return nil, fmt.Errorf("resource %s wrote an invalid exports line (want KEY=VALUE): %q", resource.Label, line)
+			return exportsEnvironment(merged), fmt.Errorf("resource %s wrote an invalid exports line (want KEY=VALUE): %q", resource.Label, line)
 		}
 		merged[key] = value
 	}
+	return exportsEnvironment(merged), nil
+}
 
-	keys := make([]string, 0, len(merged))
-	for key := range merged {
+func exportsEnvironment(exports map[string]string) []string {
+	keys := make([]string, 0, len(exports))
+	for key := range exports {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
 
 	environment := make([]string, 0, len(keys))
 	for _, key := range keys {
-		environment = append(environment, key+"="+merged[key])
+		environment = append(environment, key+"="+exports[key])
 	}
-	return environment, nil
+	return environment
 }
 
 // resourceEnv builds the base environment for resource lifecycle commands.

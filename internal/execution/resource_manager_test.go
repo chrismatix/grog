@@ -236,6 +236,124 @@ func TestTeardownAllRunsForPartiallyFailedStart(t *testing.T) {
 	}
 }
 
+func TestTeardownAfterFailedUpHasExports(t *testing.T) {
+	tmpDir := setupResourceTestWorkspace(t)
+	downFile := filepath.Join(tmpDir, "down.log")
+
+	resource := &model.Resource{
+		Label:   label.TargetLabel{Package: "pkg", Name: "db"},
+		Up:      `echo "CONTAINER_ID=abc123" >> "$GROG_RESOURCE_EXPORTS_FILE"; false`,
+		Down:    `echo "$STATIC_NAME:$CONTAINER_ID" > ` + downFile,
+		Exports: map[string]string{"STATIC_NAME": "database"},
+	}
+	target := &model.Target{
+		Label:        label.TargetLabel{Package: "pkg", Name: "consumer"},
+		Dependencies: []label.TargetLabel{resource.Label},
+	}
+	graph := newResourceTestGraph(t, resource, target)
+	if err := graph.AddEdge(resource, target); err != nil {
+		t.Fatalf("failed to add edge: %v", err)
+	}
+
+	manager := NewResourceManager()
+	if _, err := manager.EnsureResourcesStarted(context.Background(), graph, target, noopStatus); err == nil {
+		t.Fatal("expected up failure")
+	}
+	manager.TeardownAll(context.Background())
+
+	content, err := os.ReadFile(downFile)
+	if err != nil {
+		t.Fatalf("failed to read down log: %v", err)
+	}
+	if strings.TrimSpace(string(content)) != "database:abc123" {
+		t.Fatalf("expected down to receive exports, got %q", content)
+	}
+}
+
+func TestTeardownAllWaitsForActiveStart(t *testing.T) {
+	tmpDir := setupResourceTestWorkspace(t)
+	launchedFile := filepath.Join(tmpDir, "launched.marker")
+	runningFile := filepath.Join(tmpDir, "running.marker")
+
+	resource := &model.Resource{
+		Label: label.TargetLabel{Package: "pkg", Name: "db"},
+		Up:    "touch " + launchedFile + "; sleep 0.2; touch " + runningFile,
+		Down:  "rm -f " + runningFile,
+	}
+	target := &model.Target{
+		Label:        label.TargetLabel{Package: "pkg", Name: "consumer"},
+		Dependencies: []label.TargetLabel{resource.Label},
+	}
+	graph := newResourceTestGraph(t, resource, target)
+	if err := graph.AddEdge(resource, target); err != nil {
+		t.Fatalf("failed to add edge: %v", err)
+	}
+
+	manager := NewResourceManager()
+	startResult := make(chan error, 1)
+	go func() {
+		_, err := manager.EnsureResourcesStarted(context.Background(), graph, target, noopStatus)
+		startResult <- err
+	}()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, err := os.Stat(launchedFile); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("resource start did not launch")
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	manager.TeardownAll(context.Background())
+	if err := <-startResult; err != nil {
+		t.Fatalf("resource start failed: %v", err)
+	}
+	if _, err := os.Stat(runningFile); !os.IsNotExist(err) {
+		t.Fatalf("resource remained after teardown: %v", err)
+	}
+}
+
+func TestEnsureResourcesStartedResolvesResourceAlias(t *testing.T) {
+	tmpDir := setupResourceTestWorkspace(t)
+	startedFile := filepath.Join(tmpDir, "started.marker")
+
+	resource := &model.Resource{
+		Label:   label.TargetLabel{Package: "pkg", Name: "db"},
+		Up:      "touch " + startedFile,
+		Exports: map[string]string{"DATABASE_URL": "postgres://local"},
+	}
+	resourceAlias := &model.Alias{
+		Label:  label.TargetLabel{Package: "pkg", Name: "database"},
+		Actual: resource.Label,
+	}
+	target := &model.Target{
+		Label:        label.TargetLabel{Package: "pkg", Name: "consumer"},
+		Dependencies: []label.TargetLabel{resourceAlias.Label},
+	}
+	graph := newResourceTestGraph(t, resource, resourceAlias, target)
+	if err := graph.AddEdge(resource, resourceAlias); err != nil {
+		t.Fatalf("failed to add resource edge: %v", err)
+	}
+	if err := graph.AddEdge(resourceAlias, target); err != nil {
+		t.Fatalf("failed to add alias edge: %v", err)
+	}
+
+	manager := NewResourceManager()
+	environment, err := manager.EnsureResourcesStarted(context.Background(), graph, target, noopStatus)
+	if err != nil {
+		t.Fatalf("failed to start aliased resource: %v", err)
+	}
+	if _, err := os.Stat(startedFile); err != nil {
+		t.Fatalf("aliased resource did not start: %v", err)
+	}
+	if !strings.Contains(strings.Join(environment, "\n"), "DATABASE_URL=postgres://local") {
+		t.Fatalf("aliased resource exports missing: %v", environment)
+	}
+}
+
 // TestEnsureResourcesStartedIsAtMostOnceAcrossSequentialConsumers guards
 // against relying on singleflight as a cache: it only collapses calls that
 // overlap in time, so a consumer arriving after the first start finished must

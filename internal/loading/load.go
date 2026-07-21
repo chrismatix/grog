@@ -131,10 +131,19 @@ func mergePackages(from *model.Package, into *model.Package) error {
 	if into.Aliases == nil {
 		into.Aliases = make(map[label.TargetLabel]*model.Alias)
 	}
+	if into.Resources == nil {
+		into.Resources = make(map[label.TargetLabel]*model.Resource)
+	}
 
 	for fromTargetLabel, fromTarget := range from.Targets {
 		if intoTarget, exists := into.Targets[fromTargetLabel]; exists {
 			return fmt.Errorf("duplicate target label: %s (defined in %s and %s)", fromTargetLabel, intoTarget.SourceFilePath, fromTarget.SourceFilePath)
+		}
+		if intoAlias, exists := into.Aliases[fromTargetLabel]; exists {
+			return fmt.Errorf("duplicate target label: %s (defined in %s and as alias in %s)", fromTargetLabel, fromTarget.SourceFilePath, intoAlias.SourceFilePath)
+		}
+		if intoResource, exists := into.Resources[fromTargetLabel]; exists {
+			return fmt.Errorf("duplicate target label: %s (defined in %s and as resource in %s)", fromTargetLabel, fromTarget.SourceFilePath, intoResource.SourceFilePath)
 		}
 		into.Targets[fromTargetLabel] = fromTarget
 	}
@@ -146,7 +155,23 @@ func mergePackages(from *model.Package, into *model.Package) error {
 		if intoTarget, exists := into.Targets[fromAliasLabel]; exists {
 			return fmt.Errorf("duplicate alias label: %s (defined in %s and as target in %s)", fromAliasLabel, fromAlias.SourceFilePath, intoTarget.SourceFilePath)
 		}
+		if intoResource, exists := into.Resources[fromAliasLabel]; exists {
+			return fmt.Errorf("duplicate alias label: %s (defined in %s and as resource in %s)", fromAliasLabel, fromAlias.SourceFilePath, intoResource.SourceFilePath)
+		}
 		into.Aliases[fromAliasLabel] = fromAlias
+	}
+
+	for fromResourceLabel, fromResource := range from.Resources {
+		if intoResource, exists := into.Resources[fromResourceLabel]; exists {
+			return fmt.Errorf("duplicate resource label: %s (defined in %s and %s)", fromResourceLabel, intoResource.SourceFilePath, fromResource.SourceFilePath)
+		}
+		if intoTarget, exists := into.Targets[fromResourceLabel]; exists {
+			return fmt.Errorf("duplicate resource label: %s (defined in %s and as target in %s)", fromResourceLabel, fromResource.SourceFilePath, intoTarget.SourceFilePath)
+		}
+		if intoAlias, exists := into.Aliases[fromResourceLabel]; exists {
+			return fmt.Errorf("duplicate resource label: %s (defined in %s and as alias in %s)", fromResourceLabel, fromResource.SourceFilePath, intoAlias.SourceFilePath)
+		}
+		into.Resources[fromResourceLabel] = fromResource
 	}
 
 	return nil
