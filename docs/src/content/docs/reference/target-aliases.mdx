@@ -3,6 +3,8 @@ title: Target Aliases
 description: Use aliases to create alternative labels pointing to existing targets.
 ---
 
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
 A **target alias** is a lightweight entry in a `BUILD` file that simply points to another target.
 It has its own label but no command or outputs. When you build an alias, Grog will
 transparently build the aliased target.
@@ -16,10 +18,38 @@ transparently build the aliased target.
 
 ## Example
 
+<Tabs syncKey="build-file-format">
+  <TabItem label="YAML">
+
 ```yaml
 aliases:
   - name: default
     actual: :build_app
 ```
+
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+alias(
+    name = "default",
+    actual = ":build_app",
+)
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+aliases {
+  new {
+    name = "default"
+    actual = ":build_app"
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
 
 Running `grog build :default` would build the `:build_app` target.

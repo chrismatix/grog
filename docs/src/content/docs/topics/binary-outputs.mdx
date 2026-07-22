@@ -3,7 +3,7 @@ title: Binary and Tool Outputs
 description: Learn how to manage build tools and executables in your Grog build process for better reproducibility.
 ---
 
-import { Aside } from "@astrojs/starlight/components";
+import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
 
 ## Managing Build Tools
 
@@ -30,6 +30,9 @@ Each target can specify a single `bin_output` field that points to a file output
 
 ### Example: Creating and Using a Binary Tool
 
+<Tabs syncKey="build-file-format">
+  <TabItem label="YAML">
+
 ```yaml
 targets:
   # Target that builds a tool
@@ -54,6 +57,73 @@ targets:
     outputs:
       - dir::generated
 ```
+
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+# Target that builds a tool
+target(
+    name = "protoc_compiler",
+    command = """
+    curl -L https://github.com/protocolbuffers/protobuf/releases/download/v3.19.4/protoc-3.19.4-linux-x86_64.zip -o protoc.zip
+    unzip protoc.zip -d protoc
+    chmod +x protoc/bin/protoc
+    """,
+    outputs = ["dir::protoc/include/google/protobuf/"],
+    bin_output = "protoc/bin/protoc",
+)
+
+# Target that uses the tool
+target(
+    name = "generate_protos",
+    dependencies = [":protoc_compiler"],
+    inputs = ["proto/*.proto"],
+    # Use the binary tool with $(bin :target_name)
+    command = "$(bin :protoc_compiler) --cpp_out=generated proto/*.proto",
+    outputs = ["dir::generated"],
+)
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+targets {
+  // Target that builds a tool
+  new {
+    name = "protoc_compiler"
+    command = """
+      curl -L https://github.com/protocolbuffers/protobuf/releases/download/v3.19.4/protoc-3.19.4-linux-x86_64.zip -o protoc.zip
+      unzip protoc.zip -d protoc
+      chmod +x protoc/bin/protoc
+      """
+    outputs {
+      "dir::protoc/include/google/protobuf/"
+    }
+    bin_output = "protoc/bin/protoc"
+  }
+
+  // Target that uses the tool
+  new {
+    name = "generate_protos"
+    dependencies {
+      ":protoc_compiler"
+    }
+    inputs {
+      "proto/*.proto"
+    }
+    // Use the binary tool with $(bin :target_name)
+    command = "$(bin :protoc_compiler) --cpp_out=generated proto/*.proto"
+    outputs {
+      "dir::generated"
+    }
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
 
 ### Running Binary Tools Directly
 
@@ -92,10 +162,13 @@ Say, for instance, that you have a shell or python script that you want to use a
 To do so all you need to do is omit the command field and add the `no-cache` attribute to ensure that grog does not store the script file in its cache.
 Here is what that could look like:
 
+<Tabs syncKey="build-file-format">
+  <TabItem label="YAML">
+
 ```yaml
 targets:
   # Assuming that this script exists in
-  # the same directory as the build filr
+  # the same directory as the build file
   - name: protoc_compiler_script
     inputs:
       - compile.sh
@@ -115,6 +188,67 @@ targets:
       - dir::generated
 ```
 
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+# Assuming that this script exists in
+# the same directory as the build file
+target(
+    name = "protoc_compiler_script",
+    inputs = ["compile.sh"],
+    bin_output = "compile.sh",
+    tags = ["no-cache"],
+)
+
+target(
+    name = "generate_protos",
+    dependencies = [":protoc_compiler_script"],
+    inputs = ["proto/*.proto"],
+    # Use the binary tool with $(bin :target_name)
+    command = "$(bin :protoc_compiler_script) --cpp_out=generated proto/*.proto",
+    outputs = ["dir::generated"],
+)
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+targets {
+  // Assuming that this script exists in
+  // the same directory as the build file
+  new {
+    name = "protoc_compiler_script"
+    inputs {
+      "compile.sh"
+    }
+    bin_output = "compile.sh"
+    tags {
+      "no-cache"
+    }
+  }
+
+  new {
+    name = "generate_protos"
+    dependencies {
+      ":protoc_compiler_script"
+    }
+    inputs {
+      "proto/*.proto"
+    }
+    // Use the binary tool with $(bin :target_name)
+    command = "$(bin :protoc_compiler_script) --cpp_out=generated proto/*.proto"
+    outputs {
+      "dir::generated"
+    }
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
+
 This makes it easy to share scripts across your workspace without having to invoke them by their relative file path.
 
 ## Output Checks
@@ -130,6 +264,9 @@ This is the life-cycle of a target's execution with output checks:
 It is therefore recommended to keep output checks as light and fast as possible.
 
 ### How to Define Output Checks
+
+<Tabs syncKey="build-file-format">
+  <TabItem label="YAML">
 
 ```yaml
 targets:
@@ -167,6 +304,103 @@ targets:
     outputs:
       - dist/bundle.js
 ```
+
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+target(
+    name = "ensure_nvm",
+    command = "curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash",
+    # The target will fail if this command
+    # returns a non-zero exit code
+    output_checks = [
+        {"command": "nvm --version"},
+    ],
+)
+
+target(
+    name = "ensure_node_22",
+    command = "nvm install 22",
+    # If specified, grog will run this command everytime the tool
+    # is used to check that it has the correct version
+    output_checks = [
+        {"command": "node --version", "expected_output": "v20.11.1"},
+        {"command": "npm --version", "expected_output": "10.2.4"},
+    ],
+    dependencies = [":ensure_nvm"],
+)
+
+target(
+    name = "build_js",
+    dependencies = [":ensure_node_22"],
+    # Node is now guaranteed to be available
+    command = "node build.js",
+    inputs = [
+        "src/**/*.js",
+        "package.json",
+    ],
+    outputs = ["dist/bundle.js"],
+)
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+targets {
+  new {
+    name = "ensure_nvm"
+    command = "curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash"
+    // The target will fail if this command
+    // returns a non-zero exit code
+    output_checks {
+      new {
+        command = "nvm --version"
+      }
+    }
+  }
+
+  new {
+    name = "ensure_node_22"
+    command = "nvm install 22"
+    // If specified, grog will run this command everytime the tool
+    // is used to check that it has the correct version
+    output_checks {
+      new {
+        command = "node --version"
+        expected_output = "v20.11.1"
+      }
+      new {
+        command = "npm --version"
+        expected_output = "10.2.4"
+      }
+    }
+    dependencies {
+      ":ensure_nvm"
+    }
+  }
+
+  new {
+    name = "build_js"
+    dependencies {
+      ":ensure_node_22"
+    }
+    // Node is now guaranteed to be available
+    command = "node build.js"
+    inputs {
+      "src/**/*.js"
+      "package.json"
+    }
+    outputs {
+      "dist/bundle.js"
+    }
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
 
 In this example, the `ensure_node` target verifies that `node` is available in the PATH.
 If it's not, the command installs it.

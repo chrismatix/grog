@@ -96,6 +96,9 @@ When using the registry backend, Grog expects your current session to be authent
 
 Once your Docker storage is set up, you can define container image outputs for your targets. The prefix is `oci::` regardless of which tool builds the image:
 
+<Tabs syncKey="build-file-format">
+  <TabItem label="YAML">
+
 ```yaml
 targets:
   - name: build_api_image
@@ -112,9 +115,57 @@ targets:
       - oci::api-service:latest
 ```
 
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+target(
+    name = "build_api_image",
+    inputs = [
+        "Dockerfile",
+        "src/**/*.go",
+        "go.mod",
+        "go.sum",
+    ],
+    # Build the Docker image
+    command = "docker build -t api-service:latest .",
+    # Cache the local image
+    outputs = ["oci::api-service:latest"],
+)
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+targets {
+  new {
+    name = "build_api_image"
+    inputs {
+      "Dockerfile"
+      "src/**/*.go"
+      "go.mod"
+      "go.sum"
+    }
+    // Build the Docker image
+    command = "docker build -t api-service:latest ."
+    // Cache the local image
+    outputs {
+      "oci::api-service:latest"
+    }
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
+
 ## Using Docker Images in Dependent Targets
 
 You can use Docker images built by one target in dependent targets:
+
+<Tabs syncKey="build-file-format">
+  <TabItem label="YAML">
 
 ```yaml
 targets:
@@ -127,7 +178,6 @@ targets:
       - oci::api-service:latest
 
   - name: integration_test
-
     dependencies:
       - :build_api_image
     command: |
@@ -136,6 +186,67 @@ targets:
       # Run tests against the image
       go test -tags=integration ./tests/...
 ```
+
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+target(
+    name = "build_api_image",
+    inputs = [
+        "Dockerfile",
+        "src/**/*.go",
+    ],
+    command = "docker build -t api-service:latest .",
+    outputs = ["oci::api-service:latest"],
+)
+
+target(
+    name = "integration_test",
+    dependencies = [":build_api_image"],
+    command = """
+    # The api-service image is now available locally
+    docker run --rm api-service:latest --version
+    # Run tests against the image
+    go test -tags=integration ./tests/...
+    """,
+)
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+targets {
+  new {
+    name = "build_api_image"
+    inputs {
+      "Dockerfile"
+      "src/**/*.go"
+    }
+    command = "docker build -t api-service:latest ."
+    outputs {
+      "oci::api-service:latest"
+    }
+  }
+
+  new {
+    name = "integration_test"
+    dependencies {
+      ":build_api_image"
+    }
+    command = """
+      # The api-service image is now available locally
+      docker run --rm api-service:latest --version
+      # Run tests against the image
+      go test -tags=integration ./tests/...
+      """
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
 
 ## Pushing images
 
@@ -149,7 +260,24 @@ predeclared `GROG_GIT_HASH` variable directly into the destination string
 (YAML has no built-in interpolation, so you'd have to template the file
 yourself).
 
-<Tabs>
+<Tabs syncKey="build-file-format">
+  <TabItem label="YAML">
+
+```yaml
+targets:
+  - name: build_api_image
+    command: docker build -t api-service .
+    inputs:
+      - Dockerfile
+      - src/**/*.go
+    outputs:
+      - oci::api-service
+    oci_push:
+      # No interpolation in YAML — use a static destination tag
+      api-service: us-east1-docker.pkg.dev/proj/api:latest
+```
+
+  </TabItem>
   <TabItem label="Starlark">
 
 ```starlark
@@ -168,8 +296,8 @@ target(
   </TabItem>
   <TabItem label="Pkl">
 
-```Pkl
-amends "package://grog.build/releases/<version>/grog@<version>#/package.pkl"
+```pkl
+amends "package://grog.build/releases/v0.44.0/grog@0.44.0#/package.pkl"
 
 targets {
   new {

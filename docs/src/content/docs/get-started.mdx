@@ -60,7 +60,7 @@ Refer to the [configuration reference](/reference/configuration) to see all avai
 Each target is a **command** that runs when its file **inputs** or **dependencies** change.
 Grog provides a wide array of build file formats:
 
-<Tabs>
+<Tabs syncKey="build-file-format">
   <TabItem label="YAML">
 
 ```yaml
@@ -204,7 +204,7 @@ Save this as `BUILD.star` in your project directory.
 <TabItem label="Pkl">
 
 ```Pkl
-amends "package://grog.build/releases/v0.9.3/grog@0.9.3#/package.pkl"
+amends "package://grog.build/releases/v0.44.0/grog@0.44.0#/package.pkl"
 
 targets {
   new {
@@ -336,12 +336,40 @@ You can find the complete target configuration reference [here](/reference/targe
 Inputs are files that your build target depends on. When any of these files change, Grog will re-run the target's command.
 You can specify inputs using file paths or glob patterns:
 
+<Tabs syncKey="build-file-format">
+  <TabItem label="YAML">
+
 ```yaml
 inputs:
   - "src/**/*.js"
   - package.json
   - "assets/*.{png,jpg}"
 ```
+
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+inputs = [
+    "src/**/*.js",
+    "package.json",
+    "assets/*.{png,jpg}",
+],
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+inputs {
+  "src/**/*.js"
+  "package.json"
+  "assets/*.{png,jpg}"
+}
+```
+
+  </TabItem>
+</Tabs>
 
 - `src/**/*.js` - All JavaScript files in src directory and subdirectories
 - `package.json` - A specific file
@@ -360,11 +388,37 @@ This allows it to detect changes and only rebuild when necessary.
 Dependencies are other targets that must be built before the current target.
 This creates a directed acyclic graph (DAG) of build steps:
 
+<Tabs syncKey="build-file-format">
+  <TabItem label="YAML">
+
 ```yaml
 dependencies:
   - :generate_proto
   - //lib:build_lib
 ```
+
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+dependencies = [
+    ":generate_proto",
+    "//lib:build_lib",
+],
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+dependencies {
+  ":generate_proto"
+  "//lib:build_lib"
+}
+```
+
+  </TabItem>
+</Tabs>
 
 - `generate_proto` - A dependency on another target in the same package
 - `//lib:build_lib` - A dependency on a target in another package
@@ -380,12 +434,40 @@ When you specify dependencies:
 Outputs are artifacts that your build target produces and who you might want to share between machines using a remote cache.
 Grog, therefore, caches these outputs and restores them when possible to avoid unnecessary rebuilds.
 
+<Tabs syncKey="build-file-format">
+  <TabItem label="YAML">
+
 ```yaml
 outputs:
   - dist/bundle.js
   - dir::dist/assets/
   - oci::some-image
 ```
+
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+outputs = [
+    "dist/bundle.js",
+    "dir::dist/assets/",
+    "oci::some-image",
+],
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+outputs {
+  "dist/bundle.js"
+  "dir::dist/assets/"
+  "oci::some-image"
+}
+```
+
+  </TabItem>
+</Tabs>
 
 - `dist/bundle.js` - A file output
 - `dir::dist/assets/` - A directory output

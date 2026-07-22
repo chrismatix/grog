@@ -18,7 +18,7 @@ This will allow you
 An environment configuration exists on the build graph, but is distinct from targets.
 You can define a docker environment like so:
 
-<Tabs>
+<Tabs syncKey="build-file-format">
   <TabItem label="YAML">
     ```yaml
     targets:
@@ -34,6 +34,52 @@ You can define a docker environment like so:
         defaults:
           mount_dependencies: transitive # or: none, direct
           mount_dependency_inputs: true # whether to also mount the input files of dependencies
+    ```
+
+  </TabItem>
+  <TabItem label="Starlark">
+    ```starlark
+    target(
+        name = "foo",
+        # ...
+    )
+
+    environment(
+        name = "arm64",
+        type = "docker",
+        dependencies = ["arm64-image"],
+        oci_image = "arm64-builder",
+        defaults = {
+            "mount_dependencies": "transitive",  # or: "none", "direct"
+            "mount_dependency_inputs": True,  # whether to also mount the input files of dependencies
+        },
+    )
+    ```
+
+  </TabItem>
+  <TabItem label="Pkl">
+    ```pkl
+    targets {
+      new {
+        name = "foo"
+        // ...
+      }
+    }
+
+    environments {
+      new {
+        name = "arm64"
+        type = "docker"
+        dependencies {
+          "arm64-image"
+        }
+        oci_image = "arm64-builder"
+        defaults {
+          mount_dependencies = "transitive" // or: "none", "direct"
+          mount_dependency_inputs = true // whether to also mount the input files of dependencies
+        }
+      }
+    }
     ```
 
   </TabItem>

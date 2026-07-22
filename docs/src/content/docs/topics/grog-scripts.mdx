@@ -3,7 +3,7 @@ title: Grog Scripts
 description: Learn how to turn annotated shell and Python scripts into first-class Grog targets that are easy to share and run.
 ---
 
-import { Aside } from "@astrojs/starlight/components";
+import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
 
 ## What are Grog Scripts?
 
@@ -66,8 +66,33 @@ Use `--` to forward additional parameters to the script.
 
 Before this feature you would have to define a wrapper target that defines the existing script file as an executable target with a `bin_output` like so:
 
-```Pkl
-amends "package://grog.build/releases/v0.16.1/grog@0.16.1#/package.pkl"
+<Tabs syncKey="build-file-format">
+  <TabItem label="YAML">
+
+```yaml
+targets:
+  - name: your_script
+    bin_output: script_file.sh
+    tags:
+      - no-cache
+```
+
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+target(
+    name = "your_script",
+    bin_output = "script_file.sh",
+    tags = ["no-cache"],
+)
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+amends "package://grog.build/releases/v0.44.0/grog@0.44.0#/package.pkl"
 
 targets {
   new {
@@ -79,5 +104,8 @@ targets {
   }
 }
 ```
+
+  </TabItem>
+</Tabs>
 
 While this is less convenient and arguably a bit awkward, since there is no actual build step, it can still be useful in case you want to keep your build configuration separate from your scripts.
