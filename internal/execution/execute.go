@@ -50,6 +50,7 @@ type Executor struct {
 	deferAsyncWait   bool
 	asyncDrained     bool
 	rerunGroup       singleflight.Group
+	resourceManager  *ResourceManager
 }
 
 func NewExecutor(
@@ -72,6 +73,7 @@ func NewExecutor(
 		loadOutputsMode:  loadOutputsMode,
 		targetHasher:     hashing.NewTargetHasher(graph),
 		streamLogsToggle: console.NewStreamLogsToggle(streamLogs),
+		resourceManager:  NewResourceManager(),
 	}
 }
 
@@ -135,7 +137,9 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	walkCallback := func(ctx context.Context, node model.BuildNode) (dag.CacheResult, error) {
 		target, ok := node.(*model.Target)
 		if !ok {
-			// this is where we would add the execution of other node types
+			// Aliases complete trivially; resources start lazily when the
+			// first dependent target executes (see ResourceManager), so fully
+			// cached builds never pay for a resource start.
 			return dag.CacheHit, nil
 		}
 
@@ -169,6 +173,10 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	// Emit any buffered per-target result lines (deterministic mode only;
 	// otherwise they were streamed as targets completed).
 	resultLogger.Flush(stdLogger)
+
+	// Tear down started resources even when the build was interrupted, hence
+	// the non-cancellable context.
+	e.resourceManager.TeardownAll(context.WithoutCancel(ctx))
 
 	// Drain the I/O pool before returning, but only if the build was not
 	// interrupted and the caller hasn't opted to wait itself. Async cache
@@ -373,7 +381,7 @@ func (e *Executor) getTaskFunc(
 			logger.Debugf("%s: loaded target result %s", target.Label, formatTargetResultForDebug(targetResult))
 		}
 
-		outputCheckErr := runOutputChecks(ctx, target, binToolPaths, outputIdentifiers)
+		outputCheckErr := runOutputChecks(ctx, target, binToolPaths, outputIdentifiers, nil)
 		if outputCheckErr != nil {
 			logger.Debugf("running target due to output check error: %v", outputCheckErr)
 		}
@@ -505,10 +513,14 @@ func (e *Executor) executeTarget(
 
 	startTime := time.Now()
 	var err error
+	var resourceEnvironment []string
 	if target.Command != "" {
-		update(worker.Status(fmt.Sprintf("%s: running \"%s\"", target.Label, target.CommandEllipsis())))
-		logger.Debugf("running target %s: %s", target.Label, target.CommandEllipsis())
-		err = executeTarget(ctx, target, binToolPaths, outputIdentifiers, transitiveOutputs, taggedOutputs, e.streamLogsToggle.Enabled())
+		resourceEnvironment, err = e.resourceManager.EnsureResourcesStarted(ctx, e.graph, target, update)
+		if err == nil {
+			update(worker.Status(fmt.Sprintf("%s: running \"%s\"", target.Label, target.CommandEllipsis())))
+			logger.Debugf("running target %s: %s", target.Label, target.CommandEllipsis())
+			err = executeTarget(ctx, target, binToolPaths, outputIdentifiers, transitiveOutputs, taggedOutputs, resourceEnvironment, e.streamLogsToggle.Enabled())
+		}
 	} else {
 		logger.Debugf("skipped target %s due to no command", target.Label)
 	}
@@ -527,7 +539,7 @@ func (e *Executor) executeTarget(
 	}
 
 	// Run output checks again to see if they match now
-	if outputCheckErr := runOutputChecks(ctx, target, binToolPaths, outputIdentifiers); outputCheckErr != nil {
+	if outputCheckErr := runOutputChecks(ctx, target, binToolPaths, outputIdentifiers, resourceEnvironment); outputCheckErr != nil {
 		return dag.CacheMiss, outputCheckErr
 	}
 

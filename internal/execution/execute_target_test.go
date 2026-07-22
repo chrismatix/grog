@@ -233,7 +233,7 @@ func TestRunTargetCommandForwardsExtraArgs(t *testing.T) {
 	ctx = WithExtraArgs(ctx, []string{"-k", "test_foo", "-x"})
 
 	// The command uses $@ which should expand to the extra args
-	output, err := runTargetCommand(ctx, target, nil, nil, nil, nil, `echo "ARGS:$@"`, false)
+	output, err := runTargetCommand(ctx, target, nil, nil, nil, nil, nil, `echo "ARGS:$@"`, false)
 	if err != nil {
 		t.Fatalf("expected no error, got %v\noutput: %s", err, string(output))
 	}
@@ -270,7 +270,7 @@ func TestRunTargetCommandHandlesLargeScript(t *testing.T) {
 	// this overflows execve; as a script file it runs fine.
 	command := "# " + strings.Repeat("x", 256*1024) + "\necho OK"
 
-	output, err := runTargetCommand(context.Background(), target, nil, nil, nil, nil, command, false)
+	output, err := runTargetCommand(context.Background(), target, nil, nil, nil, nil, nil, command, false)
 	if err != nil {
 		t.Fatalf("expected large script to execute, got %v\noutput: %s", err, string(output))
 	}
@@ -301,7 +301,7 @@ func TestRunTargetCommandWithoutExtraArgs(t *testing.T) {
 
 	ctx := context.Background()
 
-	output, err := runTargetCommand(ctx, target, nil, nil, nil, nil, `echo "ARGS:$@"`, false)
+	output, err := runTargetCommand(ctx, target, nil, nil, nil, nil, nil, `echo "ARGS:$@"`, false)
 	if err != nil {
 		t.Fatalf("expected no error, got %v\noutput: %s", err, string(output))
 	}

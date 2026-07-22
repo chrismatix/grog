@@ -25,6 +25,12 @@ func BuildNodeMapFromPackages(packages []*Package) (BuildNodeMap, error) {
 			}
 			nodes[a.Label] = a
 		}
+		for _, r := range pkg.GetResources() {
+			if _, ok := nodes[r.Label]; ok {
+				return nil, fmt.Errorf("duplicate target label: %s", r.Label)
+			}
+			nodes[r.Label] = r
+		}
 	}
 	return nodes, nil
 }

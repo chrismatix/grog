@@ -1,0 +1,26 @@
+resources:
+  - name: db
+    up: |
+      echo "RESOURCE_TOKEN=token-from-up" >> "$GROG_RESOURCE_EXPORTS_FILE"
+      touch db_running.marker
+    ready: test -f db_running.marker
+    down: rm -f db_running.marker
+    exports:
+      STATIC_GREETING: hello-resource
+
+targets:
+  - name: consumer_one
+    dependencies: [":db"]
+    command: echo "$STATIC_GREETING $RESOURCE_TOKEN" > one.out
+    outputs: [one.out]
+    output_checks:
+      - command: cat one.out
+        expected_output: hello-resource token-from-up
+
+  - name: consumer_two
+    dependencies: [":db"]
+    command: echo "$RESOURCE_TOKEN" > two.out
+    outputs: [two.out]
+    output_checks:
+      - command: cat two.out
+        expected_output: token-from-up

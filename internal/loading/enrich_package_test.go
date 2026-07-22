@@ -101,3 +101,75 @@ func TestGetEnrichedPackage_FingerprintCopied(t *testing.T) {
 		}
 	}
 }
+
+func TestGetEnrichedPackage_Resources(t *testing.T) {
+	logger := console.NewFromSugared(zaptest.NewLogger(t).Sugar(), zapcore.DebugLevel)
+	packagePath := "test/package"
+
+	pkgDTO := PackageDTO{
+		SourceFilePath: "test/package/BUILD.yaml",
+		Targets: []*TargetDTO{
+			{Name: "image", Command: "echo image"},
+		},
+		Resources: []*ResourceDTO{
+			{
+				Name:         "postgres",
+				Up:           "docker run -d postgres",
+				Down:         "docker rm -f postgres",
+				Ready:        "pg_isready",
+				Timeout:      "2m",
+				Exports:      map[string]string{"DATABASE_URL": "postgres://localhost/test"},
+				Dependencies: []string{":image"},
+			},
+		},
+	}
+
+	enrichedPkg, err := getEnrichedPackage(logger, packagePath, pkgDTO)
+	if err != nil {
+		t.Fatalf("Failed to enrich package: %v", err)
+	}
+
+	resource, ok := enrichedPkg.Resources[label.TL(packagePath, "postgres")]
+	if !ok {
+		t.Fatalf("Resource //test/package:postgres not found in enriched package")
+	}
+	if resource.Up != "docker run -d postgres" || resource.Down != "docker rm -f postgres" || resource.Ready != "pg_isready" {
+		t.Errorf("Resource lifecycle commands not preserved: %+v", resource)
+	}
+	if resource.Timeout.String() != "2m0s" {
+		t.Errorf("Resource timeout not parsed: got %s", resource.Timeout)
+	}
+	if resource.Exports["DATABASE_URL"] != "postgres://localhost/test" {
+		t.Errorf("Resource exports not preserved: %v", resource.Exports)
+	}
+	if len(resource.Dependencies) != 1 || resource.Dependencies[0].String() != "//test/package:image" {
+		t.Errorf("Resource dependencies not parsed: %v", resource.Dependencies)
+	}
+}
+
+func TestGetEnrichedPackage_ResourceRequiresUp(t *testing.T) {
+	logger := console.NewFromSugared(zaptest.NewLogger(t).Sugar(), zapcore.DebugLevel)
+
+	pkgDTO := PackageDTO{
+		SourceFilePath: "test/package/BUILD.yaml",
+		Resources:      []*ResourceDTO{{Name: "postgres"}},
+	}
+
+	if _, err := getEnrichedPackage(logger, "test/package", pkgDTO); err == nil {
+		t.Fatal("expected error for resource without up command")
+	}
+}
+
+func TestGetEnrichedPackage_ResourceDuplicateLabel(t *testing.T) {
+	logger := console.NewFromSugared(zaptest.NewLogger(t).Sugar(), zapcore.DebugLevel)
+
+	pkgDTO := PackageDTO{
+		SourceFilePath: "test/package/BUILD.yaml",
+		Targets:        []*TargetDTO{{Name: "postgres", Command: "echo hi"}},
+		Resources:      []*ResourceDTO{{Name: "postgres", Up: "true"}},
+	}
+
+	if _, err := getEnrichedPackage(logger, "test/package", pkgDTO); err == nil {
+		t.Fatal("expected duplicate label error")
+	}
+}

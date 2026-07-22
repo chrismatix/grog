@@ -2,13 +2,16 @@ package loading
 
 import (
 	"fmt"
-	"grog/internal/console"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
 	"testing"
+
+	"grog/internal/console"
+	"grog/internal/label"
+	"grog/internal/model"
 
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
@@ -222,6 +225,63 @@ func TestResolveInputs(t *testing.T) {
 
 			if !reflect.DeepEqual(actual, tc.expected) {
 				t.Errorf("Unexpected resolved inputs.\nExpected: %v\nActual:   %v", tc.expected, actual)
+			}
+		})
+	}
+}
+
+func TestMergePackagesIncludesResources(t *testing.T) {
+	resourceLabel := label.TL("pkg", "database")
+	fromPackage := &model.Package{
+		Resources: map[label.TargetLabel]*model.Resource{
+			resourceLabel: {Label: resourceLabel, Up: "true"},
+		},
+	}
+	intoPackage := &model.Package{
+		Targets: map[label.TargetLabel]*model.Target{
+			label.TL("pkg", "consumer"): {Label: label.TL("pkg", "consumer")},
+		},
+	}
+
+	if err := mergePackages(fromPackage, intoPackage); err != nil {
+		t.Fatalf("failed to merge packages: %v", err)
+	}
+	if intoPackage.Resources[resourceLabel] == nil {
+		t.Fatal("resource was not merged")
+	}
+}
+
+func TestMergePackagesRejectsResourceTargetCollisionsInBothOrders(t *testing.T) {
+	resourceLabel := label.TL("pkg", "database")
+	testCases := []struct {
+		name        string
+		fromPackage *model.Package
+		intoPackage *model.Package
+	}{
+		{
+			name: "resource into target",
+			fromPackage: &model.Package{Resources: map[label.TargetLabel]*model.Resource{
+				resourceLabel: {Label: resourceLabel, SourceFilePath: "resource.yaml"},
+			}},
+			intoPackage: &model.Package{Targets: map[label.TargetLabel]*model.Target{
+				resourceLabel: {Label: resourceLabel, SourceFilePath: "target.yaml"},
+			}},
+		},
+		{
+			name: "target into resource",
+			fromPackage: &model.Package{Targets: map[label.TargetLabel]*model.Target{
+				resourceLabel: {Label: resourceLabel, SourceFilePath: "target.yaml"},
+			}},
+			intoPackage: &model.Package{Resources: map[label.TargetLabel]*model.Resource{
+				resourceLabel: {Label: resourceLabel, SourceFilePath: "resource.yaml"},
+			}},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if err := mergePackages(testCase.fromPackage, testCase.intoPackage); err == nil {
+				t.Fatal("expected duplicate label error")
 			}
 		})
 	}

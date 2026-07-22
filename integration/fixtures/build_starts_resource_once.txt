@@ -1,0 +1,7 @@
+INFO: 1 package loaded, 2 targets configured.
+INFO: Selected 2 targets.
+INFO: Resource //:db started.
+INFO: //:consumer_one DONE
+INFO: //:consumer_two DONE
+INFO: Resource //:db stopped.
+INFO: Build completed successfully. 2 targets completed (0 cache hits).

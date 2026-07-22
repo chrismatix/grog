@@ -120,6 +120,50 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 		}
 	}
 
+	resources := make(map[label.TargetLabel]*model.Resource)
+	for _, resource := range pkg.Resources {
+		var resourceDeps []label.TargetLabel
+		for _, dep := range resource.Dependencies {
+			depLabel, err := label.ParseTargetLabel(packagePath, dep)
+			if err != nil {
+				return nil, err
+			}
+			resourceDeps = append(resourceDeps, depLabel)
+		}
+
+		if packagePath == "." {
+			packagePath = ""
+		}
+		resourceLabel := label.TargetLabel{Package: packagePath, Name: resource.Name}
+		if _, ok := targets[resourceLabel]; ok || resources[resourceLabel] != nil {
+			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", resource.Name, pkg.SourceFilePath)
+		}
+
+		if resource.Up == "" {
+			return nil, fmt.Errorf("resource %s must define an up command (package file %s)", resourceLabel, pkg.SourceFilePath)
+		}
+
+		var resourceTimeout time.Duration
+		if resource.Timeout != "" {
+			var err error
+			resourceTimeout, err = time.ParseDuration(resource.Timeout)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse timeout for resource %s: %w", resourceLabel, err)
+			}
+		}
+
+		resources[resourceLabel] = &model.Resource{
+			SourceFilePath: pkg.SourceFilePath,
+			Label:          resourceLabel,
+			Up:             resource.Up,
+			Down:           resource.Down,
+			Ready:          resource.Ready,
+			Timeout:        resourceTimeout,
+			Exports:        resource.Exports,
+			Dependencies:   resourceDeps,
+		}
+	}
+
 	for _, alias := range pkg.Aliases {
 		actualLabel, err := label.ParseTargetLabel(packagePath, alias.Actual)
 		if err != nil {
@@ -130,7 +174,7 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 			packagePath = ""
 		}
 		aliasLabel := label.TargetLabel{Package: packagePath, Name: alias.Name}
-		if _, ok := targets[aliasLabel]; ok || aliases[aliasLabel] != nil {
+		if _, ok := targets[aliasLabel]; ok || aliases[aliasLabel] != nil || resources[aliasLabel] != nil {
 			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", alias.Name, pkg.SourceFilePath)
 		}
 
@@ -142,9 +186,10 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 	}
 
 	return &model.Package{
-		Path:    packagePath,
-		Targets: targets,
-		Aliases: aliases,
+		Path:      packagePath,
+		Targets:   targets,
+		Aliases:   aliases,
+		Resources: resources,
 	}, nil
 }
 
