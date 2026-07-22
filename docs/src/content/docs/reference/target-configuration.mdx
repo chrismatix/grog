@@ -115,6 +115,7 @@ A map from the local name of an `oci::` output to one or more remote registry de
 ```yaml
 outputs:
   - oci::api
+  - oci::worker
 oci_push:
   api: registry.org/api:${VERSION} # single destination
   worker: # multi-destination
@@ -126,7 +127,7 @@ oci_push:
   <TabItem label="Starlark">
 
 ```starlark
-outputs = ["oci::api"],
+outputs = ["oci::api", "oci::worker"],
 oci_push = {
     # single destination
     "api": "registry.org/api:" + GROG_GIT_HASH,
@@ -142,7 +143,7 @@ oci_push = {
   <TabItem label="Pkl">
 
 ```pkl
-outputs { "oci::api" }
+outputs { "oci::api" ; "oci::worker" }
 oci_push {
   // single destination
   ["api"] { "registry.org/api:\(read("env:GROG_GIT_HASH").text)" }
