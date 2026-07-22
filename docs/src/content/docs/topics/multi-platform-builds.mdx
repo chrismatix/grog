@@ -3,7 +3,7 @@ title: Multiplatform Builds
 description: Learn how to build for multiple platforms using Grog's platform selectors and cross-compilation strategies.
 ---
 
-import { Aside } from "@astrojs/starlight/components";
+import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
 
 ## Building for Multiple Platforms
 
@@ -24,6 +24,9 @@ When a target doesn't match the current host's platform, Grog will **skip** it a
 ### Defining Platform Selectors
 
 You can specify platform requirements using the `platforms` field:
+
+<Tabs syncKey="build-file-format">
+  <TabItem label="YAML">
 
 ```yaml
 default_platforms:
@@ -50,6 +53,77 @@ targets:
     outputs:
       - dist/myapp-darwin-arm64
 ```
+
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+# Starlark has no package-level default_platforms; set platforms per target
+target(
+    name = "build_linux_amd64",
+    command = "go build -o dist/myapp-linux-amd64 ./cmd/myapp",
+    platforms = ["linux/amd64"],
+    inputs = [
+        "cmd/**/*.go",
+        "go.mod",
+    ],
+    outputs = ["dist/myapp-linux-amd64"],
+)
+
+target(
+    name = "build_darwin_arm64",
+    command = "go build -o dist/myapp-darwin-arm64 ./cmd/myapp",
+    platforms = ["darwin/arm64"],
+    inputs = [
+        "cmd/**/*.go",
+        "go.mod",
+    ],
+    outputs = ["dist/myapp-darwin-arm64"],
+)
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+default_platforms {
+  "linux/amd64"
+}
+
+targets {
+  // default_platforms is applied here
+  new {
+    name = "build_linux_amd64"
+    command = "go build -o dist/myapp-linux-amd64 ./cmd/myapp"
+    inputs {
+      "cmd/**/*.go"
+      "go.mod"
+    }
+    outputs {
+      "dist/myapp-linux-amd64"
+    }
+  }
+
+  new {
+    name = "build_darwin_arm64"
+    command = "go build -o dist/myapp-darwin-arm64 ./cmd/myapp"
+    // This overrides default_platforms
+    platforms {
+      "darwin/arm64"
+    }
+    inputs {
+      "cmd/**/*.go"
+      "go.mod"
+    }
+    outputs {
+      "dist/myapp-darwin-arm64"
+    }
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
 
 In this example:
 
@@ -85,6 +159,9 @@ internal-only build box, or a CI runner with privileged credentials).
 
 Add a custom tag to a target's `platforms` list. A target with a tag-only `platforms` list is also valid.
 
+<Tabs syncKey="build-file-format">
+  <TabItem label="YAML">
+
 ```yaml
 targets:
   - name: gpu_train
@@ -105,6 +182,67 @@ targets:
     inputs:
       - publish.sh
 ```
+
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+target(
+    name = "gpu_train",
+    command = "python train.py",
+    platforms = [
+        "linux/amd64",  # auto-detected platform identifier
+        "gpu-runner",  # custom platform tag
+    ],
+    inputs = ["train.py"],
+    outputs = ["model.pt"],
+)
+
+target(
+    name = "secrets_publish",
+    command = "./publish.sh",
+    # Only ever runs on hosts that opt into the "release" tag.
+    platforms = ["release"],
+    inputs = ["publish.sh"],
+)
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+targets {
+  new {
+    name = "gpu_train"
+    command = "python train.py"
+    platforms {
+      "linux/amd64" // auto-detected platform identifier
+      "gpu-runner" // custom platform tag
+    }
+    inputs {
+      "train.py"
+    }
+    outputs {
+      "model.pt"
+    }
+  }
+
+  new {
+    name = "secrets_publish"
+    command = "./publish.sh"
+    // Only ever runs on hosts that opt into the "release" tag.
+    platforms {
+      "release"
+    }
+    inputs {
+      "publish.sh"
+    }
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
 
 `gpu_train` will run on any `linux/amd64` host **or** on any host with the `gpu-runner` platform tag enabled.
 `secrets_publish` runs only on hosts that explicitly enable the `release` tag.
@@ -138,6 +276,9 @@ Inside target commands, the active tags are also exposed as `GROG_PLATFORM_TAGS`
 
 When a target depends on a platform-specific target, Grog enforces platform compatibility:
 
+<Tabs syncKey="build-file-format">
+  <TabItem label="YAML">
+
 ```yaml
 targets:
   - name: linux_binary
@@ -156,6 +297,61 @@ targets:
     outputs:
       - dist/myapp-linux.tar.gz
 ```
+
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+target(
+    name = "linux_binary",
+    command = "go build -o dist/myapp-linux ./cmd/myapp",
+    platforms = ["linux/amd64"],
+    outputs = ["dist/myapp-linux"],
+)
+
+target(
+    name = "package_linux",
+    dependencies = [":linux_binary"],
+    command = "tar -czf dist/myapp-linux.tar.gz dist/myapp-linux",
+    platforms = ["linux/amd64"],
+    outputs = ["dist/myapp-linux.tar.gz"],
+)
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+targets {
+  new {
+    name = "linux_binary"
+    command = "go build -o dist/myapp-linux ./cmd/myapp"
+    platforms {
+      "linux/amd64"
+    }
+    outputs {
+      "dist/myapp-linux"
+    }
+  }
+
+  new {
+    name = "package_linux"
+    dependencies {
+      ":linux_binary"
+    }
+    command = "tar -czf dist/myapp-linux.tar.gz dist/myapp-linux"
+    platforms {
+      "linux/amd64"
+    }
+    outputs {
+      "dist/myapp-linux.tar.gz"
+    }
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
 
 If you try to build `package_linux` on a non-Linux platform, Grog will fail with an error because the dependency `linux_binary` cannot be built on the current platform.
 

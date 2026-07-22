@@ -3,7 +3,7 @@ title: Target Configuration
 description: Targets define what builds to run and how. This reference covers all the configuration options for a target.
 ---
 
-import { Aside } from "@astrojs/starlight/components";
+import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
 
 ## Overview
 
@@ -109,6 +109,9 @@ Examples:
 
 A map from the local name of an `oci::` output to one or more remote registry destinations to ship it to under `grog build --push`. See [Docker (OCI) Outputs › Pushing images](/topics/docker-outputs#pushing-images) for the full story; the short version:
 
+<Tabs syncKey="build-file-format">
+  <TabItem label="YAML">
+
 ```yaml
 outputs:
   - oci::api
@@ -119,16 +122,73 @@ oci_push:
     - registry.org/worker:latest
 ```
 
-The destination tag is **not** part of the cache key, so bumping `${VERSION}` reuses the cached image and only re-runs the push.
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+outputs = ["oci::api"],
+oci_push = {
+    # single destination
+    "api": "registry.org/api:" + GROG_GIT_HASH,
+    # multi-destination
+    "worker": [
+        "registry.org/worker:" + GROG_GIT_HASH,
+        "registry.org/worker:latest",
+    ],
+},
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+outputs { "oci::api" }
+oci_push {
+  // single destination
+  ["api"] { "registry.org/api:\(read("env:GROG_GIT_HASH").text)" }
+  // multi-destination
+  ["worker"] {
+    "registry.org/worker:\(read("env:GROG_GIT_HASH").text)"
+    "registry.org/worker:latest"
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
+
+The destination tag is **not** part of the cache key, so bumping the destination tag reuses the cached image and only re-runs the push.
 
 ### binary_requires_push
 
 When set to `true`, running the target's binary with `grog run` fails unless the `--push` flag is provided. This is useful for release-style binaries whose side effects (publishing artifacts, deploying) should only happen on an explicit `grog run --push`.
 
+<Tabs syncKey="build-file-format">
+  <TabItem label="YAML">
+
 ```yaml
 bin_output: ./release.sh
 binary_requires_push: true
 ```
+
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+bin_output = "./release.sh",
+binary_requires_push = True,
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+bin_output = "./release.sh"
+binary_requires_push = true
+```
+
+  </TabItem>
+</Tabs>
 
 ### dependencies
 
@@ -165,6 +225,9 @@ There are a few reserved tags that alter the way grog treats a target:
 
 `fingerprint` lets you inject additional pieces of identity that should bust the cache even when none of the declared inputs change. Each key/value pair is fed into the target definition hash, so modifying any entry forces a rebuild on the next run.
 
+<Tabs syncKey="build-file-format">
+  <TabItem label="YAML">
+
 ```yaml
 targets:
   - name: publish
@@ -173,6 +236,39 @@ targets:
       release_channel: "stable"
       node_version: "22.1.0"
 ```
+
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+target(
+    name = "publish",
+    command = "npm publish --tag $RELEASE_CHANNEL",
+    fingerprint = {
+        "release_channel": "stable",
+        "node_version": "22.1.0",
+    },
+)
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+targets {
+  new {
+    name = "publish"
+    command = "npm publish --tag $RELEASE_CHANNEL"
+    fingerprint {
+      ["release_channel"] = "stable"
+      ["node_version"] = "22.1.0"
+    }
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
 
 In the example above, bumping `node_version` will change the computed change hash despite the command and inputs staying the same. This is useful for build metadata like compiler versions or environment-provided secrets.
 
@@ -200,10 +296,39 @@ Optional name of a concurrency group. At most `capacity` members of a group run 
 
 Group capacities are configured workspace-wide in `grog.toml` under `[concurrency_groups]` (see [Configuration → Concurrency Groups](/reference/configuration/#concurrency-groups)). Use groups for shared external resources — a single docker daemon, a test database, a GPU, a bound port — where the contention is not expressible as a target dependency.
 
+<Tabs syncKey="build-file-format">
+  <TabItem label="YAML">
+
+```yaml
+targets:
+  - name: image
+    command: docker build -t myapp .
+    concurrency_group: docker
+```
+
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+target(
+    name = "image",
+    command = "docker build -t myapp .",
+    concurrency_group = "docker",
+)
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
 ```pkl
-new Target {
-  name = "image"
-  concurrency_group = "docker"
-  command = "docker build -t myapp ."
+targets {
+  new {
+    name = "image"
+    command = "docker build -t myapp ."
+    concurrency_group = "docker"
+  }
 }
 ```
+
+  </TabItem>
+</Tabs>

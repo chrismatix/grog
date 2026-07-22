@@ -22,8 +22,9 @@ You can configure Grog builds in four different ways:
 
 The simplest way to define your build targets is to create a `BUILD.json` or `BUILD.yaml` file in your package directory. This file defines all build targets for that package in your monorepo.
 
-<Tabs>
+<Tabs syncKey="build-file-format">
   <TabItem label="YAML">
+
 ```yaml
 targets:
   - name: build_app
@@ -37,27 +38,26 @@ targets:
     outputs:
       - dist/bundle.js
 
-- name: generate_proto
-  command: "protoc --js_out=src/generated proto/\*.proto"
-  inputs:
-  - proto/\*.proto
+  - name: generate_proto
+    command: protoc --js_out=src/generated proto/*.proto
+    inputs:
+      - proto/*.proto
     outputs:
-  - dir::src/generated
+      - dir::src/generated
+```
 
-````
 Save this as `BUILD.yaml` in your project directory.
+
   </TabItem>
   <TabItem label="JSON">
+
 ```json
 {
   "targets": [
     {
       "name": "build_app",
       "command": "npm run build",
-      "dependencies": [
-        ":generate_proto",
-        "//path/to/other/package:target_name"
-      ],
+      "dependencies": [":generate_proto", "//path/to/other/package:target_name"],
       "inputs": ["src/**/*.js", "package.json"],
       "outputs": ["dist/bundle.js"]
     },
@@ -69,7 +69,7 @@ Save this as `BUILD.yaml` in your project directory.
     }
   ]
 }
-````
+```
 
 Save this as `BUILD.json` in your project directory.
 
@@ -78,11 +78,39 @@ Save this as `BUILD.json` in your project directory.
 
 You can also define simple **aliases** that point to other targets:
 
+<Tabs syncKey="build-file-format">
+  <TabItem label="YAML">
+
 ```yaml
 aliases:
   - name: default
     actual: :build_app
 ```
+
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+alias(
+    name = "default",
+    actual = ":build_app",
+)
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+aliases {
+  new {
+    name = "default"
+    actual = ":build_app"
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
 
 Running `grog build :default` would build `:build_app`.
 
@@ -131,7 +159,7 @@ This Makefile exposes the targets `build_app` and `generate_proto` to Grog, allo
 
 Here's the same build configuration as above, but using Starlark:
 
-```python
+```starlark
 # BUILD.star
 target(
     name = "build_app",
@@ -161,7 +189,7 @@ Save this as `BUILD.star` or `BUILD.bzl` in your project directory.
 
 One of Starlark's key features is the ability to create reusable macros using functions. For example, if you want a standard setup for TypeScript projects that includes build, test, and format targets:
 
-```python
+```starlark
 # rules.star
 def ts_package(name, srcs = [], deps = []):
     """Creates a TypeScript package with build, test, and format targets."""
@@ -192,7 +220,7 @@ def ts_package(name, srcs = [], deps = []):
 
 You can then use this macro in your BUILD files:
 
-```python
+```starlark
 # packages/example/BUILD.star
 load("//rules.star", "ts_package")
 
@@ -229,7 +257,7 @@ As your codebase grows, maintaining consistent build configurations across packa
 Here's the same build configuration as above, but using Pkl:
 
 ```Pkl
-amends "package://grog.build/releases/v0.16.1/grog@0.16.1#/package.pkl"
+amends "package://grog.build/releases/v0.44.0/grog@0.44.0#/package.pkl"
 
 targets {
   new {
@@ -267,7 +295,7 @@ One of Pkl's strengths is the ability to create reusable build macros.
 For example, if you want a standard setup for Next.js projects that includes installing dependencies and building the app, you can create a reusable macro:
 
 ```Pkl
-import "package://grog.build/releases/v0.16.1/grog@0.16.1#/package.pkl"
+import "package://grog.build/releases/v0.44.0/grog@0.44.0#/package.pkl"
 
 // Create a function that returns
 // a list of targets for a Next.js app

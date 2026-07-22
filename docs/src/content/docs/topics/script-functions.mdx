@@ -13,7 +13,7 @@ These helpers let you reference dependency outputs without hard-coding file path
 `$(bin //pkg:target)` returns the absolute path to the dependency's `bin_output`.
 You can also use the shorthand `$(bin :target)` for dependencies that live in the same package, or `$(bin //pkg)` when the target label can be shortened.
 
-<Tabs>
+<Tabs syncKey="build-file-format">
   <TabItem label="YAML">
 
 ```yaml
@@ -25,6 +25,19 @@ You can also use the shorthand `$(bin :target)` for dependencies that live in th
     $(bin //tools:protoc) --python_out=generated proto/*.proto
   outputs:
     - dir::generated
+```
+
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+target(
+    name = "generate_stubs",
+    dependencies = ["//tools:protoc"],
+    # The protoc binary path resolves automatically regardless of cwd
+    command = "$(bin //tools:protoc) --python_out=generated proto/*.proto",
+    outputs = ["dir::generated"],
+)
 ```
 
   </TabItem>
@@ -57,7 +70,7 @@ targets {
 Indexes are zero-based and follow the order defined in the dependency's `outputs` list (with its `bin_output` appended last when present).
 File and directory outputs resolve to absolute paths on disk, while other output types return their identifier strings—for example, Docker outputs return the image tag you defined.
 
-<Tabs>
+<Tabs syncKey="build-file-format">
   <TabItem label="YAML">
 
 ```yaml
@@ -69,6 +82,19 @@ File and directory outputs resolve to absolute paths on disk, while other output
     cp -R $(output //frontend:build 0) dist/
   outputs:
     - dir::dist
+```
+
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+target(
+    name = "package_site",
+    dependencies = ["//frontend:build"],
+    # Copy the compiled assets from the build target's first output directory
+    command = "cp -R $(output //frontend:build 0) dist/",
+    outputs = ["dir::dist"],
+)
 ```
 
   </TabItem>
@@ -100,7 +126,7 @@ If you reference an index that does not exist—or a dependency that produces no
 
 To reference Docker images (or any other non-filesystem outputs), use the identifier directly:
 
-<Tabs>
+<Tabs syncKey="build-file-format">
   <TabItem label="YAML">
 
 ```yaml
@@ -109,6 +135,17 @@ To reference Docker images (or any other non-filesystem outputs), use the identi
     - //containers:backend_image
   command: |
     docker run --rm $(output //containers:backend_image 0) --health-check
+```
+
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+target(
+    name = "smoke_test_image",
+    dependencies = ["//containers:backend_image"],
+    command = "docker run --rm $(output //containers:backend_image 0) --health-check",
+)
 ```
 
   </TabItem>
@@ -138,7 +175,7 @@ This is useful when a target needs to aggregate outputs from its full ancestor g
 
 When there are no transitive dependencies (or none of them produce outputs), the function silently returns nothing.
 
-<Tabs>
+<Tabs syncKey="build-file-format">
   <TabItem label="YAML">
 
 ```yaml
@@ -152,6 +189,23 @@ When there are no transitive dependencies (or none of them produce outputs), the
     done
   outputs:
     - dir::bundle
+```
+
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+target(
+    name = "bundle_all",
+    dependencies = ["//libs:core"],
+    command = """
+    # Collect every output produced by any transitive dependency
+    for artifact in $(transitive_outputs); do
+      cp "$artifact" bundle/
+    done
+    """,
+    outputs = ["dir::bundle"],
+)
 ```
 
   </TabItem>
@@ -188,7 +242,7 @@ This lets you select a subset of ancestor outputs based on a convention you defi
 If no transitive dependency carries the requested tag, the function exits with an error to make the misconfiguration obvious.
 When there are no transitive tagged outputs at all (the target has no transitive deps with tags), the function silently returns nothing.
 
-<Tabs>
+<Tabs syncKey="build-file-format">
   <TabItem label="YAML">
 
 ```yaml
@@ -212,6 +266,33 @@ When there are no transitive tagged outputs at all (the target has no transitive
       FIND_LINKS="$FIND_LINKS --find-links $dir"
     done
     pip install $FIND_LINKS my-package
+```
+
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+# A library target that tags its outputs for downstream discovery
+target(
+    name = "my_lib",
+    tags = ["find-links"],
+    command = "python -m build --wheel --outdir dist/",
+    outputs = ["dir::dist"],
+)
+
+# A downstream target that collects all find-links directories
+# from the full transitive dependency graph
+target(
+    name = "install",
+    dependencies = ["//libs:my_lib"],
+    command = """
+    FIND_LINKS=""
+    for dir in $(transitive_outputs_by_tag find-links); do
+      FIND_LINKS="$FIND_LINKS --find-links $dir"
+    done
+    pip install $FIND_LINKS my-package
+    """,
+)
 ```
 
   </TabItem>

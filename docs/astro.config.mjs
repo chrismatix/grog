@@ -54,6 +54,10 @@ export default defineConfig({
       expressiveCode: {
         shiki: {
           langs: [JSON.parse(fs.readFileSync("./pkl_grammar.json", "utf-8"))],
+          langAlias: {
+            starlark: "python",
+            Makefile: "makefile",
+          },
         },
       },
     }),
