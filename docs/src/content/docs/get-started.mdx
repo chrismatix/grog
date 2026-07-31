@@ -473,6 +473,17 @@ outputs {
 - `dir::dist/assets/` - A directory output
 - `oci::some-image-tag` - An OCI container image output
 
+## Add Grog to Coding Agent Instructions
+
+Run `grog agents init` to add a managed Grog fragment to the repository's `AGENTS.md`. The fragment lists the available targets and the canonical build, test, change, and configuration commands, so coding agents discover the repository workflow automatically.
+
+```shell
+grog agents init
+grog agents init --file CLAUDE.md
+```
+
+Existing instructions outside the managed fragment remain unchanged. Rerun the command after changing targets to refresh the generated list, or use `--stdout` to print the fragment without modifying a file.
+
 ## Next Steps
 
 Now that you've set up Grog and created your first build targets, you might want to explore:

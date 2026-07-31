@@ -206,6 +206,7 @@ func configureRoot() bool {
 	cmds.AddChangesCmd(RootCmd)
 	cmds.AddExplainChangesCmd(RootCmd)
 	cmds.AddListCmd(RootCmd)
+	cmds.AddAgentsCmd(RootCmd)
 	traces.AddCmd(RootCmd)
 	return true
 }

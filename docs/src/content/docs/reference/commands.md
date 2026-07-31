@@ -9,6 +9,8 @@ Reference for the `grog` CLI.
 ## Commands
 
 - [`grog`](#grog)
+- [`grog agents`](#grog-agents)
+- [`grog agents init`](#grog-agents-init)
 - [`grog build`](#grog-build)
 - [`grog build-and-test`](#grog-build-and-test)
 - [`grog changes`](#grog-changes)
@@ -65,6 +67,7 @@ Reference for the `grog` CLI.
 
 ### See also
 
+- [`grog agents`](#grog-agents) - Generates repository guidance for coding agents.
 - [`grog build`](#grog-build) - Loads the user configuration and executes build targets.
 - [`grog build-and-test`](#grog-build-and-test) - Loads the user configuration and executes build and test targets.
 - [`grog changes`](#grog-changes) - Lists targets whose inputs have been modified since a given commit.
@@ -83,6 +86,97 @@ Reference for the `grog` CLI.
 - [`grog test`](#grog-test) - Loads the user configuration and executes test targets.
 - [`grog traces`](#grog-traces) - View and manage build execution traces.
 - [`grog version`](#grog-version) - Print the version info.
+
+---
+
+## grog agents
+
+Generates repository guidance for coding agents.
+
+### Options
+
+```text
+  -h, --help   help for agents
+```
+
+### Options inherited from parent commands
+
+```text
+  -a, --all-platforms                 Select all platforms (bypasses platform selectors)
+      --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
+      --color string                  Set color output (yes, no, or auto) (default "auto")
+      --debug                         Enable debug logging
+      --disable-default-shell-flags   Do not prepend "set -eu" to target commands
+      --disable-progress-tracker      Disable progress tracking updates
+      --disable-tea                   Disable interactive TUI (Bubble Tea)
+      --enable-cache                  Enable cache (default true)
+      --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
+      --fail-fast                     Fail fast on first error
+      --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
+      --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
+      --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
+      --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
+      --stream-logs                   Forward all target build/test logs to stdout/-err
+      --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+  -v, --verbose count                 Set verbosity level (-v, -vv)
+```
+
+### See also
+
+- [`grog`](#grog)
+- [`grog agents init`](#grog-agents-init) - Adds Grog commands and targets to an agent instruction file.
+
+---
+
+## grog agents init
+
+Adds Grog commands and targets to an agent instruction file.
+
+```text
+grog agents init [flags]
+```
+
+### Options
+
+```text
+      --file string   Instruction file path, relative to the workspace root (default "AGENTS.md")
+  -h, --help          help for init
+      --stdout        Print the managed fragment instead of writing a file
+```
+
+### Options inherited from parent commands
+
+```text
+  -a, --all-platforms                 Select all platforms (bypasses platform selectors)
+      --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
+      --color string                  Set color output (yes, no, or auto) (default "auto")
+      --debug                         Enable debug logging
+      --disable-default-shell-flags   Do not prepend "set -eu" to target commands
+      --disable-progress-tracker      Disable progress tracking updates
+      --disable-tea                   Disable interactive TUI (Bubble Tea)
+      --enable-cache                  Enable cache (default true)
+      --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
+      --fail-fast                     Fail fast on first error
+      --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
+      --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
+      --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
+      --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
+      --stream-logs                   Forward all target build/test logs to stdout/-err
+      --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+  -v, --verbose count                 Set verbosity level (-v, -vv)
+```
+
+### See also
+
+- [`grog agents`](#grog-agents) - Generates repository guidance for coding agents.
 
 ---
 

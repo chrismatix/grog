@@ -2,6 +2,7 @@ Usage:
   grog [command]
 
 Available Commands:
+  agents          Generates repository guidance for coding agents.
   build           Loads the user configuration and executes build targets.
   build-and-test  Loads the user configuration and executes build and test targets.
   changes         Lists targets whose inputs have been modified since a given commit.
