@@ -358,11 +358,20 @@ func RunBuildAndAfter(
 			if completion.Err == nil {
 				logger.Errorf("Target %s failed with no error", target.Label)
 			} else if errors.As(completion.Err, &executionError) {
-				logger.Errorf("Target %s failed with exit code %d:\ncommand: \"%s\"\n%s",
+				changeSummary := ""
+				if len(executionError.InputChanges) > 0 {
+					var lines []string
+					for _, inputChange := range executionError.InputChanges {
+						lines = append(lines, fmt.Sprintf("  %s %s", inputChange.Kind, inputChange.Path))
+					}
+					changeSummary = "\nchanges since last green:\n" + strings.Join(lines, "\n")
+				}
+				logger.Errorf("Target %s failed with exit code %d:\ncommand: \"%s\"\n%s%s",
 					target.Label,
 					executionError.ExitCode,
 					target.Command,
-					strings.TrimSpace(executionError.Output))
+					strings.TrimSpace(executionError.Output),
+					changeSummary)
 			} else {
 				logger.Errorf("Target %s failed: %v", target.Label, completion.Err)
 			}

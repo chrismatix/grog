@@ -8,6 +8,7 @@ import (
 
 	"grog/internal/dag"
 	"grog/internal/execution"
+	"grog/internal/failurehistory"
 	"grog/internal/label"
 	"grog/internal/model"
 )
@@ -32,10 +33,22 @@ func TestRenderAgentFailuresGroupsAndCapsFailures(t *testing.T) {
 	)
 	completionMap := dag.CompletionMap{
 		firstLabel: {
-			Err: &execution.CommandError{ExitCode: 1, Output: "old\nsame\nlast"},
+			Err: &execution.CommandError{
+				ExitCode: 1,
+				Output:   "old\nsame\nlast",
+				InputChanges: []failurehistory.InputChange{
+					{Path: "app/source.go", Kind: "modified"},
+				},
+			},
 		},
 		secondLabel: {
-			Err: &execution.CommandError{ExitCode: 1, Output: "old\nsame\nlast"},
+			Err: &execution.CommandError{
+				ExitCode: 1,
+				Output:   "old\nsame\nlast",
+				InputChanges: []failurehistory.InputChange{
+					{Path: "app/source.go", Kind: "modified"},
+				},
+			},
 		},
 		thirdLabel: {
 			Err: errors.New("setup failed"),
@@ -57,5 +70,8 @@ func TestRenderAgentFailuresGroupsAndCapsFailures(t *testing.T) {
 	}
 	if !strings.Contains(output, "1 more failing targets omitted") {
 		t.Errorf("expected omitted failure count, got:\n%s", output)
+	}
+	if !strings.Contains(output, "changes since last green:\nmodified app/source.go") {
+		t.Errorf("expected input changes, got:\n%s", output)
 	}
 }

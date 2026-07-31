@@ -1,0 +1,6 @@
+FAIL //:check (exit 4)
+command: grep -q pass input.txt || { echo expected pass; exit 4; }
+output:
+expected pass
+changes since last green:
+modified input.txt

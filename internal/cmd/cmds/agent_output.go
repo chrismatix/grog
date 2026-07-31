@@ -10,6 +10,7 @@ import (
 
 	"grog/internal/dag"
 	"grog/internal/execution"
+	"grog/internal/failurehistory"
 	"grog/internal/label"
 	"grog/internal/model"
 )
@@ -20,6 +21,7 @@ type agentFailureGroup struct {
 	command  string
 	output   []string
 	message  string
+	changes  []failurehistory.InputChange
 }
 
 func renderAgentFailures(
@@ -95,6 +97,12 @@ func renderAgentFailures(
 				fmt.Fprintln(writer, line)
 			}
 		}
+		if len(group.changes) > 0 {
+			fmt.Fprintln(writer, "changes since last green:")
+			for _, change := range group.changes {
+				fmt.Fprintf(writer, "%s %s\n", change.Kind, change.Path)
+			}
+		}
 	}
 
 	if omittedFailures := len(failedLabels) - includedFailures; omittedFailures > 0 {
@@ -110,11 +118,17 @@ func newAgentFailureGroup(target *model.Target, failure error, maximumLogLines i
 		exitCode := commandError.ExitCode
 		group.exitCode = &exitCode
 		group.output = tailDeduplicatedLines(commandError.Output, maximumLogLines)
+		group.changes = commandError.InputChanges
+		changeSignature := make([]string, 0, len(group.changes))
+		for _, change := range group.changes {
+			changeSignature = append(changeSignature, change.Kind+"\x00"+change.Path)
+		}
 		signature := strings.Join([]string{
 			"command",
 			strconv.Itoa(exitCode),
 			target.Command,
 			strings.Join(group.output, "\n"),
+			strings.Join(changeSignature, "\n"),
 		}, "\x00")
 		return group, signature
 	}

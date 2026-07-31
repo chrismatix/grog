@@ -1,0 +1,9 @@
+{
+  "targets": [
+    {
+      "name": "check",
+      "command": "grep -q pass input.txt || { echo expected pass; exit 4; }",
+      "inputs": ["input.txt"]
+    }
+  ]
+}

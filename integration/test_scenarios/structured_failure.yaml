@@ -1,0 +1,23 @@
+name: structured failure
+repo: structured_failure
+cases:
+  - name: structured_failure_reset
+    setup_command: "printf 'pass\n' > input.txt"
+
+  - name: structured_failure_green
+    grog_args:
+      - build
+      - --for-agent
+    skip_fixture: true
+
+  - name: structured_failure_modify
+    setup_command: "printf 'fail\n' > input.txt"
+
+  - name: structured_failure_report
+    grog_args:
+      - build
+      - --for-agent
+    expect_fail: true
+
+  - name: structured_failure_restore
+    setup_command: "printf 'pass\n' > input.txt"
