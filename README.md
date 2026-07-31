@@ -27,6 +27,7 @@ Read more in [Why grog?](https://grog.build/why-grog/)
 - 🔄 Only rebuilds changed targets (incremental)
 - 💾 (Remote) output caching
 - 🛠️ Simple build configuration with either **Makefile**, **JSON**, **yaml**, ...
+- 🤖 Built-in MCP server for coding agents
 - 📦 Single binary
 
 ## Installation
@@ -43,6 +44,12 @@ Linux:
 ```shell
 curl -L https://grog.build/latest/grog-linux-amd64 -o /usr/local/bin/grog
 chmod +x /usr/local/bin/grog
+```
+
+Connect an MCP client to the repository's build graph with the same binary:
+
+```shell
+grog mcp
 ```
 
 ## Documentation

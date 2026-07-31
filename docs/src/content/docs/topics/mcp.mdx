@@ -1,0 +1,51 @@
+---
+title: MCP Server
+description: Connect coding agents directly to the Grog build graph.
+---
+
+Grog includes a Model Context Protocol server in the main binary. An MCP client can inspect targets, dependencies, ownership, and changes without parsing terminal output or installing another package.
+
+## Configure a Client
+
+Install Grog normally, then configure the client to start `grog mcp` in the repository:
+
+```json
+{
+  "mcpServers": {
+    "grog": {
+      "command": "grog",
+      "args": ["mcp"],
+      "cwd": "/path/to/repository"
+    }
+  }
+}
+```
+
+If the client does not support `cwd`, start it from the repository or wrap the command in a script that changes directories first. The working directory must be inside a Grog workspace.
+
+## Tools
+
+All tools are read-only and return structured results.
+
+| Tool                   | Result                                                  |
+| ---------------------- | ------------------------------------------------------- |
+| `list_targets`         | Targets matching optional patterns and target type      |
+| `get_dependencies`     | Direct or transitive dependencies of a target           |
+| `get_dependents`       | Direct or transitive reverse dependencies of a target   |
+| `find_owners`          | Targets that own one or more files                      |
+| `get_changed_targets`  | Targets affected since a Git ref or Jujutsu revision    |
+| `explain_changes`      | Changed inputs and their paths through affected targets |
+| `get_dependency_graph` | The dependency graph for optional target patterns       |
+
+The server delegates each tool call to Grog's versioned JSON query interface, so MCP and CLI queries use the same loading, selection, and platform rules.
+
+## Verify the Connection
+
+Use the client's MCP tool browser to list the seven Grog tools, then call `list_targets`:
+
+```json
+{
+  "patterns": ["//..."],
+  "target_type": "test"
+}
+```

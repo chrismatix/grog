@@ -209,6 +209,7 @@ func configureRoot() bool {
 	cmds.AddChangesCmd(RootCmd)
 	cmds.AddExplainChangesCmd(RootCmd)
 	cmds.AddListCmd(RootCmd)
+	cmds.AddMCPCmd(RootCmd)
 	traces.AddCmd(RootCmd)
 	return true
 }
