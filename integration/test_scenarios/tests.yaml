@@ -16,3 +16,10 @@ cases:
       - test
       - //:failing_test
     expect_fail: true
+
+  - name: test_output_fail_json
+    grog_args:
+      - test
+      - //:failing_test
+      - --json
+    expect_fail: true

@@ -123,6 +123,9 @@ func RunBuildAndAfter(
 		for _, err := range errs {
 			logger.Errorf(err.Error())
 		}
+		if console.JSONEnabled() {
+			console.WriteError(console.ErrorCodeRuntimeFailure, "target constraints failed")
+		}
 		os.Exit(1)
 	}
 
@@ -140,7 +143,7 @@ func RunBuildAndAfter(
 			errString += fmt.Sprintf(" (%s not matching %s host)",
 				console.FCountTargets(skippedCount), config.Global.GetPlatform())
 		}
-		logger.Fatalf(errString)
+		logger.Fatalf("%s", errString)
 	}
 
 	infoStr := fmt.Sprintf("Selected %s.",
@@ -316,6 +319,9 @@ func RunBuildAndAfter(
 	if executionErr != nil {
 		// If this is a cancellation error continue printing out any collected errors
 		if !errors.Is(executionErr, context.Canceled) || completionMap == nil {
+			if console.JSONEnabled() {
+				console.WriteError(console.ErrorCodeRuntimeFailure, executionErr.Error())
+			}
 			os.Exit(1)
 			return
 		}
@@ -343,7 +349,9 @@ func RunBuildAndAfter(
 			}
 
 			var executionError *execution.CommandError
-			color.Red("---------------------------------")
+			if !console.JSONEnabled() {
+				color.Red("---------------------------------")
+			}
 			if completion.Err == nil {
 				logger.Errorf("Target %s failed with no error", target.Label)
 			} else if errors.As(completion.Err, &executionError) {
@@ -356,10 +364,16 @@ func RunBuildAndAfter(
 				logger.Errorf("Target %s failed: %v", target.Label, completion.Err)
 			}
 		}
+		if console.JSONEnabled() {
+			console.WriteError(console.ErrorCodeTargetFailure, console.FCountTargets(len(executionErrors))+" failed")
+		}
 		os.Exit(1)
 	}
 
 	if executionErr != nil {
+		if console.JSONEnabled() {
+			console.WriteError(console.ErrorCodeRuntimeFailure, executionErr.Error())
+		}
 		os.Exit(1)
 	}
 
@@ -368,6 +382,9 @@ func RunBuildAndAfter(
 	}
 
 	if pushHadFailures {
+		if console.JSONEnabled() {
+			console.WriteError(console.ErrorCodeRuntimeFailure, "one or more output pushes failed")
+		}
 		os.Exit(1)
 	}
 }

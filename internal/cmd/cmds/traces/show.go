@@ -39,6 +39,13 @@ var showCmd = &cobra.Command{
 		}
 
 		sortSpans(trace.Spans, showSortBy.Value)
+		if console.JSONEnabled() {
+			console.WriteResult(map[string]any{
+				"build": trace.Build,
+				"spans": trace.Spans,
+			})
+			return
+		}
 
 		printBuildSummary(&trace.Build)
 		printSpanTable(trace.Spans)

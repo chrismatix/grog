@@ -50,6 +50,12 @@ cases:
     grog_args:
       - list
 
+  - name: list_json
+    grog_args:
+      - list
+      - //...
+      - --json
+
   # Deps
   ###
   - name: deps_intransitive

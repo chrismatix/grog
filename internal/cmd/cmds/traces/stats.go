@@ -57,15 +57,28 @@ var statsCmd = &cobra.Command{
 			return
 		}
 
-		printStatsSummary(stats)
-
 		if statsDetailed {
 			report, err := store.Bottlenecks(ctx, statsOptions)
 			if err != nil {
 				logger.Fatalf("failed to compute bottleneck analysis: %v", err)
 			}
+			if console.JSONEnabled() {
+				console.WriteResult(map[string]any{
+					"stats":       stats,
+					"bottlenecks": report,
+				})
+				return
+			}
+			printStatsSummary(stats)
 			printBottleneckReport(report)
+			return
 		}
+
+		if console.JSONEnabled() {
+			console.WriteResult(map[string]any{"stats": stats})
+			return
+		}
+		printStatsSummary(stats)
 	},
 }
 

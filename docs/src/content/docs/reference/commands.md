@@ -50,6 +50,7 @@ Reference for the `grog` CLI.
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
   -h, --help                          help for grog
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -125,6 +126,7 @@ grog build [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -183,6 +185,7 @@ grog build-and-test [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -245,6 +248,7 @@ grog changes [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -301,6 +305,7 @@ grog check [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -363,6 +368,7 @@ grog clean [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -425,6 +431,7 @@ grog deps [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -499,6 +506,7 @@ grog explain-changes [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -562,6 +570,7 @@ grog graph [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -619,6 +628,7 @@ grog info [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -679,6 +689,7 @@ grog list [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -738,6 +749,7 @@ grog logs [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -796,6 +808,7 @@ grog owners [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -858,6 +871,7 @@ grog rdeps [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -918,6 +932,7 @@ grog run [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -978,6 +993,7 @@ grog taint [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -1039,6 +1055,7 @@ grog test [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -1085,6 +1102,7 @@ View, analyze, and export build execution traces for performance analysis and da
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -1148,6 +1166,7 @@ grog traces export [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -1207,6 +1226,7 @@ grog traces list [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -1261,6 +1281,7 @@ grog traces prune [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -1313,6 +1334,7 @@ grog traces pull [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -1368,6 +1390,7 @@ grog traces show <trace-id> [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -1427,6 +1450,7 @@ grog traces stats [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -1483,6 +1507,7 @@ grog version [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")

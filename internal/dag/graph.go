@@ -3,6 +3,7 @@ package dag
 import (
 	"encoding/json"
 	"fmt"
+	"grog/internal/console"
 	"grog/internal/label"
 	"grog/internal/model"
 	"slices"
@@ -357,6 +358,15 @@ type GraphJSON struct {
 }
 
 func (g *DirectedTargetGraph) LogSelectedNodes() {
+	if console.JSONEnabled() {
+		nodes := g.nodes.SelectedNodesAlphabetically()
+		labels := make([]string, 0, len(nodes))
+		for _, node := range nodes {
+			labels = append(labels, node.GetLabel().String())
+		}
+		console.WriteResult(map[string]any{"targets": labels})
+		return
+	}
 	for _, node := range g.nodes.SelectedNodesAlphabetically() {
 		fmt.Println(node.GetLabel())
 	}

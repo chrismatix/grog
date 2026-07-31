@@ -1,0 +1,43 @@
+---
+title: JSON Output
+description: Stable JSON envelopes and error codes for Grog automation.
+---
+
+Pass `--json` to any Grog command to emit newline-delimited JSON. Every line uses schema version `1` and is one of three envelope types:
+
+```json
+{"schema_version":"1","type":"result","data":{"targets":["//app:test"]}}
+{"schema_version":"1","type":"log","level":"info","message":"Selected 1 target."}
+{"schema_version":"1","type":"error","error":{"code":"target_failure","message":"1 target failed"}}
+```
+
+## Envelope Schema
+
+| Field            | Type   | Required | Description                          |
+| ---------------- | ------ | -------- | ------------------------------------ |
+| `schema_version` | string | yes      | Schema version. Currently `"1"`.     |
+| `type`           | string | yes      | `result`, `log`, or `error`.         |
+| `data`           | object | results  | Command-specific result payload.     |
+| `level`          | string | logs     | `debug`, `info`, `warn`, or `error`. |
+| `message`        | string | logs     | Human-readable log message.          |
+| `error.code`     | string | errors   | Stable symbolic error code.          |
+| `error.message`  | string | errors   | Human-readable error detail.         |
+
+Query commands return typed arrays such as `data.targets`. Build, test, and run commands emit log events throughout execution and finish with an error event when they fail. Commands with an explicit export format, such as `grog traces export --output`, preserve the requested file format.
+
+## Error Codes
+
+| Code                 | Exit status | Meaning                                      |
+| -------------------- | ----------- | -------------------------------------------- |
+| `invalid_invocation` | 2           | Invalid flags, arguments, or command usage.  |
+| `runtime_failure`    | 1           | Configuration, loading, cache, or I/O error. |
+| `target_failure`     | 1           | One or more selected targets failed.         |
+
+Exit status `0` means the command completed successfully.
+
+## Examples
+
+```shell
+grog list //... --json | jq -r '.data.targets[]?'
+grog test //app:test --json | jq -c 'select(.type == "error")'
+```

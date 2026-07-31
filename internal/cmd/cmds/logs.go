@@ -1,7 +1,6 @@
 package cmds
 
 import (
-	"fmt"
 	"grog/internal/completions"
 	"grog/internal/config"
 	"grog/internal/console"
@@ -57,7 +56,26 @@ Use the --path-only flag to only print the path to the log file instead of its c
 		}
 
 		if logsOptions.pathOnly {
-			fmt.Println(targetLogFile.Path())
+			if console.JSONEnabled() {
+				console.WriteResult(map[string]string{
+					"target": targetLabel.String(),
+					"path":   targetLogFile.Path(),
+				})
+			} else {
+				console.WriteText(targetLogFile.Path() + "\n")
+			}
+			return
+		}
+
+		if console.JSONEnabled() {
+			content, readError := targetLogFile.Read()
+			if readError != nil {
+				logger.Fatalf("could not read log file: %v", readError)
+			}
+			console.WriteResult(map[string]string{
+				"target": targetLabel.String(),
+				"log":    string(content),
+			})
 			return
 		}
 

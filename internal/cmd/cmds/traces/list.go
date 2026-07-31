@@ -62,6 +62,10 @@ var listCmd = &cobra.Command{
 			logger.Info("No traces found.")
 			return
 		}
+		if console.JSONEnabled() {
+			console.WriteResult(map[string]any{"traces": entries})
+			return
+		}
 
 		headers := []string{"TRACE ID", "DATE", "CMD", "TARGETS", "HITS", "FAILS", "DURATION", "COMMIT"}
 		var rows [][]string

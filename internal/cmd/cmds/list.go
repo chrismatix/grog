@@ -57,7 +57,7 @@ var ListCmd = &cobra.Command{
 
 		targetTypeFilter, err := selection.StringToTargetTypeSelection(listOptions.targetType.Value)
 		if err != nil {
-			logger.Fatalf(err.Error())
+			logger.Fatalf("%s", err.Error())
 		}
 		selector := selection.New(targetPatterns, config.Global.Tags, config.Global.ExcludeTags, targetTypeFilter)
 		selector.SelectTargets(graph)

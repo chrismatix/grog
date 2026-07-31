@@ -1,6 +1,7 @@
 package traces
 
 import (
+	"bytes"
 	"io"
 	"os"
 	"time"
@@ -50,6 +51,10 @@ var exportCmd = &cobra.Command{
 		}
 
 		var w io.Writer = os.Stdout
+		var outputBuffer bytes.Buffer
+		if console.JSONEnabled() && exportOutput == "" {
+			w = &outputBuffer
+		}
 		if exportOutput != "" {
 			f, openErr := os.Create(exportOutput)
 			if openErr != nil {
@@ -68,6 +73,12 @@ var exportCmd = &cobra.Command{
 			if err := tracing.ExportOTLP(ctx, store, entries, w); err != nil {
 				logger.Fatalf("export failed: %v", err)
 			}
+		}
+		if console.JSONEnabled() && exportOutput == "" {
+			console.WriteResult(map[string]string{
+				"format":  exportFormat.Value,
+				"content": outputBuffer.String(),
+			})
 		}
 	},
 }

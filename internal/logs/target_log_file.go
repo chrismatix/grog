@@ -60,3 +60,8 @@ func (tl *TargetLogFile) Print() error {
 	_, err = io.Copy(os.Stdout, file)
 	return err
 }
+
+// Read returns the complete target log.
+func (tl *TargetLogFile) Read() ([]byte, error) {
+	return os.ReadFile(tl.Path())
+}

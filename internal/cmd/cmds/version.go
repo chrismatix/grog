@@ -1,7 +1,7 @@
 package cmds
 
 import (
-	"fmt"
+	"grog/internal/console"
 
 	"github.com/spf13/cobra"
 )
@@ -13,6 +13,10 @@ var VersionCmd = &cobra.Command{
 	Example: `  grog version  # Show the version information`,
 	Args:    cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(cmd.VersionTemplate())
+		if console.JSONEnabled() {
+			console.WriteResult(map[string]string{"version": cmd.VersionTemplate()})
+			return
+		}
+		console.WriteText(cmd.VersionTemplate() + "\n")
 	},
 }

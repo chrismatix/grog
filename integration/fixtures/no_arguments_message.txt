@@ -35,6 +35,7 @@ Flags:
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
   -h, --help                          help for grog
+      --json                          Emit stable newline-delimited JSON
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")

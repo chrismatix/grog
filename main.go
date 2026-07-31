@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"grog/internal/cmd"
+	"grog/internal/console"
 	"os"
 )
 
@@ -15,8 +15,16 @@ var (
 
 func main() {
 	cmd.Stamp(version, commit, buildDate)
+	if console.ConfigureJSONFromArguments(os.Args[1:]) {
+		cmd.RootCmd.SilenceErrors = true
+		cmd.RootCmd.SilenceUsage = true
+	}
 	if err := cmd.RootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		if console.JSONEnabled() {
+			console.WriteError(console.ErrorCodeInvalidInvocation, err.Error())
+		} else {
+			console.WriteText(err.Error() + "\n")
+		}
+		os.Exit(2)
 	}
 }

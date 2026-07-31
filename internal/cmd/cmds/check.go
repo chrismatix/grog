@@ -1,10 +1,11 @@
 package cmds
 
 import (
+	"os"
+
 	"grog/internal/analysis"
 	"grog/internal/console"
 	"grog/internal/loading"
-	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -24,6 +25,9 @@ var CheckCmd = &cobra.Command{
 		if len(errs) > 0 {
 			for _, err := range errs {
 				logger.Errorf(err.Error())
+			}
+			if console.JSONEnabled() {
+				console.WriteError(console.ErrorCodeRuntimeFailure, "target constraints failed")
 			}
 			os.Exit(1)
 		}

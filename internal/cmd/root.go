@@ -110,6 +110,9 @@ func configureRoot() bool {
 	RootCmd.PersistentFlags().CountP("verbose", "v", "Set verbosity level (-v, -vv)")
 	_ = viper.BindPFlag("verbose", RootCmd.PersistentFlags().Lookup("verbose"))
 
+	RootCmd.PersistentFlags().Bool("json", false, "Emit stable newline-delimited JSON")
+	_ = viper.BindPFlag("json", RootCmd.PersistentFlags().Lookup("json"))
+
 	// log_level
 	RootCmd.PersistentFlags().Var(flagtypes.NewEnum("", "trace", "debug", "info", "warn", "error"), "log-level", "Set log level (trace, debug, info, warn, error)")
 	_ = viper.BindPFlag("log_level", RootCmd.PersistentFlags().Lookup("log-level"))
@@ -278,6 +281,12 @@ func initConfig(cmd *cobra.Command) error {
 	// Merge all config sources into the global
 	if err := viper.Unmarshal(&config.Global); err != nil {
 		return fmt.Errorf("failed to parse config: %w", err)
+	}
+
+	if console.JSONEnabled() {
+		viper.Set("color", "no")
+		viper.Set("disable_tea", true)
+		config.Global.DisableProgressTracker = true
 	}
 
 	config.Global.HashAlgorithm = strings.ToLower(config.Global.HashAlgorithm)

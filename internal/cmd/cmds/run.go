@@ -1,6 +1,7 @@
 package cmds
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -256,17 +257,25 @@ func runTargetBinaries(ctx context.Context, logger *console.Logger, runTargets [
 	type binaryRun struct {
 		target *model.Target
 		cmd    *exec.Cmd
+		output *bytes.Buffer
 	}
 	// For each target, create a new Cmd and run it in a goroutine.
 	runs := make([]binaryRun, 0, len(runTargets))
 	for _, runTarget := range runTargets {
 		cmd := newBinaryRunCommand(ctx, runTarget, userCommandArgs)
+		var output *bytes.Buffer
+		if console.JSONEnabled() {
+			output = &bytes.Buffer{}
+			cmd.Stdout = output
+			cmd.Stderr = output
+			cmd.Stdin = nil
+		}
 		if runOptions.inPackage {
 			logger.Infof("Running %s -> %s with args %s in package directory", runTarget.Label, runTarget.BinOutput.Identifier, userCommandArgs)
 		} else {
 			logger.Infof("Running %s -> %s with args %s", runTarget.Label, runTarget.BinOutput.Identifier, userCommandArgs)
 		}
-		runs = append(runs, binaryRun{target: runTarget, cmd: cmd})
+		runs = append(runs, binaryRun{target: runTarget, cmd: cmd, output: output})
 	}
 
 	errCh := make(chan error, len(runs))
@@ -284,6 +293,14 @@ func runTargetBinaries(ctx context.Context, logger *console.Logger, runTargets [
 
 	wg.Wait()
 	close(errCh)
+	if console.JSONEnabled() {
+		for _, run := range runs {
+			console.WriteResult(map[string]string{
+				"target": run.target.Label.String(),
+				"output": run.output.String(),
+			})
+		}
+	}
 	var errs []error
 	for err := range errCh {
 		errs = append(errs, err)

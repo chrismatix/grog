@@ -64,7 +64,7 @@ Dependencies can be filtered by target type using the --target-type flag.`,
 		// Filter by target type
 		targetTypeFilter, err := selection.StringToTargetTypeSelection(depsOptions.targetType.Value)
 		if err != nil {
-			logger.Fatalf(err.Error())
+			logger.Fatalf("%s", err.Error())
 		}
 		selector := selection.New(nil, config.Global.Tags, config.Global.ExcludeTags, targetTypeFilter)
 		filteredDeps := selector.FilterNodes(dependencies)

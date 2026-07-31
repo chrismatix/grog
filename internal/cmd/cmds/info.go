@@ -25,34 +25,46 @@ var InfoCmd = &cobra.Command{
 		version := cmd.VersionTemplate()
 		platform := config.Global.GetPlatform()
 
-		writer := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
-		defer writer.Flush()
-
 		fsCache, err := backends.NewFileSystemCache(ctx)
 		if err != nil {
 			logger.Fatalf("could not instantiate cache: %v", err)
 		}
-
-		fmt.Fprintf(writer, "Version:\t%s\n", version)
-		fmt.Fprintf(writer, "Platform:\t%s\n", platform)
-		fmt.Fprintf(writer, "Workspace:\t%s\n", config.Global.WorkspaceRoot)
-		fmt.Fprintf(writer, "Workspace Cache:\t%s\n", config.Global.GetWorkspaceCacheDirectory())
-		fmt.Fprintf(writer, "Config:\t%s\n", viper.ConfigFileUsed())
-		fmt.Fprintf(writer, "Grog root:\t%s\n", config.Global.Root)
 
 		workspaceCacheSizeBytes, err := fsCache.GetWorkspaceCacheSizeBytes()
 		if err != nil {
 			logger.Fatalf("could not get workspace cache size: %v", err)
 		}
 		workspaceCacheSizeMB := float64(workspaceCacheSizeBytes) / (1024 * 1024)
-		fmt.Fprintf(writer, "Local workspace cache size:\t%.2f MB\n", workspaceCacheSizeMB)
 
 		totalCacheSizeBytes, err := fsCache.GetCacheSizeBytes()
 		if err != nil {
 			logger.Fatalf("could not get cache size:\t%v", err)
 		}
 		totalCacheSizeMB := float64(totalCacheSizeBytes) / (1024 * 1024)
-		fmt.Fprintf(writer, "Grog root size:\t%.2f MB\n", totalCacheSizeMB)
 
+		if console.JSONEnabled() {
+			console.WriteResult(map[string]any{
+				"version":                    version,
+				"platform":                   platform,
+				"workspace":                  config.Global.WorkspaceRoot,
+				"workspace_cache":            config.Global.GetWorkspaceCacheDirectory(),
+				"config":                     viper.ConfigFileUsed(),
+				"grog_root":                  config.Global.Root,
+				"workspace_cache_size_bytes": workspaceCacheSizeBytes,
+				"grog_root_size_bytes":       totalCacheSizeBytes,
+			})
+			return
+		}
+
+		writer := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
+		defer writer.Flush()
+		fmt.Fprintf(writer, "Version:\t%s\n", version)
+		fmt.Fprintf(writer, "Platform:\t%s\n", platform)
+		fmt.Fprintf(writer, "Workspace:\t%s\n", config.Global.WorkspaceRoot)
+		fmt.Fprintf(writer, "Workspace Cache:\t%s\n", config.Global.GetWorkspaceCacheDirectory())
+		fmt.Fprintf(writer, "Config:\t%s\n", viper.ConfigFileUsed())
+		fmt.Fprintf(writer, "Grog root:\t%s\n", config.Global.Root)
+		fmt.Fprintf(writer, "Local workspace cache size:\t%.2f MB\n", workspaceCacheSizeMB)
+		fmt.Fprintf(writer, "Grog root size:\t%.2f MB\n", totalCacheSizeMB)
 	},
 }

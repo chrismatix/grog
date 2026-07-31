@@ -1,0 +1,8 @@
+{"level":"info","message":"1 package loaded, 2 targets configured.","schema_version":"1","type":"log"}
+{"level":"warn","message":"target //:failing_test has no inputs, dependencies, output checks or fingerprint causing it to run only once","schema_version":"1","type":"log"}
+{"level":"warn","message":"target //:passing_test has no inputs, dependencies, output checks or fingerprint causing it to run only once","schema_version":"1","type":"log"}
+{"level":"info","message":"Selected 1 target.","schema_version":"1","type":"log"}
+{"level":"info","message":"//:failing_test FAILED","schema_version":"1","type":"log"}
+{"level":"error","message":"Test failed. 0 targets completed (0 cache hits), 1 failed:","schema_version":"1","type":"log"}
+{"level":"error","message":"Target //:failing_test failed with exit code 1:\ncommand: \"exit 1\"\n","schema_version":"1","type":"log"}
+{"schema_version":"1","type":"error","error":{"code":"target_failure","message":"1 target failed"}}

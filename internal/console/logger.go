@@ -3,6 +3,7 @@ package console
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"grog/internal/config"
@@ -52,6 +53,26 @@ func (l *Logger) DebugEnabled() bool {
 		return false
 	}
 	return l.Desugar().Core().Enabled(zap.DebugLevel)
+}
+
+// Fatalf logs a fatal error or emits a stable JSON error before exiting.
+func (l *Logger) Fatalf(template string, args ...any) {
+	if JSONEnabled() {
+		WriteError(ErrorCodeRuntimeFailure, fmt.Sprintf(template, args...))
+		_ = l.Sync()
+		os.Exit(1)
+	}
+	l.SugaredLogger.Fatalf(template, args...)
+}
+
+// Fatal logs a fatal error or emits a stable JSON error before exiting.
+func (l *Logger) Fatal(args ...any) {
+	if JSONEnabled() {
+		WriteError(ErrorCodeRuntimeFailure, fmt.Sprint(args...))
+		_ = l.Sync()
+		os.Exit(1)
+	}
+	l.SugaredLogger.Fatal(args...)
 }
 
 func (l *Logger) With(args ...any) *Logger {
@@ -126,8 +147,19 @@ func InitLoggerWithTea(program *tea.Program) *Logger {
 		level = zap.InfoLevel
 	}
 
-	// do not use structured logging by default
 	cfg.Encoding = "console"
+	if JSONEnabled() {
+		cfg.Encoding = "json"
+		encoderConfig = zapcore.EncoderConfig{
+			MessageKey:  "message",
+			LevelKey:    "level",
+			EncodeLevel: zapcore.LowercaseLevelEncoder,
+		}
+		cfg.InitialFields = map[string]any{
+			"schema_version": JSONSchemaVersion,
+			"type":           "log",
+		}
+	}
 
 	cfg.OutputPaths = []string{
 		logPath,

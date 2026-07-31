@@ -2,6 +2,7 @@ package label
 
 import (
 	"fmt"
+	"grog/internal/console"
 	"sort"
 	"strings"
 )
@@ -111,6 +112,10 @@ func PrintSorted(labels []TargetLabel) {
 	}
 
 	sort.Strings(result)
+	if console.JSONEnabled() {
+		console.WriteResult(map[string]any{"targets": result})
+		return
+	}
 	for _, s := range result {
 		fmt.Println(s)
 	}

@@ -1,7 +1,6 @@
 package cmds
 
 import (
-	"fmt"
 	"path/filepath"
 	"sort"
 
@@ -150,7 +149,7 @@ func printFileRootedTree(fileToTargets map[string][]*model.Target, graph *dag.Di
 		for _, t := range targets {
 			root.Child(buildDependentTree(t, graph))
 		}
-		fmt.Println(root)
+		console.WriteText(root.String() + "\n")
 	}
 }
 
@@ -175,7 +174,7 @@ func printTargetRootedTree(fileToTargets map[string][]*model.Target, graph *dag.
 	for _, t := range roots {
 		subtree := buildDependentTree(t, graph)
 		applyRootStyle(subtree, downEnumerator)
-		fmt.Println(subtree)
+		console.WriteText(subtree.String() + "\n")
 	}
 }
 
@@ -262,7 +261,7 @@ func printConsumerRootedTree(
 	for _, r := range roots {
 		t := buildUpstreamTree(r, graph, affected, targetToFiles, showFiles)
 		applyRootStyle(t, upEnumerator)
-		fmt.Println(t)
+		console.WriteText(t.String() + "\n")
 	}
 }
 

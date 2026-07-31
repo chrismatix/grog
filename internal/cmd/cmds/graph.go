@@ -1,6 +1,7 @@
 package cmds
 
 import (
+	"encoding/json"
 	"fmt"
 	"grog/internal/console"
 	"sort"
@@ -99,7 +100,15 @@ Supports tree, JSON, and Mermaid diagram output formats. By default, only direct
 			if err != nil {
 				logger.Fatalf("could not marshal graph to json: %v", err)
 			}
-			fmt.Println(string(jsonData))
+			if console.JSONEnabled() {
+				var graphData any
+				if unmarshalError := json.Unmarshal(jsonData, &graphData); unmarshalError != nil {
+					logger.Fatalf("could not prepare graph json: %v", unmarshalError)
+				}
+				console.WriteResult(map[string]any{"graph": graphData})
+			} else {
+				fmt.Println(string(jsonData))
+			}
 		}
 	},
 }
@@ -185,7 +194,7 @@ func printMermaidDiagram(graph *dag.DirectedTargetGraph) {
 		}
 	}
 
-	fmt.Println(chart.String())
+	console.WriteText(chart.String() + "\n")
 }
 
 func printTree(graph *dag.DirectedTargetGraph) {
@@ -204,7 +213,7 @@ func printTree(graph *dag.DirectedTargetGraph) {
 
 	for _, root := range roots {
 		rootTree := buildTree(root, graph, 0)
-		fmt.Println(rootTree)
+		console.WriteText(rootTree.String() + "\n")
 	}
 }
 
