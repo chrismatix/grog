@@ -24,6 +24,8 @@ Available Commands:
   version         Print the version info.
 
 Flags:
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -34,6 +36,7 @@ Flags:
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
   -h, --help                          help for grog
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)

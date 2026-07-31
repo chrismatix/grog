@@ -39,6 +39,8 @@ Reference for the `grog` CLI.
 ### Options
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -49,6 +51,7 @@ Reference for the `grog` CLI.
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
   -h, --help                          help for grog
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
@@ -115,6 +118,8 @@ grog build [flags]
 ### Options inherited from parent commands
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -125,6 +130,7 @@ grog build [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -173,6 +179,8 @@ grog build-and-test [flags]
 ### Options inherited from parent commands
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -183,6 +191,7 @@ grog build-and-test [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -235,6 +244,8 @@ grog changes [flags]
 ### Options inherited from parent commands
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -245,6 +256,7 @@ grog changes [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -291,6 +303,8 @@ grog check [flags]
 ### Options inherited from parent commands
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -301,6 +315,7 @@ grog check [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -353,6 +368,8 @@ grog clean [flags]
 ### Options inherited from parent commands
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -363,6 +380,7 @@ grog clean [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -415,6 +433,8 @@ grog deps [flags]
 ### Options inherited from parent commands
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -425,6 +445,7 @@ grog deps [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -489,6 +510,8 @@ grog explain-changes [flags]
 ### Options inherited from parent commands
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -499,6 +522,7 @@ grog explain-changes [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -552,6 +576,8 @@ grog graph [flags]
 ### Options inherited from parent commands
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -562,6 +588,7 @@ grog graph [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -609,6 +636,8 @@ grog info [flags]
 ### Options inherited from parent commands
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -619,6 +648,7 @@ grog info [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -669,6 +699,8 @@ grog list [flags]
 ### Options inherited from parent commands
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -679,6 +711,7 @@ grog list [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -728,6 +761,8 @@ grog logs [flags]
 ### Options inherited from parent commands
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -738,6 +773,7 @@ grog logs [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -786,6 +822,8 @@ grog owners [flags]
 ### Options inherited from parent commands
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -796,6 +834,7 @@ grog owners [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -848,6 +887,8 @@ grog rdeps [flags]
 ### Options inherited from parent commands
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -858,6 +899,7 @@ grog rdeps [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -908,6 +950,8 @@ grog run [flags]
 ### Options inherited from parent commands
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -918,6 +962,7 @@ grog run [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -968,6 +1013,8 @@ grog taint [flags]
 ### Options inherited from parent commands
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -978,6 +1025,7 @@ grog taint [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -1029,6 +1077,8 @@ grog test [flags]
 ### Options inherited from parent commands
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -1039,6 +1089,7 @@ grog test [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -1075,6 +1126,8 @@ View, analyze, and export build execution traces for performance analysis and da
 ### Options inherited from parent commands
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -1085,6 +1138,7 @@ View, analyze, and export build execution traces for performance analysis and da
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -1138,6 +1192,8 @@ grog traces export [flags]
 ### Options inherited from parent commands
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -1148,6 +1204,7 @@ grog traces export [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -1197,6 +1254,8 @@ grog traces list [flags]
 ### Options inherited from parent commands
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -1207,6 +1266,7 @@ grog traces list [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -1251,6 +1311,8 @@ grog traces prune [flags]
 ### Options inherited from parent commands
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -1261,6 +1323,7 @@ grog traces prune [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -1303,6 +1366,8 @@ grog traces pull [flags]
 ### Options inherited from parent commands
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -1313,6 +1378,7 @@ grog traces pull [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -1358,6 +1424,8 @@ grog traces show <trace-id> [flags]
 ### Options inherited from parent commands
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -1368,6 +1436,7 @@ grog traces show <trace-id> [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -1417,6 +1486,8 @@ grog traces stats [flags]
 ### Options inherited from parent commands
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -1427,6 +1498,7 @@ grog traces stats [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
@@ -1473,6 +1545,8 @@ grog version [flags]
 ### Options inherited from parent commands
 
 ```text
+      --agent-log-lines int           Maximum output lines per failure in --for-agent mode (default 20)
+      --agent-max-failures int        Maximum failing targets rendered in --for-agent mode (default 10)
   -a, --all-platforms                 Select all platforms (bypasses platform selectors)
       --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
       --color string                  Set color output (yes, no, or auto) (default "auto")
@@ -1483,6 +1557,7 @@ grog version [flags]
       --enable-cache                  Enable cache (default true)
       --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
       --fail-fast                     Fail fast on first error
+      --for-agent                     Emit compact, bounded failure output for coding agents
       --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
       --log-level string              Set log level (trace, debug, info, warn, error)
       --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")

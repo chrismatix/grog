@@ -142,6 +142,13 @@ func configureRoot() bool {
 	RootCmd.PersistentFlags().Bool("stream-logs", false, "Forward all target build/test logs to stdout/-err")
 	_ = viper.BindPFlag("stream_logs", RootCmd.PersistentFlags().Lookup("stream-logs"))
 
+	RootCmd.PersistentFlags().Bool("for-agent", false, "Emit compact, bounded failure output for coding agents")
+	_ = viper.BindPFlag("for_agent", RootCmd.PersistentFlags().Lookup("for-agent"))
+	RootCmd.PersistentFlags().Int("agent-log-lines", 20, "Maximum output lines per failure in --for-agent mode")
+	_ = viper.BindPFlag("agent_log_lines", RootCmd.PersistentFlags().Lookup("agent-log-lines"))
+	RootCmd.PersistentFlags().Int("agent-max-failures", 10, "Maximum failing targets rendered in --for-agent mode")
+	_ = viper.BindPFlag("agent_max_failures", RootCmd.PersistentFlags().Lookup("agent-max-failures"))
+
 	// output_mode
 	RootCmd.PersistentFlags().Var(flagtypes.NewEnum("terse", "detailed"), "output-mode", "Build output style: terse (one line per target) or detailed (stream each target's lifecycle)")
 	_ = viper.BindPFlag("output_mode", RootCmd.PersistentFlags().Lookup("output-mode"))
@@ -224,6 +231,8 @@ func initConfig(cmd *cobra.Command) error {
 	viper.SetDefault("include_hidden", false)
 	viper.SetDefault("environment_variables", make(map[string]string))
 	viper.SetDefault("traces.enabled", false)
+	viper.SetDefault("agent_log_lines", 20)
+	viper.SetDefault("agent_max_failures", 10)
 
 	names := []string{"grog"}
 	if os.Getenv("CI") == "1" {
@@ -278,6 +287,15 @@ func initConfig(cmd *cobra.Command) error {
 	// Merge all config sources into the global
 	if err := viper.Unmarshal(&config.Global); err != nil {
 		return fmt.Errorf("failed to parse config: %w", err)
+	}
+
+	if config.Global.ForAgent {
+		config.Global.LogLevel = "error"
+		config.Global.StreamLogs = false
+		config.Global.DisableProgressTracker = true
+		config.Global.DisableNonDeterministicLogging = true
+		viper.Set("color", "no")
+		viper.Set("disable_tea", true)
 	}
 
 	config.Global.HashAlgorithm = strings.ToLower(config.Global.HashAlgorithm)

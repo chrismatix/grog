@@ -1,0 +1,31 @@
+---
+title: Coding Agents
+description: Keep Grog build and test feedback compact for coding agents.
+---
+
+## Token-Efficient Build Output
+
+Pass `--for-agent` to any build, test, or run invocation:
+
+```shell
+grog test //... --for-agent
+```
+
+Successful runs emit no output. Failed runs contain only failing target labels, their commands, exit codes, and bounded output tails. Identical failures are grouped, repeated output lines are removed, and the report is capped so a noisy build cannot consume an agent's context window.
+
+```text
+FAIL //services/api:test (exit 1)
+command: go test ./services/api
+output:
+--- FAIL: TestCreateUser
+expected status 201, got 500
+FAIL
+```
+
+Use `--agent-log-lines` to change the default 20-line tail and `--agent-max-failures` to change the default 10-target report cap.
+
+```shell
+grog test //... --for-agent --agent-log-lines=40 --agent-max-failures=5
+```
+
+The same settings can be stored as `for_agent`, `agent_log_lines`, and `agent_max_failures` in `grog.toml`.

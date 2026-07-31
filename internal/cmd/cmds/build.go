@@ -326,6 +326,17 @@ func RunBuildAndAfter(
 	successCount, cacheHits := completionMap.TargetSuccessCount()
 
 	if len(executionErrors) > 0 {
+		if config.Global.ForAgent {
+			renderAgentFailures(
+				os.Stdout,
+				completionMap,
+				graph,
+				config.Global.AgentLogLines,
+				config.Global.AgentMaxFailures,
+			)
+			os.Exit(1)
+		}
+
 		logger.Errorf("%s failed. %s completed (%d cache hits), %d failed:",
 			goal,
 			console.FCountTargets(successCount),

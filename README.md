@@ -26,6 +26,7 @@ Read more in [Why grog?](https://grog.build/why-grog/)
 - 🚀 Parallelize your build commands
 - 🔄 Only rebuilds changed targets (incremental)
 - 💾 (Remote) output caching
+- 🤖 Token-efficient `--for-agent` failure output
 - 🛠️ Simple build configuration with either **Makefile**, **JSON**, **yaml**, ...
 - 📦 Single binary
 

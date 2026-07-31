@@ -27,10 +27,13 @@ type WorkspaceConfig struct {
 	CacheNamespace string `mapstructure:"cache_namespace"`
 
 	// Execution
-	FailFast    bool   `mapstructure:"fail_fast"`
-	StreamLogs  bool   `mapstructure:"stream_logs"`
-	NumWorkers  int    `mapstructure:"num_workers"`
-	LoadOutputs string `mapstructure:"load_outputs"`
+	FailFast         bool   `mapstructure:"fail_fast"`
+	StreamLogs       bool   `mapstructure:"stream_logs"`
+	NumWorkers       int    `mapstructure:"num_workers"`
+	LoadOutputs      string `mapstructure:"load_outputs"`
+	ForAgent         bool   `mapstructure:"for_agent"`
+	AgentLogLines    int    `mapstructure:"agent_log_lines"`
+	AgentMaxFailures int    `mapstructure:"agent_max_failures"`
 	// DisableProgressTracker suppresses progress bar updates in task status output
 	// while still allowing status strings to be emitted.
 	DisableProgressTracker bool `mapstructure:"disable_progress_tracker"`

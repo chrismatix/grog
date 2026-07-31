@@ -1,0 +1,4 @@
+FAIL //:target_1 (exit 1)
+command: echo 'failed' && exit 1
+output:
+failed

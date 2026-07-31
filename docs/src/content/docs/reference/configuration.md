@@ -27,6 +27,9 @@ all_platforms = false
 # Logging Settings
 stream_logs = true
 log_level = "info"
+# for_agent = true
+# agent_log_lines = 20
+# agent_max_failures = 10
 
 # Environment Variables
 environment_variables = { FOO = "bar" }
@@ -91,6 +94,9 @@ For instance, to set or override the `fail_fast` option set `GROG_FAIL_FAST=fals
 - **num_workers**: Number of concurrent workers for parallel task execution. Defaults to the number of CPUs.
 - **log_level**: Determines verbosity of logging (e.g., "debug", "info"). Defaults to `info`.
 - **stream_logs**: When `true`, Grog will stream build and test logs to stdout. Defaults to `false`.
+- **for_agent**: When `true`, successful executions are silent and failures include only grouped target labels, commands, exit codes, and bounded output tails. Defaults to `false`.
+- **agent_log_lines**: Maximum output lines retained for each failure in agent mode. Defaults to `20`.
+- **agent_max_failures**: Maximum failing targets rendered in agent mode. Defaults to `10`.
 - **disable_default_shell_flags**: When `false` (default), Grog prepends `set -eu` to target commands before execution to fail fast on unset variables and errors. Set to `true` to opt out.
 - **environment_variables**: Key-value pairs that will be set for all target executions and passed to the Pkl loader.
 - **environment_variables_file**: Path to a dotenv-style file whose variables are loaded into the execution environment. The path is relative to the workspace root (where `grog.toml` lives); absolute paths are also accepted. Variables from the file are loaded first, then inline `environment_variables` from `grog.toml` are merged on top — inline values take precedence. The file format supports `KEY=VALUE`, `KEY="VALUE"`, `KEY='VALUE'`, `export KEY=VALUE`, comments (`#`), and variable expansion (`$VAR` or `${VAR}`).

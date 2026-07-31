@@ -8,3 +8,9 @@ cases:
       - --fail-fast
       - //...
     expect_fail: true
+  - name: for_agent_failure
+    grog_args:
+      - build
+      - --for-agent
+      - //...
+    expect_fail: true
