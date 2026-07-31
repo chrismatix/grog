@@ -4,13 +4,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 
-	"grog/internal/analysis"
 	"grog/internal/cmd/flagtypes"
 	"grog/internal/config"
 	"grog/internal/console"
+	"grog/internal/dag"
 	"grog/internal/label"
 	"grog/internal/loading"
 	"grog/internal/model"
@@ -52,74 +51,15 @@ Can optionally include transitive dependents of changed targets to find all affe
 		}
 		logger.Debugf("Changed files: %v", changedFiles)
 
-		packages, err := loading.LoadAllPackages(ctx)
-		if err != nil {
-			logger.Fatalf(
-				"could not load packages: %v",
-				err)
-		}
-
-		nodes, err := model.BuildNodeMapFromPackages(packages)
-		if err != nil {
-			logger.Fatalf("could not create target map: %v", err)
-		}
-
-		graph, err := analysis.BuildGraph(nodes)
-		if err != nil {
-			logger.Fatalf("could not build graph: %v", err)
-		}
-
-		// Find nodes that own the changed files
-		var matchingTargets []*model.Target
-		for _, target := range nodes.GetTargets() {
-			for _, inputFile := range target.Inputs {
-				// Get the absolute path of the input file
-				absInputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(
-					target.Label.Package,
-					inputFile,
-				))
-
-				if containsFile(changedFiles, absInputPath) {
-					matchingTargets = append(matchingTargets, target)
-					break // Found a match, no need to check other inputs
-				}
-			}
-		}
-
-		// Check package definitions
-		for _, pkg := range packages {
-			for _, target := range pkg.Targets {
-				if containsFile(changedFiles, target.SourceFilePath) {
-					// Add this target if the package source file changed
-					matchingTargets = append(matchingTargets, target)
-				}
-			}
-		}
-
-		// Get dependents if requested
-		var resultTargets []*model.Target
-		if changesOptions.dependents.Value == "transitive" {
-			// Get all transitive dependents of the matching nodes
-			for _, target := range matchingTargets {
-				resultTargets = append(resultTargets, target)
-				for _, descendant := range graph.GetDescendants(target) {
-					if targetDescendant, ok := descendant.(*model.Target); ok {
-						resultTargets = append(resultTargets, targetDescendant)
-					}
-				}
-			}
-		} else {
-			resultTargets = matchingTargets
-		}
-
-		// Deduplicate nodes
-		uniqueLabels := make(map[label.TargetLabel]bool)
-		var deduplicatedTargets []model.BuildNode
-		for _, target := range resultTargets {
-			if !uniqueLabels[target.Label] {
-				uniqueLabels[target.Label] = true
-				deduplicatedTargets = append(deduplicatedTargets, target)
-			}
+		graph := loading.MustLoadGraphForQuery(ctx, logger)
+		affectedTargets := findTargetsAffectedByFiles(
+			graph,
+			changedFiles,
+			changesOptions.dependents.Value == "transitive",
+		)
+		affectedNodes := make([]model.BuildNode, 0, len(affectedTargets))
+		for _, target := range affectedTargets {
+			affectedNodes = append(affectedNodes, target)
 		}
 
 		targetTypeFilter, err := selection.StringToTargetTypeSelection(changesOptions.targetType.Value)
@@ -128,8 +68,59 @@ Can optionally include transitive dependents of changed targets to find all affe
 		}
 		selector := selection.New(nil, config.Global.Tags, config.Global.ExcludeTags, targetTypeFilter)
 
-		model.PrintSortedLabels(selector.FilterNodes(deduplicatedTargets))
+		model.PrintSortedLabels(selector.FilterNodes(affectedNodes))
 	},
+}
+
+func findTargetsAffectedByFiles(
+	graph *dag.DirectedTargetGraph,
+	changedFiles []string,
+	includeDependents bool,
+) []*model.Target {
+	affectedTargets := make(map[label.TargetLabel]*model.Target)
+
+	for _, node := range graph.GetNodes() {
+		target, ok := node.(*model.Target)
+		if !ok {
+			continue
+		}
+
+		if containsFile(changedFiles, target.SourceFilePath) {
+			affectedTargets[target.Label] = target
+			continue
+		}
+
+		for _, inputFile := range target.Inputs {
+			absoluteInputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(
+				target.Label.Package,
+				inputFile,
+			))
+			if containsFile(changedFiles, absoluteInputPath) {
+				affectedTargets[target.Label] = target
+				break
+			}
+		}
+	}
+
+	if includeDependents {
+		directlyAffectedTargets := make([]*model.Target, 0, len(affectedTargets))
+		for _, target := range affectedTargets {
+			directlyAffectedTargets = append(directlyAffectedTargets, target)
+		}
+		for _, target := range directlyAffectedTargets {
+			for _, descendant := range graph.GetDescendants(target) {
+				if descendantTarget, ok := descendant.(*model.Target); ok {
+					affectedTargets[descendantTarget.Label] = descendantTarget
+				}
+			}
+		}
+	}
+
+	targets := make([]*model.Target, 0, len(affectedTargets))
+	for _, target := range affectedTargets {
+		targets = append(targets, target)
+	}
+	return targets
 }
 
 // getChangedFiles returns a list of files that have changed since the given revision
@@ -256,7 +247,21 @@ func vcsIsJJ(gitRoot string) bool {
 
 // containsFile checks if the list of files contains the given file
 func containsFile(files []string, file string) bool {
-	return slices.Contains(files, file)
+	canonicalFile := canonicalPath(file)
+	for _, candidate := range files {
+		if canonicalPath(candidate) == canonicalFile {
+			return true
+		}
+	}
+	return false
+}
+
+func canonicalPath(path string) string {
+	canonical, err := filepath.EvalSymlinks(path)
+	if err == nil {
+		return canonical
+	}
+	return filepath.Clean(path)
 }
 
 func AddChangesCmd(rootCmd *cobra.Command) {

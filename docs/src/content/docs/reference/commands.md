@@ -34,6 +34,7 @@ Reference for the `grog` CLI.
 - [`grog traces pull`](#grog-traces-pull)
 - [`grog traces show`](#grog-traces-show)
 - [`grog traces stats`](#grog-traces-stats)
+- [`grog verify`](#grog-verify)
 - [`grog version`](#grog-version)
 
 ## grog
@@ -85,6 +86,7 @@ Reference for the `grog` CLI.
 - [`grog taint`](#grog-taint) - Taints targets by pattern to force execution regardless of cache status.
 - [`grog test`](#grog-test) - Loads the user configuration and executes test targets.
 - [`grog traces`](#grog-traces) - View and manage build execution traces.
+- [`grog verify`](#grog-verify) - Builds and tests targets affected by repository changes.
 - [`grog version`](#grog-version) - Print the version info.
 
 ---
@@ -1537,6 +1539,65 @@ grog traces stats [flags]
 ### See also
 
 - [`grog traces`](#grog-traces) - View and manage build execution traces.
+
+---
+
+## grog verify
+
+Builds and tests targets affected by repository changes.
+
+### Synopsis
+
+Finds targets affected by changes since a Git ref or Jujutsu revision, includes their transitive dependents, and builds and tests the resulting graph.
+
+```text
+grog verify [flags]
+```
+
+### Examples
+
+```text
+  grog verify               # Verify uncommitted changes
+  grog v                    # Short alias
+  grog verify --since=main  # Verify all changes since main
+```
+
+### Options
+
+```text
+  -h, --help           help for verify
+      --since string   Git ref or Jujutsu revision to compare against (default "HEAD")
+```
+
+### Options inherited from parent commands
+
+```text
+  -a, --all-platforms                 Select all platforms (bypasses platform selectors)
+      --async-cache-writes            Defer cache writes to background I/O workers during the build (default true)
+      --color string                  Set color output (yes, no, or auto) (default "auto")
+      --debug                         Enable debug logging
+      --disable-default-shell-flags   Do not prepend "set -eu" to target commands
+      --disable-progress-tracker      Disable progress tracking updates
+      --disable-tea                   Disable interactive TUI (Bubble Tea)
+      --enable-cache                  Enable cache (default true)
+      --exclude-tag strings           Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar
+      --fail-fast                     Fail fast on first error
+      --load-outputs string           Level of output loading for cached targets. One of: all, minimal. (default "all")
+      --log-level string              Set log level (trace, debug, info, warn, error)
+      --output-mode string            Build output style: terse (one line per target) or detailed (stream each target's lifecycle) (default "terse")
+      --platform string               Force a specific platform in the form os/arch
+      --platform-tag strings          Enable a custom platform tag for matching targets' platform selectors. Can be used multiple times.
+      --profile string                Select a configuration profile to use
+      --push                          Push oci:: outputs declared in target.oci_push to their remote destinations after a successful build
+      --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
+      --stream-logs                   Forward all target build/test logs to stdout/-err
+      --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+  -v, --verbose count                 Set verbosity level (-v, -vv)
+```
+
+### See also
+
+- [`grog`](#grog)
 
 ---
 

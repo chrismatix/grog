@@ -94,7 +94,7 @@ func renderAgentsFragment(graph *dag.DirectedTargetGraph) string {
 	fmt.Fprintln(&buffer, "- Validate configuration with `grog check`.")
 	fmt.Fprintln(&buffer, "- Build the workspace with `grog build //...`.")
 	fmt.Fprintln(&buffer, "- Test the workspace with `grog test //...`.")
-	fmt.Fprintln(&buffer, "- Inspect affected targets with `grog changes --since=HEAD`.")
+	fmt.Fprintln(&buffer, "- Verify all affected targets with `grog verify` (short form: `grog v`).")
 	fmt.Fprintln(&buffer, "- Run a narrower target by passing its label to `grog build` or `grog test`.")
 
 	writeAgentTargetGroup(&buffer, "Build targets", buildTargets)

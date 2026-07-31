@@ -32,6 +32,7 @@ func TestRenderAgentsFragmentGroupsSortedTargets(t *testing.T) {
 		"### Binary targets\n\n- `//cmd:tool`",
 		"`grog build //...`",
 		"`grog test //...`",
+		"`grog verify`",
 	} {
 		if !strings.Contains(fragment, expected) {
 			t.Errorf("expected fragment to contain %q:\n%s", expected, fragment)
