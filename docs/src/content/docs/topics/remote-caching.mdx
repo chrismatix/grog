@@ -17,6 +17,8 @@ When using a remote cache grog will effectively use the remote file system as a 
 This means that local outputs are first cached locally and then on the cloud.
 Likewise, when checking the cache grog will fall back to the remote cache if there is no local copy
 
+Local cache keys are content-addressed and independent of the checkout path. Parallel coding agents working in separate Git worktrees therefore share cache hits automatically through the same `GROG_ROOT`, without requiring a remote cache.
+
 **Note:** Grog does not take garbage collect your cache files in any way so even though storage is relatively cheap it can be good practice to set up a mechanism for monitoring its size.
 
 ## Google Cloud Storage (GCS)

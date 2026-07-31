@@ -14,7 +14,7 @@ hero:
       link: /why-grog/
 features:
   - title: Cache what matters
-    details: Reuse build outputs across runs with local or remote caching.
+    details: Reuse build outputs across runs, worktrees, and agents with local or remote caching.
   - title: Parallel by default
     details: Run independent targets at the same time to keep CI moving.
   - title: Bring your own commands
@@ -59,7 +59,8 @@ Grog coordinates the commands you already use and runs only what changed in para
 
 <CardGrid>
   <Card title="File-aware caching" icon="document">
-    Use content hashing to avoid repeating work across machines and branches.
+    Content-addressed keys let parallel agents in separate Git worktrees share local cache hits
+    automatically.
   </Card>
   <Card title="Language agnostic" icon="translate">
     Build Go, Node, Rust, Python, or anything else that runs in a shell.
