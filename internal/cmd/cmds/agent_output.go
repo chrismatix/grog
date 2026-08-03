@@ -10,9 +10,9 @@ import (
 
 	"grog/internal/dag"
 	"grog/internal/execution"
-	"grog/internal/failurehistory"
 	"grog/internal/label"
 	"grog/internal/model"
+	"grog/internal/tracing"
 )
 
 type agentFailureGroup struct {
@@ -21,7 +21,8 @@ type agentFailureGroup struct {
 	command  string
 	output   []string
 	message  string
-	changes  []failurehistory.InputChange
+	changes  []tracing.InputChange
+	baseline *tracing.InputBaseline
 }
 
 func renderAgentFailures(
@@ -119,9 +120,14 @@ func newAgentFailureGroup(target *model.Target, failure error, maximumLogLines i
 		group.exitCode = &exitCode
 		group.output = tailDeduplicatedLines(commandError.Output, maximumLogLines)
 		group.changes = commandError.InputChanges
+		group.baseline = commandError.InputBaseline
 		changeSignature := make([]string, 0, len(group.changes))
 		for _, change := range group.changes {
 			changeSignature = append(changeSignature, change.Kind+"\x00"+change.Path)
+		}
+		baselineSignature := ""
+		if group.baseline != nil {
+			baselineSignature = group.baseline.TraceID
 		}
 		signature := strings.Join([]string{
 			"command",
@@ -129,6 +135,7 @@ func newAgentFailureGroup(target *model.Target, failure error, maximumLogLines i
 			target.Command,
 			strings.Join(group.output, "\n"),
 			strings.Join(changeSignature, "\n"),
+			baselineSignature,
 		}, "\x00")
 		return group, signature
 	}

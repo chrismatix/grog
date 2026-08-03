@@ -1,6 +1,10 @@
 package tracing
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
+
 	"grog/internal/config"
 )
 
@@ -32,4 +36,38 @@ func (p *PathResolver) BuildsGlob() string {
 // SpansGlob returns a DuckDB-readable glob for all span Parquet files.
 func (p *PathResolver) SpansGlob() string {
 	return p.spansBase + "/**/*.parquet"
+}
+
+func (p *PathResolver) hasTraceFiles() bool {
+	return p.hasBuildFiles() && p.hasSpanFiles()
+}
+
+func (p *PathResolver) hasBuildFiles() bool {
+	return hasParquetFiles(p.buildsBase)
+}
+
+func (p *PathResolver) hasSpanFiles() bool {
+	return hasParquetFiles(p.spansBase)
+}
+
+func hasParquetFiles(basePath string) bool {
+	dateDirectories, readError := os.ReadDir(basePath)
+	if readError != nil {
+		return false
+	}
+	for _, dateDirectory := range dateDirectories {
+		if !dateDirectory.IsDir() {
+			continue
+		}
+		files, directoryError := os.ReadDir(filepath.Join(basePath, dateDirectory.Name()))
+		if directoryError != nil {
+			continue
+		}
+		for _, file := range files {
+			if !file.IsDir() && strings.HasSuffix(file.Name(), ".parquet") {
+				return true
+			}
+		}
+	}
+	return false
 }

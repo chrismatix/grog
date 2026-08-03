@@ -4,20 +4,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
+	"time"
+
 	"grog/internal/caching"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/dag"
-	"grog/internal/failurehistory"
 	"grog/internal/hashing"
 	"grog/internal/label"
 	"grog/internal/model"
 	"grog/internal/output"
 	"grog/internal/output/handlers"
 	"grog/internal/proto/gen"
+	"grog/internal/tracing"
 	"grog/internal/worker"
-	"path/filepath"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"golang.org/x/sync/singleflight"
@@ -25,10 +26,11 @@ import (
 )
 
 type CommandError struct {
-	TargetLabel  label.TargetLabel
-	ExitCode     int
-	Output       string
-	InputChanges []failurehistory.InputChange
+	TargetLabel   label.TargetLabel
+	ExitCode      int
+	Output        string
+	InputChanges  []tracing.InputChange
+	InputBaseline *tracing.InputBaseline
 }
 
 func (e *CommandError) Error() string {
@@ -53,7 +55,7 @@ type Executor struct {
 	asyncDrained     bool
 	rerunGroup       singleflight.Group
 	resourceManager  *ResourceManager
-	greenInputStore  *failurehistory.Store
+	traceStore       *tracing.TraceStore
 }
 
 func NewExecutor(
@@ -77,8 +79,12 @@ func NewExecutor(
 		targetHasher:     hashing.NewTargetHasher(graph),
 		streamLogsToggle: console.NewStreamLogsToggle(streamLogs),
 		resourceManager:  NewResourceManager(),
-		greenInputStore:  failurehistory.NewStore(targetCache.GetBackend()),
 	}
+}
+
+// SetTraceStore enables trace-backed failure provenance.
+func (e *Executor) SetTraceStore(traceStore *tracing.TraceStore) {
+	e.traceStore = traceStore
 }
 
 // Execute executes the targets in the given graph and returns the completion map.
@@ -413,7 +419,6 @@ func (e *Executor) getTaskFunc(
 				update(worker.Status(fmt.Sprintf("%s: cache hit, skipping output load (load_outputs=minimal)", target.Label)))
 				logger.Debugf("%s: cache hit. skipped loading %s because load_ outputs=minimal", target.Label, console.FCountOutputs(len(target.AllOutputs())))
 				logTargetCached(ctx, logger, target, float64(targetResult.ExecutionDurationMillis)/1000)
-				e.saveGreenInputs(ctx, target)
 				return dag.CacheHit, nil
 			}
 
@@ -435,7 +440,6 @@ func (e *Executor) getTaskFunc(
 				// Log the cached execution time recorded when the target was
 				// originally built, not the (near-zero) cache-load time.
 				logTargetCached(ctx, logger, target, float64(targetResult.ExecutionDurationMillis)/1000)
-				e.saveGreenInputs(ctx, target)
 				return dag.CacheHit, nil
 			}
 		}
@@ -536,12 +540,13 @@ func (e *Executor) executeTarget(
 	if err != nil {
 		logger.Debugf("target execution returned error %s: %s", target.Label, err)
 		var commandError *CommandError
-		if errors.As(err, &commandError) {
-			inputChanges, explainError := e.greenInputStore.Changes(ctx, target)
+		if errors.As(err, &commandError) && e.traceStore != nil {
+			inputChangeSet, explainError := e.traceStore.InputChangesSinceLastSuccess(ctx, target)
 			if explainError != nil {
 				logger.Warnf("failed to explain input changes for %s: %v", target.Label, explainError)
-			} else {
-				commandError.InputChanges = inputChanges
+			} else if inputChangeSet != nil {
+				commandError.InputChanges = inputChangeSet.Changes
+				commandError.InputBaseline = &inputChangeSet.Baseline
 			}
 		}
 		// Cancellations should just exit the execution without a result line.
@@ -569,7 +574,6 @@ func (e *Executor) executeTarget(
 	// Log the completion line only once the target is fully done (outputs
 	// written), so the detailed lifecycle reads check → run → write → done.
 	logTargetBuilt(ctx, logger, target, executionTimeSeconds)
-	e.saveGreenInputs(ctx, target)
 
 	if isTainted {
 		go func() {
@@ -581,12 +585,6 @@ func (e *Executor) executeTarget(
 	}
 
 	return dag.CacheMiss, nil
-}
-
-func (e *Executor) saveGreenInputs(ctx context.Context, target *model.Target) {
-	if err := e.greenInputStore.Save(ctx, target); err != nil {
-		console.GetLogger(ctx).Warnf("failed to save green input state for %s: %v", target.Label, err)
-	}
 }
 
 // OnTargetComplete should be called when a target has completed executing

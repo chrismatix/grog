@@ -1,6 +1,7 @@
 package tracing
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -22,10 +23,13 @@ type TraceCollector struct {
 	command           string
 	requestedPatterns []label.TargetPattern
 	grogVersion       string
+	repositoryID      string
+	workspaceID       string
 }
 
 // NewTraceCollector creates a collector that records metadata at build start.
 func NewTraceCollector(
+	commandContext context.Context,
 	command string,
 	patterns []label.TargetPattern,
 	grogVersion string,
@@ -36,6 +40,8 @@ func NewTraceCollector(
 		command:           command,
 		requestedPatterns: patterns,
 		grogVersion:       grogVersion,
+		repositoryID:      repositoryIdentity(commandContext),
+		workspaceID:       workspaceIdentity(),
 	}
 }
 
@@ -82,6 +88,8 @@ func (c *TraceCollector) Finalize(
 			RequestedPatterns:    strings.Join(patterns, ","),
 			IsCI:                 isCI,
 			AsyncCacheWaitMillis: asyncWaitTime.Milliseconds(),
+			RepositoryID:         c.repositoryID,
+			WorkspaceID:          c.workspaceID,
 		},
 	}
 
@@ -139,6 +147,7 @@ func (c *TraceCollector) buildSpan(target *model.Target, completion *dag.Complet
 	// Status
 	if completion.IsSuccess {
 		span.Status = "SUCCESS"
+		span.InputManifest = encodeInputManifest(target)
 	} else if completion.Err != nil {
 		span.Status = "FAILURE"
 	} else {

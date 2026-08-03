@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"grog/internal/caching/backends"
+	"grog/internal/model"
 
 	_ "github.com/duckdb/duckdb-go/v2"
 	"github.com/parquet-go/parquet-go"
@@ -80,9 +83,10 @@ func writeParquet[T any](rows []T) ([]byte, error) {
 // TraceStore provides both write and query capabilities for traces.
 // Query methods use DuckDB via database/sql.
 type TraceStore struct {
-	writer   *TraceWriter
-	resolver *PathResolver
-	db       *sql.DB
+	writer     *TraceWriter
+	resolver   *PathResolver
+	db         *sql.DB
+	queryMutex sync.Mutex
 }
 
 // NewTraceStore creates a full store with write + query support.
@@ -107,6 +111,66 @@ func (s *TraceStore) Close() error {
 // Write delegates to the TraceWriter.
 func (s *TraceStore) Write(ctx context.Context, trace *BuildTrace) error {
 	return s.writer.Write(ctx, trace)
+}
+
+// InputChangesSinceLastSuccess compares a target with its latest successful trace.
+func (s *TraceStore) InputChangesSinceLastSuccess(
+	commandContext context.Context,
+	target *model.Target,
+) (*InputChangeSet, error) {
+	currentManifest, captureError := captureInputManifest(target)
+	if captureError != nil {
+		return nil, captureError
+	}
+	if !s.resolver.hasTraceFiles() {
+		return nil, nil
+	}
+
+	s.queryMutex.Lock()
+	defer s.queryMutex.Unlock()
+
+	query := fmt.Sprintf(`SELECT builds.trace_id, builds.git_commit, spans.input_manifest
+		FROM read_parquet('%s', union_by_name=true) AS builds
+		JOIN read_parquet('%s', union_by_name=true) AS spans USING (trace_id)
+		WHERE builds.repository_id = ?
+			AND spans.label = ?
+			AND spans.status = 'SUCCESS'
+			AND COALESCE(spans.input_manifest, '') <> ''
+		ORDER BY CASE WHEN builds.workspace_id = ? THEN 0 ELSE 1 END,
+			builds.start_time_unix_millis DESC
+		LIMIT 1`, s.resolver.BuildsGlob(), s.resolver.SpansGlob())
+
+	var baseline InputBaseline
+	var encodedManifest string
+	queryError := s.db.QueryRowContext(
+		commandContext,
+		query,
+		repositoryIdentity(commandContext),
+		target.Label.String(),
+		workspaceIdentity(),
+	).Scan(&baseline.TraceID, &baseline.GitCommit, &encodedManifest)
+	if queryError != nil {
+		if errors.Is(queryError, sql.ErrNoRows) || isNoFilesError(queryError) || isMissingInputProvenanceError(queryError) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("query successful input trace: %w", queryError)
+	}
+
+	previousManifest, decodeError := decodeInputManifest(encodedManifest)
+	if decodeError != nil {
+		return nil, fmt.Errorf("decode successful input trace: %w", decodeError)
+	}
+	return &InputChangeSet{
+		Baseline: baseline,
+		Changes:  compareInputManifests(previousManifest, currentManifest),
+	}, nil
+}
+
+func isMissingInputProvenanceError(err error) bool {
+	message := err.Error()
+	return strings.Contains(message, "repository_id") ||
+		strings.Contains(message, "workspace_id") ||
+		strings.Contains(message, "input_manifest")
 }
 
 // PullProgress tracks remote trace files downloaded into the local cache.
@@ -174,6 +238,10 @@ func (s *TraceStore) Pull(ctx context.Context, onProgress PullProgress) (int, er
 
 // List returns recent builds matching optional filters.
 func (s *TraceStore) List(ctx context.Context, opts ListOptions) ([]BuildRow, error) {
+	if !s.resolver.hasBuildFiles() {
+		return nil, nil
+	}
+
 	var conditions []string
 	if opts.Since != nil {
 		conditions = append(conditions, fmt.Sprintf("start_time_unix_millis >= %d", opts.Since.UnixMilli()))
@@ -231,6 +299,10 @@ type ListOptions struct {
 
 // LoadBuild retrieves a single build by trace ID prefix.
 func (s *TraceStore) LoadBuild(ctx context.Context, traceIDPrefix string) (*BuildRow, error) {
+	if !s.resolver.hasBuildFiles() {
+		return nil, fmt.Errorf("no trace found matching %q", traceIDPrefix)
+	}
+
 	query := fmt.Sprintf(`SELECT trace_id, workspace, git_commit, git_branch, grog_version, platform,
 		command, start_time_unix_millis, total_duration_millis, total_targets,
 		success_count, failure_count, cache_hit_count,
@@ -266,6 +338,10 @@ func (s *TraceStore) LoadBuild(ctx context.Context, traceIDPrefix string) (*Buil
 
 // LoadSpans retrieves all spans for a given trace ID.
 func (s *TraceStore) LoadSpans(ctx context.Context, traceID string) ([]SpanRow, error) {
+	if !s.resolver.hasSpanFiles() {
+		return nil, nil
+	}
+
 	query := fmt.Sprintf(`SELECT trace_id, label, package, change_hash, output_hash,
 		status, cache_result, command, exit_code, is_test,
 		start_time_unix_millis, end_time_unix_millis, total_duration_millis,
@@ -294,7 +370,7 @@ func (s *TraceStore) LoadSpans(ctx context.Context, traceID string) ([]SpanRow, 
 // internally to keep the generated SQL bounded.
 func (s *TraceStore) LoadSpansForTraces(ctx context.Context, traceIDs []string) (map[string][]SpanRow, error) {
 	result := make(map[string][]SpanRow, len(traceIDs))
-	if len(traceIDs) == 0 {
+	if len(traceIDs) == 0 || !s.resolver.hasSpanFiles() {
 		return result, nil
 	}
 
@@ -368,6 +444,10 @@ type StatsOptions struct {
 }
 
 func (s *TraceStore) Stats(ctx context.Context, opts StatsOptions) (*TraceStats, error) {
+	if !s.resolver.hasBuildFiles() {
+		return &TraceStats{}, nil
+	}
+
 	limit := opts.Limit
 	if limit <= 0 {
 		limit = 20
@@ -449,6 +529,10 @@ const (
 )
 
 func (s *TraceStore) Bottlenecks(ctx context.Context, opts StatsOptions) (*BottleneckReport, error) {
+	if !s.resolver.hasTraceFiles() {
+		return &BottleneckReport{}, nil
+	}
+
 	limit := opts.Limit
 	if limit <= 0 {
 		limit = 20
@@ -576,6 +660,10 @@ func (s *TraceStore) Bottlenecks(ctx context.Context, opts StatsOptions) (*Bottl
 
 // Prune deletes traces older than the given time.
 func (s *TraceStore) Prune(ctx context.Context, olderThan time.Time) (int, error) {
+	if !s.resolver.hasBuildFiles() {
+		return 0, nil
+	}
+
 	cutoffMillis := olderThan.UnixMilli()
 
 	query := fmt.Sprintf(`SELECT trace_id, start_time_unix_millis

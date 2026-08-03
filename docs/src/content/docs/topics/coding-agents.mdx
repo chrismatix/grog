@@ -13,7 +13,7 @@ grog test //... --for-agent
 
 Successful runs emit no output. Failed runs contain only failing target labels, their commands, exit codes, and bounded output tails. Identical failures are grouped, repeated output lines are removed, and the report is capped so a noisy build cannot consume an agent's context window.
 
-After a target has completed successfully, Grog also records hashes for its declared inputs. A later failure reports files that were added, modified, or removed since that last green run:
+Agent mode records declared input hashes in each target's immutable successful execution trace. A later failure compares against the latest successful trace, preferring the same worktree, and reports files that were added, modified, or removed:
 
 ```text
 FAIL //services/api:test (exit 1)
@@ -33,3 +33,5 @@ grog test //... --for-agent --agent-log-lines=40 --agent-max-failures=5
 ```
 
 The same settings can be stored as `for_agent`, `agent_log_lines`, and `agent_max_failures` in `grog.toml`.
+
+`--for-agent` records these provenance traces automatically, even when `traces.enabled` is false.

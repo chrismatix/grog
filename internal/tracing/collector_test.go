@@ -1,6 +1,7 @@
 package tracing
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -17,7 +18,7 @@ func TestTraceCollector_Finalize(t *testing.T) {
 	}
 	patterns := []label.TargetPattern{pattern}
 
-	collector := NewTraceCollector("build", patterns, "0.1.0")
+	collector := NewTraceCollector(context.Background(), "build", patterns, "0.1.0")
 	collector.startTime = time.Now().Add(-5 * time.Second)
 
 	targetA := &model.Target{
@@ -130,7 +131,7 @@ func TestTraceCollector_Finalize(t *testing.T) {
 }
 
 func TestTraceCollector_FailedTarget(t *testing.T) {
-	collector := NewTraceCollector("test", nil, "0.2.0")
+	collector := NewTraceCollector(context.Background(), "test", nil, "0.2.0")
 	collector.startTime = time.Now().Add(-2 * time.Second)
 
 	target := &model.Target{

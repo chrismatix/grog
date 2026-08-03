@@ -30,8 +30,8 @@ Query path (DuckDB Go driver):
 
 Defined as Go structs in `schema.go` with `parquet` struct tags:
 
-- **`BuildRow`** — One row per `grog build/test/run` invocation. Contains build metadata, aggregate counts, and critical path info.
-- **`SpanRow`** — One row per selected target. Includes status, cache result, and 8 phase-level timing fields for bottleneck analysis.
+- **`BuildRow`** — One row per `grog build/test/run` invocation. Contains repository and worktree identity, build metadata, aggregate counts, and critical path info.
+- **`SpanRow`** — One row per selected target. Includes status, cache result, successful input provenance, and 8 phase-level timing fields for bottleneck analysis.
 - **`BuildTrace`** — In-memory container holding `BuildRow` + `[]SpanRow`.
 
 ### Phase timing
@@ -85,6 +85,8 @@ Opt-in via `grog.toml`:
 [traces]
 enabled = true
 ```
+
+Agent mode records traces automatically for failure provenance, even when tracing is otherwise disabled.
 
 Optionally uses a separate storage backend from the build cache:
 

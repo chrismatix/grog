@@ -8,9 +8,9 @@ import (
 
 	"grog/internal/dag"
 	"grog/internal/execution"
-	"grog/internal/failurehistory"
 	"grog/internal/label"
 	"grog/internal/model"
+	"grog/internal/tracing"
 )
 
 func TestTailDeduplicatedLines(t *testing.T) {
@@ -36,7 +36,7 @@ func TestRenderAgentFailuresGroupsAndCapsFailures(t *testing.T) {
 			Err: &execution.CommandError{
 				ExitCode: 1,
 				Output:   "old\nsame\nlast",
-				InputChanges: []failurehistory.InputChange{
+				InputChanges: []tracing.InputChange{
 					{Path: "app/source.go", Kind: "modified"},
 				},
 			},
@@ -45,7 +45,7 @@ func TestRenderAgentFailuresGroupsAndCapsFailures(t *testing.T) {
 			Err: &execution.CommandError{
 				ExitCode: 1,
 				Output:   "old\nsame\nlast",
-				InputChanges: []failurehistory.InputChange{
+				InputChanges: []tracing.InputChange{
 					{Path: "app/source.go", Kind: "modified"},
 				},
 			},

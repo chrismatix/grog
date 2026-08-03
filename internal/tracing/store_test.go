@@ -22,6 +22,8 @@ func makeTestTrace(id string, startMillis int64, command string) *BuildTrace {
 		Build: BuildRow{
 			TraceID:             id,
 			Workspace:           "test-workspace",
+			RepositoryID:        "test-repository",
+			WorkspaceID:         "test-workspace-id",
 			Command:             command,
 			StartTimeUnixMillis: startMillis,
 			TotalDurationMillis: 5000,

@@ -20,6 +20,8 @@ type BuildRow struct {
 	AsyncCacheWaitMillis    int64  `parquet:"async_cache_wait_millis" json:"async_cache_wait_millis"`
 	IsCI                    bool   `parquet:"is_ci" json:"is_ci"`
 	RequestedPatterns       string `parquet:"requested_patterns" json:"requested_patterns"`
+	RepositoryID            string `parquet:"repository_id" json:"-"`
+	WorkspaceID             string `parquet:"workspace_id" json:"-"`
 }
 
 // SpanRow represents one row in the spans Parquet table.
@@ -47,6 +49,7 @@ type SpanRow struct {
 	DepLoadMillis         int64  `parquet:"dep_load_millis" json:"dep_load_millis"`
 	Tags                  string `parquet:"tags" json:"tags"`
 	Dependencies          string `parquet:"dependencies" json:"dependencies"`
+	InputManifest         string `parquet:"input_manifest" json:"-"`
 }
 
 // BuildTrace is the in-memory representation of a complete trace.

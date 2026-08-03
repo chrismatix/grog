@@ -115,8 +115,8 @@ func RunBuildAndAfter(
 	}
 
 	var traceCollector *tracing.TraceCollector
-	if config.Global.Traces.Enabled {
-		traceCollector = tracing.NewTraceCollector(commandName, targetPatterns, GrogVersion)
+	if config.Global.Traces.Enabled || config.Global.ForAgent {
+		traceCollector = tracing.NewTraceCollector(ctx, commandName, targetPatterns, GrogVersion)
 	}
 	errs := analysis.CheckTargetConstraints(logger, graph.GetNodes())
 	if len(errs) > 0 {
@@ -160,6 +160,30 @@ func RunBuildAndAfter(
 	if err != nil {
 		logger.Fatalf("could not instantiate cache: %v", err)
 	}
+	var traceStore *tracing.TraceStore
+	if traceCollector != nil {
+		traceBackend := cache
+		if config.Global.Traces.Backend != "" {
+			traceCacheConfig := config.CacheConfig{
+				Backend: config.Global.Traces.Backend,
+				GCS:     config.Global.Traces.GCS,
+				S3:      config.Global.Traces.S3,
+			}
+			traceCacheBackend, traceBackendError := backends.GetCacheBackend(ctx, traceCacheConfig)
+			if traceBackendError == nil {
+				traceBackend = traceCacheBackend
+			} else {
+				logger.Warnf("failed to instantiate traces backend, falling back to cache: %v", traceBackendError)
+			}
+		}
+		traceStore, err = tracing.NewTraceStore(traceBackend, tracing.NewPathResolver())
+		if err != nil {
+			logger.Warnf("failed to initialize trace store: %v", err)
+			traceStore = nil
+		} else {
+			defer traceStore.Close()
+		}
+	}
 	targetCache := caching.NewTargetResultCache(cache)
 	cas := caching.NewCas(cache)
 	taintCache := caching.NewTaintStore()
@@ -197,6 +221,7 @@ func RunBuildAndAfter(
 		config.Global.EnableCache,
 		loadOutputsMode,
 	)
+	executor.SetTraceStore(traceStore)
 	if afterBuildSuccess != nil {
 		executor.DeferAsyncWait()
 	}
@@ -254,26 +279,9 @@ func RunBuildAndAfter(
 
 	// Write trace (synchronous — Parquet writes are fast for local FS,
 	// and we need to ensure the write completes before the process exits)
-	if traceCollector != nil && completionMap != nil {
+	if traceCollector != nil && traceStore != nil && completionMap != nil {
 		buildTrace := traceCollector.Finalize(completionMap, graph, executor.AsyncWaitTime())
-
-		// Use the dedicated traces backend if configured, otherwise fall back to the main cache
-		traceBackend := cache
-		if config.Global.Traces.Backend != "" {
-			traceCacheConfig := config.CacheConfig{
-				Backend: config.Global.Traces.Backend,
-				GCS:     config.Global.Traces.GCS,
-				S3:      config.Global.Traces.S3,
-			}
-			if tb, err := backends.GetCacheBackend(ctx, traceCacheConfig); err == nil {
-				traceBackend = tb
-			} else {
-				logger.Warnf("failed to instantiate traces backend, falling back to cache: %v", err)
-			}
-		}
-
-		traceWriter := tracing.NewTraceWriter(traceBackend)
-		if err := traceWriter.Write(context.WithoutCancel(ctx), buildTrace); err != nil {
+		if err := traceStore.Write(context.WithoutCancel(ctx), buildTrace); err != nil {
 			logger.Warnf("failed to write trace: %v", err)
 		}
 	}
