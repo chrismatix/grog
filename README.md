@@ -26,6 +26,7 @@ Read more in [Why grog?](https://grog.build/why-grog/)
 - 🚀 Parallelize your build commands
 - 🔄 Only rebuilds changed targets (incremental)
 - 💾 (Remote) output caching
+- 🌳 Share local cache hits across Git worktrees automatically
 - 🛠️ Simple build configuration with either **Makefile**, **JSON**, **yaml**, ...
 - 📦 Single binary
 
