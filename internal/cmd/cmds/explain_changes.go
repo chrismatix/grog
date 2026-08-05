@@ -48,7 +48,7 @@ through the directly-affected targets to their transitive dependents.`,
 		ctx, logger := console.SetupCommand()
 
 		if explainChangesOptions.since == "" {
-			logger.Fatalf("--since flag is required")
+			logger.InvalidInvocationf("--since flag is required")
 		}
 
 		changedFiles, err := getChangedFiles(explainChangesOptions.since)

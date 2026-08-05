@@ -59,7 +59,7 @@ Supports tree, JSON, and Mermaid diagram output formats. By default, only direct
 
 		targetPatterns, err := label.ParsePatternsOrMatchAll(currentPackagePath, args)
 		if err != nil {
-			logger.Fatalf("could not parse target pattern: %v", err)
+			logger.InvalidInvocationf("could not parse target pattern: %v", err)
 		}
 
 		nodes, err := model.BuildNodeMapFromPackages(packages)

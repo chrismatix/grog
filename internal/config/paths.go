@@ -24,23 +24,19 @@ func GetWorkspaceCachePrefix(workspaceDir string) string {
 	return fmt.Sprintf("%s-%s", repoHash, workspaceName)
 }
 
-// MustFindWorkspaceRoot searches for the repository root by looking for "grog.toml"
-// in the current working directory and its parents. It panics if it
-// does not find the file.
-func MustFindWorkspaceRoot() string {
+// FindWorkspaceRoot searches for a grog.toml in the current directory and its parents.
+func FindWorkspaceRoot() (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
-		fmt.Printf("%s failed to get current working directory: %v\n", color.RedString("FATAL:"), err)
-		os.Exit(1)
+		return "", fmt.Errorf("failed to get current working directory: %w", err)
 	}
 
 	for {
 		configPath := filepath.Join(cwd, "grog.toml")
 		if _, err := os.Stat(configPath); err == nil {
-			return cwd
+			return cwd, nil
 		} else if !os.IsNotExist(err) {
-			fmt.Printf("%s failed to check for grog.toml: %v\n", color.RedString("FATAL:"), err)
-			os.Exit(1)
+			return "", fmt.Errorf("failed to check for grog.toml: %w", err)
 		}
 
 		parent := filepath.Dir(cwd)
@@ -50,9 +46,17 @@ func MustFindWorkspaceRoot() string {
 		cwd = parent
 	}
 
-	fmt.Printf("%s grog.toml not found in any parent directory. Is this a grog workspace?\n", color.RedString("FATAL:"))
-	os.Exit(1)
-	return "" // unreachable but needed to satisfy compiler
+	return "", fmt.Errorf("grog.toml not found in any parent directory. Is this a grog workspace?")
+}
+
+// MustFindWorkspaceRoot returns the workspace root or exits.
+func MustFindWorkspaceRoot() string {
+	workspaceRoot, err := FindWorkspaceRoot()
+	if err != nil {
+		fmt.Printf("%s %v\n", color.RedString("FATAL:"), err)
+		os.Exit(1)
+	}
+	return workspaceRoot
 }
 
 func GetPathRelativeToWorkspaceRoot(path string) (string, error) {

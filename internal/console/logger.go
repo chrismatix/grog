@@ -75,6 +75,16 @@ func (l *Logger) Fatal(args ...any) {
 	l.SugaredLogger.Fatal(args...)
 }
 
+// InvalidInvocationf exits with a stable invalid-invocation error in JSON mode.
+func (l *Logger) InvalidInvocationf(template string, args ...any) {
+	if JSONEnabled() {
+		WriteError(ErrorCodeInvalidInvocation, fmt.Sprintf(template, args...))
+		_ = l.Sync()
+		os.Exit(2)
+	}
+	l.SugaredLogger.Fatalf(template, args...)
+}
+
 func (l *Logger) With(args ...any) *Logger {
 	return &Logger{
 		SugaredLogger: l.SugaredLogger.With(args...),

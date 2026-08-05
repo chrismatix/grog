@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -63,11 +64,12 @@ type TestTable struct {
 // If SetupCommand is defined and GrogArgs is empty the step will only run the setup command (without fixtures).
 type TestStep struct {
 	// Names must be unique as they determine the fixture file name
-	Name         string   `yaml:"name"`
-	SetupCommand string   `yaml:"setup_command"`
-	GrogArgs     []string `yaml:"grog_args"`
-	EnvVars      []string `yaml:"env_vars"`
-	ExpectFail   bool     `yaml:"expect_fail"`
+	Name             string   `yaml:"name"`
+	SetupCommand     string   `yaml:"setup_command"`
+	GrogArgs         []string `yaml:"grog_args"`
+	EnvVars          []string `yaml:"env_vars"`
+	ExpectFail       bool     `yaml:"expect_fail"`
+	ExpectedExitCode *int     `yaml:"expected_exit_code"`
 	// Whether to run this test step against a temporary repo directory.
 	TempDir bool `yaml:"temp_dir"`
 	// Some tests have machine-specific outputs which makes
@@ -185,6 +187,19 @@ func TestCliScenarios(t *testing.T) {
 				t.Run(tc.Name, func(t *testing.T) {
 
 					output, err := runBinary(tc.GrogArgs, repoPath, tc.EnvVars, coverDir)
+					if tc.ExpectedExitCode != nil {
+						actualExitCode := 0
+						if err != nil {
+							var exitError *exec.ExitError
+							if !errors.As(err, &exitError) {
+								t.Fatalf("could not read exit code: %v", err)
+							}
+							actualExitCode = exitError.ExitCode()
+						}
+						if actualExitCode != *tc.ExpectedExitCode {
+							t.Fatalf("expected exit code %d, got %d\nCommand output:\n%s", *tc.ExpectedExitCode, actualExitCode, output)
+						}
+					}
 
 					if err != nil && !tc.ExpectFail {
 						fmt.Printf("Command output: %s\n", output)

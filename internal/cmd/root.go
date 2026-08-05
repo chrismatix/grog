@@ -31,17 +31,20 @@ var RootCmd = &cobra.Command{
 			return nil
 		}
 
-		workspaceRoot := config.MustFindWorkspaceRoot()
+		workspaceRoot, err := config.FindWorkspaceRoot()
+		if err != nil {
+			return console.RuntimeFailure(err)
+		}
 		viper.Set("workspace_root", workspaceRoot)
 		viper.AddConfigPath(workspaceRoot)
 
 		// Initialize config (read file, env, flags)
 		if err := initConfig(cmd); err != nil {
-			return err
+			return console.RuntimeFailure(err)
 		}
 
 		if err := config.Global.Validate(); err != nil {
-			return err
+			return console.RuntimeFailure(err)
 		}
 
 		if !console.UseTea() {
@@ -49,7 +52,7 @@ var RootCmd = &cobra.Command{
 		}
 
 		if err := config.Global.ValidateGrogVersion(Version); err != nil {
-			console.InitLogger().Fatalf("Invalid grog version: %v", err)
+			return console.RuntimeFailure(fmt.Errorf("invalid grog version: %w", err))
 		}
 		return nil
 	},
@@ -296,12 +299,12 @@ func initConfig(cmd *cobra.Command) error {
 
 	platform := viper.GetString("platform")
 	if config.Global.AllPlatforms && platform != "" {
-		return fmt.Errorf("--platform cannot be used with --all-platforms")
+		return console.InvalidInvocation(fmt.Errorf("--platform cannot be used with --all-platforms"))
 	}
 	if platform != "" {
 		parts := strings.SplitN(platform, "/", 2)
 		if len(parts) != 2 {
-			return fmt.Errorf("invalid platform %s, expected os/arch", platform)
+			return console.InvalidInvocation(fmt.Errorf("invalid platform %s, expected os/arch", platform))
 		}
 		config.Global.OS = parts[0]
 		config.Global.Arch = parts[1]

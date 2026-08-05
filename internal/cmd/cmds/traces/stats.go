@@ -35,11 +35,11 @@ var statsCmd = &cobra.Command{
 
 		command, err := normalizeStatsCommandType(statsCommandType.Value)
 		if err != nil {
-			logger.Fatalf("%v", err)
+			logger.InvalidInvocationf("%v", err)
 		}
 		isCI, err := normalizeStatsCI(statsCI.Value)
 		if err != nil {
-			logger.Fatalf("%v", err)
+			logger.InvalidInvocationf("%v", err)
 		}
 
 		statsOptions := tracing.StatsOptions{

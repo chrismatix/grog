@@ -6,6 +6,15 @@ import (
 	"testing"
 )
 
+func TestFindWorkspaceRootReturnsError(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	workspaceRoot, err := FindWorkspaceRoot()
+	if err == nil {
+		t.Fatalf("expected error, got workspace root %q", workspaceRoot)
+	}
+}
+
 func TestGetWorkspaceCachePrefix_IsPathUnique(t *testing.T) {
 	// Logs and the workspace lock rely on this prefix staying unique per
 	// absolute path so that parallel grog invocations in different

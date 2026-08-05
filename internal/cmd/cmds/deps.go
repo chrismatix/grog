@@ -35,7 +35,7 @@ Dependencies can be filtered by target type using the --target-type flag.`,
 		ctx, logger := console.SetupCommand()
 
 		if len(args) == 0 {
-			logger.Fatalf("`%s` requires a target label", cmd.UseLine())
+			logger.InvalidInvocationf("`%s` requires a target label", cmd.UseLine())
 		}
 
 		currentPackagePath, err := config.Global.GetCurrentPackage()
@@ -45,13 +45,13 @@ Dependencies can be filtered by target type using the --target-type flag.`,
 
 		targetLabel, err := label.ParseTargetLabel(currentPackagePath, args[0])
 		if err != nil {
-			logger.Fatalf("could not parse target label: %v", err)
+			logger.InvalidInvocationf("could not parse target label: %v", err)
 		}
 		graph := loading.MustLoadGraphForQuery(ctx, logger)
 
 		target, hasTarget := graph.GetNodes()[targetLabel]
 		if !hasTarget {
-			logger.Fatalf("could not find target %s", targetLabel)
+			logger.InvalidInvocationf("could not find target %s", targetLabel)
 		}
 
 		var dependencies []model.BuildNode
@@ -64,7 +64,7 @@ Dependencies can be filtered by target type using the --target-type flag.`,
 		// Filter by target type
 		targetTypeFilter, err := selection.StringToTargetTypeSelection(depsOptions.targetType.Value)
 		if err != nil {
-			logger.Fatalf("%s", err.Error())
+			logger.InvalidInvocationf("%s", err.Error())
 		}
 		selector := selection.New(nil, config.Global.Tags, config.Global.ExcludeTags, targetTypeFilter)
 		filteredDeps := selector.FilterNodes(dependencies)

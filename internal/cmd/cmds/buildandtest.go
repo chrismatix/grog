@@ -31,7 +31,7 @@ var BuildAndTestCmd = &cobra.Command{
 
 		targetPatterns, err := label.ParsePatternsOrMatchCurrentPackageAndSubpackages(currentPackagePath, args)
 		if err != nil {
-			logger.Fatalf("could not parse target pattern: %v", err)
+			logger.InvalidInvocationf("could not parse target pattern: %v", err)
 		}
 
 		graph := loading.MustLoadGraphForBuild(ctx, logger)

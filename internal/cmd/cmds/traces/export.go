@@ -35,7 +35,7 @@ var exportCmd = &cobra.Command{
 		if exportSince != "" {
 			sinceTime, err := time.Parse("2006-01-02", exportSince)
 			if err != nil {
-				logger.Fatalf("invalid --since date: %v", err)
+				logger.InvalidInvocationf("invalid --since date: %v", err)
 			}
 			opts.Since = &sinceTime
 		}

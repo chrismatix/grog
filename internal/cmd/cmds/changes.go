@@ -124,7 +124,7 @@ Can optionally include transitive dependents of changed targets to find all affe
 
 		targetTypeFilter, err := selection.StringToTargetTypeSelection(changesOptions.targetType.Value)
 		if err != nil {
-			logger.Fatalf("%s", err.Error())
+			logger.InvalidInvocationf("%s", err.Error())
 		}
 		selector := selection.New(nil, config.Global.Tags, config.Global.ExcludeTags, targetTypeFilter)
 

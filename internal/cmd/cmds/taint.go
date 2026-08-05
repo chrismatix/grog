@@ -34,7 +34,7 @@ This is useful when you want to force a rebuild of specific targets.`,
 
 		targetPatterns, err := label.ParsePatternsOrMatchAll(currentPackagePath, args)
 		if err != nil {
-			logger.Fatalf("could not parse target pattern: %v", err)
+			logger.InvalidInvocationf("could not parse target pattern: %v", err)
 		}
 
 		graph := loading.MustLoadGraphForQuery(ctx, logger)

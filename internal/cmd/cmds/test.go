@@ -49,7 +49,7 @@ Use "--" to separate the list of targets from additional arguments passed to the
 
 		targetPatterns, err := label.ParsePatternsOrMatchCurrentPackageAndSubpackages(currentPackagePath, targetArgs)
 		if err != nil {
-			logger.Fatalf("could not parse target pattern: %v", err)
+			logger.InvalidInvocationf("could not parse target pattern: %v", err)
 		}
 
 		if len(extraArgs) > 0 {

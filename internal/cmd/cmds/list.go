@@ -42,14 +42,14 @@ var ListCmd = &cobra.Command{
 			// Default to only showing the targets in the current package
 			currentPackagePattern, err := label.ParseTargetPattern(currentPackagePath, ":all")
 			if err != nil {
-				logger.Fatalf("could not parse target pattern: %v", err)
+				logger.InvalidInvocationf("could not parse target pattern: %v", err)
 			}
 			targetPatterns = []label.TargetPattern{currentPackagePattern}
 		} else {
 			var err error
 			targetPatterns, err = label.ParsePatternsOrMatchAll(currentPackagePath, args)
 			if err != nil {
-				logger.Fatalf("could not parse target pattern: %v", err)
+				logger.InvalidInvocationf("could not parse target pattern: %v", err)
 			}
 		}
 
@@ -57,7 +57,7 @@ var ListCmd = &cobra.Command{
 
 		targetTypeFilter, err := selection.StringToTargetTypeSelection(listOptions.targetType.Value)
 		if err != nil {
-			logger.Fatalf("%s", err.Error())
+			logger.InvalidInvocationf("%s", err.Error())
 		}
 		selector := selection.New(targetPatterns, config.Global.Tags, config.Global.ExcludeTags, targetTypeFilter)
 		selector.SelectTargets(graph)

@@ -42,15 +42,15 @@ Use "--" to separate the list of targets from the arguments passed to the binari
 		ctx, logger := console.SetupCommand()
 
 		if len(args) == 0 {
-			logger.Fatalf("`%s` requires a target pattern", cmd.UseLine())
+			logger.InvalidInvocationf("`%s` requires a target pattern", cmd.UseLine())
 		}
 
 		targetArgs, userCommandArgs, err := splitRunArgs(args, cmd.ArgsLenAtDash())
 		if err != nil {
-			logger.Fatalf("%v", err)
+			logger.InvalidInvocationf("%v", err)
 		}
 		if len(targetArgs) == 0 {
-			logger.Fatalf("`%s` requires a target pattern", cmd.UseLine())
+			logger.InvalidInvocationf("`%s` requires a target pattern", cmd.UseLine())
 		}
 
 		currentPackagePath, err := config.Global.GetCurrentPackage()
@@ -183,7 +183,7 @@ func parseMultipleTargetLabels(logger *console.Logger, currentPackagePath string
 	for _, targetArg := range targetArgs {
 		targetLabel, err := label.ParseTargetLabel(currentPackagePath, targetArg)
 		if err != nil {
-			logger.Fatalf("could not parse target label %s: %v. Use '--' to separate target labels from binary arguments.", targetArg, err)
+			logger.InvalidInvocationf("could not parse target label %s: %v. Use '--' to separate target labels from binary arguments.", targetArg, err)
 		}
 		if _, exists := seen[targetLabel]; exists {
 			continue
@@ -213,13 +213,13 @@ func runTargetsByLabels(ctx context.Context, logger *console.Logger, targetLabel
 func resolveRunTarget(logger *console.Logger, graph *dag.DirectedTargetGraph, targetLabel label.TargetLabel) *model.Target {
 	node, hasNode := graph.GetNodes()[targetLabel]
 	if !hasNode {
-		logger.Fatalf("could not find target %s", targetLabel)
+		logger.InvalidInvocationf("could not find target %s", targetLabel)
 	}
 
 	switch typed := node.(type) {
 	case *model.Target:
 		if !typed.HasBinOutput() {
-			logger.Fatalf("target %s does not have a binary output.", targetLabel)
+			logger.InvalidInvocationf("target %s does not have a binary output.", targetLabel)
 		}
 		checkBinaryRequiresPush(logger, typed)
 		return typed
@@ -227,22 +227,22 @@ func resolveRunTarget(logger *console.Logger, graph *dag.DirectedTargetGraph, ta
 		resolvedNode := graph.GetNodes()[typed.Actual]
 		resolvedTarget, ok := resolvedNode.(*model.Target)
 		if !ok {
-			logger.Fatalf("%s resolved from %s is not a target", targetLabel, typed.Actual)
+			logger.InvalidInvocationf("%s resolved from %s is not a target", targetLabel, typed.Actual)
 		}
 		if !resolvedTarget.HasBinOutput() {
-			logger.Fatalf("target %s does not have a binary output.", typed.Actual)
+			logger.InvalidInvocationf("target %s does not have a binary output.", typed.Actual)
 		}
 		checkBinaryRequiresPush(logger, resolvedTarget)
 		return resolvedTarget
 	default:
-		logger.Fatalf("%s is not a target", targetLabel)
+		logger.InvalidInvocationf("%s is not a target", targetLabel)
 	}
 	return nil
 }
 
 func checkBinaryRequiresPush(logger *console.Logger, target *model.Target) {
 	if target.BinaryRequiresPush && !config.Global.Push {
-		logger.Fatalf("target %s requires the --push flag to run", target.Label)
+		logger.InvalidInvocationf("target %s requires the --push flag to run", target.Label)
 	}
 }
 
@@ -265,10 +265,7 @@ func runTargetBinaries(ctx context.Context, logger *console.Logger, runTargets [
 		cmd := newBinaryRunCommand(ctx, runTarget, userCommandArgs)
 		var output *bytes.Buffer
 		if console.JSONEnabled() {
-			output = &bytes.Buffer{}
-			cmd.Stdout = output
-			cmd.Stderr = output
-			cmd.Stdin = nil
+			output = captureBinaryOutput(cmd)
 		}
 		if runOptions.inPackage {
 			logger.Infof("Running %s -> %s with args %s in package directory", runTarget.Label, runTarget.BinOutput.Identifier, userCommandArgs)
@@ -312,6 +309,13 @@ func runTargetBinaries(ctx context.Context, logger *console.Logger, runTargets [
 		return errs[0]
 	}
 	return fmt.Errorf("multiple binaries failed: %w", errors.Join(errs...))
+}
+
+func captureBinaryOutput(command *exec.Cmd) *bytes.Buffer {
+	output := &bytes.Buffer{}
+	command.Stdout = output
+	command.Stderr = output
+	return output
 }
 
 func newBinaryRunCommand(ctx context.Context, runTarget *model.Target, userCommandArgs []string) *exec.Cmd {

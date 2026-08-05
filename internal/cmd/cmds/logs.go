@@ -35,18 +35,18 @@ Use the --path-only flag to only print the path to the log file instead of its c
 
 		targetLabel, err := label.ParseTargetLabel(currentPackagePath, args[0])
 		if err != nil {
-			logger.Fatalf("could not parse target label: %v", err)
+			logger.InvalidInvocationf("could not parse target label: %v", err)
 		}
 
 		graph := loading.MustLoadGraphForQuery(ctx, logger)
 		node, hasTarget := graph.GetNodes()[targetLabel]
 		if !hasTarget {
-			logger.Fatalf("could not find target %s", targetLabel)
+			logger.InvalidInvocationf("could not find target %s", targetLabel)
 		}
 
 		logTarget, isTarget := node.(*model.Target)
 		if !isTarget {
-			logger.Fatalf("%s is not a target", targetLabel)
+			logger.InvalidInvocationf("%s is not a target", targetLabel)
 		}
 
 		targetLogFile := logs.NewTargetLogFile(*logTarget)

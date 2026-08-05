@@ -24,7 +24,7 @@ var pruneCmd = &cobra.Command{
 
 		duration, err := parseDuration(pruneOlderThan)
 		if err != nil {
-			logger.Fatalf("invalid --older-than value: %v", err)
+			logger.InvalidInvocationf("invalid --older-than value: %v", err)
 		}
 
 		cutoff := time.Now().Add(-duration)

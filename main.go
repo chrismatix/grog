@@ -20,11 +20,12 @@ func main() {
 		cmd.RootCmd.SilenceUsage = true
 	}
 	if err := cmd.RootCmd.Execute(); err != nil {
+		errorCode, exitStatus := console.ClassifyError(err)
 		if console.JSONEnabled() {
-			console.WriteError(console.ErrorCodeInvalidInvocation, err.Error())
+			console.WriteError(errorCode, err.Error())
 		} else {
 			console.WriteText(err.Error() + "\n")
 		}
-		os.Exit(2)
+		os.Exit(exitStatus)
 	}
 }

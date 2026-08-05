@@ -134,3 +134,28 @@ cases:
       - --files-first
       - --show-files=false
       - --since=5e79b3bc4fc7f1978e78f917126710989bf0deaa
+
+  - name: json_runtime_config_failure
+    grog_args:
+      - list
+      - --json
+    env_vars:
+      - GROG_HASH_ALGORITHM=invalid
+    expect_fail: true
+    expected_exit_code: 1
+
+  - name: json_invalid_missing_target
+    grog_args:
+      - deps
+      - //:missing
+      - --json
+    expect_fail: true
+    expected_exit_code: 2
+
+  - name: json_outside_workspace
+    grog_args:
+      - list
+      - --json
+    temp_dir: true
+    expect_fail: true
+    expected_exit_code: 1

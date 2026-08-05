@@ -51,7 +51,7 @@ var BuildCmd = &cobra.Command{
 
 		targetPatterns, err := label.ParsePatternsOrMatchCurrentPackageAndSubpackages(currentPackagePath, args)
 		if err != nil {
-			logger.Fatalf("could not parse target pattern: %v", err)
+			logger.InvalidInvocationf("could not parse target pattern: %v", err)
 		}
 
 		graph := loading.MustLoadGraphForBuild(ctx, logger)
@@ -143,7 +143,7 @@ func RunBuildAndAfter(
 			errString += fmt.Sprintf(" (%s not matching %s host)",
 				console.FCountTargets(skippedCount), config.Global.GetPlatform())
 		}
-		logger.Fatalf("%s", errString)
+		logger.InvalidInvocationf("%s", errString)
 	}
 
 	infoStr := fmt.Sprintf("Selected %s.",

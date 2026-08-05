@@ -53,3 +53,11 @@ cases:
       - //:declares_bin_tool
       - --
       - bar
+
+  - name: run_child_json_flag_is_forwarded
+    grog_args:
+      - run
+      - //:declares_bin_tool
+      - --
+      - bar
+      - --json

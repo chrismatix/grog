@@ -38,7 +38,7 @@ var listCmd = &cobra.Command{
 
 		command, err := normalizeCommand(listCommand.Value)
 		if err != nil {
-			logger.Fatalf("%v", err)
+			logger.InvalidInvocationf("%v", err)
 		}
 
 		opts := tracing.ListOptions{
@@ -49,7 +49,7 @@ var listCmd = &cobra.Command{
 		if listSince != "" {
 			sinceTime, err := time.Parse("2006-01-02", listSince)
 			if err != nil {
-				logger.Fatalf("invalid --since date: %v (use YYYY-MM-DD format)", err)
+				logger.InvalidInvocationf("invalid --since date: %v (use YYYY-MM-DD format)", err)
 			}
 			opts.Since = &sinceTime
 		}
