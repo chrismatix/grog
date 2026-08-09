@@ -216,7 +216,7 @@ func (d *DockerOutputHandler) Load(
 	}
 	defer pullReader.Close()
 
-	if err := consumeDockerProgress(pullReader, tracker, fmt.Sprintf("%s: pulling cache for %s", target.Label, localImageName)); err != nil {
+	if _, err := consumeDockerProgress(pullReader, tracker, fmt.Sprintf("%s: pulling cache for %s", target.Label, localImageName)); err != nil {
 		return fmt.Errorf("error reading pull response: %w", err)
 	}
 
@@ -253,6 +253,14 @@ func (d *DockerOutputHandler) PushImage(ctx context.Context, image *gen.OCIImage
 		SourceInsecure:      true,
 		DestinationInsecure: matchesInsecureRegistry(destination, d.insecureRegistries),
 	})
+}
+
+func (d *DockerOutputHandler) PushLocalImage(ctx context.Context, localTag, destination string, tracker *worker.ProgressTracker) (bool, error) {
+	cli, err := d.ensureClient()
+	if err != nil {
+		return false, err
+	}
+	return false, pushImageFromDaemon(ctx, cli, localTag, destination, tracker)
 }
 
 // dockerImageWritePlan defers the actual `docker push` to the cache-write phase.
@@ -293,7 +301,7 @@ func (d *dockerImageWritePlan) Execute(ctx context.Context, tracker *worker.Prog
 	}
 	defer pushReader.Close()
 
-	if err := consumeDockerProgress(pushReader, tracker, baseStatus); err != nil {
+	if _, err := consumeDockerProgress(pushReader, tracker, baseStatus); err != nil {
 		return fmt.Errorf("error reading push response: %w", err)
 	}
 

@@ -1,6 +1,11 @@
 package handlers
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+
+	"github.com/docker/docker/pkg/jsonmessage"
+)
 
 func TestFormatPhaseSummary_NoLayers(t *testing.T) {
 	got := formatPhaseSummary(map[string]string{})
@@ -83,4 +88,35 @@ func TestFormatPhaseSummary_PullStateLabels(t *testing.T) {
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
+}
+
+// The two image stores report a completed push differently: the classic store
+// sends a structured aux payload, the containerd store only the status line.
+func TestRegistryConfirmedDigest(t *testing.T) {
+	const digest = "sha256:fa647fc1e5d5df7d8d923fb6332aab8e78783f8fca1a1394efb4011f68f5a793"
+
+	aux := json.RawMessage(`{"Tag":"1.0.0","Digest":"` + digest + `","Size":1917}`)
+	cases := []struct {
+		name    string
+		message jsonmessage.JSONMessage
+		want    string
+	}{
+		{"classic aux", jsonmessage.JSONMessage{Aux: &aux}, digest},
+		{"containerd status line", jsonmessage.JSONMessage{Status: "1.0.0: digest: " + digest + " size: 1917"}, digest},
+		{"layer progress", jsonmessage.JSONMessage{ID: "abc", Status: "Pushing"}, ""},
+		{"unrelated aux", jsonmessage.JSONMessage{Aux: rawMessage(`{"manifestPushedInsteadOfIndex":true}`)}, ""},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := registryConfirmedDigest(c.message); got != c.want {
+				t.Errorf("registryConfirmedDigest = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+func rawMessage(s string) *json.RawMessage {
+	raw := json.RawMessage(s)
+	return &raw
 }

@@ -63,8 +63,61 @@ cases:
   - name: verify_registry_has_manifest
     setup_command: |
       curl -fsS -o /dev/null \
-        -H 'Accept: application/vnd.oci.image.manifest.v1+json' \
+        -H 'Accept: application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json' \
         http://127.0.0.1:5555/v2/grog-smoke/image/manifests/1.0.0
+
+  # A no-cache target skips output staging entirely, so its push has no
+  # cached source and must ship from the local daemon. It used to report
+  # nothing at all and exit 0 without touching the registry.
+  - name: oci_push_no_cache_target
+    grog_args:
+      - build
+      - --push
+      - :nocache
+
+  - name: verify_no_cache_target_pushed
+    setup_command: |
+      curl -fsS -o /dev/null \
+        -H 'Accept: application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json' \
+        http://127.0.0.1:5555/v2/grog-smoke/nocache/manifests/1.0.0
+
+  # Build :minimal without --push so the next run is a cache hit whose
+  # destination is empty.
+  - name: oci_push_minimal_seed_cache
+    grog_args:
+      - build
+      - :minimal
+
+  # load_outputs=minimal short-circuits the cache hit before outputs are
+  # loaded. The push sources from the cache, not from the loaded outputs,
+  # so it still has to run — this used to silently push nothing.
+  - name: oci_push_minimal_load_outputs
+    grog_args:
+      - build
+      - --push
+      - --load-outputs=minimal
+      - :minimal
+
+  - name: verify_minimal_load_outputs_pushed
+    setup_command: |
+      curl -fsS -o /dev/null \
+        -H 'Accept: application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json' \
+        http://127.0.0.1:5555/v2/grog-smoke/minimal/manifests/1.0.0
+
+  # Seed a local tag from a different Dockerfile, standing in for an image
+  # a previous build system left in the daemon.
+  - name: seed_stale_local_image
+    setup_command: |
+      docker buildx build --platform=linux/amd64 -f Dockerfile.stale -t grog-smoke-stale --load . >/dev/null
+
+  # The target's command never loads its result, so the tag still points at
+  # the seeded image. Grog cannot tell that apart from a byte-identical
+  # rebuild, but it must say so rather than cache and push it silently.
+  - name: oci_push_warns_on_unproduced_image
+    grog_args:
+      - build
+      - --push
+      - :stale
 
   # Push to a port nothing is listening on; the build itself succeeds but
   # the push fails and the summary reports the destination + the underlying
@@ -83,4 +136,8 @@ cases:
       # (per design Q9: no local-tag cleanup). Remove it here so the
       # test machine does not accumulate tags across runs.
       docker rmi 127.0.0.1:5555/grog-smoke/image:1.0.0 >/dev/null 2>&1 || true
+      docker rmi 127.0.0.1:5555/grog-smoke/nocache:1.0.0 >/dev/null 2>&1 || true
+      docker rmi 127.0.0.1:5555/grog-smoke/minimal:1.0.0 >/dev/null 2>&1 || true
+      docker rmi 127.0.0.1:5555/grog-smoke/stale:1.0.0 >/dev/null 2>&1 || true
+      docker rmi grog-smoke-stale >/dev/null 2>&1 || true
       docker rmi 127.0.0.1:5560/grog-smoke/fail:1.0.0 >/dev/null 2>&1 || true

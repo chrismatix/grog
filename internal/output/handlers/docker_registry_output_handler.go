@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -61,7 +62,7 @@ func (d *dockerRegistryWritePlan) Execute(ctx context.Context, tracker *worker.P
 	}
 	defer pushReader.Close()
 
-	if err := consumeDockerProgress(pushReader, tracker, baseStatus); err != nil {
+	if _, err := consumeDockerProgress(pushReader, tracker, baseStatus); err != nil {
 		return fmt.Errorf("error reading push response: %w", err)
 	}
 
@@ -133,6 +134,14 @@ func (d *DockerRegistryOutputHandler) PushImage(ctx context.Context, image *gen.
 		SourceInsecure:      matchesInsecureRegistry(src, d.config.InsecureRegistries),
 		DestinationInsecure: matchesInsecureRegistry(destination, d.config.InsecureRegistries),
 	})
+}
+
+func (d *DockerRegistryOutputHandler) PushLocalImage(ctx context.Context, localTag, destination string, tracker *worker.ProgressTracker) (bool, error) {
+	cli, err := d.lazyClient()
+	if err != nil {
+		return false, err
+	}
+	return false, pushImageFromDaemon(ctx, cli, localTag, destination, tracker)
 }
 
 func (d *DockerRegistryOutputHandler) cacheImageName(digest string) string {
@@ -278,7 +287,7 @@ func (d *DockerRegistryOutputHandler) Load(
 	}()
 
 	// Read and bridge the Docker JSON progress from pull before tagging
-	if err := consumeDockerProgress(pull, tracker, fmt.Sprintf("%s: pulling cache for %s", target.Label, localImageName)); err != nil {
+	if _, err := consumeDockerProgress(pull, tracker, fmt.Sprintf("%s: pulling cache for %s", target.Label, localImageName)); err != nil {
 		return fmt.Errorf("error reading pull response: %w", err)
 	}
 
@@ -288,6 +297,28 @@ func (d *DockerRegistryOutputHandler) Load(
 
 	logger.Debugf("successfully loaded Docker image %s from registry tag %s", localImageName, remoteImageName)
 	return nil
+}
+
+// statusDigestPattern matches the trailing "1.0.0: digest: sha256:… size: 1917"
+// line the daemon emits once the registry has acknowledged a manifest.
+var statusDigestPattern = regexp.MustCompile(`digest:\s+(sha256:[0-9a-f]{64})`)
+
+// The classic image store reports the acknowledged digest as a structured aux
+// payload; the containerd store reports only the status line, so both shapes
+// have to be read.
+func registryConfirmedDigest(jsonMessage jsonmessage.JSONMessage) string {
+	if jsonMessage.Aux != nil {
+		var pushResult struct {
+			Digest string `json:"Digest"`
+		}
+		if err := json.Unmarshal(*jsonMessage.Aux, &pushResult); err == nil && pushResult.Digest != "" {
+			return pushResult.Digest
+		}
+	}
+	if match := statusDigestPattern.FindStringSubmatch(jsonMessage.Status); match != nil {
+		return match[1]
+	}
+	return ""
 }
 
 // dockerLayerProgress holds per-layer tracking state for bridging JSON progress.
@@ -313,13 +344,16 @@ type dockerLayerProgress struct {
 // The base status string is set on the parent immediately so the UI reflects
 // the current plan even before the first daemon message arrives. If parent is
 // nil, the stream is still drained but no progress is emitted.
+//
+// The returned digest is the one the registry confirmed for a push; it is
+// empty for pulls and for pushes the daemon never got a digest for.
 func consumeDockerProgress(
 	reader io.Reader,
 	parent *worker.ProgressTracker,
 	status string,
-) error {
+) (string, error) {
 	if reader == nil {
-		return nil
+		return "", nil
 	}
 
 	// Seed the parent status so the UI shows something meaningful immediately,
@@ -335,17 +369,22 @@ func consumeDockerProgress(
 	layerStates := make(map[string]string)
 	lastPhaseSummary := ""
 
+	pushedDigest := ""
 	for {
 		var jsonMessage jsonmessage.JSONMessage
 		if err := dec.Decode(&jsonMessage); err != nil {
 			if err == io.EOF {
 				break
 			}
-			return err
+			return "", err
 		}
 
 		if jsonMessage.Error != nil {
-			return jsonMessage.Error
+			return "", jsonMessage.Error
+		}
+
+		if digest := registryConfirmedDigest(jsonMessage); digest != "" {
+			pushedDigest = digest
 		}
 
 		// Update the plan-level phase summary whenever a layer transitions to
@@ -401,7 +440,7 @@ func consumeDockerProgress(
 	for _, st := range layers {
 		st.tracker.Complete()
 	}
-	return nil
+	return pushedDigest, nil
 }
 
 // layerPhaseLabels maps the verbose docker daemon status strings to short,

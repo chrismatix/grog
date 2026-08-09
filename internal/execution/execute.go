@@ -408,6 +408,13 @@ func (e *Executor) getTaskFunc(
 				target.OutputHash = targetResult.OutputHash
 				update(worker.Status(fmt.Sprintf("%s: cache hit, skipping output load (load_outputs=minimal)", target.Label)))
 				logger.Debugf("%s: cache hit. skipped loading %s because load_ outputs=minimal", target.Label, console.FCountOutputs(len(target.AllOutputs())))
+				// Pushes read the image from the cache rather than from the
+				// loaded outputs, so --push still has to run for a target
+				// whose outputs we deliberately never load.
+				pushProgress := worker.NewProgressTracker(fmt.Sprintf("%s: pushing", target.Label), 0, update)
+				if pushErr := e.registry.PushCachedOutputs(ctx, target, targetResult, pushProgress); pushErr != nil {
+					logger.Errorf("%s: %v", target.Label, pushErr)
+				}
 				logTargetCached(ctx, logger, target, float64(targetResult.ExecutionDurationMillis)/1000)
 				return dag.CacheHit, nil
 			}
@@ -519,7 +526,11 @@ func (e *Executor) executeTarget(
 		if err == nil {
 			update(worker.Status(fmt.Sprintf("%s: running \"%s\"", target.Label, target.CommandEllipsis())))
 			logger.Debugf("running target %s: %s", target.Label, target.CommandEllipsis())
+			ociImagesBefore := e.registry.SnapshotOciImages(ctx, target)
 			err = executeTarget(ctx, target, binToolPaths, outputIdentifiers, transitiveOutputs, taggedOutputs, resourceEnvironment, e.streamLogsToggle.Enabled())
+			if err == nil {
+				e.registry.WarnOnUnproducedOciImages(ctx, target, ociImagesBefore)
+			}
 		}
 	} else {
 		logger.Debugf("skipped target %s due to no command", target.Label)
@@ -584,6 +595,9 @@ func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, u
 		if err == nil {
 			preparedTarget = &output.PreparedTargetResult{
 				TargetResult: targetResult,
+				// Nothing was staged to the cache, so oci_push has to ship the
+				// image straight out of the local docker daemon.
+				WritePlans: e.registry.BuildLocalPushPlans(target),
 			}
 		}
 		// TODO should we even store this in the cache given that the target

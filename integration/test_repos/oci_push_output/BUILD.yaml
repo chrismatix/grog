@@ -13,6 +13,47 @@ targets:
     oci_push:
       grog-smoke-image: 127.0.0.1:5555/grog-smoke/image:1.0.0
 
+  # A no-cache target never stages its oci output, so its push has to
+  # source the image from the local daemon instead of the cache.
+  - name: nocache
+    tags: ["no-cache"]
+    command: |
+      docker buildx build --platform=linux/amd64 -t grog-smoke-nocache .
+    inputs:
+      - script.sh
+      - Dockerfile
+    outputs:
+      - oci::grog-smoke-nocache
+    oci_push:
+      grog-smoke-nocache: 127.0.0.1:5555/grog-smoke/nocache:1.0.0
+
+  # Pushed from a cache hit under load_outputs=minimal, where the outputs
+  # are deliberately never loaded.
+  - name: minimal
+    command: |
+      docker buildx build --platform=linux/amd64 -t grog-smoke-minimal .
+    inputs:
+      - script.sh
+      - Dockerfile
+    outputs:
+      - oci::grog-smoke-minimal
+    oci_push:
+      grog-smoke-minimal: 127.0.0.1:5555/grog-smoke/minimal:1.0.0
+
+  # Builds without loading the result, the way a docker-container or cloud
+  # buildx driver does, so the local tag keeps pointing at the image the
+  # setup step left behind.
+  - name: stale
+    command: |
+      docker buildx build --platform=linux/amd64 --output=type=cacheonly -t grog-smoke-stale .
+    inputs:
+      - script.sh
+      - Dockerfile
+    outputs:
+      - oci::grog-smoke-stale
+    oci_push:
+      grog-smoke-stale: 127.0.0.1:5555/grog-smoke/stale:1.0.0
+
   # Builds the same image but pushes to a port nothing is listening on,
   # exercising the failure path of the push summary.
   - name: fail

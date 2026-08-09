@@ -1,0 +1,7 @@
+INFO: 1 package loaded, 5 targets configured.
+INFO: Selected 1 target.
+WARN: //:stale: oci output grog-smoke-stale is unchanged after running the command. If the command does not load its result into the local Docker daemon (e.g. buildx with a docker-container or cloud driver and no --load), grog caches and pushes the image that was already there.
+INFO: //:stale DONE
+INFO: Build completed successfully. 1 target completed (0 cache hits).
+INFO: Pushes: 1 pushed, 0 already current, 0 failed.
+INFO:   PUSHED //:stale -> 127.0.0.1:5555/grog-smoke/stale:1.0.0

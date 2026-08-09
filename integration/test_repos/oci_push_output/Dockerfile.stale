@@ -1,0 +1,5 @@
+FROM scratch
+
+# Stands in for an image left behind by a previous build system.
+LABEL grog.test.builder="previous-tool"
+COPY script.sh /script.sh

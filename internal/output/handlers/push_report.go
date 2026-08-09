@@ -22,15 +22,33 @@ type PushReporter struct {
 
 	mu      sync.Mutex
 	entries []PushReport
+	claimed map[string]bool
 
 	aborted atomic.Bool
+}
+
+// Claim reserves a (target, destination) pair and reports whether the caller
+// owns the push. A build can reach the same pair from more than one path — a
+// cache-hit load and a dependency load, say — and only the first should ship.
+func (p *PushReporter) Claim(targetLabel, destination string) bool {
+	if p == nil {
+		return true
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	key := targetLabel + " -> " + destination
+	if p.claimed[key] {
+		return false
+	}
+	p.claimed[key] = true
+	return true
 }
 
 func NewPushReporter(failFast func() bool) *PushReporter {
 	if failFast == nil {
 		failFast = func() bool { return false }
 	}
-	return &PushReporter{failFast: failFast}
+	return &PushReporter{failFast: failFast, claimed: make(map[string]bool)}
 }
 
 func (p *PushReporter) Record(report PushReport) {

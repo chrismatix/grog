@@ -60,12 +60,12 @@ cases:
   - name: verify_same_host_destination
     setup_command: |
       curl -fsS -o /dev/null \
-        -H 'Accept: application/vnd.oci.image.manifest.v1+json' \
+        -H 'Accept: application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json' \
         http://127.0.0.1:5556/v2/prod/same/manifests/1
   - name: verify_cross_host_destination
     setup_command: |
       curl -fsS -o /dev/null \
-        -H 'Accept: application/vnd.oci.image.manifest.v1+json' \
+        -H 'Accept: application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json' \
         http://127.0.0.1:5557/v2/prod/cross/manifests/1
 
   - name: stop_cross_repo_registries
