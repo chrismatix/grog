@@ -11,9 +11,10 @@ import (
 	"strings"
 
 	cerrdefs "github.com/containerd/errdefs"
-	dockerconfig "github.com/docker/cli/cli/config"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/pkg/jsonmessage"
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
 
 	"grog/internal/caching"
 	"grog/internal/config"
@@ -206,23 +207,27 @@ func (d *DockerRegistryOutputHandler) Write(
 	return &PreparedOutput{Output: genOutput, WritePlan: writePlan}, nil
 }
 
+// makeRegistryAuth builds the base64 auth header the daemon expects for ref.
+// Credentials resolve through the same keychain as the daemon-free push path,
+// which is what maps a shorthand reference like "alice/app" onto Docker Hub —
+// splitting the string on "/" would look up a registry named "alice".
 func makeRegistryAuth(ref string) (string, error) {
-	// Extract registry hostname (e.g. "gcr.io" or "myregistry.example.com")
-	registry, _, _ := strings.Cut(ref, "/")
-
-	// Load CLI config (respects DOCKER_CONFIG / XDG_CONFIG_HOME / ~/.docker)
-	cfg, err := dockerconfig.Load("")
+	parsed, err := name.ParseReference(ref)
 	if err != nil {
-		return "", fmt.Errorf("loading docker config: %w", err)
+		return "", fmt.Errorf("parsing reference %q: %w", ref, err)
+	}
+	registry := parsed.Context()
+
+	authenticator, err := authn.DefaultKeychain.Resolve(registry)
+	if err != nil {
+		return "", fmt.Errorf("getting auth config for registry %q: %w", registry.RegistryStr(), err)
 	}
 
-	// Get the AuthConfig for this registry
-	authConfig, err := cfg.GetAuthConfig(registry)
+	authConfig, err := authenticator.Authorization()
 	if err != nil {
-		return "", fmt.Errorf("getting auth config for registry %q: %w", registry, err)
+		return "", fmt.Errorf("reading credentials for registry %q: %w", registry.RegistryStr(), err)
 	}
 
-	// JSON-encode and base64-encode it for the daemon API
 	raw, err := json.Marshal(authConfig)
 	if err != nil {
 		return "", fmt.Errorf("marshaling auth config: %w", err)

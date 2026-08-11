@@ -63,25 +63,41 @@ func Copy(ctx context.Context, source, destination string, opts Options) (bool, 
 		return true, nil
 	}
 
+	if err := retryTransient(ctx, opts, func() error {
+		return remote.Push(dstRef, sourceManifest, remoteOptions(ctx)...)
+	}); err != nil {
+		return false, wrapInsecureHint(destination, opts.DestinationInsecure, err)
+	}
+
+	// The write landed, so a read-back that fails or lags gets the same
+	// patience the write itself got before the push is called a failure.
+	return false, retryTransient(ctx, opts, func() error {
+		return verifyDestination(ctx, dstRef, srcDesc.Digest, destination)
+	})
+}
+
+// retryTransient runs attempt until it succeeds, fails for a reason not worth
+// retrying, or runs out of attempts.
+func retryTransient(ctx context.Context, opts Options, attempt func() error) error {
 	backoff := opts.InitialBackoff
 	var lastErr error
-	for attempt := 1; attempt <= opts.MaxAttempts; attempt++ {
-		err := remote.Push(dstRef, sourceManifest, remoteOptions(ctx)...)
+	for try := 1; try <= opts.MaxAttempts; try++ {
+		err := attempt()
 		if err == nil {
-			return false, verifyDestination(ctx, dstRef, srcDesc.Digest, destination)
+			return nil
 		}
 		lastErr = err
-		if !isTransient(err) || attempt == opts.MaxAttempts {
-			return false, wrapInsecureHint(destination, opts.DestinationInsecure, err)
+		if !isTransient(err) || try == opts.MaxAttempts {
+			return err
 		}
 		select {
 		case <-ctx.Done():
-			return false, ctx.Err()
+			return ctx.Err()
 		case <-time.After(backoff):
 		}
 		backoff *= 2
 	}
-	return false, wrapInsecureHint(destination, opts.DestinationInsecure, lastErr)
+	return lastErr
 }
 
 // verifyDestination guards the one failure a green build log cannot reveal: a

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 )
@@ -34,4 +35,53 @@ func TestIsTransient(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRetryTransient(t *testing.T) {
+	opts := Options{MaxAttempts: 3, InitialBackoff: time.Millisecond}
+
+	t.Run("retries until success", func(t *testing.T) {
+		calls := 0
+		err := retryTransient(context.Background(), opts, func() error {
+			calls++
+			if calls < 3 {
+				return &transport.Error{StatusCode: http.StatusServiceUnavailable}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("retryTransient: %v", err)
+		}
+		if calls != 3 {
+			t.Errorf("attempted %d times, want 3", calls)
+		}
+	})
+
+	t.Run("gives up on a permanent error", func(t *testing.T) {
+		calls := 0
+		err := retryTransient(context.Background(), opts, func() error {
+			calls++
+			return &transport.Error{StatusCode: http.StatusForbidden}
+		})
+		if err == nil {
+			t.Fatal("expected the permanent error to surface")
+		}
+		if calls != 1 {
+			t.Errorf("attempted %d times, want 1 — 403 is not worth retrying", calls)
+		}
+	})
+
+	t.Run("stops at MaxAttempts", func(t *testing.T) {
+		calls := 0
+		err := retryTransient(context.Background(), opts, func() error {
+			calls++
+			return errors.New("dial tcp: connection refused")
+		})
+		if err == nil {
+			t.Fatal("expected the last error to surface")
+		}
+		if calls != opts.MaxAttempts {
+			t.Errorf("attempted %d times, want %d", calls, opts.MaxAttempts)
+		}
+	})
 }
