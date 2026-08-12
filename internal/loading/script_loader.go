@@ -132,12 +132,12 @@ func (p *scriptParser) handleTarget(
 ) (scriptAnnotation, error) {
 	// Combine annotation lines into a YAML snippet.
 	annotationContent := strings.Join(annotationLines, "\n")
-	lastLineNum := annotationLineNumbers[len(annotationLineNumbers)-1]
+	firstLineNum, lastLineNum := annotationLineRange(annotationLineNumbers)
 
 	var annotation scriptAnnotation
 	if len(annotationContent) > 0 {
 		if err := yaml.Unmarshal([]byte(annotationContent), &annotation); err != nil {
-			return scriptAnnotation{}, fmt.Errorf("failed to parse annotation block L%d-%d: %w", annotationLineNumbers[0], lastLineNum, err)
+			return scriptAnnotation{}, fmt.Errorf("failed to parse annotation block L%d-%d: %w", firstLineNum, lastLineNum, err)
 		}
 	}
 

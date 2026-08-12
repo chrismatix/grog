@@ -422,15 +422,13 @@ func validateTargetResultOutputs(target *model.Target, targetResult *gen.TargetR
 	slices.Sort(sortedExpectedOutputDefinitions)
 	slices.Sort(sortedLoadedOutputDefinitions)
 
-	for index := range sortedExpectedOutputDefinitions {
-		if sortedExpectedOutputDefinitions[index] != sortedLoadedOutputDefinitions[index] {
-			return fmt.Errorf(
-				"%s: cached outputs mismatch: expected outputs %v, got outputs %v",
-				target.Label,
-				expectedOutputDefinitions,
-				loadedOutputDefinitions,
-			)
-		}
+	if !slices.Equal(sortedExpectedOutputDefinitions, sortedLoadedOutputDefinitions) {
+		return fmt.Errorf(
+			"%s: cached outputs mismatch: expected outputs %v, got outputs %v",
+			target.Label,
+			expectedOutputDefinitions,
+			loadedOutputDefinitions,
+		)
 	}
 
 	return nil

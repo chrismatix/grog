@@ -107,12 +107,12 @@ func (p *makefileParser) handleTarget(
 ) error {
 	// Combine annotation lines into a YAML snippet.
 	annotationContent := strings.Join(annotationLines, "\n")
-	lastLineNum := annotationLineNumbers[len(annotationLineNumbers)-1]
+	firstLineNum, lastLineNum := annotationLineRange(annotationLineNumbers)
 
 	var annotation grogAnnotation
 	if len(annotationContent) > 0 {
 		if err := yaml.Unmarshal([]byte(annotationContent), &annotation); err != nil {
-			return fmt.Errorf("failed to parse annotation block L%d-%d: %w", annotationLineNumbers[0], lastLineNum, err)
+			return fmt.Errorf("failed to parse annotation block L%d-%d: %w", firstLineNum, lastLineNum, err)
 		}
 	}
 

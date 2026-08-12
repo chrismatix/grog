@@ -196,14 +196,14 @@ func parseLockFileContents(lockFileContents string) (int, string, error) {
 		return 0, "", errors.New("lockfile is empty")
 	}
 
-	parts := strings.SplitN(trimmedContents, lockFileFieldSeparator, 2)
-	processID, conversionError := strconv.Atoi(parts[0])
+	processIDField, commandField, hasCommand := strings.Cut(trimmedContents, lockFileFieldSeparator)
+	processID, conversionError := strconv.Atoi(processIDField)
 	if conversionError != nil {
 		return 0, "", conversionError
 	}
-	if len(parts) < 2 {
+	if !hasCommand {
 		return processID, "", nil
 	}
 
-	return processID, strings.TrimSpace(parts[1]), nil
+	return processID, strings.TrimSpace(commandField), nil
 }

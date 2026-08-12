@@ -11,6 +11,15 @@ When opening a Pull Request, check that:
 - The branch name follows our convention
 - Commits are squashed and follow our conventions
 
+## Linting
+
+Both of these run in CI (`.github/workflows/lint.yml`):
+
+- `prek run --all-files` formats the tree with `treefmt`.
+- `make nilaway` runs [NilAway](https://github.com/uber-go/nilaway) over the non-test
+  packages to catch potential nil panics. When a report is a false positive, silence it
+  with a `//nolint:nilaway // <reason>` comment on the offending line.
+
 ## Module Overview
 
 At a high level Grog execution can be split into three phases, `loading`, `analysis`, and `execution`.

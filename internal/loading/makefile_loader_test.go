@@ -116,6 +116,20 @@ build_error:
 			shouldError:       false,
 		},
 		{
+			name: "Annotation block without any comment lines",
+			input: `# @grog
+build_bare:
+	echo "bare"`,
+			expectedTargets: []TargetDTO{
+				{
+					Name:    "build_bare",
+					Command: "make build_bare",
+				},
+			},
+			expectedFoundFlag: true,
+			shouldError:       false,
+		},
+		{
 			name: "Multiple valid annotations in one file",
 			input: `# @grog
 # name: target_one

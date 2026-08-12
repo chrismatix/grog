@@ -109,11 +109,11 @@ func (t *Target) IsTestOnly() bool {
 }
 
 func (t *Target) CommandEllipsis() string {
-	lines := strings.SplitN(t.Command, "\n", 2)
-	firstLine := strings.TrimLeft(lines[0], " ")
+	firstLine, _, hasMoreLines := strings.Cut(t.Command, "\n")
+	firstLine = strings.TrimLeft(firstLine, " ")
 	if len(firstLine) > 70 {
 		return firstLine[:67] + "..."
-	} else if len(lines) > 1 {
+	} else if hasMoreLines {
 		return firstLine + "..."
 	}
 	return firstLine

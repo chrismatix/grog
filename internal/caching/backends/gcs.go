@@ -246,7 +246,7 @@ func (gcs *GCSCache) Size(ctx context.Context, path, key string) (int64, error) 
 	if err != nil {
 		return 0, fmt.Errorf("failed to get object attrs: %w", err)
 	}
-	return attrs.Size, nil
+	return attrs.Size, nil //nolint:nilaway // Attrs only returns nil alongside a non-nil error.
 }
 
 // Exists checks if a file exists in GCS.

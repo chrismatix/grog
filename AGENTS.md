@@ -31,6 +31,7 @@
 ## Testing expectations
 
 - For Go code changes run `go test ./...` (or at least the relevant packages). This is the baseline check that must pass before completion.
+- Also run `make nilaway` for Go changes: CI gates on it. Fix the reported nil flow where it is real, and only suppress genuine false positives with `//nolint:nilaway // <reason>` on the offending line.
 - If you modify integration test code, test scenarios, or behavior that affects CLI output, also run `go test ./integration/...` to ensure the CLI fixtures stay green. Use `make test update=<test_case>` if you need to refresh a single fixture.
 - When you regenerate the CLI docs (`docs/gen_docs.go`), verify that the generated files build by running `npm install` (once) and `npm run build` inside `docs/` if you touched the Astro site or its assets.
 

@@ -83,11 +83,13 @@ func (g *DirectedTargetGraph) GetSelectedSubgraph() *DirectedTargetGraph {
 
 	// Add edges between selected nodes
 	for fromLabel, toList := range g.outEdges {
-		if g.nodes[fromLabel].GetIsSelected() {
-			for _, to := range toList {
-				if to.GetIsSelected() {
-					subgraph.AddEdge(g.nodes[fromLabel], to)
-				}
+		from, exists := g.nodes[fromLabel]
+		if !exists || !from.GetIsSelected() {
+			continue
+		}
+		for _, to := range toList {
+			if to.GetIsSelected() {
+				subgraph.AddEdge(from, to)
 			}
 		}
 	}
