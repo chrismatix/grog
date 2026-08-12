@@ -239,8 +239,9 @@ func (r *Registry) PrepareOutputs(
 	}
 
 	// Append a push plan per (oci output, destination) for any oci_push entry
-	// declared on the target. Each plan runs after the cache plans so that
-	// image_id and manifest_digest are populated before it tries to source.
+	// declared on the target. Each plan runs after the cache plans, which
+	// populate image_id/manifest_digest and tee blobs to the destinations —
+	// leaving the push plan to verify blobs and write the manifest.
 	if r.pushEnabled != nil && r.pushEnabled() {
 		pushPlans, err := r.buildPushPlans(target, targetOutputs)
 		if err != nil {

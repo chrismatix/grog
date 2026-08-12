@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"grog/internal/caching"
+	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/model"
 	"grog/internal/oci_push"
@@ -147,13 +148,15 @@ func (d *DockerOutputHandler) Write(
 	}
 
 	plan := &dockerImageWritePlan{
-		dockerClient:   cli,
-		proxy:          proxy,
-		output:         dockerImageOutput,
-		loopbackRef:    loopbackRef,
-		repoName:       repoName,
-		localImageName: imageName,
-		targetLabel:    target.Label.String(),
+		dockerClient:       cli,
+		proxy:              proxy,
+		output:             dockerImageOutput,
+		loopbackRef:        loopbackRef,
+		repoName:           repoName,
+		localImageName:     imageName,
+		targetLabel:        target.Label.String(),
+		pushDestinations:   pushDestinations(target, imageName),
+		insecureRegistries: d.insecureRegistries,
 	}
 
 	return &PreparedOutput{Output: genOutput, WritePlan: plan}, nil
@@ -272,9 +275,73 @@ type dockerImageWritePlan struct {
 	repoName       string // path part of loopbackRef, used to look up the manifest digest
 	localImageName string
 	targetLabel    string
+
+	// pushDestinations, when non-empty, makes Execute tee the daemon's blob
+	// stream to these oci_push destinations while it lands in the CAS.
+	pushDestinations   []string
+	insecureRegistries []string
 }
 
+// pushDestinations returns the oci_push destinations declared for the image,
+// or nil when --push is off and blobs should only flow to the cache.
+func pushDestinations(target model.Target, imageName string) []string {
+	if !config.Global.Push {
+		return nil
+	}
+	return target.OciPush[imageName]
+}
+
+// Execute wraps the daemon push with the push tee's lifecycle: blobs stream
+// to every oci_push destination while they stream into the CAS, and the later
+// push plan only has to verify blobs and write the manifest.
 func (d *dockerImageWritePlan) Execute(ctx context.Context, tracker *worker.ProgressTracker) error {
+	tee := d.attachPushTee(ctx)
+	err := d.pushThroughProxy(ctx, tracker)
+	if tee != nil {
+		d.proxy.ClearTee(d.repoName)
+		if err != nil {
+			// Abandoned upload sessions never Commit/Cancel their sinks, so
+			// cancel outright rather than leaving destination uploads pending.
+			tee.Abort()
+		}
+		d.reportTee(ctx, tee)
+	}
+	return err
+}
+
+// attachPushTee registers a blob tee for the plan's push destinations, or
+// returns nil when there is nothing to tee (or the destinations don't parse —
+// the push plan surfaces that as a proper per-destination failure later).
+func (d *dockerImageWritePlan) attachPushTee(ctx context.Context) *oci_push.Tee {
+	if len(d.pushDestinations) == 0 {
+		return nil
+	}
+	tee, err := oci_push.NewTee(ctx, d.pushDestinations, func(destination string) bool {
+		return matchesInsecureRegistry(destination, d.insecureRegistries)
+	})
+	if err != nil {
+		console.GetLogger(ctx).Warnf("%s: %v", d.targetLabel, err)
+		return nil
+	}
+	d.proxy.SetTee(d.repoName, tee)
+	return tee
+}
+
+func (d *dockerImageWritePlan) reportTee(ctx context.Context, tee *oci_push.Tee) {
+	logger := console.GetLogger(ctx)
+	uploadCount, failures := tee.Wait()
+	for repo, err := range failures {
+		// Debug, not warn: the tee is best-effort and the push plan reports
+		// the authoritative per-destination outcome right after.
+		logger.Debugf("%s: streaming blobs to %s failed (the push will retry from the cache): %v",
+			d.targetLabel, repo, err)
+	}
+	if uploadCount > 0 {
+		logger.Debugf("%s: streamed %d blob uploads to push destinations during the cache write", d.targetLabel, uploadCount)
+	}
+}
+
+func (d *dockerImageWritePlan) pushThroughProxy(ctx context.Context, tracker *worker.ProgressTracker) error {
 	logger := console.GetLogger(ctx)
 
 	baseStatus := fmt.Sprintf("%s: caching docker image %s", d.targetLabel, d.localImageName)

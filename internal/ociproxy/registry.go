@@ -50,6 +50,22 @@ import (
 	"grog/internal/console"
 )
 
+// BlobTee mirrors blob uploads for one repository name to an additional
+// destination while they stream into the CAS. Registered via SetTee.
+type BlobTee interface {
+	// OpenBlob is called once per incoming blob upload; nil means skip.
+	OpenBlob() BlobSink
+}
+
+// BlobSink receives one blob's byte stream alongside the CAS staged writer.
+// Sinks are best-effort by contract: the proxy ignores Write errors, and a
+// sink failure must never fail the CAS write it shadows.
+type BlobSink interface {
+	io.Writer
+	Commit(digest string)
+	Cancel()
+}
+
 // Registry is an in-process OCI Distribution v2 server backed by a CAS.
 type Registry struct {
 	cas      *caching.Cas
@@ -71,6 +87,9 @@ type Registry struct {
 	uploadsMu sync.Mutex
 	uploads   map[string]*pendingUpload
 
+	teesMu sync.Mutex
+	tees   map[string]BlobTee
+
 	// manifestsByName remembers the digest of the most recent manifest PUT
 	// per repository name. The DockerOutputHandler reads this back after
 	// `docker push` to learn the manifest digest the daemon produced.
@@ -85,6 +104,7 @@ type Registry struct {
 type pendingUpload struct {
 	mu       sync.Mutex
 	writer   caching.StagedWriter
+	sink     BlobSink // optional tee destination; nil when no tee is registered
 	digester hash.Hash
 	written  int64
 	finished bool // true after Commit/Cancel; further Writes are rejected
@@ -110,6 +130,7 @@ func New(ctx context.Context, cas *caching.Cas) (*Registry, error) {
 		sessionCtx:      sessionCtx,
 		sessionCancel:   sessionCancel,
 		uploads:         make(map[string]*pendingUpload),
+		tees:            make(map[string]BlobTee),
 		manifestsByName: make(map[string]string),
 	}
 
@@ -314,8 +335,12 @@ func (r *Registry) startBlobUpload(w http.ResponseWriter, req *http.Request, nam
 			writeError(w, http.StatusBadRequest, "DIGEST_INVALID", "invalid digest format")
 			return
 		}
-		if err := r.writeBlobMonolithic(req.Context(), digest, req.Body); err != nil {
-			writeError(w, http.StatusInternalServerError, "BLOB_UPLOAD_INVALID", err.Error())
+		if err := r.writeBlobMonolithic(req.Context(), name, digest, req.Body); err != nil {
+			if errors.Is(err, errDigestMismatch) {
+				writeError(w, http.StatusBadRequest, "DIGEST_INVALID", err.Error())
+			} else {
+				writeError(w, http.StatusInternalServerError, "BLOB_UPLOAD_INVALID", err.Error())
+			}
 			return
 		}
 		w.Header().Set("Location", "/v2/"+name+"/blobs/"+digest)
@@ -330,7 +355,7 @@ func (r *Registry) startBlobUpload(w http.ResponseWriter, req *http.Request, nam
 	// POST handler returns 202 immediately and net/http cancels its
 	// request context, but the staged writer needs to keep accepting
 	// bytes through subsequent PATCH/PUT requests.
-	id, err := r.openUpload()
+	id, err := r.openUpload(name)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "BLOB_UPLOAD_INVALID", err.Error())
 		return
@@ -344,26 +369,16 @@ func (r *Registry) startBlobUpload(w http.ResponseWriter, req *http.Request, nam
 // writeBlobMonolithic streams a single-request blob upload into the CAS and
 // verifies the supplied digest at the end. Used by the rare monolithic POST
 // path; chunked PATCH/PUT goes through the upload-session machinery instead.
-func (r *Registry) writeBlobMonolithic(ctx context.Context, digest string, body io.Reader) error {
-	stagedWriter, err := r.cas.BeginWrite(ctx)
+func (r *Registry) writeBlobMonolithic(ctx context.Context, name, digest string, body io.Reader) error {
+	upload, err := r.newUpload(ctx, name)
 	if err != nil {
-		return fmt.Errorf("begin staged write: %w", err)
+		return err
 	}
-	digester := sha256.New()
-	tee := io.TeeReader(body, digester)
-	if _, err := io.Copy(stagedWriter, tee); err != nil {
-		_ = stagedWriter.Cancel(ctx)
+	if _, err := io.Copy(upload, body); err != nil {
+		upload.cancel(ctx)
 		return fmt.Errorf("stream body to staged writer: %w", err)
 	}
-	actual := "sha256:" + hex.EncodeToString(digester.Sum(nil))
-	if actual != digest {
-		_ = stagedWriter.Cancel(ctx)
-		return fmt.Errorf("digest mismatch: client=%s actual=%s", digest, actual)
-	}
-	if err := stagedWriter.Commit(ctx, "cas", digest); err != nil {
-		return fmt.Errorf("commit blob: %w", err)
-	}
-	return nil
+	return upload.commit(ctx, digest)
 }
 
 func (r *Registry) patchBlobUpload(w http.ResponseWriter, req *http.Request, name, uploadId string) {
@@ -444,8 +459,6 @@ func (r *Registry) finishBlobUpload(w http.ResponseWriter, req *http.Request, na
 			return
 		}
 	}
-	actualDigest := "sha256:" + hex.EncodeToString(upload.digester.Sum(nil))
-	writer := upload.writer
 	upload.mu.Unlock()
 
 	// Always remove the upload from the registry's session map, regardless
@@ -455,15 +468,12 @@ func (r *Registry) finishBlobUpload(w http.ResponseWriter, req *http.Request, na
 	// Use the session ctx for Commit/Cancel — these run on a backend
 	// goroutine that may outlive the request, and we don't want a client
 	// disconnect to interrupt a final commit.
-	if actualDigest != digest {
-		_ = writer.Cancel(r.sessionCtx)
-		writeError(w, http.StatusBadRequest, "DIGEST_INVALID",
-			fmt.Sprintf("digest mismatch: client=%s actual=%s", digest, actualDigest))
-		return
-	}
-
-	if err := writer.Commit(r.sessionCtx, "cas", digest); err != nil {
-		writeError(w, http.StatusInternalServerError, "BLOB_UPLOAD_INVALID", err.Error())
+	if err := upload.commit(r.sessionCtx, digest); err != nil {
+		if errors.Is(err, errDigestMismatch) {
+			writeError(w, http.StatusBadRequest, "DIGEST_INVALID", err.Error())
+		} else {
+			writeError(w, http.StatusInternalServerError, "BLOB_UPLOAD_INVALID", err.Error())
+		}
 		return
 	}
 
@@ -543,6 +553,32 @@ func (r *Registry) putManifest(w http.ResponseWriter, req *http.Request, name, r
 	w.WriteHeader(http.StatusCreated)
 }
 
+// SetTee registers a tee for blob uploads under the given repository name.
+// Callers must ClearTee once the push the tee shadows has completed. A
+// second SetTee for the same name replaces the first (last writer wins).
+func (r *Registry) SetTee(name string, tee BlobTee) {
+	r.teesMu.Lock()
+	defer r.teesMu.Unlock()
+	r.tees[name] = tee
+}
+
+// ClearTee unregisters the tee for the given repository name.
+func (r *Registry) ClearTee(name string) {
+	r.teesMu.Lock()
+	defer r.teesMu.Unlock()
+	delete(r.tees, name)
+}
+
+func (r *Registry) openSink(name string) BlobSink {
+	r.teesMu.Lock()
+	tee := r.tees[name]
+	r.teesMu.Unlock()
+	if tee == nil {
+		return nil
+	}
+	return tee.OpenBlob()
+}
+
 // LastManifestDigest returns the digest of the most recent manifest PUT
 // against the given repository name, or "" if none has been received.
 // Used by the docker output handler to discover the manifest digest the
@@ -555,23 +591,33 @@ func (r *Registry) LastManifestDigest(name string) string {
 
 // upload session management ---------------------------------------------------
 
-// openUpload starts a new chunked upload session by opening a CAS staged
-// writer up front. Subsequent PATCH calls stream their bodies straight into
-// this writer, and PUT either Commits or Cancels it depending on whether the
-// daemon-supplied digest matches the running SHA256.
+// newUpload opens a CAS staged writer plus the registered tee sink (if any)
+// for the given repository name and bundles them into a pendingUpload.
+func (r *Registry) newUpload(ctx context.Context, name string) (*pendingUpload, error) {
+	stagedWriter, err := r.cas.BeginWrite(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("open staged writer: %w", err)
+	}
+	return &pendingUpload{
+		writer:   stagedWriter,
+		sink:     r.openSink(name),
+		digester: sha256.New(),
+	}, nil
+}
+
+// openUpload starts a new chunked upload session. Subsequent PATCH calls
+// stream their bodies straight into the staged writer, and PUT either Commits
+// or Cancels it depending on whether the daemon-supplied digest matches the
+// running SHA256.
 //
 // The staged writer is opened with the registry's long-lived sessionCtx so
 // it survives the POST handler returning. Backends like S3/GCS/Azure run a
 // background goroutine for the upload that observes ctx cancellation; using
 // req.Context() here would tear the upload down before the first PATCH.
-func (r *Registry) openUpload() (string, error) {
-	stagedWriter, err := r.cas.BeginWrite(r.sessionCtx)
+func (r *Registry) openUpload(name string) (string, error) {
+	upload, err := r.newUpload(r.sessionCtx, name)
 	if err != nil {
-		return "", fmt.Errorf("open staged writer: %w", err)
-	}
-	upload := &pendingUpload{
-		writer:   stagedWriter,
-		digester: sha256.New(),
+		return "", err
 	}
 	id := uuid.NewString()
 	r.uploadsMu.Lock()
@@ -619,9 +665,38 @@ func (u *pendingUpload) Write(p []byte) (int, error) {
 	n, err := u.writer.Write(p)
 	if n > 0 {
 		u.digester.Write(p[:n])
+		if u.sink != nil {
+			_, _ = u.sink.Write(p[:n])
+		}
 		u.written += int64(n)
 	}
 	return n, err
+}
+
+var errDigestMismatch = errors.New("digest mismatch")
+
+// commit verifies the client-supplied digest against the running SHA256 and
+// then finalises the staged writer and the tee sink together. The caller must
+// have marked the upload finished (or own it exclusively) before calling.
+func (u *pendingUpload) commit(ctx context.Context, digest string) error {
+	actual := "sha256:" + hex.EncodeToString(u.digester.Sum(nil))
+	if actual != digest {
+		_ = u.writer.Cancel(ctx)
+		if u.sink != nil {
+			u.sink.Cancel()
+		}
+		return fmt.Errorf("%w: client=%s actual=%s", errDigestMismatch, digest, actual)
+	}
+	if err := u.writer.Commit(ctx, "cas", digest); err != nil {
+		if u.sink != nil {
+			u.sink.Cancel()
+		}
+		return fmt.Errorf("commit blob: %w", err)
+	}
+	if u.sink != nil {
+		u.sink.Commit(digest)
+	}
+	return nil
 }
 
 // cancel discards the staged writer. Safe to call from any goroutine; the
@@ -634,6 +709,10 @@ func (u *pendingUpload) cancel(ctx context.Context) {
 		return
 	}
 	_ = u.writer.Cancel(ctx)
+	if u.sink != nil {
+		u.sink.Cancel()
+		u.sink = nil
+	}
 	u.writer = nil
 	u.finished = true
 }

@@ -333,6 +333,14 @@ digest. `--push` applies transitively across the build selection, so a
 The `oci_push` map is **not** part of the cache key, so bumping the tag in
 your destination string reuses the cached image and only re-runs the push.
 
+On a cache miss with the default (filesystem/S3/GCS/Azure) backend, layer
+blobs are streamed to every push destination _while_ they stream into the
+cache — each layer's bytes leave the daemon once instead of being read back
+from the cache for the push. The push step that follows then just verifies
+the blobs arrived and writes the manifest; if any streamed upload failed it
+falls back to uploading from the cache, so a flaky destination costs
+bandwidth, never correctness.
+
 ### Insecure registries
 
 By default Grog pushes over HTTPS. To allow plain HTTP destinations (local

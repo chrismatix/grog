@@ -519,3 +519,204 @@ func TestConcurrentChunkedUploadsAreIsolated(t *testing.T) {
 		assert.Equal(t, payloads[i], got, "session %d", i)
 	}
 }
+
+// blob tee -------------------------------------------------------------------
+
+type recordingSink struct {
+	mu         sync.Mutex
+	data       bytes.Buffer
+	committed  string
+	cancelled  bool
+	failWrites bool
+}
+
+func (s *recordingSink) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.failWrites {
+		return 0, fmt.Errorf("sink write failure")
+	}
+	return s.data.Write(p)
+}
+
+func (s *recordingSink) Commit(digest string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.committed = digest
+}
+
+func (s *recordingSink) Cancel() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cancelled = true
+}
+
+type recordingTee struct {
+	mu         sync.Mutex
+	sinks      []*recordingSink
+	failWrites bool
+}
+
+func (t *recordingTee) OpenBlob() ociproxy.BlobSink {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	sink := &recordingSink{failWrites: t.failWrites}
+	t.sinks = append(t.sinks, sink)
+	return sink
+}
+
+func TestChunkedUploadTeesToSink(t *testing.T) {
+	reg, cas := newTestRegistry(t)
+	ctx := context.Background()
+
+	tee := &recordingTee{}
+	reg.SetTee("some/repo", tee)
+
+	payload := bytes.Repeat([]byte("0123456789"), 1500)
+	digest := digestOf(payload)
+
+	startResp, err := http.Post(urlFor(reg, "/v2/some/repo/blobs/uploads/"), "application/octet-stream", nil)
+	require.NoError(t, err)
+	startResp.Body.Close()
+	location := startResp.Header.Get("Location")
+
+	for _, chunk := range [][]byte{payload[:7000], payload[7000:]} {
+		req, err := http.NewRequest(http.MethodPatch, urlFor(reg, location), bytes.NewReader(chunk))
+		require.NoError(t, err)
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		resp.Body.Close()
+		require.Equal(t, http.StatusAccepted, resp.StatusCode)
+	}
+
+	putReq, err := http.NewRequest(http.MethodPut, urlFor(reg, location)+"?digest="+digest, nil)
+	require.NoError(t, err)
+	putResp, err := http.DefaultClient.Do(putReq)
+	require.NoError(t, err)
+	putResp.Body.Close()
+	require.Equal(t, http.StatusCreated, putResp.StatusCode)
+
+	require.Len(t, tee.sinks, 1)
+	assert.Equal(t, payload, tee.sinks[0].data.Bytes())
+	assert.Equal(t, digest, tee.sinks[0].committed)
+	assert.False(t, tee.sinks[0].cancelled)
+
+	got, err := cas.LoadBytes(ctx, digest)
+	require.NoError(t, err)
+	assert.Equal(t, payload, got)
+}
+
+func TestMonolithicUploadTeesToSink(t *testing.T) {
+	reg, _ := newTestRegistry(t)
+
+	tee := &recordingTee{}
+	reg.SetTee("some/repo", tee)
+
+	payload := []byte("monolithic tee payload")
+	digest := digestOf(payload)
+
+	resp, err := http.Post(
+		urlFor(reg, "/v2/some/repo/blobs/uploads/?digest="+digest),
+		"application/octet-stream",
+		bytes.NewReader(payload),
+	)
+	require.NoError(t, err)
+	resp.Body.Close()
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	require.Len(t, tee.sinks, 1)
+	assert.Equal(t, payload, tee.sinks[0].data.Bytes())
+	assert.Equal(t, digest, tee.sinks[0].committed)
+}
+
+func TestUploadDigestMismatchCancelsSink(t *testing.T) {
+	reg, _ := newTestRegistry(t)
+
+	tee := &recordingTee{}
+	reg.SetTee("some/repo", tee)
+
+	startResp, err := http.Post(urlFor(reg, "/v2/some/repo/blobs/uploads/"), "application/octet-stream", nil)
+	require.NoError(t, err)
+	startResp.Body.Close()
+	location := startResp.Header.Get("Location")
+
+	patchReq, err := http.NewRequest(http.MethodPatch, urlFor(reg, location), strings.NewReader("abc"))
+	require.NoError(t, err)
+	patchResp, err := http.DefaultClient.Do(patchReq)
+	require.NoError(t, err)
+	patchResp.Body.Close()
+
+	putReq, err := http.NewRequest(http.MethodPut, urlFor(reg, location)+"?digest="+digestOf([]byte("xyz")), nil)
+	require.NoError(t, err)
+	putResp, err := http.DefaultClient.Do(putReq)
+	require.NoError(t, err)
+	putResp.Body.Close()
+	require.Equal(t, http.StatusBadRequest, putResp.StatusCode)
+
+	require.Len(t, tee.sinks, 1)
+	assert.True(t, tee.sinks[0].cancelled)
+	assert.Empty(t, tee.sinks[0].committed)
+}
+
+func TestClearTeeStopsTeeing(t *testing.T) {
+	reg, _ := newTestRegistry(t)
+
+	tee := &recordingTee{}
+	reg.SetTee("some/repo", tee)
+	reg.ClearTee("some/repo")
+
+	payload := []byte("no tee expected")
+	resp, err := http.Post(
+		urlFor(reg, "/v2/some/repo/blobs/uploads/?digest="+digestOf(payload)),
+		"application/octet-stream",
+		bytes.NewReader(payload),
+	)
+	require.NoError(t, err)
+	resp.Body.Close()
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	assert.Empty(t, tee.sinks)
+}
+
+func TestTeeOnlyAppliesToItsRepo(t *testing.T) {
+	reg, _ := newTestRegistry(t)
+
+	tee := &recordingTee{}
+	reg.SetTee("teed/repo", tee)
+
+	payload := []byte("other repo payload")
+	resp, err := http.Post(
+		urlFor(reg, "/v2/other/repo/blobs/uploads/?digest="+digestOf(payload)),
+		"application/octet-stream",
+		bytes.NewReader(payload),
+	)
+	require.NoError(t, err)
+	resp.Body.Close()
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	assert.Empty(t, tee.sinks)
+}
+
+func TestFailingSinkDoesNotFailUpload(t *testing.T) {
+	reg, cas := newTestRegistry(t)
+	ctx := context.Background()
+
+	tee := &recordingTee{failWrites: true}
+	reg.SetTee("some/repo", tee)
+
+	payload := []byte("payload that the sink rejects")
+	digest := digestOf(payload)
+
+	resp, err := http.Post(
+		urlFor(reg, "/v2/some/repo/blobs/uploads/?digest="+digest),
+		"application/octet-stream",
+		bytes.NewReader(payload),
+	)
+	require.NoError(t, err)
+	resp.Body.Close()
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	got, err := cas.LoadBytes(ctx, digest)
+	require.NoError(t, err)
+	assert.Equal(t, payload, got)
+}
