@@ -7,20 +7,7 @@ on:
   pull_request:
 
 jobs:
-  prek:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Set up mise
-        uses: jdx/mise-action@v4
-
-      - name: Run prek
-        run: prek run --all-files
-        env:
-          TREEFMT_CI: true # Don't use formatter cache
-
-  nilaway:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -34,9 +21,11 @@ jobs:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: ${{ runner.os }}-nilaway-${{ hashFiles('go.sum') }}
+          key: ${{ runner.os }}-lint-${{ hashFiles('go.sum') }}
           restore-keys: |
-            ${{ runner.os }}-nilaway-
+            ${{ runner.os }}-lint-
 
-      - name: Run NilAway
-        run: make nilaway
+      - name: Run lint
+        run: make lint
+        env:
+          TREEFMT_CI: true # Don't use formatter cache
