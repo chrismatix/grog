@@ -116,6 +116,19 @@ build_error:
 			shouldError:       false,
 		},
 		{
+			name: "Bare annotation block with non matching target definition",
+			input: `setup:
+	echo "setup"
+
+# @grog
+build_bug
+	npm run build`,
+			expectedTargets:   nil,
+			expectedFoundFlag: true,
+			shouldError:       true,
+			errorContains:     "expected a make target definition in L5",
+		},
+		{
 			name: "Annotation block without any comment lines",
 			input: `# @grog
 build_bare:
