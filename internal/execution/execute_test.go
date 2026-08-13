@@ -534,6 +534,7 @@ func TestExecutorDeferAsyncWaitKeepsIOPoolAliveAfterExecute(t *testing.T) {
 		targetCache,
 		taintCache,
 		registry,
+		nil,
 		graph,
 		false,
 		false,

@@ -125,21 +125,3 @@ func TestLocalOciPushPlan_PushesFromDaemon(t *testing.T) {
 		t.Errorf("expected one pushed report, got %+v", r)
 	}
 }
-
-func TestOciPushPlan_PushesOncePerDestination(t *testing.T) {
-	pusher := &fakeImagePusher{}
-	reporter := NewPushReporter(nil)
-
-	for range 2 {
-		if err := newTestPlan(pusher, reporter, "repo/image:1").Execute(context.Background(), newTestProgress(t)); err != nil {
-			t.Fatalf("Execute: %v", err)
-		}
-	}
-
-	if len(pusher.calls) != 1 {
-		t.Errorf("PushImage called %d times, want 1 — the same destination must not be pushed twice", len(pusher.calls))
-	}
-	if r := reporter.Reports(); len(r) != 1 {
-		t.Errorf("summary lists %d entries, want 1: %+v", len(r), r)
-	}
-}

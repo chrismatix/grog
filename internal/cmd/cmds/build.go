@@ -25,6 +25,8 @@ import (
 	"grog/internal/locking"
 	"grog/internal/model"
 	"grog/internal/output"
+	"grog/internal/output/handlers"
+	"grog/internal/output/push"
 	"grog/internal/selection"
 	"grog/internal/tracing"
 )
@@ -165,6 +167,19 @@ func RunBuildAndAfter(
 	taintCache := caching.NewTaintStore()
 	registry := output.NewRegistry(ctx, cas)
 
+	ociHandler, ok := registry.Handler(handlers.OCIHandler)
+	if !ok {
+		logger.Fatalf("oci output handler is not registered")
+	}
+	pusher, err := push.New(
+		ociHandler,
+		func() bool { return config.Global.Push },
+		func() bool { return config.Global.FailFast },
+	)
+	if err != nil {
+		logger.Fatalf("could not instantiate image pusher: %v", err)
+	}
+
 	// Only lock the workspace once necessary, i.e., before we start building.
 	// releaseWorkspaceLock is invoked explicitly before afterBuildSuccess so a
 	// user binary that itself shells out to grog doesn't deadlock on the lock.
@@ -191,6 +206,7 @@ func RunBuildAndAfter(
 		targetCache,
 		taintCache,
 		registry,
+		pusher,
 		graph,
 		failFast,
 		streamLogs,
@@ -232,7 +248,7 @@ func RunBuildAndAfter(
 	}
 	if afterBuildSuccess != nil && buildOK {
 		releaseWorkspaceLock()
-		if pushBeforeAfter && registry.PushReporter().HasFailures() {
+		if pushBeforeAfter && pusher.Reporter().HasFailures() {
 			logger.Errorf("Skipping post-build callback because one or more pushes failed.")
 		} else {
 			afterBuildErr = afterBuildSuccess(executor)
@@ -243,7 +259,7 @@ func RunBuildAndAfter(
 		executor.WaitForAsyncWrites(ctx)
 	}
 
-	pushHadFailures := registry.PushReporter().RenderSummary(logger)
+	pushHadFailures := pusher.Reporter().RenderSummary(logger)
 
 	// Close output handlers (notably the loopback docker registry) only after
 	// async writes have drained. Closing earlier would tear the proxy down

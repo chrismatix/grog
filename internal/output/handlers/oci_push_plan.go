@@ -53,10 +53,6 @@ func (p *OciPushPlan) Execute(ctx context.Context, tracker *worker.ProgressTrack
 		return err
 	}
 
-	if !p.reporter.Claim(p.targetLabel, p.destination) {
-		return nil
-	}
-
 	tracker.SetStatus(fmt.Sprintf("%s: pushing %s", p.targetLabel, p.destination))
 
 	skipped, err := p.push(ctx, tracker)

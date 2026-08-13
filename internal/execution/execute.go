@@ -13,6 +13,7 @@ import (
 	"grog/internal/model"
 	"grog/internal/output"
 	"grog/internal/output/handlers"
+	"grog/internal/output/push"
 	"grog/internal/proto/gen"
 	"grog/internal/worker"
 	"path/filepath"
@@ -37,6 +38,7 @@ type Executor struct {
 	targetCache      *caching.TargetResultCache
 	taintStore       *caching.TaintStore
 	registry         *output.Registry
+	pusher           *push.Pusher
 	graph            *dag.DirectedTargetGraph
 	failFast         bool
 	enableCache      bool
@@ -57,6 +59,7 @@ func NewExecutor(
 	targetCache *caching.TargetResultCache,
 	taintStore *caching.TaintStore,
 	registry *output.Registry,
+	pusher *push.Pusher,
 	graph *dag.DirectedTargetGraph,
 	failFast bool,
 	streamLogs bool,
@@ -67,6 +70,7 @@ func NewExecutor(
 		targetCache:      targetCache,
 		taintStore:       taintStore,
 		registry:         registry,
+		pusher:           pusher,
 		graph:            graph,
 		failFast:         failFast,
 		enableCache:      enableCache,
@@ -411,10 +415,9 @@ func (e *Executor) getTaskFunc(
 				// Pushes read the image from the cache rather than from the
 				// loaded outputs, so --push still has to run for a target
 				// whose outputs we deliberately never load.
-				pushProgress := worker.NewProgressTracker(fmt.Sprintf("%s: pushing", target.Label), 0, update)
-				if pushErr := e.registry.PushCachedOutputs(ctx, target, targetResult, pushProgress); pushErr != nil {
-					logger.Errorf("%s: %v", target.Label, pushErr)
-				}
+				e.pushCachedTarget(ctx, target, targetResult, worker.NewProgressTracker(
+					fmt.Sprintf("%s: pushing", target.Label), 0, update,
+				))
 				logTargetCached(ctx, logger, target, float64(targetResult.ExecutionDurationMillis)/1000)
 				return dag.CacheHit, nil
 			}
@@ -434,6 +437,7 @@ func (e *Executor) getTaskFunc(
 				// Don't return so that we instead break out and continue executing the target
 				logger.Errorf("%s re-running due to output loading failure: %v", target.Label, loadingErr)
 			} else {
+				e.pushCachedTarget(ctx, target, targetResult, progress)
 				// Log the cached execution time recorded when the target was
 				// originally built, not the (near-zero) cache-load time.
 				logTargetCached(ctx, logger, target, float64(targetResult.ExecutionDurationMillis)/1000)
@@ -458,6 +462,20 @@ func (e *Executor) getTaskFunc(
 		}
 
 		return e.executeTarget(ctx, target, binToolPaths, outputIdentifiers, transitiveOutputs, taggedOutputs, update, isTainted)
+	}
+}
+
+// pushCachedTarget ships a cache-hit target's oci_push destinations. Push
+// failures belong in the end-of-build summary, so they must not turn a cache
+// hit into a re-run; only a malformed oci_push map is worth logging here.
+func (e *Executor) pushCachedTarget(
+	ctx context.Context,
+	target *model.Target,
+	targetResult *gen.TargetResult,
+	progress *worker.ProgressTracker,
+) {
+	if err := e.pusher.PushFromCache(ctx, target, targetResult, progress); err != nil {
+		console.GetLogger(ctx).Errorf("%s: %v", target.Label, err)
 	}
 }
 
@@ -597,7 +615,7 @@ func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, u
 				TargetResult: targetResult,
 				// Nothing was staged to the cache, so oci_push has to ship the
 				// image straight out of the local docker daemon.
-				WritePlans: e.registry.BuildLocalPushPlans(target),
+				WritePlans: e.pusher.PlansFromDaemon(target),
 			}
 		}
 		// TODO should we even store this in the cache given that the target
@@ -630,6 +648,14 @@ func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, u
 			return writeErr
 		}
 		preparedTarget = writeResult
+
+		// Appended after the cache plans so that image_id and manifest_digest
+		// are populated before a push tries to source them.
+		pushPlans, pushPlanErr := e.pusher.PlansFromCache(target, preparedTarget.TargetResult.GetOutputs())
+		if pushPlanErr != nil {
+			return pushPlanErr
+		}
+		preparedTarget.WritePlans = append(preparedTarget.WritePlans, pushPlans...)
 	}
 	if err != nil {
 		return err
