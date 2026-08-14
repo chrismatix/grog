@@ -119,15 +119,16 @@ func (w *Walker) Walk(
 		readyCh := make(chan any, 1)
 		cancelCh := make(chan any, 1)
 
-		w.nodeInfoMap[node.GetLabel()] = &nodeInfo{
+		info := &nodeInfo{
 			done:   doneCh,
 			ready:  readyCh,
 			cancel: cancelCh,
 		}
+		w.nodeInfoMap[node.GetLabel()] = info
 
 		w.wait.Add(1)
 		// start all routines
-		go w.nodeRoutine(ctx, node, w.nodeInfoMap[node.GetLabel()])
+		go w.nodeRoutine(ctx, node, info)
 	}
 
 	// Map is fully populated; now start the no-dependency nodes.

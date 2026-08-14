@@ -11,6 +11,16 @@ When opening a Pull Request, check that:
 - The branch name follows our convention
 - Commits are squashed and follow our conventions
 
+## Linting
+
+`make lint` is the single entrypoint and is exactly what CI runs
+(`.github/workflows/lint.yml`). It chains:
+
+- `make prek` — formats the tree with `treefmt` and runs the `prek` hooks.
+- `make nilaway` — runs [NilAway](https://github.com/uber-go/nilaway) over the non-test
+  packages to catch potential nil panics. When a report is a false positive, silence it
+  with a `//nolint:nilaway // <reason>` comment on the offending line.
+
 ## Module Overview
 
 At a high level Grog execution can be split into three phases, `loading`, `analysis`, and `execution`.

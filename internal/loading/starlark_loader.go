@@ -451,7 +451,7 @@ func starlarkListToStringSlice(list *starlark.List) ([]string, error) {
 	for iter.Next(&val) {
 		str, ok := val.(starlark.String)
 		if !ok {
-			return nil, fmt.Errorf("expected string, got %s", val.Type())
+			return nil, fmt.Errorf("expected string, got %s", val.Type()) //nolint:nilaway // Iterate assigns val before Next reports true.
 		}
 		result = append(result, string(str))
 	}
@@ -549,7 +549,7 @@ func starlarkListToOutputChecks(list *starlark.List) ([]model.OutputCheck, error
 				}
 			}
 		} else {
-			return nil, fmt.Errorf("output_check must be dict or struct, got %s", val.Type())
+			return nil, fmt.Errorf("output_check must be dict or struct, got %s", val.Type()) //nolint:nilaway // Iterate assigns val before Next reports true.
 		}
 
 		result = append(result, model.OutputCheck{

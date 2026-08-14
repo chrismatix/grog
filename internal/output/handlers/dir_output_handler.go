@@ -446,7 +446,7 @@ func (d *DirectoryOutputHandler) Load(
 	logger.Debugf("loading directory from cache for target %s → %s", target.Label, dirPath)
 
 	// Fetch the tree from CAS
-	treeDigest := directoryOutput.GetTreeDigest().Hash
+	treeDigest := directoryOutput.GetTreeDigest().GetHash()
 
 	// Check the current directory hash against the cached tree
 	// so that we can avoid downloading the directory if it hasn't changed

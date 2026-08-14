@@ -199,8 +199,7 @@ func (d *DockerRegistryOutputHandler) Write(
 
 func makeRegistryAuth(ref string) (string, error) {
 	// Extract registry hostname (e.g. "gcr.io" or "myregistry.example.com")
-	parts := strings.SplitN(ref, "/", 2)
-	registry := parts[0]
+	registry, _, _ := strings.Cut(ref, "/")
 
 	// Load CLI config (respects DOCKER_CONFIG / XDG_CONFIG_HOME / ~/.docker)
 	cfg, err := dockerconfig.Load("")

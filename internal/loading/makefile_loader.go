@@ -86,7 +86,7 @@ func (p *makefileParser) parse() (PackageDTO, bool, error) {
 					annotationLineNumbers = append(annotationLineNumbers, lineCount)
 				} else {
 					// End of annotation: this should be the target definition.
-					if err := p.handleTarget(annotationLines, annotationLineNumbers, nextLine); err != nil {
+					if err := p.handleTarget(annotationLines, annotationLineNumbers, nextLine, lineCount); err != nil {
 						return p.pkg, targetsFound, err
 					}
 					// Break out of the loop.
@@ -104,22 +104,23 @@ func (p *makefileParser) handleTarget(
 	annotationLines []string,
 	annotationLineNumbers []int,
 	targetLine string,
+	targetLineNumber int,
 ) error {
 	// Combine annotation lines into a YAML snippet.
 	annotationContent := strings.Join(annotationLines, "\n")
-	lastLineNum := annotationLineNumbers[len(annotationLineNumbers)-1]
+	firstLineNum, lastLineNum := annotationLineRange(annotationLineNumbers)
 
 	var annotation grogAnnotation
 	if len(annotationContent) > 0 {
 		if err := yaml.Unmarshal([]byte(annotationContent), &annotation); err != nil {
-			return fmt.Errorf("failed to parse annotation block L%d-%d: %w", annotationLineNumbers[0], lastLineNum, err)
+			return fmt.Errorf("failed to parse annotation block L%d-%d: %w", firstLineNum, lastLineNum, err)
 		}
 	}
 
 	// Process the target definition.
 	trimmedTarget := strings.TrimSpace(targetLine)
 	if !strings.Contains(trimmedTarget, ":") {
-		return fmt.Errorf("expected a make target definition in L%d ending with ':', got: %s", lastLineNum+1, trimmedTarget)
+		return fmt.Errorf("expected a make target definition in L%d ending with ':', got: %s", targetLineNumber, trimmedTarget)
 	}
 	// Extract the target name (remove the trailing colon).
 	targetName := strings.Split(trimmedTarget, ":")[0]

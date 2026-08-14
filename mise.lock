@@ -168,6 +168,10 @@ url = "https://dl.google.com/go/go1.26.3.darwin-amd64.tar.gz"
 checksum = "sha256:20d2ceafb4ed41b96b879010927b28bc92a5be57a7c1801ce365a9ca51d3224a"
 url = "https://dl.google.com/go/go1.26.3.windows-amd64.zip"
 
+[[tools."go:go.uber.org/nilaway/cmd/nilaway"]]
+version = "0.0.0-20260808063849-8649a03c818a"
+backend = "go:go.uber.org/nilaway/cmd/nilaway"
+
 [[tools."go:golang.org/x/tools/cmd/goimports"]]
 version = "0.48.0"
 backend = "go:golang.org/x/tools/cmd/goimports"
