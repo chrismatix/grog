@@ -15,18 +15,25 @@ import (
 // the test set. It satisfies the ImagePusher interface without bringing up a
 // docker daemon or a real registry.
 type fakeImagePusher struct {
-	calls   []pushCall
-	skipped bool
-	err     error
+	calls      []pushCall
+	localCalls []pushCall
+	skipped    bool
+	err        error
 }
 
 type pushCall struct {
 	destination string
 	imageID     string
+	localTag    string
 }
 
 func (f *fakeImagePusher) PushImage(_ context.Context, image *gen.OCIImageOutput, dest string, _ *worker.ProgressTracker) (bool, error) {
 	f.calls = append(f.calls, pushCall{destination: dest, imageID: image.GetImageId()})
+	return f.skipped, f.err
+}
+
+func (f *fakeImagePusher) PushLocalImage(_ context.Context, localTag, dest string, _ *worker.ProgressTracker) (bool, error) {
+	f.localCalls = append(f.localCalls, pushCall{destination: dest, localTag: localTag})
 	return f.skipped, f.err
 }
 
@@ -97,5 +104,24 @@ func TestOciPushPlan_FailFastAborts(t *testing.T) {
 	}
 	if len(subsequent.calls) != 0 {
 		t.Errorf("PushImage was invoked after abort (%d calls)", len(subsequent.calls))
+	}
+}
+
+func TestLocalOciPushPlan_PushesFromDaemon(t *testing.T) {
+	pusher := &fakeImagePusher{}
+	reporter := NewPushReporter(nil)
+
+	plan := NewLocalOciPushPlan(pusher, "app-image", "repo/image:1", "//pkg:tgt", reporter)
+	if err := plan.Execute(context.Background(), newTestProgress(t)); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if len(pusher.calls) != 0 {
+		t.Errorf("cache-sourced PushImage was used for a no-cache target: %+v", pusher.calls)
+	}
+	if len(pusher.localCalls) != 1 || pusher.localCalls[0].localTag != "app-image" {
+		t.Fatalf("PushLocalImage calls = %+v, want one for app-image", pusher.localCalls)
+	}
+	if r := reporter.Reports(); len(r) != 1 || r[0].Err != nil {
+		t.Errorf("expected one pushed report, got %+v", r)
 	}
 }

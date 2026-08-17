@@ -46,6 +46,10 @@ type Handler interface {
 // destination. Driven by target.OciPush entries after Write/Load.
 type ImagePusher interface {
 	PushImage(ctx context.Context, image *gen.OCIImageOutput, destination string, tracker *worker.ProgressTracker) (skipped bool, err error)
+
+	// PushLocalImage ships an image that exists only in the local docker
+	// daemon, for targets that never stage their oci outputs to the cache.
+	PushLocalImage(ctx context.Context, localTag, destination string, tracker *worker.ProgressTracker) (skipped bool, err error)
 }
 
 type HandlerType string

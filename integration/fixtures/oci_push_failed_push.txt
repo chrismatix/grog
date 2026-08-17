@@ -1,4 +1,4 @@
-INFO: 1 package loaded, 2 targets configured.
+INFO: 1 package loaded, 5 targets configured.
 INFO: Selected 1 target.
 INFO: //:fail DONE
 WARN: //:fail: push to 127.0.0.1:5560/grog-smoke/fail:1.0.0 failed: Get "https://127.0.0.1:5560/v2/": dial tcp 127.0.0.1:5560: connect: connection refused; Get "http://127.0.0.1:5560/v2/": dial tcp 127.0.0.1:5560: connect: connection refused

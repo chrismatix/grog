@@ -9,11 +9,11 @@ import (
 	"grog/internal/worker"
 )
 
-// OciPushPlan ships a cached image to a user-facing destination via the oci
-// handler's PushImage.
+// OciPushPlan ships an image to a user-facing destination via the oci handler.
+// The image is sourced either from the cache (NewOciPushPlan) or straight from
+// the local docker daemon (NewLocalOciPushPlan).
 type OciPushPlan struct {
-	pusher      ImagePusher
-	dockerOut   *gen.OCIImageOutput
+	push        func(context.Context, *worker.ProgressTracker) (bool, error)
 	destination string
 	targetLabel string
 	reporter    *PushReporter
@@ -21,8 +21,23 @@ type OciPushPlan struct {
 
 func NewOciPushPlan(pusher ImagePusher, image *gen.OCIImageOutput, destination, targetLabel string, reporter *PushReporter) *OciPushPlan {
 	return &OciPushPlan{
-		pusher:      pusher,
-		dockerOut:   image,
+		push: func(ctx context.Context, tracker *worker.ProgressTracker) (bool, error) {
+			return pusher.PushImage(ctx, image, destination, tracker)
+		},
+		destination: destination,
+		targetLabel: targetLabel,
+		reporter:    reporter,
+	}
+}
+
+// NewLocalOciPushPlan pushes an image that only exists in the local docker
+// daemon. Targets that skip the cache never stage their oci outputs, so there
+// is no cached copy for the daemon-free path to read.
+func NewLocalOciPushPlan(pusher ImagePusher, localTag, destination, targetLabel string, reporter *PushReporter) *OciPushPlan {
+	return &OciPushPlan{
+		push: func(ctx context.Context, tracker *worker.ProgressTracker) (bool, error) {
+			return pusher.PushLocalImage(ctx, localTag, destination, tracker)
+		},
 		destination: destination,
 		targetLabel: targetLabel,
 		reporter:    reporter,
@@ -40,7 +55,7 @@ func (p *OciPushPlan) Execute(ctx context.Context, tracker *worker.ProgressTrack
 
 	tracker.SetStatus(fmt.Sprintf("%s: pushing %s", p.targetLabel, p.destination))
 
-	skipped, err := p.pusher.PushImage(ctx, p.dockerOut, p.destination, tracker)
+	skipped, err := p.push(ctx, tracker)
 	p.reporter.Record(PushReport{
 		TargetLabel: p.targetLabel,
 		Destination: p.destination,

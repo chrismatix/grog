@@ -326,9 +326,21 @@ grog build --push :build_api_image
 Cache misses build the image, cache it, and ship it. Cache hits skip the build,
 restore the image, and still ship it — the destination is HEAD-probed first
 and the push is short-circuited when the registry already holds the same
-digest. `--push` applies transitively across the build selection, so a
+digest. Cache hits under `load_outputs=minimal` ship too: the push reads the
+image from the cache, so it does not depend on the outputs being loaded.
+`--push` applies transitively across the build selection, so a
 `grog build --push //services/api` invocation ships every `oci_push` entry on
 `//services/api` and on every dependency it reached.
+
+Whatever the build produced is what lands at the destination, byte for byte —
+a multi-platform image is copied as a full index rather than collapsed to one
+platform, and the destination digest matches the one Grog cached.
+
+Targets tagged `no-cache` — and every target under `--enable-cache=false` —
+never stage their outputs, so there is no cached copy to copy from. Their
+pushes go straight from the local Docker daemon instead, which means they use
+the daemon's own credentials and its `insecure-registries` list rather than
+the `oci.insecure_registries` setting below.
 
 The `oci_push` map is **not** part of the cache key, so bumping the tag in
 your destination string reuses the cached image and only re-runs the push.

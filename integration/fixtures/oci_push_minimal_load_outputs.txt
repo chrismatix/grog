@@ -1,0 +1,6 @@
+INFO: 1 package loaded, 5 targets configured.
+INFO: Selected 1 target.
+INFO: //:minimal DONE (cached)
+INFO: Build completed successfully. 1 target completed (1 cache hits).
+INFO: Pushes: 1 pushed, 0 already current, 0 failed.
+INFO:   PUSHED //:minimal -> 127.0.0.1:5555/grog-smoke/minimal:1.0.0
