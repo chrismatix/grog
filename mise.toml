@@ -7,7 +7,7 @@
 "go:gotest.tools/gotestsum" = "latest"
 "npm:oxfmt" = "latest"
 buildifier = "latest"
-go = "1.26.3"
+go = "1.27.0"
 node = "24"
 pkl = "latest"
 podman = "latest"
