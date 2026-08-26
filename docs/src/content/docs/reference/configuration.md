@@ -17,6 +17,7 @@ fail_fast = true # Exit immediately when encountering an issue
 num_workers = 4
 load_outputs = "minimal"
 hash_algorithm = "xxh3" # default
+pkl_evaluation_timeout = "30s" # maximum evaluation time per BUILD.pkl module
 # Disable injecting "set -eu" before running target commands
 # disable_default_shell_flags = true
 
@@ -89,6 +90,7 @@ For instance, to set or override the `fail_fast` option set `GROG_FAIL_FAST=fals
   an error.
 - **fail_fast**: When true, Grog will stop execution after encountering the first error, cancelling all running tasks. Defaults to `false`.
 - **num_workers**: Number of concurrent workers for parallel task execution. Defaults to the number of CPUs.
+- **pkl_evaluation_timeout**: Maximum time allowed to evaluate one `BUILD.pkl` module. Defaults to `30s`. It accepts Go duration syntax (for example, `10s` or `1m`) and can be overridden with `GROG_PKL_EVALUATION_TIMEOUT`.
 - **log_level**: Determines verbosity of logging (e.g., "debug", "info"). Defaults to `info`.
 - **stream_logs**: When `true`, Grog will stream build and test logs to stdout. Defaults to `false`.
 - **disable_default_shell_flags**: When `false` (default), Grog prepends `set -eu` to target commands before execution to fail fast on unset variables and errors. Set to `true` to opt out.

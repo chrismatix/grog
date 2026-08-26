@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	semver "github.com/blang/semver/v4"
 )
@@ -13,6 +14,9 @@ import (
 const (
 	HashAlgorithmXXH3   = "xxh3"
 	HashAlgorithmSHA256 = "sha256"
+
+	// DefaultPklEvaluationTimeout bounds the evaluation of one BUILD.pkl module.
+	DefaultPklEvaluationTimeout = 30 * time.Second
 )
 
 type WorkspaceConfig struct {
@@ -60,6 +64,8 @@ type WorkspaceConfig struct {
 	// this knob only affects queueing — not the backend bound. Defaults
 	// to 3 * num_workers.
 	NumAsyncWriters int `mapstructure:"num_async_writers"`
+	// PklEvaluationTimeout bounds the evaluation of one BUILD.pkl module.
+	PklEvaluationTimeout time.Duration `mapstructure:"pkl_evaluation_timeout"`
 
 	// IncludeHidden controls whether the package loader descends into hidden
 	// files and directories (names starting with a dot, e.g. ".github"). By
@@ -258,6 +264,14 @@ func (w WorkspaceConfig) GetOutputMode() OutputMode {
 		return OutputModeTerse
 	}
 	return mode
+}
+
+// GetPklEvaluationTimeout returns the configured BUILD.pkl evaluation timeout.
+func (w WorkspaceConfig) GetPklEvaluationTimeout() time.Duration {
+	if w.PklEvaluationTimeout > 0 {
+		return w.PklEvaluationTimeout
+	}
+	return DefaultPklEvaluationTimeout
 }
 
 type CacheBackend string

@@ -224,6 +224,7 @@ func initConfig(cmd *cobra.Command) error {
 	viper.SetDefault("include_hidden", false)
 	viper.SetDefault("environment_variables", make(map[string]string))
 	viper.SetDefault("traces.enabled", false)
+	viper.SetDefault("pkl_evaluation_timeout", config.DefaultPklEvaluationTimeout)
 
 	names := []string{"grog"}
 	if os.Getenv("CI") == "1" {
