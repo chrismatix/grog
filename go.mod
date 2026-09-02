@@ -9,7 +9,7 @@ require (
 	github.com/Netflix/go-expect v0.0.0-20220104043353-73e0943537d2
 	github.com/TyphonHill/go-mermaid v1.0.0
 	github.com/alitto/pond/v2 v2.6.0
-	github.com/apple/pkl-go v0.12.1
+	github.com/apple/pkl-go v0.14.1-0.20260826164911-a15d198922e0
 	github.com/aws/aws-sdk-go-v2 v1.41.7
 	github.com/aws/aws-sdk-go-v2/config v1.32.18
 	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.1.22
