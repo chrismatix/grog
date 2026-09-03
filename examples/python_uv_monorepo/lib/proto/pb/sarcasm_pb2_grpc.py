@@ -5,7 +5,7 @@ import warnings
 
 import sarcasm_pb2 as sarcasm__pb2
 
-GRPC_GENERATED_VERSION = '1.76.0'
+GRPC_GENERATED_VERSION = '1.81.1'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -25,7 +25,7 @@ if _version_not_supported:
     )
 
 
-class SarcasmStub(object):
+class SarcasmStub:
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -41,7 +41,7 @@ class SarcasmStub(object):
                 _registered_method=True)
 
 
-class SarcasmServicer(object):
+class SarcasmServicer:
     """Missing associated documentation comment in .proto file."""
 
     def Convert(self, request, context):
@@ -66,7 +66,7 @@ def add_SarcasmServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Sarcasm(object):
+class Sarcasm:
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod

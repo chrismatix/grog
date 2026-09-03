@@ -1,0 +1,537 @@
+---
+title: Python
+description: Build, test, lint and containerize a uv workspace with grog, using a small shared helper library in Starlark or Pkl.
+sidebar:
+  order: 1
+---
+
+import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
+
+This guide shows how to run a Python monorepo on grog: one [uv](https://docs.astral.sh/uv/) workspace,
+per-package cached tests and lint, and a Docker image per service that only rebuilds the layers that changed.
+Everything here is taken from the [`python_uv_monorepo`](https://github.com/chrismatix/grog/tree/main/examples/python_uv_monorepo)
+example, which you can clone and run.
+
+## How grog fits a uv workspace
+
+uv already manages one virtual environment for the whole workspace, so grog does not install anything per package.
+Every target simply runs `uv run ...` inside its package directory. Grog's job is to decide **what needs to run**,
+cache the results, and share them across machines.
+
+The mental model is small:
+
+- A **library** is a _filegroup_ target: no command, just the package's sources as inputs.
+  Other packages depend on its label (`//lib/format`), and grog's hash chain propagates changes from there.
+- **Tests and lint** are ordinary targets that depend on the filegroup. They re-run only when the package or one of its
+  workspace dependencies changed.
+- A **service** is a library that additionally produces a Docker image.
+
+Because every package follows the same shape, the target definitions live in one shared helper library rather than being
+copied between BUILD files.
+
+## The helper library
+
+Put the helper in `tools/grog/` and write it in whichever language your BUILD files use. Both versions below produce the same targets.
+
+<Tabs syncKey="build-file-format">
+  <TabItem label="Starlark">
+
+```starlark
+# tools/grog/python.star
+def python_library(name, package_dir = None, deps = [], test_deps = [], pytest_args = ""):
+    """Filegroup `name` plus `test` (pytest with coverage) and `lint` (ruff) targets."""
+    package_dir = package_dir or name
+    sources = [package_dir + "/**/*.py", "pyproject.toml"]
+    test_sources = ["tests/**/*.py"]
+
+    target(
+        name = name,
+        inputs = sources,
+        dependencies = ["//tools/grog:python"] + deps,
+    )
+
+    target(
+        name = "test",
+        command = "uv run pytest %s --cov=%s --cov-report=xml:coverage.xml" % (pytest_args, package_dir),
+        inputs = sources + test_sources,
+        dependencies = [":" + name] + test_deps,
+        outputs = ["coverage.xml"],
+    )
+
+    target(
+        name = "lint",
+        command = "uv run ruff check . && uv run ruff format --check .",
+        inputs = sources + test_sources,
+        dependencies = ["//:ruff.toml"],
+    )
+
+def python_image(name, library, deploy_arch = "amd64", dockerfile = "Dockerfile", push = []):
+    """`pylock`, `stage` and `image` targets building a Docker image tagged `name`.
+
+    `library` is the service's filegroup (e.g. ":server"); `push` lists the
+    `repo:tag` destinations for `grog build --push`.
+    """
+    target(
+        name = "pylock",
+        command = "mkdir -p build && uv export --locked --format pylock.toml --no-dev --no-emit-project --no-header > build/uv-pylock.toml",
+        inputs = ["pyproject.toml"],
+        dependencies = ["//:uv.lock"],
+        outputs = ["build/uv-pylock.toml"],
+    )
+
+    target(
+        name = "stage",
+        command = 'uv run --script "$GROG_WORKSPACE_ROOT/tools/grog/uv_image_stage.py"',
+        dependencies = [":pylock", "//tools/grog:python", library],
+        outputs = ["dir::build/uv"],
+    )
+
+    image = dict(
+        name = "image",
+        command = "docker build --platform=linux/%s -f %s -t %s ." % (deploy_arch, dockerfile, name),
+        inputs = [dockerfile],
+        dependencies = [":stage"],
+        outputs = ["oci::" + name],
+        platforms = ["linux/" + deploy_arch],
+    )
+    if push:
+        image["oci_push"] = {name: push}
+    target(**image)
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+// tools/grog/python.pkl
+module python
+
+import "@grog/package.pkl"
+
+class Library {
+  local self = this
+
+  /// Filegroup target name that other packages depend on (e.g. "format").
+  name: String
+
+  /// Import package directory holding the sources. Defaults to `name`.
+  package_dir: String = name
+
+  sources: Listing<String> = new Listing<String> {
+    "\(self.package_dir)/**/*.py"
+    "pyproject.toml"
+  }
+
+  test_sources: Listing<String> = new Listing<String> {
+    "tests/**/*.py"
+  }
+
+  /// Workspace members this package imports, as filegroup labels.
+  dependencies: Listing<String> = new Listing<String> {}
+
+  /// Extra dependencies only the tests need.
+  test_dependencies: Listing<String> = new Listing<String> {}
+
+  pytest_args: String = ""
+
+  fixed targets: Listing<package.Target> = new Listing<package.Target> {
+    new {
+      name = self.name
+      inputs = self.sources
+      dependencies {
+        "//tools/grog:python"
+        ...self.dependencies
+      }
+    }
+
+    new {
+      name = "test"
+      command =
+        "uv run pytest \(self.pytest_args) --cov=\(self.package_dir) --cov-report=xml:coverage.xml"
+      inputs {
+        ...self.sources
+        ...self.test_sources
+      }
+      dependencies {
+        ":\(self.name)"
+        ...self.test_dependencies
+      }
+      outputs {
+        "coverage.xml"
+      }
+    }
+
+    new {
+      name = "lint"
+      command = "uv run ruff check . && uv run ruff format --check ."
+      inputs {
+        ...self.sources
+        ...self.test_sources
+      }
+      dependencies {
+        "//:ruff.toml"
+      }
+    }
+  }
+}
+
+class Image {
+  local self = this
+
+  /// Local image tag; also the name of the `oci::` output.
+  name: String
+
+  /// Filegroup of the service package (its Library target, e.g. ":server").
+  /// Its inputs and dependencies decide when the image is re-staged.
+  library: String
+
+  deploy_arch: String = "amd64"
+
+  dockerfile: String = "Dockerfile"
+
+  /// Fully qualified `repo:tag` destinations for `grog build --push`.
+  /// Not part of the cache key, so retagging reuses the cached image.
+  push_destinations: Listing<String> = new Listing<String> {}
+
+  fixed targets: Listing<package.Target> = new Listing<package.Target> {
+    new {
+      name = "pylock"
+      command =
+        "mkdir -p build && uv export --locked --format pylock.toml --no-dev --no-emit-project --no-header > build/uv-pylock.toml"
+      inputs {
+        "pyproject.toml"
+      }
+      dependencies {
+        "//:uv.lock"
+      }
+      outputs {
+        "build/uv-pylock.toml"
+      }
+    }
+
+    new {
+      name = "stage"
+      command = "uv run --script \"$GROG_WORKSPACE_ROOT/tools/grog/uv_image_stage.py\""
+      dependencies {
+        ":pylock"
+        "//tools/grog:python"
+        self.library
+      }
+      outputs {
+        "dir::build/uv"
+      }
+    }
+
+    new {
+      name = "image"
+      command =
+        "docker build --platform=linux/\(self.deploy_arch) -f \(self.dockerfile) -t \(self.name) ."
+      inputs {
+        self.dockerfile
+      }
+      dependencies {
+        ":stage"
+      }
+      outputs {
+        "oci::\(self.name)"
+      }
+      oci_push =
+        if (self.push_destinations.isEmpty)
+          null
+        else
+          new Mapping { [self.name] = self.push_destinations }
+      platforms {
+        "linux/\(self.deploy_arch)"
+      }
+    }
+  }
+}
+```
+
+The `@grog/package.pkl` import resolves through a `PklProject` next to your `grog.toml`:
+
+```pkl
+// PklProject
+amends "pkl:Project"
+
+dependencies {
+  ["grog"] {
+    uri = "package://grog.build/releases/v0.46.0/grog@0.46.0"
+  }
+}
+```
+
+Run `pkl project resolve` once to write `PklProject.deps.json`.
+
+  </TabItem>
+</Tabs>
+
+### What each target does
+
+| Target    | Purpose                                                                                                                                                                                                                        |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `:<name>` | The filegroup. Its inputs are the package sources; its dependencies are the workspace libraries the package imports. Everything else hangs off this label.                                                                     |
+| `:test`   | `uv run pytest` with coverage. `coverage.xml` is declared as an output, so it is cached and restored like any build artifact, and a repo-wide coverage report can be assembled from the cache without re-running green suites. |
+| `:lint`   | `ruff check` and `ruff format --check`, cached per package. It depends on a root `//:ruff.toml` filegroup so a config change re-lints everything.                                                                              |
+| `:pylock` | `uv export` of this service's resolved closure from `uv.lock`. See [lockfile early cutoff](#lockfile-early-cutoff).                                                                                                            |
+| `:stage`  | Runs the staging script that turns the pylock into a layered docker context under `build/uv/`. See [layered images](#layered-images).                                                                                          |
+| `:image`  | `docker build`, declared as an [`oci::` output](/topics/docker-outputs) so the image itself is cached. `--push` destinations come from `oci_push`.                                                                             |
+
+Every generated target also depends on `//tools/grog:python`, a filegroup of the helper files themselves.
+That way an edit to the template or the staging script shows up in `grog changes` for every affected package.
+
+## Using the helpers
+
+A library needs one line. A service adds an image and lists the workspace packages it imports.
+
+<Tabs syncKey="build-file-format">
+  <TabItem label="Starlark">
+
+```starlark
+# lib/format/BUILD.star
+load("//tools/grog/python.star", "python_library")
+
+python_library(name = "format")
+```
+
+```starlark
+# server/BUILD.star
+load("//tools/grog/python.star", "python_image", "python_library")
+
+python_library(
+    name = "server",
+    deps = ["//lib/format", "//lib/proto"],
+)
+
+python_image(
+    name = "server",
+    library = ":server",
+    push = [
+        "registry.example.com/sarcasm/server:" + GROG_GIT_HASH,
+        "registry.example.com/sarcasm/server:latest",
+    ],
+)
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+// lib/format/BUILD.pkl
+amends "@grog/package.pkl"
+
+import ".../tools/grog/python.pkl"
+
+targets {
+  ...new python.Library {
+    name = "format"
+  }.targets
+}
+```
+
+```pkl
+// server/BUILD.pkl
+amends "@grog/package.pkl"
+
+import ".../tools/grog/python.pkl"
+
+local const git_hash = read?("env:GROG_GIT_HASH") ?? "latest"
+
+targets {
+  ...new python.Library {
+    name = "server"
+    dependencies {
+      "//lib/format"
+      "//lib/proto"
+    }
+  }.targets
+
+  ...new python.Image {
+    name = "server"
+    library = ":server"
+    push_destinations {
+      "registry.example.com/sarcasm/server:\(git_hash)"
+      "registry.example.com/sarcasm/server:latest"
+    }
+  }.targets
+}
+```
+
+  </TabItem>
+</Tabs>
+
+The workspace root declares the two shared files as filegroups, and `tools/grog` exposes the helpers:
+
+<Tabs syncKey="build-file-format">
+  <TabItem label="Starlark">
+
+```starlark
+# BUILD.star
+target(name = "uv.lock", inputs = ["uv.lock"])
+target(name = "ruff.toml", inputs = ["ruff.toml"])
+```
+
+```starlark
+# tools/grog/BUILD.star
+target(
+    name = "python",
+    inputs = ["python.star", "python.pkl", "uv_image_stage.py"],
+)
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+// BUILD.pkl
+amends "@grog/package.pkl"
+
+targets {
+  new {
+    name = "uv.lock"
+    inputs {
+      "uv.lock"
+    }
+  }
+
+  new {
+    name = "ruff.toml"
+    inputs {
+      "ruff.toml"
+    }
+  }
+}
+```
+
+```pkl
+// tools/grog/BUILD.pkl
+amends "@grog/package.pkl"
+
+targets {
+  // Filegroup every generated target depends on, so template and staging
+  // script edits re-run them.
+  new {
+    name = "python"
+    inputs {
+      "python.pkl"
+      "python.star"
+      "uv_image_stage.py"
+    }
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
+
+<Aside type="tip">
+  Keep `pytest`, `pytest-cov` and `ruff` in the root `[dependency-groups] dev` of your workspace so
+  `uv run` finds them in every package. A root `ruff.toml` applies to all packages whose own
+  `pyproject.toml` has no `[tool.ruff]` section.
+</Aside>
+
+## Lockfile early cutoff
+
+A monorepo has one `uv.lock`, and it changes often. If every image depended on it directly, bumping a dependency of
+one service would rebuild every image.
+
+The `:pylock` target breaks that chain. It depends on `//:uv.lock` and exports **only this service's** resolved
+closure. Grog keys dependents on a target's _output_ hash, not its inputs: when a lock change does not touch this
+service, the exported pylock is byte-identical, `:pylock` is re-run (cheaply) but `:stage` and `:image` stay cache hits.
+
+## Layered images
+
+The staging script [`uv_image_stage.py`](https://github.com/chrismatix/grog/blob/main/examples/python_uv_monorepo/tools/grog/uv_image_stage.py)
+reads the exported pylock and splits it by how often each piece changes:
+
+```
+build/uv/
+  pylock.thirdparty.toml   PyPI dependencies          -> Layer 1
+  internal/<pkg>/          workspace source trees     -> Layer 2
+  deps.txt                 install manifest for Layer 2
+  app/                     this service's own tree    -> Layer 3
+```
+
+A `[[packages]]` block with a `directory = { path = ... }` source is a workspace member; everything else is
+third-party. The Dockerfile installs the pieces as separate layers, so Docker's layer cache does the rest:
+
+```dockerfile
+# syntax=docker/dockerfile:1.7
+FROM python:3.12-slim AS builder
+RUN pip install --no-cache-dir uv==0.12.5
+RUN uv venv /app
+ENV VIRTUAL_ENV=/app
+
+# Layer 1: third-party dependencies, keyed on a deterministic pylock.
+COPY build/uv/pylock.thirdparty.toml /pylock.toml
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python /app -r /pylock.toml
+
+# Layer 2: workspace libraries. --no-deps: already satisfied by Layer 1.
+# --no-sources: ignore [tool.uv.sources] workspace redirects.
+WORKDIR /tmp/uv
+COPY build/uv/internal internal
+COPY build/uv/deps.txt deps.txt
+RUN uv pip install --python /app --no-deps --no-sources -r deps.txt
+
+# Layer 3: the service itself.
+COPY build/uv/app app
+RUN uv pip install --python /app --no-deps --no-sources ./app
+
+FROM python:3.12-slim
+ENV PYTHONUNBUFFERED=1
+RUN useradd --system --create-home --shell /usr/sbin/nologin appuser
+COPY --from=builder --chown=appuser:appuser /app /app
+USER appuser
+EXPOSE 8080
+ENTRYPOINT ["/app/bin/uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "8080"]
+```
+
+A service-only commit rebuilds Layer 3, a library edit rebuilds Layer 2, and only a lockfile change touches Layer 1.
+
+The staging script deliberately leaves test artifacts such as `coverage.xml` out of the context. The `:stage` output
+hash feeds into `:image`, so anything that changes on a test-only run would otherwise rebuild the image for nothing.
+
+## Pushing images
+
+`push_destinations` / `push` map the local `oci::` output to registry tags. Nothing is pushed by default; `grog build --push`
+pushes after a successful build (or a cache hit). The destination tags are not part of the cache key, so tagging
+every commit with `GROG_GIT_HASH` reuses the cached image and only performs the push.
+See [Docker (OCI) Outputs](/topics/docker-outputs#pushing-images) for the details.
+
+## Everyday commands
+
+```bash
+grog test //...                         # every :test target, cached per package
+grog build '//...:lint'                 # every :lint target
+grog build //server:image               # stage + docker build for one service
+grog build --push //...                 # build everything and push the images
+grog changes --since=main --dependents=transitive   # what a PR touches
+```
+
+Image targets carry `platforms = ["linux/amd64"]`, so they are skipped on other hosts. Opt in explicitly with
+`grog build --platform linux/amd64 //server:image`.
+
+## In CI
+
+Put CI-only settings in `grog.ci.toml`; grog selects it automatically when `CI=1` is set
+(see [profiles](/reference/configuration#profiles)). Two settings pay off immediately:
+
+```toml
+# grog.ci.toml
+load_outputs = "minimal"
+
+[cache]
+backend = "gcs"
+
+[cache.gcs]
+bucket = "your-grog-cache"
+prefix = "/python-monorepo"
+
+[environment_variables]
+# Fail the build on an out-of-date uv.lock instead of silently re-locking.
+UV_LOCKED = "1"
+```
+
+With a [remote cache](/topics/remote-caching), a PR that touches one library re-runs that library's tests, the tests
+of the services that import it, and their image builds; every other target is downloaded rather than recomputed.

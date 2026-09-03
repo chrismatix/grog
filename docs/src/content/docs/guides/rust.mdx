@@ -1,0 +1,481 @@
+---
+title: Rust
+description: Build, test, lint and containerize a Cargo workspace with grog, using a small shared helper library in Starlark or Pkl.
+sidebar:
+  order: 2
+---
+
+import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
+
+This guide shows how to run a Rust monorepo on grog: one Cargo workspace, per-crate cached `build`, `test` and
+`lint`, and a Docker image for the binaries that need one. Everything here is taken from the
+[`rust_monorepo`](https://github.com/chrismatix/grog/tree/main/examples/rust_monorepo) example, which you can clone and run.
+
+## How grog fits a Cargo workspace
+
+Cargo is already incremental inside a single `target/` directory, so why put an orchestrator on top?
+
+- **Cached actions.** Cargo rebuilds when timestamps move; grog hashes inputs and skips `cargo test` or `cargo clippy`
+  outright when a crate and its dependencies are unchanged. With a [remote cache](/topics/remote-caching) that skip
+  works on a cold CI runner too.
+- **One graph for the whole repo.** Protobuf codegen, a TypeScript frontend and a Rust service participate in the same
+  DAG. `grog changes --since=main` answers "what does this PR affect" across languages.
+- **Per-crate granularity.** A change to `crates/cli` re-runs the cli targets; the other crates' tests and lints stay
+  cached.
+
+The mental model mirrors the [Python guide](/guides/python): every crate has a _filegroup_ target of its sources,
+crates depend on each other through those labels, and the cargo invocations hang off the filegroup.
+
+<Aside type="caution" title="Cargo serializes on target/">
+  Cargo takes a lock on the shared `target/` directory, so two cargo commands never run at the same
+  time anyway. The helper puts every cargo target in a `cargo` [concurrency
+  group](/reference/target-configuration#concurrency_group) (default capacity 1). Grog then runs
+  them one after another without lock-wait noise and keeps its worker slots free for other work,
+  such as the docker build.
+</Aside>
+
+## The helper library
+
+Put the helper in `tools/grog/` and write it in whichever language your BUILD files use. Both versions below produce the same targets.
+
+<Tabs syncKey="build-file-format">
+  <TabItem label="Starlark">
+
+```starlark
+# tools/grog/rust.star
+def cargo_crate(name, deps = [], bin = False):
+    """Filegroup `name` plus `deps-lock`, `build`, `test` and `lint` targets for one crate.
+
+    `deps` are the filegroups of the workspace crates this crate depends on.
+    With `bin = True` the release binary is copied to bin/<name> and exposed as
+    the `build` target's bin_output, so `grog run //crates/<name>:build` works.
+    """
+    target(
+        name = name,
+        inputs = ["src/**/*", "Cargo.toml"],
+        dependencies = ["//tools/grog:rust"] + deps,
+    )
+
+    # This crate's slice of the shared Cargo.lock. Cargo targets depend on it
+    # instead of //:workspace, so unrelated lockfile churn keeps them cached.
+    target(
+        name = "deps-lock",
+        command = "cargo tree -p %s -e normal,build,dev --prefix none --locked | sed -E 's/ \\([^)]*\\)$//' | sort -u > deps.lock" % name,
+        inputs = ["Cargo.toml"],
+        dependencies = ["//:workspace"],
+        outputs = ["deps.lock"],
+    )
+
+    cargo_deps = [":" + name, ":deps-lock"]
+
+    build = dict(
+        name = "build",
+        command = "cargo build -p %s --release --locked" % name,
+        dependencies = cargo_deps,
+        concurrency_group = "cargo",
+    )
+    if bin:
+        build["command"] += '\nmkdir -p bin && cp "$GROG_WORKSPACE_ROOT/target/release/%s" bin/%s' % (name, name)
+        build["bin_output"] = "bin/" + name
+    target(**build)
+
+    target(
+        name = "test",
+        command = "cargo test -p %s --locked" % name,
+        inputs = ["tests/**/*"],
+        dependencies = cargo_deps,
+        concurrency_group = "cargo",
+    )
+
+    target(
+        name = "lint",
+        command = "cargo fmt -p %s --check && cargo clippy -p %s --all-targets --locked -- -D warnings" % (name, name),
+        inputs = ["tests/**/*"],
+        dependencies = cargo_deps,
+        concurrency_group = "cargo",
+    )
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+// tools/grog/rust.pkl
+module rust
+
+import "@grog/package.pkl"
+
+class Crate {
+  local self = this
+
+  /// Cargo package name; also the filegroup target name.
+  name: String
+
+  /// Filegroups of the workspace crates this crate depends on.
+  dependencies: Listing<String> = new Listing<String> {}
+
+  /// Copy the release binary to bin/<name> and expose it as bin_output,
+  /// so `grog run //crates/<name>:build` works.
+  bin: Boolean = false
+
+  local cargo_dependencies: Listing<String> = new Listing<String> {
+    ":\(self.name)"
+    ":deps-lock"
+  }
+
+  fixed targets: Listing<package.Target> = new Listing<package.Target> {
+    new {
+      name = self.name
+      inputs {
+        "src/**/*"
+        "Cargo.toml"
+      }
+      dependencies {
+        "//tools/grog:rust"
+        ...self.dependencies
+      }
+    }
+
+    // This crate's slice of the shared Cargo.lock. Cargo targets depend on it
+    // instead of //:workspace, so unrelated lockfile churn keeps them cached.
+    new {
+      name = "deps-lock"
+      command =
+        "cargo tree -p \(self.name) -e normal,build,dev --prefix none --locked | sed -E 's/ \\([^)]*\\)$//' | sort -u > deps.lock"
+      inputs {
+        "Cargo.toml"
+      }
+      dependencies {
+        "//:workspace"
+      }
+      outputs {
+        "deps.lock"
+      }
+    }
+
+    new {
+      name = "build"
+      command =
+        if (self.bin)
+          """
+          cargo build -p \(self.name) --release --locked
+          mkdir -p bin && cp "$GROG_WORKSPACE_ROOT/target/release/\(self.name)" bin/\(self.name)
+          """
+        else
+          "cargo build -p \(self.name) --release --locked"
+      dependencies = cargo_dependencies
+      bin_output = if (self.bin) "bin/\(self.name)" else null
+      concurrency_group = "cargo"
+    }
+
+    new {
+      name = "test"
+      command = "cargo test -p \(self.name) --locked"
+      inputs {
+        "tests/**/*"
+      }
+      dependencies = cargo_dependencies
+      concurrency_group = "cargo"
+    }
+
+    new {
+      name = "lint"
+      command =
+        "cargo fmt -p \(self.name) --check && cargo clippy -p \(self.name) --all-targets --locked -- -D warnings"
+      inputs {
+        "tests/**/*"
+      }
+      dependencies = cargo_dependencies
+      concurrency_group = "cargo"
+    }
+  }
+}
+```
+
+The `@grog/package.pkl` import resolves through a `PklProject` next to your `grog.toml`:
+
+```pkl
+// PklProject
+amends "pkl:Project"
+
+dependencies {
+  ["grog"] {
+    uri = "package://grog.build/releases/v0.46.0/grog@0.46.0"
+  }
+}
+```
+
+Run `pkl project resolve` once to write `PklProject.deps.json`.
+
+  </TabItem>
+</Tabs>
+
+### What each target does
+
+| Target       | Purpose                                                                                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `:<name>`    | The filegroup: `src/**/*` and `Cargo.toml`. Other crates depend on this label, so a change in `format` reaches every crate that (transitively) uses it. |
+| `:deps-lock` | This crate's slice of `Cargo.lock`, written by `cargo tree`. See [lockfile early cutoff](#lockfile-early-cutoff).                                       |
+| `:build`     | `cargo build --release`. For binaries it copies the artifact to `bin/<name>` and declares it as the [`bin_output`](/topics/binary-outputs).             |
+| `:test`      | `cargo test -p <name>`. Integration tests under `tests/` are inputs; `src/` comes in through the filegroup.                                             |
+| `:lint`      | `cargo fmt --check` followed by `cargo clippy --all-targets -D warnings`.                                                                               |
+
+Cargo builds the path dependencies itself, so `:build` of one crate does not depend on `:build` of another. The grog
+dependency between crates is only there for invalidation, and the filegroup expresses exactly that.
+
+Every generated target also depends on `//tools/grog:rust`, a filegroup of the helper files themselves, so a template
+edit shows up in `grog changes` for every crate.
+
+## Using the helpers
+
+<Tabs syncKey="build-file-format">
+  <TabItem label="Starlark">
+
+```starlark
+# crates/greet/BUILD.star
+load("//tools/grog/rust.star", "cargo_crate")
+
+cargo_crate(
+    name = "greet",
+    deps = ["//crates/format"],
+)
+```
+
+```starlark
+# crates/cli/BUILD.star
+load("//tools/grog/rust.star", "cargo_crate")
+
+cargo_crate(
+    name = "cli",
+    bin = True,
+    deps = ["//crates/greet"],
+)
+```
+
+```starlark
+# BUILD.star (workspace root)
+# Workspace manifest and lockfile. Crates derive their pruned deps-lock from it
+# instead of depending on the whole lockfile.
+target(
+    name = "workspace",
+    inputs = [
+        "Cargo.toml",
+        "Cargo.lock",
+    ],
+)
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+// crates/greet/BUILD.pkl
+amends "@grog/package.pkl"
+
+import ".../tools/grog/rust.pkl"
+
+targets {
+  ...new rust.Crate {
+    name = "greet"
+    dependencies {
+      "//crates/format"
+    }
+  }.targets
+}
+```
+
+```pkl
+// crates/cli/BUILD.pkl
+amends "@grog/package.pkl"
+
+import ".../tools/grog/rust.pkl"
+
+targets {
+  ...new rust.Crate {
+    name = "cli"
+    dependencies {
+      "//crates/greet"
+    }
+    bin = true
+  }.targets
+}
+```
+
+```pkl
+// BUILD.pkl (workspace root)
+amends "@grog/package.pkl"
+
+targets {
+  new {
+    name = "workspace"
+    inputs {
+      "Cargo.toml"
+      "Cargo.lock"
+    }
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
+
+`bin = True` makes the binary runnable through grog, which builds it first if needed:
+
+```bash
+grog run //crates/cli:build -- grug
+# HELLO GRUG!
+```
+
+## Lockfile early cutoff
+
+A workspace has one `Cargo.lock`. If every crate depended on it directly, bumping a dependency of one crate would
+invalidate every crate's cached tests.
+
+`:deps-lock` breaks that chain. It depends on the root `//:workspace` filegroup and writes only the names and versions
+in **this crate's** dependency closure (`cargo tree -p <crate>`), one per line. Grog keys dependents on a target's
+_output_ hash: when a lock change does not touch this crate, `deps.lock` comes out byte-identical, and `:build`,
+`:test` and `:lint` stay cache hits.
+
+The `sed` strips the parenthesized suffix `cargo tree` prints after workspace members, which is an absolute path.
+Without it the output would differ between machines and a remote cache would never hit.
+
+## Docker image
+
+Build the binary **inside** the Dockerfile rather than copying a host build into a slim image: a host binary links
+against the host's glibc and tends not to run in `debian:*-slim`. BuildKit cache mounts keep the registry and
+`target/` between builds, so this is still incremental.
+
+```dockerfile
+# crates/server/Dockerfile
+# syntax=docker/dockerfile:1.7
+FROM rust:1-slim-bookworm AS builder
+WORKDIR /src
+COPY . .
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/src/target \
+    cargo build --release --locked -p server && cp target/release/server /server
+
+FROM debian:bookworm-slim
+COPY --from=builder /server /usr/local/bin/server
+ENV ADDR=0.0.0.0:8080
+EXPOSE 8080
+ENTRYPOINT ["server"]
+```
+
+The build context is the workspace root so path dependencies resolve; a root `.dockerignore` keeps `target/`,
+`crates/*/bin` and `crates/*/deps.lock` out of it. The image target sits next to the crate macro:
+
+<Tabs syncKey="build-file-format">
+  <TabItem label="Starlark">
+
+```starlark
+# crates/server/BUILD.star
+load("//tools/grog/rust.star", "cargo_crate")
+
+cargo_crate(
+    name = "server",
+    bin = True,
+    deps = ["//crates/greet"],
+)
+
+# The docker context is the workspace root so the path dependencies resolve
+# inside the builder stage. The :server filegroup covers them transitively.
+target(
+    name = "image",
+    command = "docker build --platform=linux/amd64 -f Dockerfile -t rust-monorepo-server ../..",
+    dependencies = [
+        ":server",
+        "//:workspace",
+    ],
+    inputs = ["Dockerfile"],
+    oci_push = {"rust-monorepo-server": ["registry.example.com/rust-monorepo/server:" + GROG_GIT_HASH]},
+    outputs = ["oci::rust-monorepo-server"],
+    platforms = ["linux/amd64"],
+)
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+// crates/server/BUILD.pkl
+amends "@grog/package.pkl"
+
+import ".../tools/grog/rust.pkl"
+
+const local git_hash = read?("env:GROG_GIT_HASH") ?? "latest"
+
+targets {
+  ...new rust.Crate {
+    name = "server"
+    dependencies {
+      "//crates/greet"
+    }
+    bin = true
+  }.targets
+
+  new {
+    name = "image"
+    command = "docker build --platform=linux/amd64 -f Dockerfile -t rust-monorepo-server ../.."
+    inputs {
+      "Dockerfile"
+    }
+    dependencies {
+      ":server"
+      "//:workspace"
+    }
+    outputs {
+      "oci::rust-monorepo-server"
+    }
+    oci_push {
+      ["rust-monorepo-server"] {
+        "registry.example.com/rust-monorepo/server:\(git_hash)"
+      }
+    }
+    platforms {
+      "linux/amd64"
+    }
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
+
+Depending on the `:server` filegroup is enough: it covers `greet` and `format` transitively, so any source change
+re-runs the docker build. The [`oci::` output](/topics/docker-outputs) means the image itself is cached and restored,
+and `grog build --push` ships it to the `oci_push` destinations.
+
+## Everyday commands
+
+```bash
+grog build //...                       # build + lint every crate, build the image
+grog test //...                        # cargo test per crate, cached
+grog build '//...:lint'                # fmt + clippy per crate
+grog run //crates/cli:build -- grug    # build (if needed) and run the binary
+grog changes --since=main --dependents=transitive
+```
+
+The image target carries `platforms = ["linux/amd64"]`, so it is skipped on other hosts. Opt in explicitly with
+`grog build --platform linux/amd64 //crates/server:image`.
+
+## In CI
+
+Every cargo invocation passes `--locked`, so a stale `Cargo.lock` fails the build instead of being re-resolved on the
+runner. Add a remote cache in `grog.ci.toml` (selected automatically when `CI=1` is set, see
+[profiles](/reference/configuration#profiles)):
+
+```toml
+# grog.ci.toml
+load_outputs = "minimal"
+
+[cache]
+backend = "gcs"
+
+[cache.gcs]
+bucket = "your-grog-cache"
+prefix = "/rust-monorepo"
+```
+
+A PR that touches one crate then re-runs that crate's targets and those of the crates depending on it; everything else
+is a download.
