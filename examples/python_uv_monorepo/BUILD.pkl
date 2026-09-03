@@ -6,8 +6,12 @@ targets {
     inputs {
       "uv.lock"
     }
-    outputs {
-      "uv.lock"
+  }
+
+  new {
+    name = "ruff.toml"
+    inputs {
+      "ruff.toml"
     }
   }
 }

@@ -1,41 +1,24 @@
 amends "@grog/package.pkl"
 
-import ".../lib/grog/python_uv.pkl"
+import ".../tools/grog/python.pkl"
 
-local sources =
-  List(
-    "server/**/*.py",
-    "pyproject.toml",
-  )
-
-local deps =
-  List(
-    "//lib/format",
-    "//lib/proto",
-  )
+local const git_hash = read?("env:GROG_GIT_HASH") ?? "latest"
 
 targets {
-  ...new python_uv.PythonUvImage {
-    deploy_arch = "amd64"
+  ...new python.Library {
     name = "server"
-
-    app_sources {
-      ...sources
-    }
-    app_dependencies {
-      ...deps
+    dependencies {
+      "//lib/format"
+      "//lib/proto"
     }
   }.targets
 
-  new {
-    name = "test"
-    command = "uv run pytest"
-    inputs {
-      ...sources
-      "tests/*.py"
+  ...new python.Image {
+    name = "server"
+    library = ":server"
+    push_destinations {
+      "registry.example.com/sarcasm/server:\(git_hash)"
+      "registry.example.com/sarcasm/server:latest"
     }
-    dependencies {
-      ...deps
-    }
-  }
+  }.targets
 }
