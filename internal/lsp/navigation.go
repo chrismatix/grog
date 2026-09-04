@@ -5,9 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"grog/internal/label"
+	"grog/internal/loading"
 
 	"go.starlark.net/syntax"
 	"gopkg.in/yaml.v3"
@@ -58,7 +60,20 @@ func (server *server) labelDefinition(currentPath string, targetLabel string) an
 		return nil
 	}
 	directory := filepath.Join(workspaceRoot, filepath.FromSlash(parsedLabel.Package))
-	for _, fileName := range []string{"BUILD.star", "BUILD.bzl", "BUILD.yaml", "BUILD.yml"} {
+	fileNames := []string{}
+	if filepath.Clean(directory) == filepath.Clean(filepath.Dir(currentPath)) {
+		fileNames = append(fileNames, filepath.Base(currentPath))
+	}
+	entries, operationError := os.ReadDir(directory)
+	if operationError == nil {
+		for _, entry := range entries {
+			fileName := entry.Name()
+			if !entry.IsDir() && isSupportedBuildFile(fileName) && !slices.Contains(fileNames, fileName) {
+				fileNames = append(fileNames, fileName)
+			}
+		}
+	}
+	for _, fileName := range fileNames {
 		definitionPath := filepath.Join(directory, fileName)
 		definitionURI := pathToURI(definitionPath)
 		definitionText := server.documentText(definitionURI)
@@ -130,7 +145,7 @@ func (server *server) collectWorkspaceLabels(workspaceRoot string, currentDirect
 			return nil
 		}
 		name := filepath.Base(path)
-		if name != "BUILD.star" && name != "BUILD.bzl" && name != "BUILD.yaml" && name != "BUILD.yml" {
+		if !isSupportedBuildFile(name) {
 			return nil
 		}
 		content := server.documentText(pathToURI(path))
@@ -184,13 +199,14 @@ func declarationsForFile(fileName string, text string) []namedDeclaration {
 		root = *root.Content[0]
 	}
 	declarations := []namedDeclaration{}
+	declarationKinds := yamlDeclarationKinds()
 	if root.Kind != yaml.MappingNode {
 		return declarations
 	}
 	for index := 0; index+1 < len(root.Content); index += 2 {
 		key := root.Content[index]
 		value := root.Content[index+1]
-		kind, isDeclarationList := map[string]string{"targets": "target", "aliases": "alias", "resources": "resource", "environments": "environment"}[key.Value]
+		kind, isDeclarationList := declarationKinds[key.Value]
 		if !isDeclarationList || value.Kind != yaml.SequenceNode {
 			continue
 		}
@@ -205,19 +221,23 @@ func declarationsForFile(fileName string, text string) []namedDeclaration {
 }
 
 func incompleteYamlDeclarations(text string) []namedDeclaration {
-	sectionPattern := regexp.MustCompile(`^(targets|aliases|resources|environments):`)
 	namePattern := regexp.MustCompile(`^-\s+name:\s*["']?([^\s"'#]+)`)
-	kinds := map[string]string{"targets": "target", "aliases": "alias", "resources": "resource", "environments": "environment"}
+	declarationKinds := yamlDeclarationKinds()
 	declarations := []namedDeclaration{}
 	kind := ""
 	for lineNumber, line := range strings.Split(text, "\n") {
 		trimmedLine := strings.TrimSpace(line)
-		if matches := sectionPattern.FindStringSubmatch(trimmedLine); len(matches) == 2 {
-			kind = kinds[matches[1]]
+		if collection, _, found := strings.Cut(trimmedLine, ":"); found {
+			if declarationKind, isDeclarationList := declarationKinds[collection]; isDeclarationList {
+				kind = declarationKind
+				continue
+			}
+		}
+		if kind == "" {
 			continue
 		}
 		matches := namePattern.FindStringSubmatchIndex(trimmedLine)
-		if kind == "" || len(matches) != 4 {
+		if len(matches) != 4 {
 			continue
 		}
 		name := trimmedLine[matches[2]:matches[3]]
@@ -241,25 +261,20 @@ func starlarkLoadedSymbol(currentPath string, text string, identifier string) (s
 		}
 		for index, localIdentifier := range loadStatement.To {
 			if localIdentifier.Name == identifier {
-				return resolveStarlarkModulePath(currentPath, loadStatement.ModuleName()), loadStatement.From[index].Name, true
+				workspaceRoot := findWorkspaceRoot(filepath.Dir(currentPath))
+				return loading.ResolveStarlarkModulePath(workspaceRoot, currentPath, loadStatement.ModuleName()), loadStatement.From[index].Name, true
 			}
 		}
 	}
 	return "", "", false
 }
 
-func resolveStarlarkModulePath(currentPath string, module string) string {
-	if strings.HasPrefix(module, "//") {
-		return filepath.Join(findWorkspaceRoot(filepath.Dir(currentPath)), strings.TrimPrefix(module, "//"))
-	}
-	if filepath.IsAbs(module) {
-		return filepath.Clean(module)
-	}
-	return filepath.Clean(filepath.Join(filepath.Dir(currentPath), module))
+func isStarlarkFile(fileName string) bool {
+	return loading.IsStarlarkSourceFile(fileName)
 }
 
-func isStarlarkFile(fileName string) bool {
-	return fileName == "BUILD.star" || fileName == "BUILD.bzl" || strings.HasSuffix(fileName, ".star") || strings.HasSuffix(fileName, ".bzl")
+func isSupportedBuildFile(fileName string) bool {
+	return (loading.StarlarkLoader{}).Matches(fileName) || (loading.YamlLoader{}).Matches(fileName)
 }
 
 func pathToURI(path string) string {

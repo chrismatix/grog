@@ -4,8 +4,6 @@ import (
 	"strings"
 
 	"grog/internal/config"
-
-	"go.starlark.net/starlark"
 )
 
 // LoaderEnv returns the GROG_* values exposed to both the pkl and starlark
@@ -16,14 +14,25 @@ import (
 // Per-target values (GROG_TARGET, GROG_PACKAGE) are intentionally excluded;
 // the loader does not know which target a value would belong to.
 func LoaderEnv() map[string]string {
+	return loaderEnvironment(
+		config.Global.WorkspaceRoot,
+		config.Global.OS,
+		config.Global.Arch,
+		strings.Join(config.Global.PlatformTags, ","),
+		resolvedEnvironmentVariablesFilePath(),
+		loaderGitHash(),
+	)
+}
+
+func loaderEnvironment(workspaceRoot string, operatingSystem string, architecture string, platformTags string, environmentFile string, gitHash string) map[string]string {
 	return map[string]string{
-		"GROG_OS":             config.Global.OS,
-		"GROG_ARCH":           config.Global.Arch,
-		"GROG_PLATFORM":       config.Global.GetPlatform(),
-		"GROG_PLATFORM_TAGS":  strings.Join(config.Global.PlatformTags, ","),
-		"GROG_ENV_FILE":       resolvedEnvironmentVariablesFilePath(),
-		"GROG_WORKSPACE_ROOT": config.Global.WorkspaceRoot,
-		"GROG_GIT_HASH":       loaderGitHash(),
+		"GROG_OS":             operatingSystem,
+		"GROG_ARCH":           architecture,
+		"GROG_PLATFORM":       operatingSystem + "/" + architecture,
+		"GROG_PLATFORM_TAGS":  platformTags,
+		"GROG_ENV_FILE":       environmentFile,
+		"GROG_WORKSPACE_ROOT": workspaceRoot,
+		"GROG_GIT_HASH":       gitHash,
 	}
 }
 
@@ -32,17 +41,4 @@ func LoaderEnv() map[string]string {
 func loaderGitHash() string {
 	hash, _ := config.GetGitHash()
 	return hash
-}
-
-// addLoaderEnvToStarlark mirrors LoaderEnv into a starlark predeclared dict.
-// GROG_PLATFORM_TAGS becomes a starlark list rather than the comma-joined
-// string used by pkl, matching the existing per-language convention.
-func addLoaderEnvToStarlark(dict starlark.StringDict) {
-	dict["GROG_OS"] = starlark.String(config.Global.OS)
-	dict["GROG_ARCH"] = starlark.String(config.Global.Arch)
-	dict["GROG_PLATFORM"] = starlark.String(config.Global.GetPlatform())
-	dict["GROG_PLATFORM_TAGS"] = platformTagsStarlarkList()
-	dict["GROG_ENV_FILE"] = starlark.String(resolvedEnvironmentVariablesFilePath())
-	dict["GROG_WORKSPACE_ROOT"] = starlark.String(config.Global.WorkspaceRoot)
-	dict["GROG_GIT_HASH"] = starlark.String(loaderGitHash())
 }

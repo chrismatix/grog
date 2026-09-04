@@ -6,19 +6,12 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 
 	"grog/internal/loading"
 
-	"github.com/pelletier/go-toml/v2"
-	"github.com/subosito/gotenv"
-	starlarkjson "go.starlark.net/lib/json"
-	"go.starlark.net/lib/math"
-	starlarktime "go.starlark.net/lib/time"
-	"go.starlark.net/starlark"
-	"go.starlark.net/starlarkstruct"
 	"go.starlark.net/syntax"
 	"gopkg.in/yaml.v3"
 )
@@ -35,7 +28,7 @@ func diagnosticsFor(documentURI string, text string) []diagnostic {
 	if isStarlarkFile(name) {
 		return starlarkDiagnostics(path, text)
 	}
-	if name == "BUILD.yaml" || name == "BUILD.yml" {
+	if (loading.YamlLoader{}).Matches(name) {
 		return yamlDiagnostics(text)
 	}
 	return []diagnostic{}
@@ -57,272 +50,27 @@ func starlarkDiagnostics(path string, text string) []diagnostic {
 	return diagnostics
 }
 
-type starlarkEvaluationContext struct {
-	declarations []namedDeclaration
-	readText     func(path string) (string, error)
-}
-
-const starlarkEvaluationContextKey = "grog-lsp-evaluation"
-
 func evaluateStarlark(path string, text string, readText func(path string) (string, error)) ([]namedDeclaration, error) {
-	evaluationContext := &starlarkEvaluationContext{readText: readText}
-	thread := &starlark.Thread{Name: path, Load: loadModule(evaluationContext)}
-	thread.SetLocal(starlarkEvaluationContextKey, evaluationContext)
-	_, operationError := starlark.ExecFileOptions(&syntax.FileOptions{}, thread, path, text, starlarkPredeclared(path))
-	return evaluationContext.declarations, operationError
+	declarations := []namedDeclaration{}
+	options := loading.StarlarkOptionsForWorkspace(findWorkspaceRoot(filepath.Dir(path)))
+	options.ReadFile = func(path string) ([]byte, error) {
+		content, operationError := readText(path)
+		return []byte(content), operationError
+	}
+	options.DeclarationCallback = func(declaration loading.StarlarkDeclaration) {
+		declarationRange := rangeValue{Start: position{Line: max(declaration.Line-1, 0)}, End: position{Line: max(declaration.Line-1, 0), Character: 1}}
+		if sourceText, operationError := readText(declaration.Path); operationError == nil {
+			start := positionFromOneBased(sourceText, declaration.Line, declaration.Column)
+			declarationRange = rangeValue{Start: start, End: position{Line: start.Line, Character: start.Character + 1}}
+		}
+		declarations = append(declarations, namedDeclaration{kind: declaration.Kind, name: declaration.Name, path: declaration.Path, rangeValue: declarationRange})
+	}
+	_, operationError := loading.EvaluateStarlark(path, []byte(text), options)
+	return declarations, operationError
 }
 
 func isRepeatedKeywordArgumentError(operationError error) bool {
 	return strings.Contains(operationError.Error(), "keyword argument") && strings.Contains(operationError.Error(), "is repeated")
-}
-
-func targetBuiltin(thread *starlark.Thread, function *starlark.Builtin, arguments starlark.Tuple, keywordArguments []starlark.Tuple) (starlark.Value, error) {
-	var name string
-	var command string
-	var dependencies, inputs, excludeInputs, outputs, outputChecks, tags, platforms *starlark.List
-	var fingerprint, environmentVariables, ociPush *starlark.Dict
-	var binOutput, timeout, concurrencyGroup string
-	var binaryRequiresPush bool
-	if operationError := starlark.UnpackArgs("target", arguments, keywordArguments, "name", &name, "command?", &command, "dependencies?", &dependencies, "inputs?", &inputs, "exclude_inputs?", &excludeInputs, "outputs?", &outputs, "bin_output?", &binOutput, "binary_requires_push?", &binaryRequiresPush, "output_checks?", &outputChecks, "tags?", &tags, "fingerprint?", &fingerprint, "platforms?", &platforms, "environment_variables?", &environmentVariables, "timeout?", &timeout, "concurrency_group?", &concurrencyGroup, "oci_push?", &ociPush); operationError != nil {
-		return nil, operationError
-	}
-	listFields := []struct {
-		name   string
-		values *starlark.List
-	}{{"dependencies", dependencies}, {"inputs", inputs}, {"exclude_inputs", excludeInputs}, {"outputs", outputs}, {"tags", tags}, {"platforms", platforms}}
-	for _, field := range listFields {
-		if operationError := validateStringList(field.name, field.values); operationError != nil {
-			return nil, operationError
-		}
-	}
-	dictionaryFields := []struct {
-		name   string
-		values *starlark.Dict
-	}{{"fingerprint", fingerprint}, {"environment_variables", environmentVariables}}
-	for _, field := range dictionaryFields {
-		if operationError := validateStringDict(field.name, field.values); operationError != nil {
-			return nil, operationError
-		}
-	}
-	if operationError := validateOutputChecks(outputChecks); operationError != nil {
-		return nil, operationError
-	}
-	if operationError := validateOciPush(ociPush); operationError != nil {
-		return nil, operationError
-	}
-	recordDeclaration(thread, "target", name)
-	return starlark.None, nil
-}
-
-func aliasBuiltin(thread *starlark.Thread, function *starlark.Builtin, arguments starlark.Tuple, keywordArguments []starlark.Tuple) (starlark.Value, error) {
-	var name string
-	var actual string
-	if operationError := starlark.UnpackArgs("alias", arguments, keywordArguments, "name", &name, "actual", &actual); operationError != nil {
-		return nil, operationError
-	}
-	recordDeclaration(thread, "alias", name)
-	return starlark.None, nil
-}
-
-func environmentBuiltin(thread *starlark.Thread, function *starlark.Builtin, arguments starlark.Tuple, keywordArguments []starlark.Tuple) (starlark.Value, error) {
-	var name string
-	var environmentType string
-	var dependencies *starlark.List
-	var ociImage string
-	if operationError := starlark.UnpackArgs("environment", arguments, keywordArguments, "name", &name, "type", &environmentType, "dependencies?", &dependencies, "oci_image?", &ociImage); operationError != nil {
-		return nil, operationError
-	}
-	if operationError := validateStringList("dependencies", dependencies); operationError != nil {
-		return nil, operationError
-	}
-	recordDeclaration(thread, "environment", name)
-	return starlark.None, nil
-}
-
-func resourceBuiltin(thread *starlark.Thread, function *starlark.Builtin, arguments starlark.Tuple, keywordArguments []starlark.Tuple) (starlark.Value, error) {
-	var name, up, down, ready, timeout string
-	var exports *starlark.Dict
-	var dependencies *starlark.List
-	if operationError := starlark.UnpackArgs("resource", arguments, keywordArguments, "name", &name, "up", &up, "down?", &down, "ready?", &ready, "timeout?", &timeout, "exports?", &exports, "dependencies?", &dependencies); operationError != nil {
-		return nil, operationError
-	}
-	if operationError := validateStringDict("exports", exports); operationError != nil {
-		return nil, operationError
-	}
-	if operationError := validateStringList("dependencies", dependencies); operationError != nil {
-		return nil, operationError
-	}
-	recordDeclaration(thread, "resource", name)
-	return starlark.None, nil
-}
-
-func validateStringList(field string, list *starlark.List) error {
-	if list == nil {
-		return nil
-	}
-	iterator := list.Iterate()
-	defer iterator.Done()
-	var value starlark.Value
-	for iterator.Next(&value) {
-		if _, isString := value.(starlark.String); !isString {
-			return fmt.Errorf("%s: expected string, got %s", field, value.Type()) //nolint:nilaway // Iterate assigns value before returning true.
-		}
-	}
-	return nil
-}
-
-func validateStringDict(field string, dictionary *starlark.Dict) error {
-	if dictionary == nil {
-		return nil
-	}
-	for _, item := range dictionary.Items() {
-		if _, isString := item[0].(starlark.String); !isString {
-			return fmt.Errorf("%s key must be string, got %s", field, item[0].Type())
-		}
-		if _, isString := item[1].(starlark.String); !isString {
-			return fmt.Errorf("%s value must be string, got %s", field, item[1].Type())
-		}
-	}
-	return nil
-}
-
-func validateOciPush(dictionary *starlark.Dict) error {
-	if dictionary == nil {
-		return nil
-	}
-	for _, item := range dictionary.Items() {
-		key, isString := item[0].(starlark.String)
-		if !isString {
-			return fmt.Errorf("oci_push key must be string, got %s", item[0].Type())
-		}
-		switch value := item[1].(type) {
-		case starlark.String:
-		case *starlark.List:
-			if operationError := validateStringList(fmt.Sprintf("oci_push[%q]", string(key)), value); operationError != nil {
-				return operationError
-			}
-		default:
-			return fmt.Errorf("oci_push[%q] must be string or list of strings, got %s", string(key), value.Type())
-		}
-	}
-	return nil
-}
-
-func validateOutputChecks(list *starlark.List) error {
-	if list == nil {
-		return nil
-	}
-	iterator := list.Iterate()
-	defer iterator.Done()
-	var value starlark.Value
-	for iterator.Next(&value) {
-		var command starlark.Value
-		var found bool
-		var operationError error
-		switch outputCheck := value.(type) {
-		case *starlark.Dict:
-			command, found, operationError = outputCheck.Get(starlark.String("command"))
-		case *starlarkstruct.Struct:
-			command, operationError = outputCheck.Attr("command")
-			found = operationError == nil
-		default:
-			return fmt.Errorf("output_check must be dict or struct, got %s", value.Type()) //nolint:nilaway // Iterate assigns value before returning true.
-		}
-		if operationError != nil {
-			return operationError
-		}
-		if !found {
-			return fmt.Errorf("output_check missing 'command' field")
-		}
-		if _, isString := command.(starlark.String); !isString {
-			return fmt.Errorf("output_check 'command' must be string")
-		}
-	}
-	return nil
-}
-
-func recordDeclaration(thread *starlark.Thread, kind string, name string) {
-	evaluationContext, exists := thread.Local(starlarkEvaluationContextKey).(*starlarkEvaluationContext)
-	if !exists {
-		return
-	}
-	callPosition := thread.CallFrame(1).Pos
-	declarationRange := rangeValue{Start: position{Line: max(int(callPosition.Line)-1, 0)}, End: position{Line: max(int(callPosition.Line)-1, 0), Character: 1}}
-	if sourceText, operationError := evaluationContext.readText(callPosition.Filename()); operationError == nil {
-		start := positionFromSyntaxPosition(sourceText, callPosition)
-		declarationRange = rangeValue{Start: start, End: position{Line: start.Line, Character: start.Character + 1}}
-	}
-	evaluationContext.declarations = append(evaluationContext.declarations, namedDeclaration{kind: kind, name: name, path: callPosition.Filename(), rangeValue: declarationRange})
-}
-
-func starlarkPredeclared(currentPath string) starlark.StringDict {
-	workspaceRoot := findWorkspaceRoot(filepath.Dir(currentPath))
-	platformTags := starlark.NewList(nil)
-	platformTags.Freeze()
-	predeclared := starlark.StringDict{
-		"target":              starlark.NewBuiltin("target", targetBuiltin),
-		"alias":               starlark.NewBuiltin("alias", aliasBuiltin),
-		"resource":            starlark.NewBuiltin("resource", resourceBuiltin),
-		"environment":         starlark.NewBuiltin("environment", environmentBuiltin),
-		"json":                starlarkjson.Module,
-		"math":                math.Module,
-		"time":                starlarktime.Module,
-		"GROG_OS":             starlark.String(runtime.GOOS),
-		"GROG_ARCH":           starlark.String(runtime.GOARCH),
-		"GROG_PLATFORM":       starlark.String(runtime.GOOS + "/" + runtime.GOARCH),
-		"GROG_PLATFORM_TAGS":  platformTags,
-		"GROG_ENV_FILE":       starlark.String(""),
-		"GROG_WORKSPACE_ROOT": starlark.String(workspaceRoot),
-		"GROG_GIT_HASH":       starlark.String(""),
-	}
-	configurationBytes, operationError := os.ReadFile(filepath.Join(workspaceRoot, "grog.toml"))
-	if operationError != nil {
-		return predeclared
-	}
-	var configuration struct {
-		EnvironmentVariables     map[string]string `toml:"environment_variables"`
-		EnvironmentVariablesFile string            `toml:"environment_variables_file"`
-		OperatingSystem          string            `toml:"os"`
-		Architecture             string            `toml:"arch"`
-		PlatformTags             []string          `toml:"platform_tag"`
-	}
-	if toml.Unmarshal(configurationBytes, &configuration) != nil {
-		return predeclared
-	}
-	operatingSystem := runtime.GOOS
-	if configuration.OperatingSystem != "" {
-		operatingSystem = configuration.OperatingSystem
-	}
-	architecture := runtime.GOARCH
-	if configuration.Architecture != "" {
-		architecture = configuration.Architecture
-	}
-	predeclared["GROG_OS"] = starlark.String(operatingSystem)
-	predeclared["GROG_ARCH"] = starlark.String(architecture)
-	predeclared["GROG_PLATFORM"] = starlark.String(operatingSystem + "/" + architecture)
-	values := make([]starlark.Value, 0, len(configuration.PlatformTags))
-	for _, tag := range configuration.PlatformTags {
-		values = append(values, starlark.String(tag))
-	}
-	platformTags = starlark.NewList(values)
-	platformTags.Freeze()
-	predeclared["GROG_PLATFORM_TAGS"] = platformTags
-	if configuration.EnvironmentVariablesFile != "" {
-		environmentFilePath := configuration.EnvironmentVariablesFile
-		if !filepath.IsAbs(environmentFilePath) {
-			environmentFilePath = filepath.Join(workspaceRoot, environmentFilePath)
-		}
-		predeclared["GROG_ENV_FILE"] = starlark.String(environmentFilePath)
-		if environmentVariables, readError := gotenv.Read(environmentFilePath); readError == nil {
-			for name, value := range environmentVariables {
-				predeclared[name] = starlark.String(value)
-			}
-		}
-	}
-	for name, value := range configuration.EnvironmentVariables {
-		predeclared[name] = starlark.String(value)
-	}
-	return predeclared
 }
 
 type namedDeclaration struct {
@@ -369,7 +117,11 @@ func starlarkNamedDeclarations(text string) []namedDeclaration {
 		}
 		return declarations
 	}
-	pattern := regexp.MustCompile(`(?s)\b(target|alias|resource|environment)\s*\([^)]*?\bname\s*=\s*["']([^"']+)["']`)
+	declarationKinds := loading.StarlarkBuiltinNames()
+	for index, declarationKind := range declarationKinds {
+		declarationKinds[index] = regexp.QuoteMeta(declarationKind)
+	}
+	pattern := regexp.MustCompile(`(?s)\b(` + strings.Join(declarationKinds, "|") + `)\s*\([^)]*?\bname\s*=\s*["']([^"']+)["']`)
 	declarations := []namedDeclaration{}
 	matches := pattern.FindAllStringSubmatchIndex(text, -1)
 	for _, match := range matches {
@@ -383,7 +135,7 @@ func starlarkNamedDeclarations(text string) []namedDeclaration {
 }
 
 func isDeclarationKind(name string) bool {
-	return name == "target" || name == "alias" || name == "resource" || name == "environment"
+	return slices.Contains(loading.StarlarkBuiltinNames(), name)
 }
 
 func duplicateKeywordArgumentDiagnostics(text string) []diagnostic {
@@ -441,28 +193,37 @@ func yamlSemanticDiagnostics(text string, root *yaml.Node) []diagnostic {
 	}
 	diagnostics := []diagnostic{}
 	declarations := []namedDeclaration{}
+	declarationKinds := yamlDeclarationKinds()
 	for index := 0; index+1 < len(root.Content); index += 2 {
 		key := root.Content[index]
 		value := root.Content[index+1]
-		switch key.Value {
-		case "targets", "aliases", "resources", "environments":
-			kind := map[string]string{"targets": "target", "aliases": "alias", "resources": "resource", "environments": "environment"}[key.Value]
-			if value.Kind != yaml.SequenceNode {
-				diagnostics = append(diagnostics, yamlNodeDiagnostic(text, value, fmt.Sprintf("%s must be a list", key.Value)))
+		kind, isDeclarationList := declarationKinds[key.Value]
+		if !isDeclarationList {
+			continue
+		}
+		if value.Kind != yaml.SequenceNode {
+			diagnostics = append(diagnostics, yamlNodeDiagnostic(text, value, fmt.Sprintf("%s must be a list", key.Value)))
+			continue
+		}
+		for _, item := range value.Content {
+			nameNode := yamlMappingValue(item, "name")
+			if nameNode == nil || nameNode.Value == "" {
+				diagnostics = append(diagnostics, yamlNodeDiagnostic(text, item, fmt.Sprintf("%s requires name", kind)))
 				continue
 			}
-			for _, item := range value.Content {
-				nameNode := yamlMappingValue(item, "name")
-				if nameNode == nil || nameNode.Value == "" {
-					diagnostics = append(diagnostics, yamlNodeDiagnostic(text, item, fmt.Sprintf("%s requires name", kind)))
-					continue
-				}
-				declarations = append(declarations, namedDeclaration{kind: kind, name: nameNode.Value, rangeValue: yamlNodeRange(text, nameNode)})
-			}
+			declarations = append(declarations, namedDeclaration{kind: kind, name: nameNode.Value, rangeValue: yamlNodeRange(text, nameNode)})
 		}
 	}
 	diagnostics = append(diagnostics, duplicateNameDiagnostics(declarations)...)
 	return diagnostics
+}
+
+func yamlDeclarationKinds() map[string]string {
+	kinds := make(map[string]string)
+	for _, schema := range loading.BuildDeclarationSchemas("yaml") {
+		kinds[schema.Collection] = schema.Kind
+	}
+	return kinds
 }
 
 func yamlMappingValue(node *yaml.Node, key string) *yaml.Node {
@@ -504,41 +265,8 @@ func yamlNodeRange(text string, node *yaml.Node) rangeValue {
 	return rangeValue{Start: start, End: end}
 }
 
-func loadModule(evaluationContext *starlarkEvaluationContext) func(thread *starlark.Thread, module string) (starlark.StringDict, error) {
-	loaded := map[string]starlark.StringDict{}
-	loadingModules := map[string]bool{}
-	var load func(thread *starlark.Thread, module string) (starlark.StringDict, error)
-	load = func(thread *starlark.Thread, module string) (starlark.StringDict, error) {
-		modulePath := resolveStarlarkModulePath(thread.Name, module)
-		if globals, isLoaded := loaded[modulePath]; isLoaded {
-			return globals, nil
-		}
-		if loadingModules[modulePath] {
-			return nil, fmt.Errorf("cycle detected while loading %q", module)
-		}
-		source, operationError := evaluationContext.readText(modulePath)
-		if operationError != nil {
-			return nil, fmt.Errorf("load %q: %w", module, operationError)
-		}
-		loadingModules[modulePath] = true
-		defer delete(loadingModules, modulePath)
-		moduleThread := &starlark.Thread{Name: modulePath, Load: load}
-		moduleThread.SetLocal(starlarkEvaluationContextKey, evaluationContext)
-		globals, operationError := starlark.ExecFileOptions(&syntax.FileOptions{}, moduleThread, modulePath, source, starlarkPredeclared(modulePath))
-		if operationError != nil {
-			return nil, operationError
-		}
-		loaded[modulePath] = globals
-		return globals, nil
-	}
-	return load
-}
-
 func yamlDiagnostics(text string) []diagnostic {
-	var packageDTO loading.PackageDTO
-	decoder := yaml.NewDecoder(strings.NewReader(text))
-	decoder.KnownFields(true)
-	if operationError := decoder.Decode(&packageDTO); operationError != nil {
+	if _, operationError := loading.DecodeYAML([]byte(text)); operationError != nil {
 		return []diagnostic{diagnosticFromError(text, operationError)}
 	}
 	var root yaml.Node

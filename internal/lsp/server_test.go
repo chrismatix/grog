@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"grog/internal/loading"
 	"os"
 	"path/filepath"
 	"slices"
@@ -151,13 +152,27 @@ func TestDiagnosticsForYamlResource(t *testing.T) {
 	}
 }
 
-func TestDiagnosticsForYamlReportsUnknownFields(t *testing.T) {
+func TestDiagnosticsForYamlMatchesLoaderUnknownFieldBehavior(t *testing.T) {
 	diagnostics := diagnosticsFor("file:///repo/BUILD.yaml", "targets:\n  - name: build\n    commmand: go build ./...\n")
-	if len(diagnostics) == 0 {
-		t.Fatal("expected unknown field diagnostic")
+	if len(diagnostics) != 0 {
+		t.Fatalf("expected unknown field to match loader behavior, got %#v", diagnostics)
 	}
-	if diagnostics[0].Range.Start.Line != 2 {
-		t.Fatalf("expected diagnostic on line 2, got %#v", diagnostics[0].Range)
+}
+
+func TestCompletionMetadataCoversLoaderSchema(t *testing.T) {
+	for _, format := range []string{"starlark", "yaml"} {
+		for _, declarationKind := range append([]string{""}, loading.StarlarkBuiltinNames()...) {
+			for _, field := range loading.BuildFieldNames(format, declarationKind) {
+				if docs[field] == "" {
+					t.Errorf("missing documentation for %s %s field %q", format, declarationKind, field)
+				}
+			}
+		}
+	}
+	for _, name := range append(loading.StarlarkBuiltinNames(), loading.StarlarkGlobalNames()...) {
+		if docs[name] == "" {
+			t.Errorf("missing documentation for Starlark name %q", name)
+		}
 	}
 }
 

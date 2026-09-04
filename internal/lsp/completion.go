@@ -5,7 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
+
+	"grog/internal/loading"
 )
 
 func (server *server) completionItems(documentURI string, textPosition position) []map[string]any {
@@ -22,7 +25,7 @@ func (server *server) completionItems(documentURI string, textPosition position)
 	} else if field == "outputs" {
 		return outputPathCompletionItems(path, text, textPosition)
 	}
-	return completionItemsFor([]string{"targets", "aliases", "resources", "environments", "default_platforms", "name", "command", "dependencies", "inputs", "exclude_inputs", "outputs", "bin_output", "binary_requires_push", "output_checks", "tags", "fingerprint", "platforms", "environment_variables", "timeout", "concurrency_group", "oci_push", "actual", "up", "down", "ready", "exports", "type", "oci_image"}, 5)
+	return completionItemsFor(allBuildFieldNames("yaml"), 5)
 }
 
 func (server *server) documentText(documentURI string) string {
@@ -41,13 +44,13 @@ func (server *server) starlarkCompletionItems(documentURI string, text string, t
 	field := starlarkFieldAt(text, textPosition)
 	callName := enclosingStarlarkCall(text, textPosition)
 	if inStringAt(text, textPosition) {
-		if field == "dependencies" && (callName == "target" || callName == "resource" || callName == "environment") || field == "actual" && callName == "alias" {
+		if (field == "dependencies" || field == "actual") && starlarkDeclarationHasField(callName, field) {
 			return server.labelCompletionItems(path, text, textPosition)
 		}
-		if callName == "target" && (field == "inputs" || field == "exclude_inputs" || field == "bin_output") {
+		if (field == "inputs" || field == "exclude_inputs" || field == "bin_output") && starlarkDeclarationHasField(callName, field) {
 			return pathCompletionItems(path, text, textPosition)
 		}
-		if callName == "target" && field == "outputs" {
+		if field == "outputs" && starlarkDeclarationHasField(callName, field) {
 			return outputPathCompletionItems(path, text, textPosition)
 		}
 		return nil
@@ -55,19 +58,43 @@ func (server *server) starlarkCompletionItems(documentURI string, text string, t
 	if callName != "" && !shouldSuggestStarlarkCallParameters(text, textPosition) {
 		return nil
 	}
-	switch callName {
-	case "target":
-		return completionItemsFor([]string{"name", "command", "dependencies", "inputs", "exclude_inputs", "outputs", "bin_output", "binary_requires_push", "output_checks", "tags", "fingerprint", "platforms", "environment_variables", "timeout", "concurrency_group", "oci_push"}, 5)
-	case "alias":
-		return completionItemsFor([]string{"name", "actual"}, 5)
-	case "resource":
-		return completionItemsFor([]string{"name", "up", "down", "ready", "timeout", "exports", "dependencies"}, 5)
-	case "environment":
-		return completionItemsFor([]string{"name", "type", "dependencies", "oci_image"}, 5)
+	if parameters := loading.StarlarkParameters(callName); callName != "" && len(parameters) > 0 {
+		names := make([]string, 0, len(parameters))
+		for _, parameter := range parameters {
+			names = append(names, parameter.Name)
+		}
+		return completionItemsFor(names, 5)
 	}
-	items := completionItemsFor([]string{"target", "alias", "resource", "environment", "load"}, 3)
-	items = append(items, completionItemsFor([]string{"GROG_OS", "GROG_ARCH", "GROG_PLATFORM", "GROG_PLATFORM_TAGS", "GROG_ENV_FILE", "GROG_WORKSPACE_ROOT", "GROG_GIT_HASH", "json", "math", "time"}, 6)...)
+	builtins := append(loading.StarlarkBuiltinNames(), "load")
+	items := completionItemsFor(builtins, 3)
+	items = append(items, completionItemsFor(loading.StarlarkGlobalNames(), 6)...)
 	return items
+}
+
+func allBuildFieldNames(format string) []string {
+	names := loading.BuildFieldNames(format, "")
+	seen := map[string]bool{}
+	for _, name := range names {
+		seen[name] = true
+	}
+	for _, schema := range loading.BuildDeclarationSchemas(format) {
+		for _, name := range loading.BuildFieldNames(format, schema.Kind) {
+			if !seen[name] {
+				names = append(names, name)
+				seen[name] = true
+			}
+		}
+	}
+	return names
+}
+
+func starlarkDeclarationHasField(declarationKind string, field string) bool {
+	for _, parameter := range loading.StarlarkParameters(declarationKind) {
+		if parameter.Name == field {
+			return true
+		}
+	}
+	return false
 }
 
 func (server *server) labelCompletionItems(currentPath string, text string, textPosition position) []map[string]any {
@@ -442,7 +469,7 @@ func enclosingStarlarkCall(text string, textPosition position) string {
 	}
 	for index := len(callNames) - 1; index >= 0; index-- {
 		name := callNames[index]
-		if name == "target" || name == "alias" || name == "resource" || name == "environment" {
+		if slices.Contains(loading.StarlarkBuiltinNames(), name) {
 			return name
 		}
 	}
@@ -540,15 +567,19 @@ func isWordCharacter(character byte) bool {
 }
 
 func signatureHelp(text string, textPosition position) any {
-	labels := map[string]string{
-		"target":      "target(name, command?, dependencies?, inputs?, exclude_inputs?, outputs?, bin_output?, binary_requires_push?, output_checks?, tags?, fingerprint?, platforms?, environment_variables?, timeout?, concurrency_group?, oci_push?)",
-		"alias":       "alias(name, actual)",
-		"resource":    "resource(name, up, down?, ready?, timeout?, exports?, dependencies?)",
-		"environment": "environment(name, type, dependencies?, oci_image?)",
-	}
-	label, found := labels[enclosingStarlarkCall(text, textPosition)]
-	if !found {
+	declarationKind := enclosingStarlarkCall(text, textPosition)
+	parameters := loading.StarlarkParameters(declarationKind)
+	if len(parameters) == 0 {
 		return nil
 	}
+	names := make([]string, 0, len(parameters))
+	for _, parameter := range parameters {
+		name := parameter.Name
+		if !parameter.Required {
+			name += "?"
+		}
+		names = append(names, name)
+	}
+	label := declarationKind + "(" + strings.Join(names, ", ") + ")"
 	return map[string]any{"signatures": []map[string]any{{"label": label}}, "activeSignature": 0, "activeParameter": 0}
 }
