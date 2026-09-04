@@ -1,0 +1,16 @@
+---
+title: Editor Support
+description: Configure an editor to use grog's built-in language server.
+---
+
+Grog includes a language server for `BUILD.star`, `BUILD.bzl`, other Starlark modules, and `BUILD.yaml` or `BUILD.yml` files. It provides diagnostics, completion, hover documentation, signature help, document symbols, and go-to-definition.
+
+Configure your editor's language server client to start this command using standard input and output:
+
+```shell
+grog lsp
+```
+
+Start the process with the workspace root as its working directory. No additional flags or network port are required.
+
+The server completes target labels and package-relative paths by scanning from the nearest `grog.toml`. Starlark diagnostics also read declared environment variable names from that file and its `environment_variables_file`, so build files can use the same predeclared names as grog itself.
