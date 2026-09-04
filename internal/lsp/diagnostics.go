@@ -12,21 +12,39 @@ import (
 
 	"grog/internal/loading"
 
+	"go.starlark.net/starlark"
 	"go.starlark.net/syntax"
 	"gopkg.in/yaml.v3"
 )
 
 func (server *server) publishDiagnostics(documentURI string) error {
 	text := server.documentText(documentURI)
-	diagnostics := diagnosticsFor(documentURI, text)
+	diagnostics := server.diagnosticsFor(documentURI, text)
 	return server.notify("textDocument/publishDiagnostics", map[string]any{"uri": documentURI, "diagnostics": diagnostics})
 }
 
 func diagnosticsFor(documentURI string, text string) []diagnostic {
+	return diagnosticsForReader(documentURI, text, func(path string) (string, error) {
+		content, operationError := os.ReadFile(path)
+		return string(content), operationError
+	})
+}
+
+func (server *server) diagnosticsFor(documentURI string, text string) []diagnostic {
+	return diagnosticsForReader(documentURI, text, func(path string) (string, error) {
+		if content, isOpen := server.documents[pathToURI(path)]; isOpen {
+			return content, nil
+		}
+		content, operationError := os.ReadFile(path)
+		return string(content), operationError
+	})
+}
+
+func diagnosticsForReader(documentURI string, text string, readText func(path string) (string, error)) []diagnostic {
 	path := uriPath(documentURI)
 	name := filepath.Base(path)
 	if isStarlarkFile(name) {
-		return starlarkDiagnostics(path, text)
+		return starlarkDiagnostics(path, text, readText)
 	}
 	if (loading.YamlLoader{}).Matches(name) {
 		return yamlDiagnostics(text)
@@ -34,20 +52,60 @@ func diagnosticsFor(documentURI string, text string) []diagnostic {
 	return []diagnostic{}
 }
 
-func starlarkDiagnostics(path string, text string) []diagnostic {
+func starlarkDiagnostics(path string, text string, readText func(path string) (string, error)) []diagnostic {
 	if _, operationError := syntax.Parse(path, text, syntax.RetainComments); operationError != nil {
 		return []diagnostic{diagnosticFromError(text, operationError)}
 	}
-	declarations, operationError := evaluateStarlark(path, text, func(path string) (string, error) {
-		content, readError := os.ReadFile(path)
-		return string(content), readError
-	})
+	declarations, operationError := evaluateStarlark(path, text, readText)
 	diagnostics := duplicateNameDiagnostics(declarations)
 	diagnostics = append(diagnostics, duplicateKeywordArgumentDiagnostics(text)...)
 	if operationError != nil && !isRepeatedKeywordArgumentError(operationError) {
-		diagnostics = append([]diagnostic{diagnosticFromError(text, operationError)}, diagnostics...)
+		diagnostics = append([]diagnostic{starlarkDiagnosticFromError(path, text, operationError)}, diagnostics...)
 	}
 	return diagnostics
+}
+
+func starlarkDiagnosticFromError(path string, text string, operationError error) diagnostic {
+	errorPath := starlarkErrorPath(operationError)
+	if errorPath == "" || filepath.Clean(errorPath) == filepath.Clean(path) {
+		return diagnosticFromError(text, operationError)
+	}
+	file, parseError := syntax.Parse(path, text, 0)
+	if parseError != nil {
+		return diagnosticFromError(text, operationError)
+	}
+	var fallback *syntax.LoadStmt
+	for _, statement := range file.Stmts {
+		loadStatement, isLoad := statement.(*syntax.LoadStmt)
+		if !isLoad {
+			continue
+		}
+		if fallback == nil {
+			fallback = loadStatement
+		}
+		modulePath := loading.ResolveStarlarkModulePath(findWorkspaceRoot(filepath.Dir(path)), path, loadStatement.ModuleName())
+		if filepath.Clean(modulePath) == filepath.Clean(errorPath) || strings.Contains(operationError.Error(), loadStatement.ModuleName()) {
+			start, end := loadStatement.Module.Span()
+			return diagnostic{Range: rangeFromSyntaxPositions(text, start, end), Severity: 1, Source: "grog", Message: operationError.Error()}
+		}
+	}
+	if fallback != nil {
+		start, end := fallback.Module.Span()
+		return diagnostic{Range: rangeFromSyntaxPositions(text, start, end), Severity: 1, Source: "grog", Message: operationError.Error()}
+	}
+	return diagnosticFromError(text, operationError)
+}
+
+func starlarkErrorPath(operationError error) string {
+	var syntaxError syntax.Error
+	if errors.As(operationError, &syntaxError) {
+		return syntaxError.Pos.Filename()
+	}
+	var evaluationError *starlark.EvalError
+	if errors.As(operationError, &evaluationError) && len(evaluationError.CallStack) > 0 {
+		return evaluationError.CallStack[len(evaluationError.CallStack)-1].Pos.Filename()
+	}
+	return ""
 }
 
 func evaluateStarlark(path string, text string, readText func(path string) (string, error)) ([]namedDeclaration, error) {

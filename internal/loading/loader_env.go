@@ -1,6 +1,7 @@
 package loading
 
 import (
+	"os/exec"
 	"strings"
 
 	"grog/internal/config"
@@ -20,7 +21,7 @@ func LoaderEnv() map[string]string {
 		config.Global.Arch,
 		strings.Join(config.Global.PlatformTags, ","),
 		resolvedEnvironmentVariablesFilePath(),
-		loaderGitHash(),
+		loaderGitHash(config.Global.WorkspaceRoot),
 	)
 }
 
@@ -38,7 +39,8 @@ func loaderEnvironment(workspaceRoot string, operatingSystem string, architectur
 
 // loaderGitHash mirrors execution.GetExtendedTargetEnv: outside a git repo,
 // the variable resolves to the empty string instead of failing the load.
-func loaderGitHash() string {
-	hash, _ := config.GetGitHash()
-	return hash
+func loaderGitHash(workspaceRoot string) string {
+	command := exec.Command("git", "-C", workspaceRoot, "rev-parse", "HEAD")
+	output, _ := command.Output()
+	return strings.TrimSpace(string(output))
 }

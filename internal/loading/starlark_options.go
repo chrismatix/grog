@@ -1,10 +1,14 @@
 package loading
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
+
+	"grog/internal/config"
 
 	"github.com/pelletier/go-toml/v2"
 	"github.com/subosito/gotenv"
@@ -13,9 +17,19 @@ import (
 
 // StarlarkOptionsForWorkspace returns tooling evaluation defaults for a workspace.
 func StarlarkOptionsForWorkspace(workspaceRoot string) StarlarkEvaluationOptions {
+	if filepath.Clean(config.Global.WorkspaceRoot) == filepath.Clean(workspaceRoot) && config.Global.OS != "" && config.Global.Arch != "" {
+		environmentFilePath := config.Global.EnvironmentVariablesFile
+		if environmentFilePath != "" && !filepath.IsAbs(environmentFilePath) {
+			environmentFilePath = filepath.Join(workspaceRoot, environmentFilePath)
+		}
+		environment := loaderEnvironment(workspaceRoot, config.Global.OS, config.Global.Arch, strings.Join(config.Global.PlatformTags, ","), environmentFilePath, loaderGitHash(workspaceRoot))
+		maps.Copy(environment, config.Global.EnvironmentVariables)
+		return StarlarkEvaluationOptions{WorkspaceRoot: workspaceRoot, Environment: environment, PlatformTags: config.Global.PlatformTags}
+	}
 	operatingSystem := runtime.GOOS
 	architecture := runtime.GOARCH
 	environment := standardStarlarkEnvironment(workspaceRoot, operatingSystem, architecture)
+	environment["GROG_GIT_HASH"] = loaderGitHash(workspaceRoot)
 	options := StarlarkEvaluationOptions{WorkspaceRoot: workspaceRoot, Environment: environment}
 	configurationBytes, operationError := os.ReadFile(filepath.Join(workspaceRoot, "grog.toml"))
 	if operationError != nil {

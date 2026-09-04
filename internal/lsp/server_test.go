@@ -101,8 +101,41 @@ func TestStarlarkDiagnosticsReadWorkspaceVariables(t *testing.T) {
 		t.Fatalf("write environment file: %v", operationError)
 	}
 	text := `target(name = "build", command = INLINE_VALUE + FILE_VALUE)`
-	if diagnostics := starlarkDiagnostics(filepath.Join(workspaceRoot, "BUILD.star"), text); len(diagnostics) != 0 {
+	if diagnostics := diagnosticsFor(pathToURI(filepath.Join(workspaceRoot, "BUILD.star")), text); len(diagnostics) != 0 {
 		t.Fatalf("expected no diagnostics, got %#v", diagnostics)
+	}
+}
+
+func TestDiagnosticsUsesOpenLoadedModule(t *testing.T) {
+	workspaceRoot := t.TempDir()
+	modulePath := filepath.Join(workspaceRoot, "rules.star")
+	if operationError := os.WriteFile(filepath.Join(workspaceRoot, "grog.toml"), []byte(""), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	if operationError := os.WriteFile(modulePath, []byte("def saved():\n  pass\n"), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	server := &server{documents: map[string]string{pathToURI(modulePath): "def edited():\n  target(name = \"from_module\")\n"}}
+	buildPath := filepath.Join(workspaceRoot, "BUILD.star")
+	diagnostics := server.diagnosticsFor(pathToURI(buildPath), "load(\"rules.star\", \"edited\")\nedited()\n")
+	if len(diagnostics) != 0 {
+		t.Fatalf("expected open module to be evaluated, got %#v", diagnostics)
+	}
+}
+
+func TestDiagnosticsMapsLoadedModuleErrorsToLoad(t *testing.T) {
+	workspaceRoot := t.TempDir()
+	buildPath := filepath.Join(workspaceRoot, "BUILD.star")
+	modulePath := filepath.Join(workspaceRoot, "broken.star")
+	text := "load(\"broken.star\", \"value\")\n"
+	diagnostics := starlarkDiagnostics(buildPath, text, func(path string) (string, error) {
+		if path == modulePath {
+			return "\n\nvalue =\n", nil
+		}
+		return text, nil
+	})
+	if len(diagnostics) != 1 || diagnostics[0].Range.Start.Line != 0 {
+		t.Fatalf("expected module error on the load statement, got %#v", diagnostics)
 	}
 }
 
