@@ -221,7 +221,7 @@ func (server *server) indexWorkspaceLabels(workspaceRoot string) []indexedLabel 
 }
 
 func (server *server) invalidateLabelIndexForDocument(documentURI string) {
-	if loading.IsStarlarkSourceFile(filepath.Base(uriPath(documentURI))) && !isSupportedBuildFile(filepath.Base(uriPath(documentURI))) {
+	if loading.IsStarlarkSourceFile(filepath.Base(uriPath(documentURI))) {
 		server.invalidateLabelIndex()
 	}
 }

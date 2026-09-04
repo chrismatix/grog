@@ -1125,6 +1125,40 @@ func TestWorkspaceLabelIndexInvalidatesForFilesystemChanges(t *testing.T) {
 	}
 }
 
+func TestWorkspaceLabelIndexInvalidatesForOpenBuildModules(t *testing.T) {
+	workspaceRoot := t.TempDir()
+	if operationError := os.WriteFile(filepath.Join(workspaceRoot, "grog.toml"), nil, 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	moduleDirectory := filepath.Join(workspaceRoot, "rules")
+	if operationError := os.Mkdir(moduleDirectory, 0o755); operationError != nil {
+		t.Fatal(operationError)
+	}
+	modulePath := filepath.Join(moduleDirectory, "BUILD.star")
+	moduleText := "def make():\n  target(name = \"first\")\n"
+	if operationError := os.WriteFile(modulePath, []byte(moduleText), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	buildPath := filepath.Join(workspaceRoot, "BUILD.star")
+	if operationError := os.WriteFile(buildPath, []byte("load(\"rules/BUILD.star\", \"make\")\nmake()\n"), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	var output bytes.Buffer
+	server := &server{writer: &output, documents: map[string]string{}}
+	if labels := server.collectWorkspaceLabels(workspaceRoot, workspaceRoot); !slices.Contains(labels, "//:first") {
+		t.Fatalf("unexpected initial labels: %#v", labels)
+	}
+	updatedText := "def make():\n  target(name = \"second\")\n"
+	params := json.RawMessage(fmt.Sprintf(`{"textDocument":{"uri":%q,"text":%q}}`, pathToURI(modulePath), updatedText))
+	if operationError := server.handle(message{Method: "textDocument/didOpen", Params: params}); operationError != nil {
+		t.Fatal(operationError)
+	}
+	labels := server.collectWorkspaceLabels(workspaceRoot, workspaceRoot)
+	if !slices.Contains(labels, "//:second") || slices.Contains(labels, "//:first") {
+		t.Fatalf("unexpected refreshed labels: %#v", labels)
+	}
+}
+
 func TestPositionConversionUsesUTF16CodeUnits(t *testing.T) {
 	text := "é😀target"
 	targetOffset := strings.Index(text, "target")
