@@ -16,7 +16,7 @@ func (server *server) completionItems(documentURI string, textPosition position)
 		return server.starlarkCompletionItems(documentURI, text, textPosition)
 	}
 	if field := yamlFieldAt(text, textPosition); field == "dependencies" || field == "actual" {
-		return labelCompletionItems(path, text, textPosition)
+		return server.labelCompletionItems(path, text, textPosition)
 	} else if field == "inputs" || field == "exclude_inputs" || field == "bin_output" {
 		return pathCompletionItems(path, text, textPosition)
 	} else if field == "outputs" {
@@ -42,7 +42,7 @@ func (server *server) starlarkCompletionItems(documentURI string, text string, t
 	callName := enclosingStarlarkCall(text, textPosition)
 	if inStringAt(text, textPosition) {
 		if field == "dependencies" && (callName == "target" || callName == "resource" || callName == "environment") || field == "actual" && callName == "alias" {
-			return labelCompletionItems(path, text, textPosition)
+			return server.labelCompletionItems(path, text, textPosition)
 		}
 		if callName == "target" && (field == "inputs" || field == "exclude_inputs" || field == "bin_output") {
 			return pathCompletionItems(path, text, textPosition)
@@ -70,10 +70,10 @@ func (server *server) starlarkCompletionItems(documentURI string, text string, t
 	return items
 }
 
-func labelCompletionItems(currentPath string, text string, textPosition position) []map[string]any {
+func (server *server) labelCompletionItems(currentPath string, text string, textPosition position) []map[string]any {
 	prefix := pathCompletionPrefix(text, textPosition)
 	workspaceRoot := findWorkspaceRoot(filepath.Dir(currentPath))
-	labels := collectWorkspaceLabels(workspaceRoot, filepath.Dir(currentPath))
+	labels := server.collectWorkspaceLabels(workspaceRoot, filepath.Dir(currentPath))
 	alreadyListed := stringListValuesAt(text, textPosition)
 	items := []map[string]any{}
 	for _, label := range preferredDependencyLabels(labels, prefix) {
@@ -331,8 +331,15 @@ func inStringAt(text string, textPosition position) bool {
 		return false
 	}
 	inString := byte(0)
+	inComment := false
 	for index := 0; index < offset; index++ {
 		character := text[index]
+		if inComment {
+			if character == '\n' {
+				inComment = false
+			}
+			continue
+		}
 		if inString != 0 {
 			if character == inString && (index == 0 || text[index-1] != '\\') {
 				inString = 0
@@ -341,6 +348,8 @@ func inStringAt(text string, textPosition position) bool {
 		}
 		if character == '\'' || character == '"' {
 			inString = character
+		} else if character == '#' {
+			inComment = true
 		}
 	}
 	return inString != 0
@@ -394,8 +403,15 @@ func enclosingStarlarkCall(text string, textPosition position) string {
 	}
 	callNames := []string{}
 	inString := byte(0)
+	inComment := false
 	for index := 0; index < offset; index++ {
 		character := text[index]
+		if inComment {
+			if character == '\n' {
+				inComment = false
+			}
+			continue
+		}
 		if inString != 0 {
 			if character == inString && (index == 0 || text[index-1] != '\\') {
 				inString = 0
@@ -404,6 +420,10 @@ func enclosingStarlarkCall(text string, textPosition position) string {
 		}
 		if character == '\'' || character == '"' {
 			inString = character
+			continue
+		}
+		if character == '#' {
+			inComment = true
 			continue
 		}
 		switch character {

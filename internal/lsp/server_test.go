@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -72,6 +73,20 @@ target(name = "release", binary_requires_push = True, dependencies = [":database
 value = json.encode({"platform": GROG_PLATFORM, "root": GROG_WORKSPACE_ROOT, "hash": GROG_GIT_HASH})`
 	if diagnostics := diagnosticsFor("file:///repo/BUILD.star", text); len(diagnostics) != 0 {
 		t.Fatalf("expected no diagnostics, got %#v", diagnostics)
+	}
+}
+
+func TestDiagnosticsForStarlarkValidatesListElements(t *testing.T) {
+	diagnostics := diagnosticsFor("file:///repo/BUILD.star", `target(name = "build", dependencies = [1])`)
+	if len(diagnostics) == 0 {
+		t.Fatal("expected invalid dependency diagnostic")
+	}
+}
+
+func TestDiagnosticsForStarlarkUsesLoaderSyntaxOptions(t *testing.T) {
+	diagnostics := diagnosticsFor("file:///repo/BUILD.star", `values = {"one", "two"}`)
+	if len(diagnostics) == 0 {
+		t.Fatal("expected unsupported set diagnostic")
 	}
 }
 
@@ -233,9 +248,9 @@ func TestYamlDependencyCompletionInsideBlockSequence(t *testing.T) {
 	if operationError := os.WriteFile(buildPath, []byte(diskText), 0o644); operationError != nil {
 		t.Fatalf("write build file: %v", operationError)
 	}
-	text := "targets:\n  - name: test\n    dependencies:\n      - \":bu"
+	text := "targets:\n  - name: build\n  - name: test\n    dependencies:\n      - \":bu"
 	server := &server{documents: map[string]string{pathToURI(buildPath): text}}
-	items := server.completionItems(pathToURI(buildPath), position{Line: 3, Character: 12})
+	items := server.completionItems(pathToURI(buildPath), position{Line: 4, Character: 12})
 	if !hasCompletionLabel(items, ":build") {
 		t.Fatalf("expected :build completion item, got %#v", items)
 	}
@@ -352,6 +367,15 @@ func TestStarlarkTargetCompletionDoesNotSuggestPathsAfterPreviousOutputField(t *
 		if item["documentation"] == "file path" {
 			t.Fatalf("did not expect path completion inside target parameter list, got %#v", item)
 		}
+	}
+}
+
+func TestStarlarkCompletionIgnoresQuotesInComments(t *testing.T) {
+	text := "# don't hide completions\ntarget(\n  na"
+	server := &server{documents: map[string]string{"file:///repo/BUILD.star": text}}
+	items := server.completionItems("file:///repo/BUILD.star", position{Line: 2, Character: 4})
+	if !hasCompletionLabel(items, "name") {
+		t.Fatalf("expected name completion, got %#v", items)
 	}
 }
 
@@ -481,6 +505,37 @@ func TestDefinitionForShorthandAbsoluteTargetLabel(t *testing.T) {
 	location, isLocation := server.definition(pathToURI(buildPath), position{Line: 0, Character: 47}).(map[string]any)
 	if !isLocation || location["uri"] != pathToURI(dependencyPath) {
 		t.Fatalf("unexpected definition: %#v", location)
+	}
+}
+
+func TestWorkspaceLabelsUseOpenDocumentsAndEvaluateMacros(t *testing.T) {
+	workspaceRoot := t.TempDir()
+	if operationError := os.WriteFile(filepath.Join(workspaceRoot, "grog.toml"), nil, 0o644); operationError != nil {
+		t.Fatalf("write grog.toml: %v", operationError)
+	}
+	rulesPath := filepath.Join(workspaceRoot, "rules.star")
+	rulesText := "def package(name):\n  target(name = name)\n"
+	if operationError := os.WriteFile(rulesPath, []byte(rulesText), 0o644); operationError != nil {
+		t.Fatalf("write rules: %v", operationError)
+	}
+	buildPath := filepath.Join(workspaceRoot, "BUILD.star")
+	if operationError := os.WriteFile(buildPath, []byte(`target(name = "saved")`), 0o644); operationError != nil {
+		t.Fatalf("write build file: %v", operationError)
+	}
+	openText := "load(\"rules.star\", \"package\")\npackage(\"generated\")\ntarget(name = \"open\")\n"
+	server := &server{documents: map[string]string{pathToURI(buildPath): openText, pathToURI(rulesPath): rulesText}}
+	labels := server.collectWorkspaceLabels(workspaceRoot, workspaceRoot)
+	for _, expectedLabel := range []string{"//:generated", "//:open"} {
+		if !slices.Contains(labels, expectedLabel) {
+			t.Fatalf("expected label %q, got %#v", expectedLabel, labels)
+		}
+	}
+	if slices.Contains(labels, "//:saved") {
+		t.Fatalf("did not expect stale saved label, got %#v", labels)
+	}
+	location, isLocation := server.labelDefinition(buildPath, ":generated").(map[string]any)
+	if !isLocation || location["uri"] != pathToURI(rulesPath) {
+		t.Fatalf("unexpected macro-generated definition: %#v", location)
 	}
 }
 

@@ -65,8 +65,11 @@ func (server *server) labelDefinition(currentPath string, targetLabel string) an
 		if definitionText == "" {
 			continue
 		}
-		for _, declaration := range declarationsForFile(fileName, definitionText) {
+		for _, declaration := range server.declarationsForPath(definitionPath, definitionText) {
 			if declaration.name == parsedLabel.Name {
+				if declaration.path != "" {
+					definitionURI = pathToURI(declaration.path)
+				}
 				return map[string]any{"uri": definitionURI, "range": declaration.rangeValue}
 			}
 		}
@@ -117,7 +120,7 @@ func findWorkspaceRoot(directory string) string {
 	}
 }
 
-func collectWorkspaceLabels(workspaceRoot string, currentDirectory string) []string {
+func (server *server) collectWorkspaceLabels(workspaceRoot string, currentDirectory string) []string {
 	labels := []string{}
 	_ = filepath.WalkDir(workspaceRoot, func(path string, directoryEntry os.DirEntry, operationError error) error {
 		if operationError != nil || directoryEntry.IsDir() {
@@ -130,10 +133,7 @@ func collectWorkspaceLabels(workspaceRoot string, currentDirectory string) []str
 		if name != "BUILD.star" && name != "BUILD.bzl" && name != "BUILD.yaml" && name != "BUILD.yml" {
 			return nil
 		}
-		content, operationError := os.ReadFile(path)
-		if operationError != nil {
-			return nil
-		}
+		content := server.documentText(pathToURI(path))
 		packagePath, operationError := filepath.Rel(workspaceRoot, filepath.Dir(path))
 		if operationError != nil || packagePath == "." {
 			packagePath = ""
@@ -142,7 +142,7 @@ func collectWorkspaceLabels(workspaceRoot string, currentDirectory string) []str
 		if packagePath != "" {
 			prefix += filepath.ToSlash(packagePath)
 		}
-		for _, declaration := range declarationsForFile(name, string(content)) {
+		for _, declaration := range server.declarationsForPath(path, content) {
 			label := prefix + ":" + declaration.name
 			labels = append(labels, label)
 			if filepath.Clean(filepath.Dir(path)) == filepath.Clean(currentDirectory) {
@@ -154,13 +154,31 @@ func collectWorkspaceLabels(workspaceRoot string, currentDirectory string) []str
 	return labels
 }
 
+func (server *server) declarationsForPath(path string, text string) []namedDeclaration {
+	if !isStarlarkFile(filepath.Base(path)) {
+		return declarationsForFile(filepath.Base(path), text)
+	}
+	declarations, operationError := evaluateStarlark(path, text, func(modulePath string) (string, error) {
+		moduleURI := pathToURI(modulePath)
+		if moduleText, isOpen := server.documents[moduleURI]; isOpen {
+			return moduleText, nil
+		}
+		content, readError := os.ReadFile(modulePath)
+		return string(content), readError
+	})
+	if operationError != nil {
+		return starlarkNamedDeclarations(text)
+	}
+	return declarations
+}
+
 func declarationsForFile(fileName string, text string) []namedDeclaration {
 	if isStarlarkFile(fileName) {
 		return starlarkNamedDeclarations(text)
 	}
 	var root yaml.Node
 	if operationError := yaml.Unmarshal([]byte(text), &root); operationError != nil {
-		return nil
+		return incompleteYamlDeclarations(text)
 	}
 	if root.Kind == yaml.DocumentNode && len(root.Content) > 0 {
 		root = *root.Content[0]
@@ -182,6 +200,31 @@ func declarationsForFile(fileName string, text string) []namedDeclaration {
 				declarations = append(declarations, namedDeclaration{kind: kind, name: nameNode.Value, rangeValue: yamlNodeRange(text, nameNode)})
 			}
 		}
+	}
+	return declarations
+}
+
+func incompleteYamlDeclarations(text string) []namedDeclaration {
+	sectionPattern := regexp.MustCompile(`^(targets|aliases|resources|environments):`)
+	namePattern := regexp.MustCompile(`^-\s+name:\s*["']?([^\s"'#]+)`)
+	kinds := map[string]string{"targets": "target", "aliases": "alias", "resources": "resource", "environments": "environment"}
+	declarations := []namedDeclaration{}
+	kind := ""
+	for lineNumber, line := range strings.Split(text, "\n") {
+		trimmedLine := strings.TrimSpace(line)
+		if matches := sectionPattern.FindStringSubmatch(trimmedLine); len(matches) == 2 {
+			kind = kinds[matches[1]]
+			continue
+		}
+		matches := namePattern.FindStringSubmatchIndex(trimmedLine)
+		if kind == "" || len(matches) != 4 {
+			continue
+		}
+		name := trimmedLine[matches[2]:matches[3]]
+		byteStart := strings.Index(line, name)
+		start := position{Line: lineNumber, Character: utf16Length(line[:byteStart])}
+		end := position{Line: lineNumber, Character: start.Character + utf16Length(name)}
+		declarations = append(declarations, namedDeclaration{kind: kind, name: name, rangeValue: rangeValue{Start: start, End: end}})
 	}
 	return declarations
 }
