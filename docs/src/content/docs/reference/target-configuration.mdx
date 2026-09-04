@@ -27,6 +27,7 @@ Grog uses this information to ensure incremental, cached, and parallel builds.
 | `exclude_inputs`        | `string[]`               | File paths or glob patterns to exclude from inputs                                               |
 | `outputs`               | `string[]`               | Files or directories produced by the target                                                      |
 | `dependencies`          | `label[]`                | Labels of other targets that must be built before this one                                       |
+| `dependency_providers`  | `string[]`               | Names of [dependency providers](/topics/dependency-inference) that supply this target's cross-package edges |
 | `platforms`             | `string[]`               | Specific platform identifiers where this target can run (e.g. `linux/amd64`)                     |
 | `tags`                  | `string[]`               | Metadata tags that affect target behavior (e.g., "no-cache", "testonly")                         |
 | `fingerprint`           | `Record<string, string>` | Extra identity inputs used to invalidate the target's cache entry                                |
@@ -199,6 +200,20 @@ Other targets that must be built before this one, specified as labels. Labels ca
 - Targets in other packages: `//path/to/package:target_name`
 
 Dependencies may also point at [build resources](/topics/build-resources) — long-running helpers like a shared test database that Grog starts before the target runs and tears down after the build.
+
+### dependency_providers
+
+Names of [dependency providers](/topics/dependency-inference) — Cargo, uv, npm/pnpm, Go or your own command — that Grog consults at load time for this package's cross-package edges. The inferred labels are merged into `dependencies`, so `cargo_crate(name = "greet")` needs no hand-written `deps` list at all:
+
+```starlark
+target(
+    name = "greet",
+    inputs = ["src/**/*", "Cargo.toml"],
+    dependency_providers = ["cargo"],
+)
+```
+
+Naming a provider also registers this target as its package's endpoint for that provider, which is what other packages' inferred edges resolve to. At most one target per package may register a given provider.
 
 ### platforms
 
