@@ -53,13 +53,65 @@ func diagnosticsFor(documentURI string, text string) []diagnostic {
 }
 
 func (server *server) diagnosticsFor(documentURI string, text string) []diagnostic {
-	return diagnosticsForReader(documentURI, text, func(path string) (string, error) {
+	diagnostics := diagnosticsForReader(documentURI, text, func(path string) (string, error) {
 		if content, isOpen := server.documents[pathToURI(path)]; isOpen {
 			return content, nil
 		}
 		content, operationError := os.ReadFile(path)
 		return string(content), operationError
 	})
+	return append(diagnostics, server.siblingPackageDiagnostics(uriPath(documentURI), text)...)
+}
+
+func (server *server) siblingPackageDiagnostics(path string, text string) []diagnostic {
+	if !loading.IsPackageFile(filepath.Base(path)) {
+		return nil
+	}
+	packageLoader := loading.NewPackageLoader(nil)
+	currentDeclarations := server.declarationsForPath(path, text)
+	entries, operationError := os.ReadDir(filepath.Dir(path))
+	if operationError != nil {
+		return nil
+	}
+	type siblingDeclaration struct {
+		kind     string
+		fileName string
+	}
+	siblingDeclarations := map[string]siblingDeclaration{}
+	workspaceRoot := findWorkspaceRoot(filepath.Dir(path))
+	includeHidden := loading.WorkspaceIncludesHidden(workspaceRoot)
+	for _, entry := range entries {
+		siblingPath := filepath.Join(filepath.Dir(path), entry.Name())
+		if entry.IsDir() || filepath.Clean(siblingPath) == filepath.Clean(path) || !loading.IsPackageFile(entry.Name()) {
+			continue
+		}
+		if !includeHidden && isHiddenWorkspacePath(workspaceRoot, siblingPath) {
+			continue
+		}
+		siblingText := server.documentText(pathToURI(siblingPath))
+		var declarations []namedDeclaration
+		if isStarlarkFile(entry.Name()) {
+			declarations = server.declarationsForPath(siblingPath, siblingText)
+		} else {
+			declarations = packageFileDeclarations(siblingPath, siblingText, packageLoader)
+		}
+		for _, declaration := range declarations {
+			if loading.IsBuildLabelKind(declaration.kind) {
+				siblingDeclarations[declaration.name] = siblingDeclaration{kind: declaration.kind, fileName: entry.Name()}
+			}
+		}
+	}
+	diagnostics := []diagnostic{}
+	reported := map[string]bool{}
+	for _, declaration := range currentDeclarations {
+		sibling, duplicate := siblingDeclarations[declaration.name]
+		if !duplicate || !loading.IsBuildLabelKind(declaration.kind) || reported[declaration.name] {
+			continue
+		}
+		diagnostics = append(diagnostics, diagnostic{Range: declaration.rangeValue, Severity: 1, Source: "grog", Message: fmt.Sprintf("duplicate declaration name %q; also declared as %s in %s", declaration.name, sibling.kind, sibling.fileName)})
+		reported[declaration.name] = true
+	}
+	return diagnostics
 }
 
 func diagnosticsForReader(documentURI string, text string, readText func(path string) (string, error)) []diagnostic {

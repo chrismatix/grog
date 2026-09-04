@@ -68,17 +68,23 @@ func (server *server) labelDefinition(currentPath string, targetLabel string) an
 		return nil
 	}
 	directory := filepath.Join(workspaceRoot, filepath.FromSlash(parsedLabel.Package))
+	includeHidden := loading.WorkspaceIncludesHidden(workspaceRoot)
 	fileNames := []string{}
-	if filepath.Clean(directory) == filepath.Clean(filepath.Dir(currentPath)) {
+	if filepath.Clean(directory) == filepath.Clean(filepath.Dir(currentPath)) && (includeHidden || !isHiddenWorkspacePath(workspaceRoot, currentPath)) {
 		fileNames = append(fileNames, filepath.Base(currentPath))
 	}
 	entries, operationError := os.ReadDir(directory)
 	if operationError == nil {
 		for _, entry := range entries {
 			fileName := entry.Name()
-			if !entry.IsDir() && isSupportedBuildFile(fileName) && !slices.Contains(fileNames, fileName) {
-				fileNames = append(fileNames, fileName)
+			definitionPath := filepath.Join(directory, fileName)
+			if entry.IsDir() || !isSupportedBuildFile(fileName) || slices.Contains(fileNames, fileName) {
+				continue
 			}
+			if !includeHidden && isHiddenWorkspacePath(workspaceRoot, definitionPath) {
+				continue
+			}
+			fileNames = append(fileNames, fileName)
 		}
 	}
 	for _, fileName := range fileNames {
@@ -157,9 +163,10 @@ func (server *server) collectWorkspaceLabels(workspaceRoot string, currentDirect
 	}
 	openBuildFiles := make(map[string]bool)
 	openLabels := []indexedLabel{}
+	includeHidden := loading.WorkspaceIncludesHidden(workspaceRoot)
 	for documentURI, text := range server.documents {
 		path := uriPath(documentURI)
-		if !isSupportedBuildFile(filepath.Base(path)) || !pathWithinWorkspace(workspaceRoot, path) {
+		if !isSupportedBuildFile(filepath.Base(path)) || !pathWithinWorkspace(workspaceRoot, path) || (!includeHidden && isHiddenWorkspacePath(workspaceRoot, path)) {
 			continue
 		}
 		openBuildFiles[filepath.Clean(path)] = true
@@ -212,6 +219,9 @@ func (server *server) indexWorkspaceLabels(workspaceRoot string) []indexedLabel 
 		if !isSupportedBuildFile(filepath.Base(path)) {
 			return nil
 		}
+		if !includeHidden && isHiddenWorkspacePath(workspaceRoot, path) {
+			return nil
+		}
 		text := server.documentText(pathToURI(path))
 		var declarations []namedDeclaration
 		if isStarlarkFile(filepath.Base(path)) {
@@ -227,6 +237,19 @@ func (server *server) indexWorkspaceLabels(workspaceRoot string) []indexedLabel 
 		return nil
 	})
 	return labels
+}
+
+func isHiddenWorkspacePath(workspaceRoot string, path string) bool {
+	relativePath, operationError := filepath.Rel(workspaceRoot, path)
+	if operationError != nil {
+		return false
+	}
+	for _, component := range strings.Split(relativePath, string(filepath.Separator)) {
+		if strings.HasPrefix(component, ".") && component != "." && component != ".." {
+			return true
+		}
+	}
+	return false
 }
 
 func (server *server) invalidateLabelIndexForDocument(documentURI string) {

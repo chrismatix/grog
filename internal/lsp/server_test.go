@@ -435,6 +435,27 @@ func TestDiagnosticsForYamlReportsDuplicateName(t *testing.T) {
 	}
 }
 
+func TestDiagnosticsReportDuplicateNamesAcrossPackageFiles(t *testing.T) {
+	packageDirectory := t.TempDir()
+	starlarkPath := filepath.Join(packageDirectory, "BUILD.star")
+	starlarkText := `target(name = "build")`
+	yamlPath := filepath.Join(packageDirectory, "BUILD.yaml")
+	yamlText := "targets:\n  - name: build\n"
+	if operationError := os.WriteFile(starlarkPath, []byte(starlarkText), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	if operationError := os.WriteFile(yamlPath, []byte(yamlText), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	server := &server{documents: map[string]string{}}
+	for path, text := range map[string]string{starlarkPath: starlarkText, yamlPath: yamlText} {
+		diagnostics := server.diagnosticsFor(pathToURI(path), text)
+		if len(diagnostics) == 0 || !strings.Contains(diagnostics[len(diagnostics)-1].Message, "duplicate declaration") {
+			t.Errorf("expected sibling duplicate diagnostic for %s, got %#v", path, diagnostics)
+		}
+	}
+}
+
 func TestDiagnosticsForYamlResource(t *testing.T) {
 	diagnostics := diagnosticsFor("file:///repo/BUILD.yaml", "resources:\n  - name: database\n    up: docker compose up\n")
 	if len(diagnostics) != 0 {
@@ -859,11 +880,13 @@ func TestStarlarkCallHelpAllowsWhitespaceBeforeParenthesis(t *testing.T) {
 	}
 }
 
-func TestStarlarkTargetCompletionSuppressesTargetFieldsAtEmptyArgument(t *testing.T) {
-	server := &server{documents: map[string]string{"file:///repo/BUILD.star": "target(\n  "}}
-	items := server.completionItems("file:///repo/BUILD.star", position{Line: 1, Character: 2})
-	if items != nil {
-		t.Fatalf("expected no completions at empty target argument, got %#v", items)
+func TestStarlarkTargetCompletionSuggestsFieldsAtEmptyArgument(t *testing.T) {
+	for _, text := range []string{"target(", "target(\n  "} {
+		server := &server{documents: map[string]string{"file:///repo/BUILD.star": text}}
+		items := server.completionItems("file:///repo/BUILD.star", positionForOffset(text, len(text)))
+		if !hasCompletionLabel(items, "name") {
+			t.Fatalf("expected parameter completions for %q, got %#v", text, items)
+		}
 	}
 }
 
@@ -1162,6 +1185,19 @@ func TestWorkspaceLabelsIncludeHiddenDirectoriesWhenConfigured(t *testing.T) {
 	server := &server{documents: map[string]string{}}
 	if labels := server.collectWorkspaceLabels(workspaceRoot, workspaceRoot); !slices.Contains(labels, "//.tools:generator") {
 		t.Fatalf("expected hidden package label, got %#v", labels)
+	}
+}
+
+func TestWorkspaceLabelsExcludeHiddenPackageFilesByDefault(t *testing.T) {
+	workspaceRoot := t.TempDir()
+	text := "#!/usr/bin/env bash\n# @grog\n# name: hidden\ntrue\n"
+	if operationError := os.WriteFile(filepath.Join(workspaceRoot, ".tool.grog.sh"), []byte(text), 0o755); operationError != nil {
+		t.Fatal(operationError)
+	}
+	hiddenPath := filepath.Join(workspaceRoot, ".tool.grog.sh")
+	server := &server{documents: map[string]string{pathToURI(hiddenPath): text}}
+	if labels := server.collectWorkspaceLabels(workspaceRoot, workspaceRoot); slices.Contains(labels, "//:hidden") {
+		t.Fatalf("unexpected hidden package label: %#v", labels)
 	}
 }
 

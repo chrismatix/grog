@@ -595,7 +595,7 @@ func shouldSuggestStarlarkCallParameters(text string, textPosition position) boo
 	for index >= 0 && unicodeSpace(prefix[index]) {
 		index--
 	}
-	if index >= 0 && prefix[index] == ',' {
+	if index >= 0 && (prefix[index] == ',' || prefix[index] == '(') {
 		return true
 	}
 	return len(prefix) > 0 && isWordCharacter(prefix[len(prefix)-1])
