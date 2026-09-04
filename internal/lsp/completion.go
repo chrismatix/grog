@@ -26,7 +26,7 @@ func (server *server) completionItems(documentURI string, textPosition position)
 		}
 		return server.labelCompletionItems(path, text, textPosition, alreadyListed)
 	} else if field == "inputs" || field == "exclude_inputs" || field == "bin_output" {
-		return pathCompletionItems(path, text, textPosition)
+		return pathCompletionItems(path, text, textPosition, yamlBuildFieldIsCollection(field))
 	} else if field == "outputs" {
 		return outputPathCompletionItems(path, text, textPosition)
 	}
@@ -57,7 +57,7 @@ func (server *server) starlarkCompletionItems(documentURI string, text string, t
 			return server.labelCompletionItems(path, text, textPosition, alreadyListed)
 		}
 		if (field == "inputs" || field == "exclude_inputs" || field == "bin_output") && starlarkDeclarationHasField(callName, field) {
-			return pathCompletionItems(path, text, textPosition)
+			return pathCompletionItems(path, text, textPosition, loading.BuildFieldIsCollection("starlark", callName, field))
 		}
 		if field == "outputs" && starlarkDeclarationHasField(callName, field) {
 			return outputPathCompletionItems(path, text, textPosition)
@@ -187,9 +187,13 @@ func preferredDependencyLabels(labels []string, prefix string) []string {
 
 func outputPathCompletionItems(currentPath string, text string, textPosition position) []map[string]any {
 	prefix := pathCompletionPrefix(text, textPosition)
-	for _, outputTypePrefix := range []string{"dir::"} {
-		if strings.HasPrefix(prefix, outputTypePrefix) {
-			items := pathCompletionItemsWithPrefix(currentPath, strings.TrimPrefix(prefix, outputTypePrefix), outputTypePrefix, true, stringListValuesAt(text, textPosition))
+	outputTypes := []struct {
+		prefix          string
+		directoriesOnly bool
+	}{{prefix: "dir::", directoriesOnly: true}, {prefix: "file::"}}
+	for _, outputType := range outputTypes {
+		if strings.HasPrefix(prefix, outputType.prefix) {
+			items := pathCompletionItemsWithPrefix(currentPath, strings.TrimPrefix(prefix, outputType.prefix), outputType.prefix, outputType.directoriesOnly, stringListValuesAt(text, textPosition))
 			addCompletionTextEdits(items, textPosition, prefix)
 			return items
 		}
@@ -199,9 +203,13 @@ func outputPathCompletionItems(currentPath string, text string, textPosition pos
 	return items
 }
 
-func pathCompletionItems(currentPath string, text string, textPosition position) []map[string]any {
+func pathCompletionItems(currentPath string, text string, textPosition position, excludeAlreadyListed bool) []map[string]any {
 	prefix := pathCompletionPrefix(text, textPosition)
-	items := pathCompletionItemsWithPrefix(currentPath, prefix, "", false, stringListValuesAt(text, textPosition))
+	alreadyListed := map[string]bool{}
+	if excludeAlreadyListed {
+		alreadyListed = stringListValuesAt(text, textPosition)
+	}
+	items := pathCompletionItemsWithPrefix(currentPath, prefix, "", false, alreadyListed)
 	addCompletionTextEdits(items, textPosition, prefix)
 	return items
 }

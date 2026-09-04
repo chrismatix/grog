@@ -165,6 +165,9 @@ func evaluateStarlark(path string, text string, readText func(path string) (stri
 		operationError = loading.ValidatePackageTimeouts(packageDTO)
 	}
 	if operationError == nil {
+		operationError = loading.ValidatePackageOutputs(packageDTO)
+	}
+	if operationError == nil {
 		packagePath, relativePathError := filepath.Rel(workspaceRoot, filepath.Dir(path))
 		if relativePathError == nil {
 			operationError = loading.ValidatePackageLabels(packageDTO, filepath.ToSlash(packagePath))
@@ -384,6 +387,9 @@ func yamlDiagnostics(path string, text string) []diagnostic {
 		return []diagnostic{diagnosticFromError(text, operationError)}
 	}
 	if operationError := loading.ValidatePackageTimeouts(packageDTO); operationError != nil {
+		return []diagnostic{diagnosticFromError(text, operationError)}
+	}
+	if operationError := loading.ValidatePackageOutputs(packageDTO); operationError != nil {
 		return []diagnostic{diagnosticFromError(text, operationError)}
 	}
 	workspaceRoot := findWorkspaceRoot(filepath.Dir(path))

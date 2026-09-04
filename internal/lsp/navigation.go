@@ -194,9 +194,10 @@ func (server *server) collectWorkspaceLabels(workspaceRoot string, currentDirect
 
 func (server *server) indexWorkspaceLabels(workspaceRoot string) []indexedLabel {
 	labels := []indexedLabel{}
+	includeHidden := loading.WorkspaceIncludesHidden(workspaceRoot)
 	_ = filepath.WalkDir(workspaceRoot, func(path string, directoryEntry os.DirEntry, operationError error) error {
 		if operationError != nil || directoryEntry.IsDir() {
-			if directoryEntry != nil && directoryEntry.IsDir() && strings.HasPrefix(directoryEntry.Name(), ".") && directoryEntry.Name() != "." {
+			if !includeHidden && directoryEntry != nil && directoryEntry.IsDir() && strings.HasPrefix(directoryEntry.Name(), ".") && directoryEntry.Name() != "." {
 				return filepath.SkipDir
 			}
 			return nil

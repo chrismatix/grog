@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"grog/internal/label"
+	"grog/internal/model"
+	"grog/internal/output"
 )
 
 // ValidatePackageTimeouts validates duration fields accepted by package loaders.
@@ -55,6 +57,38 @@ func ValidatePackageLabels(packageDTO PackageDTO, packagePath string) error {
 		}
 	}
 	return nil
+}
+
+// ValidatePackageOutputs validates output fields accepted by package enrichment.
+func ValidatePackageOutputs(packageDTO PackageDTO) error {
+	for _, target := range packageDTO.Targets {
+		if target == nil {
+			continue
+		}
+		if _, _, operationError := parseTargetOutputs(target, target.Name); operationError != nil {
+			return operationError
+		}
+	}
+	return nil
+}
+
+func parseTargetOutputs(target *TargetDTO, targetName string) ([]model.Output, model.Output, error) {
+	parsedOutputs, operationError := output.ParseOutputs(target.Outputs)
+	if operationError != nil {
+		return nil, model.Output{}, fmt.Errorf("failed to parse outputs for target %s: %w", targetName, operationError)
+	}
+	binaryOutput := model.Output{}
+	if target.BinOutput == "" {
+		return parsedOutputs, binaryOutput, nil
+	}
+	binaryOutput, operationError = output.ParseOutput(target.BinOutput)
+	if operationError != nil {
+		return nil, model.Output{}, fmt.Errorf("failed to parse bin output for target %s: %w", targetName, operationError)
+	}
+	if !binaryOutput.IsFile() {
+		return nil, model.Output{}, fmt.Errorf("bin output %s for target %s must be of type file", target.BinOutput, targetName)
+	}
+	return parsedOutputs, binaryOutput, nil
 }
 
 func validateLabels(packagePath string, values []string) error {

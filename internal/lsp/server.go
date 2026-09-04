@@ -176,9 +176,16 @@ func (server *server) handle(request message) error {
 		if operationError := json.Unmarshal(request.Params, &params); operationError != nil {
 			return nil
 		}
+		fileName := filepath.Base(uriPath(params.TextDocument.URI))
 		delete(server.documents, params.TextDocument.URI)
 		server.invalidateLabelIndex()
-		return server.notify("textDocument/publishDiagnostics", map[string]any{"uri": params.TextDocument.URI, "diagnostics": []diagnostic{}})
+		if operationError := server.notify("textDocument/publishDiagnostics", map[string]any{"uri": params.TextDocument.URI, "diagnostics": []diagnostic{}}); operationError != nil {
+			return operationError
+		}
+		if loading.IsStarlarkSourceFile(fileName) && !(loading.StarlarkLoader{}).Matches(fileName) {
+			return server.publishOpenStarlarkBuildDiagnostics()
+		}
+		return nil
 	case "workspace/didChangeWatchedFiles":
 		var params didChangeWatchedFilesParams
 		_ = json.Unmarshal(request.Params, &params)

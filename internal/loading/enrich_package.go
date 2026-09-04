@@ -10,7 +10,6 @@ import (
 	"grog/internal/console"
 	"grog/internal/label"
 	"grog/internal/model"
-	"grog/internal/output"
 
 	"github.com/bmatcuk/doublestar/v4"
 )
@@ -50,21 +49,9 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 			return nil, fmt.Errorf("failed to resolve inputs for target %s: %w", targetLabel, err)
 		}
 
-		parsedOutputs, err := output.ParseOutputs(target.Outputs)
+		parsedOutputs, parsedBinOutput, err := parseTargetOutputs(target, targetLabel.String())
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse outputs for target %s: %w", targetLabel, err)
-		}
-
-		parsedBinOutput := model.Output{}
-		if target.BinOutput != "" {
-			parsedBinOutput, err = output.ParseOutput(target.BinOutput)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse bin output for target %s: %w", targetLabel, err)
-			}
-			if !parsedBinOutput.IsFile() {
-				return nil, fmt.Errorf("bin output %s for target %s must be of type file",
-					target.BinOutput, targetLabel)
-			}
+			return nil, err
 		}
 
 		if _, ok := targets[targetLabel]; ok {

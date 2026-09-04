@@ -201,6 +201,31 @@ func TestModuleChangesRepublishBuildDiagnostics(t *testing.T) {
 	}
 }
 
+func TestModuleCloseRepublishesBuildDiagnostics(t *testing.T) {
+	workspaceRoot := t.TempDir()
+	buildPath := filepath.Join(workspaceRoot, "BUILD.star")
+	modulePath := filepath.Join(workspaceRoot, "rules.star")
+	buildText := "load(\"rules.star\", \"make\")\nmake()\n"
+	if operationError := os.WriteFile(modulePath, []byte("def make():\n  target(name = \"build\")\n"), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	var output bytes.Buffer
+	server := &server{
+		writer: &output,
+		documents: map[string]string{
+			pathToURI(buildPath):  buildText,
+			pathToURI(modulePath): "def make():\n  target(command = \"build\")\n",
+		},
+	}
+	params := json.RawMessage(fmt.Sprintf(`{"textDocument":{"uri":%q}}`, pathToURI(modulePath)))
+	if operationError := server.handle(message{Method: "textDocument/didClose", Params: params}); operationError != nil {
+		t.Fatal(operationError)
+	}
+	if !strings.Contains(output.String(), pathToURI(buildPath)) || strings.Contains(output.String(), "missing argument") {
+		t.Fatalf("missing refreshed BUILD diagnostics: %s", output.String())
+	}
+}
+
 func TestDiagnosticsForStarlarkHighlightsRepeatedKeywordName(t *testing.T) {
 	diagnostics := diagnosticsFor("file:///repo/BUILD.star", `target(name = "build", name = "again")`)
 	for _, diagnostic := range diagnostics {
@@ -284,6 +309,24 @@ func TestDiagnosticsValidateLabels(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			if diagnostics := diagnosticsFor(test.documentURI, test.text); len(diagnostics) == 0 {
 				t.Fatal("expected invalid label diagnostic")
+			}
+		})
+	}
+}
+
+func TestDiagnosticsValidateOutputs(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		documentURI string
+		text        string
+	}{
+		{name: "starlark", documentURI: "file:///repo/BUILD.star", text: `target(name = "build", outputs = ["unknown::artifact"])`},
+		{name: "yaml", documentURI: "file:///repo/BUILD.yaml", text: "targets:\n  - name: build\n    outputs: [unknown::artifact]\n"},
+		{name: "binary", documentURI: "file:///repo/BUILD.star", text: `target(name = "build", bin_output = "dir::artifact")`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if diagnostics := diagnosticsFor(test.documentURI, test.text); len(diagnostics) == 0 {
+				t.Fatal("expected invalid output diagnostic")
 			}
 		})
 	}
@@ -461,6 +504,35 @@ func TestOutputDirPathCompletionCompletesPathAfterDirPrefix(t *testing.T) {
 	}
 }
 
+func TestOutputFilePathCompletionSupportsExplicitPrefix(t *testing.T) {
+	temporaryDirectory := t.TempDir()
+	if operationError := os.WriteFile(filepath.Join(temporaryDirectory, "disk.img"), nil, 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	text := `target(outputs = ["file::di`
+	items := outputPathCompletionItems(filepath.Join(temporaryDirectory, "BUILD.star"), text, positionForOffset(text, len(text)))
+	if !hasCompletionLabel(items, "file::disk.img") {
+		t.Fatalf("expected explicit file output completion, got %#v", items)
+	}
+}
+
+func TestBinOutputCompletionIgnoresEarlierOutputList(t *testing.T) {
+	temporaryDirectory := t.TempDir()
+	if operationError := os.Mkdir(filepath.Join(temporaryDirectory, "bin"), 0o755); operationError != nil {
+		t.Fatal(operationError)
+	}
+	if operationError := os.WriteFile(filepath.Join(temporaryDirectory, "bin", "app"), nil, 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	buildPath := filepath.Join(temporaryDirectory, "BUILD.star")
+	text := `target(name = "build", outputs = ["bin/app"], bin_output = "bin/a`
+	server := &server{documents: map[string]string{pathToURI(buildPath): text}}
+	items := server.completionItems(pathToURI(buildPath), positionForOffset(text, len(text)))
+	if !hasCompletionLabel(items, "bin/app") {
+		t.Fatalf("expected scalar bin output completion, got %#v", items)
+	}
+}
+
 func TestPathCompletionSkipsAlreadyListedPaths(t *testing.T) {
 	temporaryDirectory := t.TempDir()
 	if operationError := os.WriteFile(filepath.Join(temporaryDirectory, "main.go"), []byte(""), 0644); operationError != nil {
@@ -469,7 +541,7 @@ func TestPathCompletionSkipsAlreadyListedPaths(t *testing.T) {
 	if operationError := os.WriteFile(filepath.Join(temporaryDirectory, "more.go"), []byte(""), 0644); operationError != nil {
 		t.Fatalf("create more file: %v", operationError)
 	}
-	items := pathCompletionItems(filepath.Join(temporaryDirectory, "BUILD.star"), `target(inputs = ["main.go", "m`, position{Line: 0, Character: 30})
+	items := pathCompletionItems(filepath.Join(temporaryDirectory, "BUILD.star"), `target(inputs = ["main.go", "m`, position{Line: 0, Character: 30}, true)
 	if hasCompletionLabel(items, "main.go") {
 		t.Fatalf("did not expect already listed path, got %#v", items)
 	}
@@ -479,7 +551,7 @@ func TestPathCompletionSkipsAlreadyListedPaths(t *testing.T) {
 }
 
 func TestDotPathCompletionFiltersHiddenFiles(t *testing.T) {
-	items := pathCompletionItems("/repo/BUILD.star", `target(inputs = [".g`, position{Line: 0, Character: 21})
+	items := pathCompletionItems("/repo/BUILD.star", `target(inputs = [".g`, position{Line: 0, Character: 21}, true)
 	for _, item := range items {
 		label, _ := item["label"].(string)
 		if label != "" && !strings.HasPrefix(label, ".g") {
@@ -751,6 +823,24 @@ func TestWorkspaceLabelsExcludeEnvironments(t *testing.T) {
 	labels := server.collectWorkspaceLabels(workspaceRoot, workspaceRoot)
 	if slices.Contains(labels, "//:container") || !slices.Contains(labels, "//:build") {
 		t.Fatalf("unexpected labels: %#v", labels)
+	}
+}
+
+func TestWorkspaceLabelsIncludeHiddenDirectoriesWhenConfigured(t *testing.T) {
+	workspaceRoot := t.TempDir()
+	if operationError := os.WriteFile(filepath.Join(workspaceRoot, "grog.toml"), []byte("include_hidden = true\n"), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	hiddenDirectory := filepath.Join(workspaceRoot, ".tools")
+	if operationError := os.Mkdir(hiddenDirectory, 0o755); operationError != nil {
+		t.Fatal(operationError)
+	}
+	if operationError := os.WriteFile(filepath.Join(hiddenDirectory, "BUILD.star"), []byte(`target(name = "generator")`), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	server := &server{documents: map[string]string{}}
+	if labels := server.collectWorkspaceLabels(workspaceRoot, workspaceRoot); !slices.Contains(labels, "//.tools:generator") {
+		t.Fatalf("expected hidden package label, got %#v", labels)
 	}
 }
 
