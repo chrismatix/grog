@@ -266,6 +266,29 @@ func TestModuleChangesRepublishBuildDiagnostics(t *testing.T) {
 	}
 }
 
+func TestWatchedBuildModuleChangesRepublishDependents(t *testing.T) {
+	workspaceRoot := t.TempDir()
+	buildPath := filepath.Join(workspaceRoot, "BUILD.star")
+	moduleDirectory := filepath.Join(workspaceRoot, "rules")
+	if operationError := os.Mkdir(moduleDirectory, 0o755); operationError != nil {
+		t.Fatal(operationError)
+	}
+	modulePath := filepath.Join(moduleDirectory, "BUILD.star")
+	if operationError := os.WriteFile(modulePath, []byte("def make():\n  target(command = \"build\")\n"), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	buildText := "load(\"rules/BUILD.star\", \"make\")\nmake()\n"
+	var output bytes.Buffer
+	server := &server{writer: &output, documents: map[string]string{pathToURI(buildPath): buildText}}
+	params := json.RawMessage(fmt.Sprintf(`{"changes":[{"uri":%q}]}`, pathToURI(modulePath)))
+	if operationError := server.handle(message{Method: "workspace/didChangeWatchedFiles", Params: params}); operationError != nil {
+		t.Fatal(operationError)
+	}
+	if !strings.Contains(output.String(), pathToURI(buildPath)) || !strings.Contains(output.String(), "missing argument") {
+		t.Fatalf("missing dependent BUILD diagnostics: %s", output.String())
+	}
+}
+
 func TestModuleCloseRepublishesBuildDiagnostics(t *testing.T) {
 	workspaceRoot := t.TempDir()
 	buildPath := filepath.Join(workspaceRoot, "BUILD.star")
@@ -589,6 +612,14 @@ func TestYamlFieldCompletionStopsAtPreviousListItem(t *testing.T) {
 	items := server.completionItems("file:///repo/BUILD.yaml", positionForOffset(text, len(text)))
 	if !hasCompletionLabel(items, "name") {
 		t.Fatalf("expected field completion, got %#v", items)
+	}
+}
+
+func TestYamlFieldAtUsesFlowMappingKeyAtCursor(t *testing.T) {
+	text := `targets: [{name: app, dependencies: [":lib"]}]`
+	textPosition := positionForOffset(text, strings.Index(text, ":lib")+3)
+	if field := yamlFieldAt(text, textPosition); field != "dependencies" {
+		t.Fatalf("field = %q", field)
 	}
 }
 

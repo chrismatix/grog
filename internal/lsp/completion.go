@@ -473,6 +473,38 @@ func yamlFieldAt(text string, textPosition position) string {
 	}
 	currentLine := lines[textPosition.Line]
 	currentIndent := len(currentLine) - len(strings.TrimLeft(currentLine, " \t"))
+	characterOffset := characterByteOffset(currentLine, textPosition.Character)
+	if characterOffset < 0 {
+		return ""
+	}
+	activeField := ""
+	stringDelimiter := byte(0)
+	for index := 0; index < characterOffset; index++ {
+		character := currentLine[index]
+		if stringDelimiter != 0 {
+			if character == stringDelimiter && !starlarkCharacterEscaped(currentLine, index) {
+				stringDelimiter = 0
+			}
+			continue
+		}
+		if character == '\'' || character == '"' {
+			stringDelimiter = character
+			continue
+		}
+		if character != ':' {
+			continue
+		}
+		start := index
+		for start > 0 && isWordCharacter(currentLine[start-1]) {
+			start--
+		}
+		if yamlFieldName(currentLine[start:index]) {
+			activeField = currentLine[start:index]
+		}
+	}
+	if activeField != "" {
+		return activeField
+	}
 	for lineNumber := textPosition.Line; lineNumber >= 0 && lineNumber < len(lines); lineNumber-- {
 		rawLine := lines[lineNumber]
 		indent := len(rawLine) - len(strings.TrimLeft(rawLine, " \t"))

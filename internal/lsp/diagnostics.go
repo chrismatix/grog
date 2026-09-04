@@ -28,15 +28,15 @@ func (server *server) publishDiagnosticsAfterChange(documentURI string) error {
 		return operationError
 	}
 	fileName := filepath.Base(uriPath(documentURI))
-	if !loading.IsStarlarkSourceFile(fileName) || (loading.StarlarkLoader{}).Matches(fileName) {
+	if !loading.IsStarlarkSourceFile(fileName) {
 		return nil
 	}
-	return server.publishOpenStarlarkBuildDiagnostics()
+	return server.publishOpenStarlarkBuildDiagnostics(documentURI)
 }
 
-func (server *server) publishOpenStarlarkBuildDiagnostics() error {
+func (server *server) publishOpenStarlarkBuildDiagnostics(excludedDocumentURI string) error {
 	for openDocumentURI := range server.documents {
-		if (loading.StarlarkLoader{}).Matches(filepath.Base(uriPath(openDocumentURI))) {
+		if openDocumentURI != excludedDocumentURI && (loading.StarlarkLoader{}).Matches(filepath.Base(uriPath(openDocumentURI))) {
 			if operationError := server.publishDiagnostics(openDocumentURI); operationError != nil {
 				return operationError
 			}
