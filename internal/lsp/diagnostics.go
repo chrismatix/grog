@@ -287,6 +287,9 @@ func duplicateNameDiagnostics(declarations []namedDeclaration) []diagnostic {
 	seen := map[string]namedDeclaration{}
 	diagnostics := []diagnostic{}
 	for _, declaration := range declarations {
+		if !loading.IsBuildLabelKind(declaration.kind) {
+			continue
+		}
 		previous, exists := seen[declaration.name]
 		if !exists {
 			seen[declaration.name] = declaration

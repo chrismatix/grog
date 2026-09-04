@@ -137,14 +137,7 @@ func (server *server) handle(request message) error {
 		if !server.watchFiles {
 			return nil
 		}
-		return server.write(map[string]any{
-			"jsonrpc": "2.0",
-			"id":      "grog-watch-build-files",
-			"method":  "client/registerCapability",
-			"params": map[string]any{"registrations": []map[string]any{{
-				"id": "grog-watch-build-files", "method": "workspace/didChangeWatchedFiles", "registerOptions": map[string]any{"watchers": watchedFileRegistrations()},
-			}}},
-		})
+		return server.registerWatchedFiles("grog-register-watch-files")
 	case "$/cancelRequest", "$/setTrace":
 		return nil
 	case "textDocument/didOpen":
@@ -192,11 +185,14 @@ func (server *server) handle(request message) error {
 		_ = json.Unmarshal(request.Params, &params)
 		server.invalidateLabelIndex()
 		refreshBuildDiagnostics := false
+		watchRegistrationChanged := false
 		for _, change := range params.Changes {
 			path := uriPath(change.URI)
 			fileName := filepath.Base(path)
 			if strings.HasPrefix(fileName, "grog") && filepath.Ext(fileName) == ".toml" {
+				previousEnvironmentFile := config.Global.EnvironmentVariablesFile
 				_ = config.ReloadGlobalFromViper()
+				watchRegistrationChanged = watchRegistrationChanged || previousEnvironmentFile != config.Global.EnvironmentVariablesFile
 				refreshBuildDiagnostics = true
 			}
 			environmentFilePath := config.Global.EnvironmentVariablesFile
@@ -211,6 +207,11 @@ func (server *server) handle(request message) error {
 			}
 			if loading.IsStarlarkSourceFile(fileName) && !(loading.StarlarkLoader{}).Matches(fileName) {
 				refreshBuildDiagnostics = true
+			}
+		}
+		if server.watchFiles && watchRegistrationChanged {
+			if operationError := server.refreshWatchedFiles(); operationError != nil {
+				return operationError
 			}
 		}
 		if refreshBuildDiagnostics {
@@ -253,6 +254,31 @@ func (server *server) handle(request message) error {
 		}
 		return nil
 	}
+}
+
+func (server *server) registerWatchedFiles(requestID string) error {
+	return server.write(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      requestID,
+		"method":  "client/registerCapability",
+		"params": map[string]any{"registrations": []map[string]any{{
+			"id": "grog-watch-files", "method": "workspace/didChangeWatchedFiles", "registerOptions": map[string]any{"watchers": watchedFileRegistrations()},
+		}}},
+	})
+}
+
+func (server *server) refreshWatchedFiles() error {
+	if operationError := server.write(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "grog-unregister-watch-files",
+		"method":  "client/unregisterCapability",
+		"params": map[string]any{"unregisterations": []map[string]any{{
+			"id": "grog-watch-files", "method": "workspace/didChangeWatchedFiles",
+		}}},
+	}); operationError != nil {
+		return operationError
+	}
+	return server.registerWatchedFiles("grog-reregister-watch-files")
 }
 
 func (server *server) respond(requestID json.RawMessage, result any) error {

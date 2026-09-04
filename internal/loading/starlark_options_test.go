@@ -36,6 +36,9 @@ func TestStarlarkOptionsForWorkspaceUsesEffectiveConfiguration(t *testing.T) {
 
 func TestStarlarkOptionsForWorkspaceUsesGitHash(t *testing.T) {
 	workspaceRoot := t.TempDir()
+	if operationError := os.WriteFile(filepath.Join(workspaceRoot, "grog.toml"), []byte("platform_tag = [\"configured\"]\n"), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
 	if operationError := os.WriteFile(filepath.Join(workspaceRoot, "file"), []byte("content"), 0o644); operationError != nil {
 		t.Fatal(operationError)
 	}

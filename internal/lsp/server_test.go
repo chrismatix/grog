@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"grog/internal/config"
 	"grog/internal/loading"
 )
 
@@ -52,6 +53,20 @@ func TestServeRegistersBuildFileWatchers(t *testing.T) {
 	}
 }
 
+func TestRefreshWatchedFilesUsesCurrentEnvironmentFile(t *testing.T) {
+	previousConfiguration := config.Global
+	config.Global.EnvironmentVariablesFile = "new.env"
+	t.Cleanup(func() { config.Global = previousConfiguration })
+	var output bytes.Buffer
+	server := &server{writer: &output}
+	if operationError := server.refreshWatchedFiles(); operationError != nil {
+		t.Fatal(operationError)
+	}
+	if !strings.Contains(output.String(), `"method":"client/unregisterCapability"`) || !strings.Contains(output.String(), `**/new.env`) {
+		t.Fatalf("missing refreshed watcher: %s", output.String())
+	}
+}
+
 func framedMessage(payload string) string {
 	return fmt.Sprintf("Content-Length: %d\r\n\r\n%s", len(payload), payload)
 }
@@ -74,6 +89,23 @@ func TestDiagnosticsForStarlarkReportsDuplicateName(t *testing.T) {
 	diagnostics := diagnosticsFor("file:///repo/BUILD.star", "target(name = \"build\")\nalias(name = \"build\", actual = \":other\")\n")
 	if len(diagnostics) == 0 {
 		t.Fatalf("expected duplicate name diagnostic")
+	}
+}
+
+func TestDiagnosticsIgnoreEnvironmentNameCollisions(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		documentURI string
+		text        string
+	}{
+		{name: "starlark", documentURI: "file:///repo/BUILD.star", text: "environment(name = \"build\", type = \"oci\")\ntarget(name = \"build\")\n"},
+		{name: "yaml", documentURI: "file:///repo/BUILD.yaml", text: "environments:\n  - name: build\n    type: oci\ntargets:\n  - name: build\n"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if diagnostics := diagnosticsFor(test.documentURI, test.text); len(diagnostics) != 0 {
+				t.Fatalf("expected no diagnostics, got %#v", diagnostics)
+			}
+		})
 	}
 }
 

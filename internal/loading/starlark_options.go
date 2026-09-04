@@ -28,8 +28,8 @@ func StarlarkOptionsForWorkspace(workspaceRoot string) StarlarkEvaluationOptions
 	}
 	operatingSystem := runtime.GOOS
 	architecture := runtime.GOARCH
-	environment := standardStarlarkEnvironment(workspaceRoot, operatingSystem, architecture)
-	environment["GROG_GIT_HASH"] = loaderGitHash(workspaceRoot)
+	gitHash := loaderGitHash(workspaceRoot)
+	environment := loaderEnvironment(workspaceRoot, operatingSystem, architecture, "", "", gitHash)
 	options := StarlarkEvaluationOptions{WorkspaceRoot: workspaceRoot, Environment: environment}
 	configurationBytes, operationError := os.ReadFile(filepath.Join(workspaceRoot, "grog.toml"))
 	if operationError != nil {
@@ -51,7 +51,7 @@ func StarlarkOptionsForWorkspace(workspaceRoot string) StarlarkEvaluationOptions
 	if configuration.Architecture != "" {
 		architecture = configuration.Architecture
 	}
-	options.Environment = standardStarlarkEnvironment(workspaceRoot, operatingSystem, architecture)
+	options.Environment = loaderEnvironment(workspaceRoot, operatingSystem, architecture, strings.Join(configuration.PlatformTags, ","), "", gitHash)
 	options.PlatformTags = configuration.PlatformTags
 	if configuration.EnvironmentVariablesFile != "" {
 		environmentFilePath := configuration.EnvironmentVariablesFile
