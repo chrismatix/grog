@@ -658,6 +658,20 @@ func TestPathCompletionPrefix(t *testing.T) {
 	}
 }
 
+func TestPathCompletionPrefixSupportsUnquotedYaml(t *testing.T) {
+	for _, test := range []struct {
+		text string
+		want string
+	}{
+		{text: "      - ma", want: "ma"},
+		{text: "dependencies: [:bu", want: ":bu"},
+	} {
+		if prefix := pathCompletionPrefix(test.text, positionForOffset(test.text, len(test.text))); prefix != test.want {
+			t.Errorf("prefix = %q, want %q", prefix, test.want)
+		}
+	}
+}
+
 func TestOutputDirPathCompletionCompletesPathAfterDirPrefix(t *testing.T) {
 	temporaryDirectory := t.TempDir()
 	if operationError := os.Mkdir(filepath.Join(temporaryDirectory, "dist"), 0755); operationError != nil {
@@ -753,6 +767,20 @@ func TestStarlarkPathStringDoesNotSuggestTopLevelSymbols(t *testing.T) {
 		if item["label"] == "target" || item["label"] == "GROG_OS" {
 			t.Fatalf("did not expect top-level completion inside path string")
 		}
+	}
+}
+
+func TestStarlarkPathCompletionIgnoresEqualsInsideString(t *testing.T) {
+	temporaryDirectory := t.TempDir()
+	if operationError := os.WriteFile(filepath.Join(temporaryDirectory, "generated=main.go"), nil, 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	buildPath := filepath.Join(temporaryDirectory, "BUILD.star")
+	text := `target(name = "build", inputs = ["generated=ma`
+	server := &server{documents: map[string]string{pathToURI(buildPath): text}}
+	items := server.completionItems(pathToURI(buildPath), positionForOffset(text, len(text)))
+	if !hasCompletionLabel(items, "generated=main.go") {
+		t.Fatalf("expected path completion, got %#v", items)
 	}
 }
 

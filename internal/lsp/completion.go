@@ -290,11 +290,27 @@ func pathCompletionPrefix(text string, textPosition position) string {
 		return ""
 	}
 	prefix := line[:characterOffset]
-	quote := strings.LastIndexAny(prefix, "\"'")
-	if quote < 0 {
-		return ""
+	stringDelimiter := byte(0)
+	quoteStart := -1
+	for index := 0; index < len(prefix); index++ {
+		character := prefix[index]
+		if stringDelimiter != 0 {
+			if character == stringDelimiter && !starlarkCharacterEscaped(prefix, index) {
+				stringDelimiter = 0
+				quoteStart = -1
+			}
+			continue
+		}
+		if character == '\'' || character == '"' {
+			stringDelimiter = character
+			quoteStart = index
+		}
 	}
-	return prefix[quote+1:]
+	if quoteStart >= 0 {
+		return prefix[quoteStart+1:]
+	}
+	start := strings.LastIndexAny(prefix, " \t,[](){}=") + 1
+	return prefix[start:]
 }
 
 func stringListValuesAt(text string, textPosition position) map[string]bool {
@@ -399,7 +415,33 @@ func starlarkFieldAt(text string, textPosition position) string {
 		return ""
 	}
 	prefix := text[:offset]
-	equals := strings.LastIndex(prefix, "=")
+	equals := -1
+	stringDelimiter := ""
+	inComment := false
+	for index := 0; index < len(prefix); index++ {
+		character := prefix[index]
+		if inComment {
+			if character == '\n' {
+				inComment = false
+			}
+			continue
+		}
+		if stringDelimiter != "" {
+			if strings.HasPrefix(prefix[index:], stringDelimiter) && !starlarkCharacterEscaped(prefix, index) {
+				index += len(stringDelimiter) - 1
+				stringDelimiter = ""
+			}
+			continue
+		}
+		if character == '\'' || character == '"' {
+			stringDelimiter = starlarkStringDelimiter(prefix, index)
+			index += len(stringDelimiter) - 1
+		} else if character == '#' {
+			inComment = true
+		} else if character == '=' {
+			equals = index
+		}
+	}
 	if equals < 0 {
 		return ""
 	}
