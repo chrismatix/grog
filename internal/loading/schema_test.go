@@ -43,4 +43,7 @@ func TestBuildDeclarationSchemasUsePackageTags(t *testing.T) {
 	if !IsBuildLabelKind(resourceDeclarationKind) || IsBuildLabelKind(environmentDeclarationKind) {
 		t.Fatal("unexpected addressable declaration metadata")
 	}
+	if !slices.Contains(BuildFileNames(), "BUILD.star") || !slices.Contains(BuildFileNames(), "BUILD.yaml") {
+		t.Fatalf("unexpected build file names: %v", BuildFileNames())
+	}
 }

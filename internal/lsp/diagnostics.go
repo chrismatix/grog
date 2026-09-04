@@ -23,6 +23,24 @@ func (server *server) publishDiagnostics(documentURI string) error {
 	return server.notify("textDocument/publishDiagnostics", map[string]any{"uri": documentURI, "diagnostics": diagnostics})
 }
 
+func (server *server) publishDiagnosticsAfterChange(documentURI string) error {
+	if operationError := server.publishDiagnostics(documentURI); operationError != nil {
+		return operationError
+	}
+	fileName := filepath.Base(uriPath(documentURI))
+	if !loading.IsStarlarkSourceFile(fileName) || (loading.StarlarkLoader{}).Matches(fileName) {
+		return nil
+	}
+	for openDocumentURI := range server.documents {
+		if (loading.StarlarkLoader{}).Matches(filepath.Base(uriPath(openDocumentURI))) {
+			if operationError := server.publishDiagnostics(openDocumentURI); operationError != nil {
+				return operationError
+			}
+		}
+	}
+	return nil
+}
+
 func diagnosticsFor(documentURI string, text string) []diagnostic {
 	return diagnosticsForReader(documentURI, text, func(path string) (string, error) {
 		content, operationError := os.ReadFile(path)
@@ -57,6 +75,13 @@ func starlarkDiagnostics(path string, text string, readText func(path string) (s
 		return []diagnostic{diagnosticFromError(text, operationError)}
 	}
 	declarations, operationError := evaluateStarlark(path, text, readText)
+	for index, declaration := range declarations {
+		if declaration.path != "" && filepath.Clean(declaration.path) != filepath.Clean(path) {
+			if loadRange, found := starlarkLoadRange(path, text, declaration.path, ""); found {
+				declarations[index].rangeValue = loadRange
+			}
+		}
+	}
 	diagnostics := duplicateNameDiagnostics(declarations)
 	diagnostics = append(diagnostics, duplicateKeywordArgumentDiagnostics(text)...)
 	if operationError != nil && !isRepeatedKeywordArgumentError(operationError) {
@@ -70,9 +95,16 @@ func starlarkDiagnosticFromError(path string, text string, operationError error)
 	if errorPath == "" || filepath.Clean(errorPath) == filepath.Clean(path) {
 		return diagnosticFromError(text, operationError)
 	}
+	if loadRange, found := starlarkLoadRange(path, text, errorPath, operationError.Error()); found {
+		return diagnostic{Range: loadRange, Severity: 1, Source: "grog", Message: operationError.Error()}
+	}
+	return diagnosticFromError(text, operationError)
+}
+
+func starlarkLoadRange(path string, text string, loadedPath string, errorMessage string) (rangeValue, bool) {
 	file, parseError := syntax.Parse(path, text, 0)
 	if parseError != nil {
-		return diagnosticFromError(text, operationError)
+		return rangeValue{}, false
 	}
 	var fallback *syntax.LoadStmt
 	for _, statement := range file.Stmts {
@@ -84,16 +116,16 @@ func starlarkDiagnosticFromError(path string, text string, operationError error)
 			fallback = loadStatement
 		}
 		modulePath := loading.ResolveStarlarkModulePath(findWorkspaceRoot(filepath.Dir(path)), path, loadStatement.ModuleName())
-		if filepath.Clean(modulePath) == filepath.Clean(errorPath) || strings.Contains(operationError.Error(), loadStatement.ModuleName()) {
+		if filepath.Clean(modulePath) == filepath.Clean(loadedPath) || errorMessage != "" && strings.Contains(errorMessage, loadStatement.ModuleName()) {
 			start, end := loadStatement.Module.Span()
-			return diagnostic{Range: rangeFromSyntaxPositions(text, start, end), Severity: 1, Source: "grog", Message: operationError.Error()}
+			return rangeFromSyntaxPositions(text, start, end), true
 		}
 	}
 	if fallback != nil {
 		start, end := fallback.Module.Span()
-		return diagnostic{Range: rangeFromSyntaxPositions(text, start, end), Severity: 1, Source: "grog", Message: operationError.Error()}
+		return rangeFromSyntaxPositions(text, start, end), true
 	}
-	return diagnosticFromError(text, operationError)
+	return rangeValue{}, false
 }
 
 func starlarkErrorPath(operationError error) string {
@@ -271,6 +303,15 @@ func yamlSemanticDiagnostics(text string, root *yaml.Node) []diagnostic {
 			if nameNode == nil || nameNode.Value == "" {
 				diagnostics = append(diagnostics, yamlNodeDiagnostic(text, item, fmt.Sprintf("%s requires name", kind)))
 				continue
+			}
+			for _, parameter := range loading.StarlarkParameters(kind) {
+				if !parameter.Required || parameter.Name == "name" {
+					continue
+				}
+				fieldNode := yamlMappingValue(item, parameter.Name)
+				if fieldNode == nil || fieldNode.Value == "" {
+					diagnostics = append(diagnostics, yamlNodeDiagnostic(text, item, fmt.Sprintf("%s requires %s", kind, parameter.Name)))
+				}
 			}
 			declarations = append(declarations, namedDeclaration{kind: kind, name: nameNode.Value, rangeValue: yamlNodeRange(text, nameNode)})
 		}

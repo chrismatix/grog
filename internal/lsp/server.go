@@ -24,6 +24,7 @@ type server struct {
 	writer          io.Writer
 	documents       map[string]string
 	workspaceLabels map[string][]indexedLabel
+	watchFiles      bool
 	shutdown        bool
 }
 
@@ -99,11 +100,17 @@ func (server *server) readMessage() (message, error) {
 }
 
 func (server *server) handle(request message) error {
+	if request.Method == "" {
+		return nil
+	}
 	if server.shutdown && request.Method != "exit" {
 		return server.respondError(request.ID, -32600, "server has shut down")
 	}
 	switch request.Method {
 	case "initialize":
+		var params initializeParams
+		_ = json.Unmarshal(request.Params, &params)
+		server.watchFiles = params.Capabilities.Workspace.DidChangeWatchedFiles.DynamicRegistration
 		return server.respond(request.ID, map[string]any{
 			"serverInfo": map[string]any{"name": "grog"},
 			"capabilities": map[string]any{
@@ -122,7 +129,19 @@ func (server *server) handle(request message) error {
 		return server.respond(request.ID, nil)
 	case "exit":
 		return errExit
-	case "initialized", "$/cancelRequest", "$/setTrace":
+	case "initialized":
+		if !server.watchFiles {
+			return nil
+		}
+		return server.write(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      "grog-watch-build-files",
+			"method":  "client/registerCapability",
+			"params": map[string]any{"registrations": []map[string]any{{
+				"id": "grog-watch-build-files", "method": "workspace/didChangeWatchedFiles", "registerOptions": map[string]any{"watchers": watchedFileRegistrations()},
+			}}},
+		})
+	case "$/cancelRequest", "$/setTrace":
 		return nil
 	case "textDocument/didOpen":
 		var params didOpenParams
@@ -131,7 +150,7 @@ func (server *server) handle(request message) error {
 		}
 		server.documents[params.TextDocument.URI] = params.TextDocument.Text
 		server.invalidateLabelIndexForDocument(params.TextDocument.URI)
-		return server.publishDiagnostics(params.TextDocument.URI)
+		return server.publishDiagnosticsAfterChange(params.TextDocument.URI)
 	case "textDocument/didChange":
 		var params didChangeParams
 		if operationError := json.Unmarshal(request.Params, &params); operationError != nil {
@@ -141,14 +160,14 @@ func (server *server) handle(request message) error {
 			server.documents[params.TextDocument.URI] = params.ContentChanges[len(params.ContentChanges)-1].Text
 		}
 		server.invalidateLabelIndexForDocument(params.TextDocument.URI)
-		return server.publishDiagnostics(params.TextDocument.URI)
+		return server.publishDiagnosticsAfterChange(params.TextDocument.URI)
 	case "textDocument/didSave":
 		var params textDocumentParams
 		if operationError := json.Unmarshal(request.Params, &params); operationError != nil {
 			return nil
 		}
 		server.invalidateLabelIndex()
-		return server.publishDiagnostics(params.TextDocument.URI)
+		return server.publishDiagnosticsAfterChange(params.TextDocument.URI)
 	case "textDocument/didClose":
 		var params textDocumentParams
 		if operationError := json.Unmarshal(request.Params, &params); operationError != nil {
@@ -225,6 +244,15 @@ func (server *server) write(value any) error {
 type textDocument struct {
 	URI  string `json:"uri"`
 	Text string `json:"text"`
+}
+type initializeParams struct {
+	Capabilities struct {
+		Workspace struct {
+			DidChangeWatchedFiles struct {
+				DynamicRegistration bool `json:"dynamicRegistration"`
+			} `json:"didChangeWatchedFiles"`
+		} `json:"workspace"`
+	} `json:"capabilities"`
 }
 type textDocumentIdentifier struct {
 	URI string `json:"uri"`

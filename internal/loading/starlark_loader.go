@@ -7,6 +7,7 @@ import (
 	"grog/internal/model"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"go.starlark.net/lib/json"
@@ -20,13 +21,29 @@ import (
 // StarlarkLoader implements the Loader interface for Starlark files.
 type StarlarkLoader struct{}
 
+var starlarkBuildFileNames = []string{"BUILD.star", "BUILD.bzl"}
+var starlarkSourceExtensions = []string{".star", ".bzl"}
+
 func (StarlarkLoader) Matches(fileName string) bool {
-	return fileName == "BUILD.star" || fileName == "BUILD.bzl"
+	return slices.Contains(starlarkBuildFileNames, fileName)
 }
 
 // IsStarlarkSourceFile reports whether tooling should treat a file as Starlark.
 func IsStarlarkSourceFile(fileName string) bool {
-	return (StarlarkLoader{}).Matches(fileName) || strings.HasSuffix(fileName, ".star") || strings.HasSuffix(fileName, ".bzl")
+	if (StarlarkLoader{}).Matches(fileName) {
+		return true
+	}
+	for _, extension := range starlarkSourceExtensions {
+		if strings.HasSuffix(fileName, extension) {
+			return true
+		}
+	}
+	return false
+}
+
+// StarlarkSourceExtensions returns file extensions supported by Starlark tooling.
+func StarlarkSourceExtensions() []string {
+	return slices.Clone(starlarkSourceExtensions)
 }
 
 // ResolveStarlarkModulePath resolves a load path using loader semantics.

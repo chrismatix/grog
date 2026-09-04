@@ -337,6 +337,21 @@ func isSupportedBuildFile(fileName string) bool {
 	return (loading.StarlarkLoader{}).Matches(fileName) || (loading.YamlLoader{}).Matches(fileName)
 }
 
+func watchedFileRegistrations() []map[string]any {
+	patterns := make([]string, 0)
+	for _, fileName := range loading.BuildFileNames() {
+		patterns = append(patterns, "**/"+fileName)
+	}
+	for _, extension := range loading.StarlarkSourceExtensions() {
+		patterns = append(patterns, "**/*"+extension)
+	}
+	registrations := make([]map[string]any, 0, len(patterns))
+	for _, pattern := range patterns {
+		registrations = append(registrations, map[string]any{"globPattern": pattern, "kind": 7})
+	}
+	return registrations
+}
+
 func pathToURI(path string) string {
 	return pathToURIForOperatingSystem(path, runtime.GOOS)
 }

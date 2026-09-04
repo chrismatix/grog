@@ -8,11 +8,17 @@ import (
 // ValidatePackageTimeouts validates duration fields accepted by package loaders.
 func ValidatePackageTimeouts(packageDTO PackageDTO) error {
 	for _, target := range packageDTO.Targets {
+		if target == nil {
+			continue
+		}
 		if _, operationError := parseBuildTimeout(targetDeclarationKind, target.Name, target.Timeout); operationError != nil {
 			return operationError
 		}
 	}
 	for _, resource := range packageDTO.Resources {
+		if resource == nil {
+			continue
+		}
 		if _, operationError := parseBuildTimeout(resourceDeclarationKind, resource.Name, resource.Timeout); operationError != nil {
 			return operationError
 		}

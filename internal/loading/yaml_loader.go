@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 
 	"gopkg.in/yaml.v3"
 )
@@ -12,8 +13,10 @@ import (
 // YamlLoader implements the Loader interface for YAML files.
 type YamlLoader struct{}
 
+var yamlBuildFileNames = []string{"BUILD.yaml", "BUILD.yml"}
+
 func (YamlLoader) Matches(fileName string) bool {
-	return fileName == "BUILD.yaml" || fileName == "BUILD.yml"
+	return slices.Contains(yamlBuildFileNames, fileName)
 }
 
 // Load reads the file at the specified filePath and unmarshals its content into a model.Package.

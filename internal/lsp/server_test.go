@@ -36,6 +36,20 @@ func TestServeExitBeforeShutdownFails(t *testing.T) {
 	}
 }
 
+func TestServeRegistersBuildFileWatchers(t *testing.T) {
+	input := framedMessage(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{"workspace":{"didChangeWatchedFiles":{"dynamicRegistration":true}}}}}`) +
+		framedMessage(`{"jsonrpc":"2.0","method":"initialized"}`) +
+		framedMessage(`{"jsonrpc":"2.0","id":2,"method":"shutdown"}`) +
+		framedMessage(`{"jsonrpc":"2.0","method":"exit"}`)
+	var output bytes.Buffer
+	if operationError := Serve(context.Background(), strings.NewReader(input), &output); operationError != nil {
+		t.Fatal(operationError)
+	}
+	if !strings.Contains(output.String(), `"method":"client/registerCapability"`) || !strings.Contains(output.String(), `**/BUILD.yaml`) {
+		t.Fatalf("missing watched-file registration: %s", output.String())
+	}
+}
+
 func framedMessage(payload string) string {
 	return fmt.Sprintf("Content-Length: %d\r\n\r\n%s", len(payload), payload)
 }
@@ -146,6 +160,44 @@ func TestDiagnosticsMapsLoadedModuleErrorsToLoad(t *testing.T) {
 	}
 }
 
+func TestDiagnosticsMapsDuplicateMacroDeclarationsToLoad(t *testing.T) {
+	workspaceRoot := t.TempDir()
+	buildPath := filepath.Join(workspaceRoot, "BUILD.star")
+	modulePath := filepath.Join(workspaceRoot, "rules.star")
+	text := "load(\"rules.star\", \"make\")\nmake()\nmake()\n"
+	diagnostics := starlarkDiagnostics(buildPath, text, func(path string) (string, error) {
+		if path == modulePath {
+			return "def make():\n  target(name = \"same\")\n", nil
+		}
+		return text, nil
+	})
+	if len(diagnostics) != 1 || diagnostics[0].Range.Start.Line != 0 {
+		t.Fatalf("expected duplicate declaration on the load statement, got %#v", diagnostics)
+	}
+}
+
+func TestModuleChangesRepublishBuildDiagnostics(t *testing.T) {
+	workspaceRoot := t.TempDir()
+	buildPath := filepath.Join(workspaceRoot, "BUILD.star")
+	modulePath := filepath.Join(workspaceRoot, "rules.star")
+	buildText := "load(\"rules.star\", \"make\")\nmake()\n"
+	moduleText := "def make():\n  target(command = \"build\")\n"
+	var output bytes.Buffer
+	server := &server{
+		writer: &output,
+		documents: map[string]string{
+			pathToURI(buildPath):  buildText,
+			pathToURI(modulePath): moduleText,
+		},
+	}
+	if operationError := server.publishDiagnosticsAfterChange(pathToURI(modulePath)); operationError != nil {
+		t.Fatal(operationError)
+	}
+	if !strings.Contains(output.String(), pathToURI(buildPath)) || !strings.Contains(output.String(), "missing argument") {
+		t.Fatalf("missing dependent BUILD diagnostics: %s", output.String())
+	}
+}
+
 func TestDiagnosticsForStarlarkHighlightsRepeatedKeywordName(t *testing.T) {
 	diagnostics := diagnosticsFor("file:///repo/BUILD.star", `target(name = "build", name = "again")`)
 	for _, diagnostic := range diagnostics {
@@ -168,6 +220,24 @@ func TestDiagnosticsForYaml(t *testing.T) {
 	diagnostics := diagnosticsFor("file:///repo/BUILD.yaml", "targets:\n  - name: build\n    command: go build ./...\n")
 	if len(diagnostics) != 0 {
 		t.Fatalf("expected no diagnostics, got %#v", diagnostics)
+	}
+}
+
+func TestDiagnosticsForIncompleteYamlDeclaration(t *testing.T) {
+	diagnostics := diagnosticsFor("file:///repo/BUILD.yaml", "targets:\n  -\n")
+	if len(diagnostics) == 0 {
+		t.Fatal("expected incomplete declaration diagnostic")
+	}
+}
+
+func TestDiagnosticsForYamlRequiredFields(t *testing.T) {
+	for _, text := range []string{
+		"aliases:\n  - name: release\n",
+		"resources:\n  - name: database\n",
+	} {
+		if diagnostics := diagnosticsFor("file:///repo/BUILD.yaml", text); len(diagnostics) == 0 {
+			t.Fatalf("expected required field diagnostic for %q", text)
+		}
 	}
 }
 
