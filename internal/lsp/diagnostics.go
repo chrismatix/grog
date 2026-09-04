@@ -123,7 +123,10 @@ func evaluateStarlark(path string, text string, readText func(path string) (stri
 		}
 		declarations = append(declarations, namedDeclaration{kind: declaration.Kind, name: declaration.Name, path: declaration.Path, rangeValue: declarationRange})
 	}
-	_, operationError := loading.EvaluateStarlark(path, []byte(text), options)
+	packageDTO, operationError := loading.EvaluateStarlark(path, []byte(text), options)
+	if operationError == nil {
+		operationError = loading.ValidatePackageTimeouts(packageDTO)
+	}
 	return declarations, operationError
 }
 
@@ -324,7 +327,11 @@ func yamlNodeRange(text string, node *yaml.Node) rangeValue {
 }
 
 func yamlDiagnostics(text string) []diagnostic {
-	if _, operationError := loading.DecodeYAML([]byte(text)); operationError != nil {
+	packageDTO, operationError := loading.DecodeYAML([]byte(text))
+	if operationError != nil {
+		return []diagnostic{diagnosticFromError(text, operationError)}
+	}
+	if operationError := loading.ValidatePackageTimeouts(packageDTO); operationError != nil {
 		return []diagnostic{diagnosticFromError(text, operationError)}
 	}
 	var root yaml.Node

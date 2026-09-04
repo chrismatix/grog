@@ -18,8 +18,9 @@ func (server *server) completionItems(documentURI string, textPosition position)
 	if isStarlarkFile(name) {
 		return server.starlarkCompletionItems(documentURI, text, textPosition)
 	}
-	if field := yamlFieldAt(text, textPosition); field == "dependencies" || field == "actual" {
-		return server.labelCompletionItems(path, text, textPosition)
+	field := yamlFieldAt(text, textPosition)
+	if field == "dependencies" || field == "actual" {
+		return server.labelCompletionItems(path, text, textPosition, yamlBuildFieldIsCollection(field))
 	} else if field == "inputs" || field == "exclude_inputs" || field == "bin_output" {
 		return pathCompletionItems(path, text, textPosition)
 	} else if field == "outputs" {
@@ -45,7 +46,7 @@ func (server *server) starlarkCompletionItems(documentURI string, text string, t
 	callName := enclosingStarlarkCall(text, textPosition)
 	if inStringAt(text, textPosition) {
 		if (field == "dependencies" || field == "actual") && starlarkDeclarationHasField(callName, field) {
-			return server.labelCompletionItems(path, text, textPosition)
+			return server.labelCompletionItems(path, text, textPosition, loading.BuildFieldIsCollection("starlark", callName, field))
 		}
 		if (field == "inputs" || field == "exclude_inputs" || field == "bin_output") && starlarkDeclarationHasField(callName, field) {
 			return pathCompletionItems(path, text, textPosition)
@@ -97,11 +98,23 @@ func starlarkDeclarationHasField(declarationKind string, field string) bool {
 	return false
 }
 
-func (server *server) labelCompletionItems(currentPath string, text string, textPosition position) []map[string]any {
+func yamlBuildFieldIsCollection(field string) bool {
+	for _, schema := range loading.BuildDeclarationSchemas("yaml") {
+		if loading.BuildFieldIsCollection("yaml", schema.Kind, field) {
+			return true
+		}
+	}
+	return false
+}
+
+func (server *server) labelCompletionItems(currentPath string, text string, textPosition position, excludeAlreadyListed bool) []map[string]any {
 	prefix := pathCompletionPrefix(text, textPosition)
 	workspaceRoot := findWorkspaceRoot(filepath.Dir(currentPath))
 	labels := server.collectWorkspaceLabels(workspaceRoot, filepath.Dir(currentPath))
-	alreadyListed := stringListValuesAt(text, textPosition)
+	alreadyListed := map[string]bool{}
+	if excludeAlreadyListed {
+		alreadyListed = stringListValuesAt(text, textPosition)
+	}
 	items := []map[string]any{}
 	for _, label := range preferredDependencyLabels(labels, prefix) {
 		if prefix != "" && !strings.HasPrefix(label, prefix) || alreadyListed[label] {
@@ -368,7 +381,7 @@ func inStringAt(text string, textPosition position) bool {
 			continue
 		}
 		if inString != 0 {
-			if character == inString && (index == 0 || text[index-1] != '\\') {
+			if character == inString && !starlarkCharacterEscaped(text, index) {
 				inString = 0
 			}
 			continue
@@ -380,6 +393,14 @@ func inStringAt(text string, textPosition position) bool {
 		}
 	}
 	return inString != 0
+}
+
+func starlarkCharacterEscaped(text string, index int) bool {
+	backslashes := 0
+	for index > backslashes && text[index-backslashes-1] == '\\' {
+		backslashes++
+	}
+	return backslashes%2 == 1
 }
 
 func yamlFieldAt(text string, textPosition position) string {
@@ -440,7 +461,7 @@ func enclosingStarlarkCall(text string, textPosition position) string {
 			continue
 		}
 		if inString != 0 {
-			if character == inString && (index == 0 || text[index-1] != '\\') {
+			if character == inString && !starlarkCharacterEscaped(text, index) {
 				inString = 0
 			}
 			continue

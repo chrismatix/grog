@@ -91,6 +91,13 @@ func TestDiagnosticsForStarlarkUsesLoaderSyntaxOptions(t *testing.T) {
 	}
 }
 
+func TestDiagnosticsForStarlarkValidatesTimeout(t *testing.T) {
+	diagnostics := diagnosticsFor("file:///repo/BUILD.star", `target(name = "build", timeout = "forever")`)
+	if len(diagnostics) == 0 {
+		t.Fatal("expected invalid timeout diagnostic")
+	}
+}
+
 func TestStarlarkDiagnosticsReadWorkspaceVariables(t *testing.T) {
 	workspaceRoot := t.TempDir()
 	configuration := "environment_variables_file = \"environment.env\"\n\n[environment_variables]\nINLINE_VALUE = \"inline\"\n"
@@ -275,6 +282,20 @@ func TestStarlarkDependencyCompletionSkipsAlreadyListedLabels(t *testing.T) {
 	}
 }
 
+func TestScalarLabelCompletionDoesNotUseEarlierListValues(t *testing.T) {
+	workspaceRoot := t.TempDir()
+	if operationError := os.WriteFile(filepath.Join(workspaceRoot, "grog.toml"), []byte(""), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	text := "target(name = \"build\")\ntarget(name = \"test\", dependencies = [\":build\"])\nalias(name = \"current\", actual = \":bu"
+	buildPath := filepath.Join(workspaceRoot, "BUILD.star")
+	server := &server{documents: map[string]string{pathToURI(buildPath): text}}
+	items := server.completionItems(pathToURI(buildPath), positionForOffset(text, len(text)))
+	if !hasCompletionLabel(items, ":build") {
+		t.Fatalf("expected scalar label completion, got %#v", items)
+	}
+}
+
 func TestStarlarkDependencyCompletionFindsMultilineTargets(t *testing.T) {
 	temporaryDirectory := t.TempDir()
 	buildPath := filepath.Join(temporaryDirectory, "BUILD.star")
@@ -424,6 +445,15 @@ func TestStarlarkCompletionIgnoresQuotesInComments(t *testing.T) {
 	items := server.completionItems("file:///repo/BUILD.star", position{Line: 2, Character: 4})
 	if !hasCompletionLabel(items, "name") {
 		t.Fatalf("expected name completion, got %#v", items)
+	}
+}
+
+func TestStarlarkCompletionClosesStringAfterEvenBackslashes(t *testing.T) {
+	text := "target(name = \"first\", command = \"C:\\\\\")\ntarget(\n  na"
+	server := &server{documents: map[string]string{"file:///repo/BUILD.star": text}}
+	items := server.completionItems("file:///repo/BUILD.star", positionForOffset(text, len(text)))
+	if !hasCompletionLabel(items, "name") {
+		t.Fatalf("expected parameter completion after closed string, got %#v", items)
 	}
 }
 
@@ -587,6 +617,42 @@ func TestWorkspaceLabelsUseOpenDocumentsAndEvaluateMacros(t *testing.T) {
 	}
 }
 
+func TestWorkspaceLabelsExcludeEnvironments(t *testing.T) {
+	workspaceRoot := t.TempDir()
+	buildPath := filepath.Join(workspaceRoot, "BUILD.star")
+	text := "environment(name = \"container\", type = \"oci\")\ntarget(name = \"build\")\n"
+	if operationError := os.WriteFile(buildPath, []byte(text), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	server := &server{documents: map[string]string{}}
+	labels := server.collectWorkspaceLabels(workspaceRoot, workspaceRoot)
+	if slices.Contains(labels, "//:container") || !slices.Contains(labels, "//:build") {
+		t.Fatalf("unexpected labels: %#v", labels)
+	}
+}
+
+func TestWorkspaceLabelIndexInvalidatesForFilesystemChanges(t *testing.T) {
+	workspaceRoot := t.TempDir()
+	buildPath := filepath.Join(workspaceRoot, "BUILD.star")
+	if operationError := os.WriteFile(buildPath, []byte("target(name = \"first\")\n"), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	server := &server{documents: map[string]string{}}
+	if labels := server.collectWorkspaceLabels(workspaceRoot, workspaceRoot); !slices.Contains(labels, "//:first") {
+		t.Fatalf("unexpected initial labels: %#v", labels)
+	}
+	if operationError := os.WriteFile(buildPath, []byte("target(name = \"second\")\n"), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	if operationError := server.handle(message{Method: "workspace/didChangeWatchedFiles"}); operationError != nil {
+		t.Fatal(operationError)
+	}
+	labels := server.collectWorkspaceLabels(workspaceRoot, workspaceRoot)
+	if !slices.Contains(labels, "//:second") || slices.Contains(labels, "//:first") {
+		t.Fatalf("unexpected refreshed labels: %#v", labels)
+	}
+}
+
 func TestPositionConversionUsesUTF16CodeUnits(t *testing.T) {
 	text := "é😀target"
 	targetOffset := strings.Index(text, "target")
@@ -596,6 +662,28 @@ func TestPositionConversionUsesUTF16CodeUnits(t *testing.T) {
 	}
 	if offset := byteOffset(text, textPosition); offset != targetOffset {
 		t.Fatalf("offset = %d, want %d", offset, targetOffset)
+	}
+}
+
+func TestURIPathForWindows(t *testing.T) {
+	tests := map[string]string{
+		"file:///C:/repo/BUILD.star":     `C:\repo\BUILD.star`,
+		"file://server/share/BUILD.star": `\\server\share\BUILD.star`,
+	}
+	for documentURI, want := range tests {
+		t.Run(documentURI, func(t *testing.T) {
+			if path := uriPathForOperatingSystem(documentURI, "windows"); path != want {
+				t.Fatalf("path = %q, want %q", path, want)
+			}
+		})
+	}
+	for path, want := range map[string]string{
+		`C:\repo\BUILD.star`:        "file:///C:/repo/BUILD.star",
+		`\\server\share\BUILD.star`: "file://server/share/BUILD.star",
+	} {
+		if documentURI := pathToURIForOperatingSystem(path, "windows"); documentURI != want {
+			t.Fatalf("URI = %q, want %q", documentURI, want)
+		}
 	}
 }
 

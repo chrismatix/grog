@@ -10,8 +10,9 @@ import (
 
 // BuildDeclarationSchema identifies a declaration and its package collection.
 type BuildDeclarationSchema struct {
-	Kind       string
-	Collection string
+	Kind        string
+	Collection  string
+	Addressable bool
 }
 
 // StarlarkParameter describes an argument accepted by a declaration builtin.
@@ -24,6 +25,7 @@ type buildDeclarationType struct {
 	kind         string
 	packageField string
 	dataType     reflect.Type
+	addressable  bool
 }
 
 const (
@@ -34,9 +36,9 @@ const (
 )
 
 var buildDeclarationTypes = []buildDeclarationType{
-	{kind: targetDeclarationKind, packageField: "Targets", dataType: reflect.TypeFor[TargetDTO]()},
-	{kind: aliasDeclarationKind, packageField: "Aliases", dataType: reflect.TypeFor[AliasDTO]()},
-	{kind: resourceDeclarationKind, packageField: "Resources", dataType: reflect.TypeFor[ResourceDTO]()},
+	{kind: targetDeclarationKind, packageField: "Targets", dataType: reflect.TypeFor[TargetDTO](), addressable: true},
+	{kind: aliasDeclarationKind, packageField: "Aliases", dataType: reflect.TypeFor[AliasDTO](), addressable: true},
+	{kind: resourceDeclarationKind, packageField: "Resources", dataType: reflect.TypeFor[ResourceDTO](), addressable: true},
 	{kind: environmentDeclarationKind, packageField: "Environments", dataType: reflect.TypeFor[EnvironmentDTO]()},
 }
 
@@ -91,10 +93,36 @@ func BuildDeclarationSchemas(format string) []BuildDeclarationSchema {
 		}
 		collection := serializedFieldName(packageField, format)
 		if collection != "" {
-			schemas = append(schemas, BuildDeclarationSchema{Kind: declarationType.kind, Collection: collection})
+			schemas = append(schemas, BuildDeclarationSchema{Kind: declarationType.kind, Collection: collection, Addressable: declarationType.addressable})
 		}
 	}
 	return schemas
+}
+
+// BuildFieldIsCollection reports whether a serialized declaration field is a slice.
+func BuildFieldIsCollection(format string, declarationKind string, fieldName string) bool {
+	for _, declarationType := range buildDeclarationTypes {
+		if declarationType.kind != declarationKind {
+			continue
+		}
+		for index := range declarationType.dataType.NumField() {
+			field := declarationType.dataType.Field(index)
+			if serializedFieldName(field, format) == fieldName {
+				return field.Type.Kind() == reflect.Slice
+			}
+		}
+	}
+	return false
+}
+
+// IsBuildLabelKind reports whether a declaration becomes an addressable build node.
+func IsBuildLabelKind(declarationKind string) bool {
+	for _, declarationType := range buildDeclarationTypes {
+		if declarationType.kind == declarationKind {
+			return declarationType.addressable
+		}
+	}
+	return false
 }
 
 // BuildFieldNames returns serialized package or declaration field names.

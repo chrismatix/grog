@@ -29,12 +29,18 @@ func TestStarlarkSchemaMatchesLoaderDeclarations(t *testing.T) {
 
 func TestBuildDeclarationSchemasUsePackageTags(t *testing.T) {
 	want := []BuildDeclarationSchema{
-		{Kind: "target", Collection: "targets"},
-		{Kind: "alias", Collection: "aliases"},
-		{Kind: "resource", Collection: "resources"},
+		{Kind: "target", Collection: "targets", Addressable: true},
+		{Kind: "alias", Collection: "aliases", Addressable: true},
+		{Kind: "resource", Collection: "resources", Addressable: true},
 		{Kind: "environment", Collection: "environments"},
 	}
 	if schemas := BuildDeclarationSchemas("yaml"); !slices.Equal(schemas, want) {
 		t.Fatalf("schemas = %#v, want %#v", schemas, want)
+	}
+	if !BuildFieldIsCollection("starlark", targetDeclarationKind, "dependencies") || BuildFieldIsCollection("starlark", aliasDeclarationKind, "actual") {
+		t.Fatal("unexpected collection metadata")
+	}
+	if !IsBuildLabelKind(resourceDeclarationKind) || IsBuildLabelKind(environmentDeclarationKind) {
+		t.Fatal("unexpected addressable declaration metadata")
 	}
 }

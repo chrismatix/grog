@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 
@@ -14,6 +15,11 @@ import (
 	"go.starlark.net/syntax"
 	"gopkg.in/yaml.v3"
 )
+
+type indexedLabel struct {
+	path string
+	name string
+}
 
 func (server *server) definition(documentURI string, textPosition position) any {
 	path := uriPath(documentURI)
@@ -81,7 +87,7 @@ func (server *server) labelDefinition(currentPath string, targetLabel string) an
 			continue
 		}
 		for _, declaration := range server.declarationsForPath(definitionPath, definitionText) {
-			if declaration.name == parsedLabel.Name {
+			if declaration.name == parsedLabel.Name && loading.IsBuildLabelKind(declaration.kind) {
 				if declaration.path != "" {
 					definitionURI = pathToURI(declaration.path)
 				}
@@ -136,7 +142,58 @@ func findWorkspaceRoot(directory string) string {
 }
 
 func (server *server) collectWorkspaceLabels(workspaceRoot string, currentDirectory string) []string {
+	indexedLabels, isCached := server.workspaceLabels[workspaceRoot]
+	if !isCached {
+		indexedLabels = server.indexWorkspaceLabels(workspaceRoot)
+		if server.workspaceLabels == nil {
+			server.workspaceLabels = make(map[string][]indexedLabel)
+		}
+		server.workspaceLabels[workspaceRoot] = indexedLabels
+	}
+	openBuildFiles := make(map[string]bool)
+	openLabels := []indexedLabel{}
+	for documentURI, text := range server.documents {
+		path := uriPath(documentURI)
+		if !isSupportedBuildFile(filepath.Base(path)) || !pathWithinWorkspace(workspaceRoot, path) {
+			continue
+		}
+		openBuildFiles[filepath.Clean(path)] = true
+		for _, declaration := range server.declarationsForPath(path, text) {
+			if loading.IsBuildLabelKind(declaration.kind) {
+				openLabels = append(openLabels, indexedLabel{path: path, name: declaration.name})
+			}
+		}
+	}
+	labelsToRender := make([]indexedLabel, 0, len(indexedLabels)+len(openLabels))
+	for _, indexedLabel := range indexedLabels {
+		if !openBuildFiles[filepath.Clean(indexedLabel.path)] {
+			labelsToRender = append(labelsToRender, indexedLabel)
+		}
+	}
+	labelsToRender = append(labelsToRender, openLabels...)
 	labels := []string{}
+	seen := make(map[string]bool)
+	for _, indexedLabel := range labelsToRender {
+		packagePath, operationError := filepath.Rel(workspaceRoot, filepath.Dir(indexedLabel.path))
+		if operationError != nil || packagePath == "." {
+			packagePath = ""
+		}
+		label := "//" + filepath.ToSlash(packagePath) + ":" + indexedLabel.name
+		if !seen[label] {
+			labels = append(labels, label)
+			seen[label] = true
+		}
+		localLabel := ":" + indexedLabel.name
+		if filepath.Clean(filepath.Dir(indexedLabel.path)) == filepath.Clean(currentDirectory) && !seen[localLabel] {
+			labels = append(labels, localLabel)
+			seen[localLabel] = true
+		}
+	}
+	return labels
+}
+
+func (server *server) indexWorkspaceLabels(workspaceRoot string) []indexedLabel {
+	labels := []indexedLabel{}
 	_ = filepath.WalkDir(workspaceRoot, func(path string, directoryEntry os.DirEntry, operationError error) error {
 		if operationError != nil || directoryEntry.IsDir() {
 			if directoryEntry != nil && directoryEntry.IsDir() && strings.HasPrefix(directoryEntry.Name(), ".") && directoryEntry.Name() != "." {
@@ -144,29 +201,32 @@ func (server *server) collectWorkspaceLabels(workspaceRoot string, currentDirect
 			}
 			return nil
 		}
-		name := filepath.Base(path)
-		if !isSupportedBuildFile(name) {
+		if !isSupportedBuildFile(filepath.Base(path)) {
 			return nil
 		}
-		content := server.documentText(pathToURI(path))
-		packagePath, operationError := filepath.Rel(workspaceRoot, filepath.Dir(path))
-		if operationError != nil || packagePath == "." {
-			packagePath = ""
-		}
-		prefix := "//"
-		if packagePath != "" {
-			prefix += filepath.ToSlash(packagePath)
-		}
-		for _, declaration := range server.declarationsForPath(path, content) {
-			label := prefix + ":" + declaration.name
-			labels = append(labels, label)
-			if filepath.Clean(filepath.Dir(path)) == filepath.Clean(currentDirectory) {
-				labels = append(labels, ":"+declaration.name)
+		for _, declaration := range server.declarationsForPath(path, server.documentText(pathToURI(path))) {
+			if loading.IsBuildLabelKind(declaration.kind) {
+				labels = append(labels, indexedLabel{path: path, name: declaration.name})
 			}
 		}
 		return nil
 	})
 	return labels
+}
+
+func (server *server) invalidateLabelIndexForDocument(documentURI string) {
+	if loading.IsStarlarkSourceFile(filepath.Base(uriPath(documentURI))) && !isSupportedBuildFile(filepath.Base(uriPath(documentURI))) {
+		server.invalidateLabelIndex()
+	}
+}
+
+func (server *server) invalidateLabelIndex() {
+	clear(server.workspaceLabels)
+}
+
+func pathWithinWorkspace(workspaceRoot string, path string) bool {
+	relativePath, operationError := filepath.Rel(workspaceRoot, path)
+	return operationError == nil && relativePath != ".." && !strings.HasPrefix(relativePath, ".."+string(filepath.Separator))
 }
 
 func (server *server) declarationsForPath(path string, text string) []namedDeclaration {
@@ -278,6 +338,20 @@ func isSupportedBuildFile(fileName string) bool {
 }
 
 func pathToURI(path string) string {
+	return pathToURIForOperatingSystem(path, runtime.GOOS)
+}
+
+func pathToURIForOperatingSystem(path string, operatingSystem string) string {
+	if operatingSystem == "windows" {
+		path = strings.ReplaceAll(path, `\`, "/")
+		if strings.HasPrefix(path, "//") {
+			host, uriPath, _ := strings.Cut(strings.TrimPrefix(path, "//"), "/")
+			return (&url.URL{Scheme: "file", Host: host, Path: "/" + uriPath}).String()
+		}
+		if len(path) >= 2 && path[1] == ':' {
+			path = "/" + path
+		}
+	}
 	return (&url.URL{Scheme: "file", Path: path}).String()
 }
 
@@ -370,9 +444,24 @@ func positionFromOneBased(text string, line int, column int) position {
 }
 
 func uriPath(documentURI string) string {
+	return uriPathForOperatingSystem(documentURI, runtime.GOOS)
+}
+
+func uriPathForOperatingSystem(documentURI string, operatingSystem string) string {
 	parsed, operationError := url.Parse(documentURI)
 	if operationError != nil || parsed.Scheme != "file" {
 		return documentURI
+	}
+	if operatingSystem == "windows" {
+		path := parsed.Path
+		if len(path) >= 3 && path[0] == '/' && path[2] == ':' {
+			path = path[1:]
+		}
+		path = strings.ReplaceAll(path, "/", `\`)
+		if parsed.Host != "" && parsed.Host != "localhost" {
+			return `\\` + parsed.Host + path
+		}
+		return path
 	}
 	return parsed.Path
 }

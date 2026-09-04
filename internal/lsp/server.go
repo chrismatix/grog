@@ -15,15 +15,16 @@ var errExit = errors.New("language server exit")
 
 // Serve runs the grog language server over an LSP stdio transport.
 func Serve(context context.Context, reader io.Reader, writer io.Writer) error {
-	server := &server{reader: bufio.NewReader(reader), writer: writer, documents: map[string]string{}}
+	server := &server{reader: bufio.NewReader(reader), writer: writer, documents: map[string]string{}, workspaceLabels: map[string][]indexedLabel{}}
 	return server.run(context)
 }
 
 type server struct {
-	reader    *bufio.Reader
-	writer    io.Writer
-	documents map[string]string
-	shutdown  bool
+	reader          *bufio.Reader
+	writer          io.Writer
+	documents       map[string]string
+	workspaceLabels map[string][]indexedLabel
+	shutdown        bool
 }
 
 type message struct {
@@ -129,6 +130,7 @@ func (server *server) handle(request message) error {
 			return nil
 		}
 		server.documents[params.TextDocument.URI] = params.TextDocument.Text
+		server.invalidateLabelIndexForDocument(params.TextDocument.URI)
 		return server.publishDiagnostics(params.TextDocument.URI)
 	case "textDocument/didChange":
 		var params didChangeParams
@@ -138,12 +140,14 @@ func (server *server) handle(request message) error {
 		if len(params.ContentChanges) > 0 {
 			server.documents[params.TextDocument.URI] = params.ContentChanges[len(params.ContentChanges)-1].Text
 		}
+		server.invalidateLabelIndexForDocument(params.TextDocument.URI)
 		return server.publishDiagnostics(params.TextDocument.URI)
 	case "textDocument/didSave":
 		var params textDocumentParams
 		if operationError := json.Unmarshal(request.Params, &params); operationError != nil {
 			return nil
 		}
+		server.invalidateLabelIndex()
 		return server.publishDiagnostics(params.TextDocument.URI)
 	case "textDocument/didClose":
 		var params textDocumentParams
@@ -151,7 +155,11 @@ func (server *server) handle(request message) error {
 			return nil
 		}
 		delete(server.documents, params.TextDocument.URI)
+		server.invalidateLabelIndex()
 		return server.notify("textDocument/publishDiagnostics", map[string]any{"uri": params.TextDocument.URI, "diagnostics": []diagnostic{}})
+	case "workspace/didChangeWatchedFiles":
+		server.invalidateLabelIndex()
+		return nil
 	case "textDocument/completion":
 		var params positionedTextDocumentParams
 		if operationError := json.Unmarshal(request.Params, &params); operationError != nil {

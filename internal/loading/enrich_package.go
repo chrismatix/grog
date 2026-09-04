@@ -73,10 +73,11 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 
 		var timeout time.Duration
 		if target.Timeout != "" {
-			timeout, err = time.ParseDuration(target.Timeout)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse timeout for target %s: %w", targetLabel, err)
+			parsedTimeout, operationError := parseBuildTimeout(targetDeclarationKind, targetLabel.String(), target.Timeout)
+			if operationError != nil {
+				return nil, operationError
 			}
+			timeout = parsedTimeout
 		}
 
 		// Determine the platforms to use
@@ -145,11 +146,11 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 
 		var resourceTimeout time.Duration
 		if resource.Timeout != "" {
-			var err error
-			resourceTimeout, err = time.ParseDuration(resource.Timeout)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse timeout for resource %s: %w", resourceLabel, err)
+			parsedTimeout, operationError := parseBuildTimeout(resourceDeclarationKind, resourceLabel.String(), resource.Timeout)
+			if operationError != nil {
+				return nil, operationError
 			}
+			resourceTimeout = parsedTimeout
 		}
 
 		resources[resourceLabel] = &model.Resource{
