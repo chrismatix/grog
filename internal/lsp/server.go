@@ -106,7 +106,7 @@ func (server *server) handle(request message) error {
 		return server.respond(request.ID, map[string]any{
 			"serverInfo": map[string]any{"name": "grog"},
 			"capabilities": map[string]any{
-				"positionEncoding":       "utf-8",
+				"positionEncoding":       "utf-16",
 				"textDocumentSync":       1,
 				"hoverProvider":          true,
 				"definitionProvider":     true,

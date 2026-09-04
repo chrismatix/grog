@@ -135,7 +135,7 @@ func addCompletionTextEdits(items []map[string]any, textPosition position, prefi
 }
 
 func completionTextEdit(textPosition position, prefix string, newText string) map[string]any {
-	start := position{Line: textPosition.Line, Character: max(textPosition.Character-len(prefix), 0)}
+	start := position{Line: textPosition.Line, Character: max(textPosition.Character-utf16Length(prefix), 0)}
 	return map[string]any{"range": rangeValue{Start: start, End: textPosition}, "newText": newText}
 }
 
@@ -192,10 +192,11 @@ func pathCompletionPrefix(text string, textPosition position) string {
 		return ""
 	}
 	line := lines[textPosition.Line]
-	if textPosition.Character < 0 || textPosition.Character > len(line) {
+	characterOffset := characterByteOffset(line, textPosition.Character)
+	if characterOffset < 0 {
 		return ""
 	}
-	prefix := line[:textPosition.Character]
+	prefix := line[:characterOffset]
 	quote := strings.LastIndexAny(prefix, "\"'")
 	if quote < 0 {
 		return ""
@@ -349,14 +350,25 @@ func yamlFieldAt(text string, textPosition position) string {
 	lines := strings.Split(text, "\n")
 	for lineNumber := textPosition.Line; lineNumber >= 0 && lineNumber < len(lines); lineNumber-- {
 		line := strings.TrimSpace(lines[lineNumber])
-		if strings.HasSuffix(line, ":") {
-			return strings.TrimSuffix(line, ":")
-		}
-		if field, _, found := strings.Cut(line, ":"); found && lineNumber == textPosition.Line {
+		line = strings.TrimSpace(strings.TrimPrefix(line, "-"))
+		if field, _, found := strings.Cut(line, ":"); found && yamlFieldName(field) {
 			return strings.TrimSpace(field)
 		}
 	}
 	return ""
+}
+
+func yamlFieldName(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	for index := range len(value) {
+		if !isWordCharacter(value[index]) {
+			return false
+		}
+	}
+	return true
 }
 
 func shouldSuggestStarlarkCallParameters(text string, textPosition position) bool {
@@ -423,13 +435,16 @@ func positionForOffset(text string, targetOffset int) position {
 	if targetOffset < 0 {
 		return position{}
 	}
-	for offset := 0; offset < len(text) && offset < targetOffset; offset++ {
-		if text[offset] == '\n' {
+	for offset, currentRune := range text {
+		if offset >= targetOffset {
+			break
+		}
+		if currentRune == '\n' {
 			line++
 			character = 0
 			continue
 		}
-		character++
+		character += utf16RuneLength(currentRune)
 	}
 	return position{Line: line, Character: character}
 }
@@ -440,21 +455,40 @@ func byteOffset(text string, textPosition position) int {
 	}
 	line := 0
 	character := 0
-	for offset := 0; offset < len(text); offset++ {
+	for offset, currentRune := range text {
 		if line == textPosition.Line && character == textPosition.Character {
 			return offset
 		}
-		if text[offset] == '\n' {
+		if currentRune == '\n' {
 			line++
 			character = 0
 			continue
 		}
-		character++
+		character += utf16RuneLength(currentRune)
 	}
 	if line == textPosition.Line && character == textPosition.Character {
 		return len(text)
 	}
 	return -1
+}
+
+func characterByteOffset(line string, character int) int {
+	return byteOffset(line, position{Character: character})
+}
+
+func utf16Length(value string) int {
+	length := 0
+	for _, currentRune := range value {
+		length += utf16RuneLength(currentRune)
+	}
+	return length
+}
+
+func utf16RuneLength(currentRune rune) int {
+	if currentRune > 0xffff {
+		return 2
+	}
+	return 1
 }
 
 func wordAt(text string, textPosition position) string {
@@ -463,14 +497,15 @@ func wordAt(text string, textPosition position) string {
 		return ""
 	}
 	line := lines[textPosition.Line]
-	if textPosition.Character < 0 || textPosition.Character > len(line) {
+	characterOffset := characterByteOffset(line, textPosition.Character)
+	if characterOffset < 0 {
 		return ""
 	}
-	start := textPosition.Character
+	start := characterOffset
 	for start > 0 && isWordCharacter(line[start-1]) {
 		start--
 	}
-	end := textPosition.Character
+	end := characterOffset
 	for end < len(line) && isWordCharacter(line[end]) {
 		end++
 	}

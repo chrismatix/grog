@@ -19,8 +19,8 @@ func TestServeLifecycle(t *testing.T) {
 	if operationError := Serve(context.Background(), strings.NewReader(input), &output); operationError != nil {
 		t.Fatalf("serve: %v", operationError)
 	}
-	if !strings.Contains(output.String(), `"positionEncoding":"utf-8"`) {
-		t.Fatalf("initialize response does not advertise UTF-8 positions: %s", output.String())
+	if !strings.Contains(output.String(), `"positionEncoding":"utf-16"`) {
+		t.Fatalf("initialize response does not advertise UTF-16 positions: %s", output.String())
 	}
 	if !strings.Contains(output.String(), `"id":2`) || !strings.Contains(output.String(), `"result":null`) {
 		t.Fatalf("missing shutdown response: %s", output.String())
@@ -221,6 +221,21 @@ func TestStarlarkDependencyCompletionFindsMultilineTargets(t *testing.T) {
 	}
 	server := &server{documents: map[string]string{pathToURI(buildPath): text}}
 	items := server.completionItems(pathToURI(buildPath), position{Line: 3, Character: 39})
+	if !hasCompletionLabel(items, ":build") {
+		t.Fatalf("expected :build completion item, got %#v", items)
+	}
+}
+
+func TestYamlDependencyCompletionInsideBlockSequence(t *testing.T) {
+	temporaryDirectory := t.TempDir()
+	buildPath := filepath.Join(temporaryDirectory, "BUILD.yaml")
+	diskText := "targets:\n  - name: build\n  - name: test\n    dependencies: []\n"
+	if operationError := os.WriteFile(buildPath, []byte(diskText), 0o644); operationError != nil {
+		t.Fatalf("write build file: %v", operationError)
+	}
+	text := "targets:\n  - name: test\n    dependencies:\n      - \":bu"
+	server := &server{documents: map[string]string{pathToURI(buildPath): text}}
+	items := server.completionItems(pathToURI(buildPath), position{Line: 3, Character: 12})
 	if !hasCompletionLabel(items, ":build") {
 		t.Fatalf("expected :build completion item, got %#v", items)
 	}
@@ -434,6 +449,50 @@ func TestDefinitionForAbsoluteTargetLabel(t *testing.T) {
 	location, isMap := definition.(map[string]any)
 	if !isMap || location["uri"] != pathToURI(filepath.Join(dependencyDirectory, "BUILD.yaml")) {
 		t.Fatalf("unexpected definition: %#v", definition)
+	}
+}
+
+func TestDefinitionForYamlTargetLabel(t *testing.T) {
+	temporaryDirectory := t.TempDir()
+	buildPath := filepath.Join(temporaryDirectory, "BUILD.yaml")
+	text := "targets:\n  - name: build\n  - name: test\n    dependencies: [\":build\"]\n"
+	server := &server{documents: map[string]string{pathToURI(buildPath): text}}
+	if definition := server.definition(pathToURI(buildPath), position{Line: 3, Character: 21}); definition == nil {
+		t.Fatal("expected YAML label definition")
+	}
+}
+
+func TestDefinitionForShorthandAbsoluteTargetLabel(t *testing.T) {
+	workspaceRoot := t.TempDir()
+	if operationError := os.WriteFile(filepath.Join(workspaceRoot, "grog.toml"), nil, 0o644); operationError != nil {
+		t.Fatalf("write grog.toml: %v", operationError)
+	}
+	dependencyDirectory := filepath.Join(workspaceRoot, "dependency")
+	if operationError := os.Mkdir(dependencyDirectory, 0o755); operationError != nil {
+		t.Fatalf("create dependency directory: %v", operationError)
+	}
+	dependencyPath := filepath.Join(dependencyDirectory, "BUILD.star")
+	if operationError := os.WriteFile(dependencyPath, []byte(`target(name = "dependency")`), 0o644); operationError != nil {
+		t.Fatalf("write dependency build file: %v", operationError)
+	}
+	buildPath := filepath.Join(workspaceRoot, "BUILD.star")
+	text := `target(name = "build", dependencies = ["//dependency"])`
+	server := &server{documents: map[string]string{pathToURI(buildPath): text}}
+	location, isLocation := server.definition(pathToURI(buildPath), position{Line: 0, Character: 47}).(map[string]any)
+	if !isLocation || location["uri"] != pathToURI(dependencyPath) {
+		t.Fatalf("unexpected definition: %#v", location)
+	}
+}
+
+func TestPositionConversionUsesUTF16CodeUnits(t *testing.T) {
+	text := "é😀target"
+	targetOffset := strings.Index(text, "target")
+	textPosition := positionForOffset(text, targetOffset)
+	if textPosition.Character != 3 {
+		t.Fatalf("character = %d, want 3", textPosition.Character)
+	}
+	if offset := byteOffset(text, textPosition); offset != targetOffset {
+		t.Fatalf("offset = %d, want %d", offset, targetOffset)
 	}
 }
 

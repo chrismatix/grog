@@ -230,7 +230,7 @@ func starlarkNamedDeclarations(text string) []namedDeclaration {
 		kind := text[match[2]:match[3]]
 		name := text[match[4]:match[5]]
 		start := positionForOffset(text, match[4])
-		end := position{Line: start.Line, Character: start.Character + len(name)}
+		end := position{Line: start.Line, Character: start.Character + utf16Length(name)}
 		declarations = append(declarations, namedDeclaration{kind: kind, name: name, rangeValue: rangeValue{Start: start, End: end}})
 	}
 	return declarations
@@ -338,13 +338,13 @@ func yamlNodeDiagnostic(text string, node *yaml.Node, message string) diagnostic
 func yamlNodeRange(text string, node *yaml.Node) rangeValue {
 	line := 0
 	character := 0
-	endCharacter := 1
+	width := 1
 	if node != nil {
 		line = node.Line - 1
 		character = node.Column - 1
-		endCharacter = character + len(node.Value)
-		if endCharacter <= character {
-			endCharacter = character + 1
+		width = utf16Length(node.Value)
+		if width == 0 {
+			width = 1
 		}
 	}
 	if line < 0 {
@@ -354,7 +354,7 @@ func yamlNodeRange(text string, node *yaml.Node) rangeValue {
 		character = 0
 	}
 	start := positionFromOneBased(text, line+1, character+1)
-	end := position{Line: start.Line, Character: start.Character + endCharacter - character}
+	end := position{Line: start.Line, Character: start.Character + width}
 	return rangeValue{Start: start, End: end}
 }
 

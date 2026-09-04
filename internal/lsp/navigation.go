@@ -7,19 +7,21 @@ import (
 	"regexp"
 	"strings"
 
+	"grog/internal/label"
+
 	"go.starlark.net/syntax"
 	"gopkg.in/yaml.v3"
 )
 
 func (server *server) definition(documentURI string, textPosition position) any {
 	path := uriPath(documentURI)
+	text := server.documentText(documentURI)
+	targetLabel := labelAt(text, textPosition)
+	if targetLabel != "" {
+		return server.labelDefinition(path, targetLabel)
+	}
 	if !isStarlarkFile(filepath.Base(path)) {
 		return nil
-	}
-	text := server.documentText(documentURI)
-	label := labelAt(text, textPosition)
-	if label != "" {
-		return server.labelDefinition(path, label)
 	}
 	word := wordAt(text, textPosition)
 	if word == "" {
@@ -45,17 +47,17 @@ func (server *server) definition(documentURI string, textPosition position) any 
 	return map[string]any{"uri": moduleURI, "range": definitionRange}
 }
 
-func (server *server) labelDefinition(currentPath string, label string) any {
-	targetName := strings.TrimPrefix(label, ":")
-	directory := filepath.Dir(currentPath)
-	if strings.HasPrefix(label, "//") {
-		colon := strings.LastIndex(label, ":")
-		if colon < 0 {
-			return nil
-		}
-		directory = filepath.Join(findWorkspaceRoot(filepath.Dir(currentPath)), strings.TrimPrefix(label[:colon], "//"))
-		targetName = label[colon+1:]
+func (server *server) labelDefinition(currentPath string, targetLabel string) any {
+	workspaceRoot := findWorkspaceRoot(filepath.Dir(currentPath))
+	packagePath, operationError := filepath.Rel(workspaceRoot, filepath.Dir(currentPath))
+	if operationError != nil {
+		return nil
 	}
+	parsedLabel, operationError := label.ParseTargetLabel(filepath.ToSlash(packagePath), targetLabel)
+	if operationError != nil {
+		return nil
+	}
+	directory := filepath.Join(workspaceRoot, filepath.FromSlash(parsedLabel.Package))
 	for _, fileName := range []string{"BUILD.star", "BUILD.bzl", "BUILD.yaml", "BUILD.yml"} {
 		definitionPath := filepath.Join(directory, fileName)
 		definitionURI := pathToURI(definitionPath)
@@ -64,7 +66,7 @@ func (server *server) labelDefinition(currentPath string, label string) any {
 			continue
 		}
 		for _, declaration := range declarationsForFile(fileName, definitionText) {
-			if declaration.name == targetName {
+			if declaration.name == parsedLabel.Name {
 				return map[string]any{"uri": definitionURI, "range": declaration.rangeValue}
 			}
 		}
@@ -78,14 +80,15 @@ func labelAt(text string, textPosition position) string {
 		return ""
 	}
 	line := lines[textPosition.Line]
-	if textPosition.Character < 0 || textPosition.Character > len(line) {
+	characterOffset := characterByteOffset(line, textPosition.Character)
+	if characterOffset < 0 {
 		return ""
 	}
-	start := textPosition.Character
+	start := characterOffset
 	for start > 0 && isLabelCharacter(line[start-1]) {
 		start--
 	}
-	end := textPosition.Character
+	end := characterOffset
 	for end < len(line) && isLabelCharacter(line[end]) {
 		end++
 	}
@@ -236,7 +239,8 @@ func starlarkIdentifierDefinitionRange(text string, identifier string) (rangeVal
 			if start < 0 {
 				continue
 			}
-			return rangeValue{Start: position{Line: lineNumber, Character: start}, End: position{Line: lineNumber, Character: start + len(identifier)}}, true
+			startCharacter := utf16Length(line[:start])
+			return rangeValue{Start: position{Line: lineNumber, Character: startCharacter}, End: position{Line: lineNumber, Character: startCharacter + utf16Length(identifier)}}, true
 		}
 	}
 	return rangeValue{}, false
@@ -304,7 +308,7 @@ func positionFromOneBased(text string, line int, column int) position {
 	if character > len(runes) {
 		character = len(runes)
 	}
-	return position{Line: lineNumber, Character: len(string(runes[:character]))}
+	return position{Line: lineNumber, Character: utf16Length(string(runes[:character]))}
 }
 
 func uriPath(documentURI string) string {
