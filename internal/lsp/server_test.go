@@ -114,6 +114,13 @@ func TestDiagnosticsForStarlarkValidatesTimeout(t *testing.T) {
 	}
 }
 
+func TestDiagnosticsForStarlarkValidatesEmptyRequiredValue(t *testing.T) {
+	diagnostics := diagnosticsFor("file:///repo/BUILD.star", `resource(name = "database", up = "")`)
+	if len(diagnostics) == 0 {
+		t.Fatal("expected empty required value diagnostic")
+	}
+}
+
 func TestStarlarkDiagnosticsReadWorkspaceVariables(t *testing.T) {
 	workspaceRoot := t.TempDir()
 	configuration := "environment_variables_file = \"environment.env\"\n\n[environment_variables]\nINLINE_VALUE = \"inline\"\n"
@@ -502,6 +509,20 @@ func TestYamlBlockPathCompletionIgnoresEarlierLists(t *testing.T) {
 	}
 }
 
+func TestYamlBlockOutputCompletionIgnoresEarlierLists(t *testing.T) {
+	temporaryDirectory := t.TempDir()
+	if operationError := os.WriteFile(filepath.Join(temporaryDirectory, "main.go"), nil, 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	buildPath := filepath.Join(temporaryDirectory, "BUILD.yaml")
+	text := "targets:\n  - name: first\n    outputs: [main.go]\n  - name: second\n    outputs:\n      - \"ma"
+	server := &server{documents: map[string]string{pathToURI(buildPath): text}}
+	items := server.completionItems(pathToURI(buildPath), positionForOffset(text, len(text)))
+	if !hasCompletionLabel(items, "main.go") {
+		t.Fatalf("expected main.go completion item, got %#v", items)
+	}
+}
+
 func TestPathCompletionPrefix(t *testing.T) {
 	prefix := pathCompletionPrefix("target(inputs = [\"src/ma", position{Line: 0, Character: 24})
 	if prefix != "src/ma" {
@@ -517,7 +538,9 @@ func TestOutputDirPathCompletionCompletesPathAfterDirPrefix(t *testing.T) {
 	if operationError := os.WriteFile(filepath.Join(temporaryDirectory, "doc.txt"), []byte(""), 0644); operationError != nil {
 		t.Fatalf("create doc file: %v", operationError)
 	}
-	items := outputPathCompletionItems(filepath.Join(temporaryDirectory, "BUILD.star"), `target(outputs = ["dir::d`, position{Line: 0, Character: 25})
+	text := `target(outputs = ["dir::d`
+	textPosition := position{Line: 0, Character: 25}
+	items := outputPathCompletionItems(filepath.Join(temporaryDirectory, "BUILD.star"), text, textPosition, stringListValuesAt(text, textPosition))
 	if !hasCompletionLabel(items, "dir::dist/") {
 		t.Fatalf("expected dir::dist/ completion item, got %#v", items)
 	}
@@ -543,7 +566,8 @@ func TestOutputFilePathCompletionSupportsExplicitPrefix(t *testing.T) {
 		t.Fatal(operationError)
 	}
 	text := `target(outputs = ["file::di`
-	items := outputPathCompletionItems(filepath.Join(temporaryDirectory, "BUILD.star"), text, positionForOffset(text, len(text)))
+	textPosition := positionForOffset(text, len(text))
+	items := outputPathCompletionItems(filepath.Join(temporaryDirectory, "BUILD.star"), text, textPosition, stringListValuesAt(text, textPosition))
 	if !hasCompletionLabel(items, "file::disk.img") {
 		t.Fatalf("expected explicit file output completion, got %#v", items)
 	}
@@ -789,6 +813,14 @@ func TestDefinitionForAbsoluteTargetLabel(t *testing.T) {
 	location, isMap := definition.(map[string]any)
 	if !isMap || location["uri"] != pathToURI(filepath.Join(dependencyDirectory, "BUILD.yaml")) {
 		t.Fatalf("unexpected definition: %#v", definition)
+	}
+}
+
+func TestLabelAtUsesAcceptedPackagePathCharacters(t *testing.T) {
+	text := `target(name = "build", dependencies = ["//pkg $!?:compile"])`
+	textPosition := positionForOffset(text, strings.Index(text, "compile")+2)
+	if targetLabel := labelAt(text, textPosition); targetLabel != "//pkg $!?:compile" {
+		t.Fatalf("unexpected label: %q", targetLabel)
 	}
 }
 

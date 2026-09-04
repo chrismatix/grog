@@ -20,6 +20,9 @@ import (
 // - applies any defaults
 // - parses the deps into target labels.
 func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageDTO) (*model.Package, error) {
+	if operationError := ValidatePackageRequiredFields(pkg); operationError != nil {
+		return nil, operationError
+	}
 	targets := make(map[label.TargetLabel]*model.Target)
 	aliases := make(map[label.TargetLabel]*model.Alias)
 	absolutePackagePath := config.GetPathAbsoluteToWorkspaceRoot(packagePath)

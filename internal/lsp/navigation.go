@@ -109,23 +109,26 @@ func labelAt(text string, textPosition position) string {
 	if characterOffset < 0 {
 		return ""
 	}
-	start := characterOffset
-	for start > 0 && isLabelCharacter(line[start-1]) {
-		start--
+	if quoteStart := strings.LastIndexAny(line[:characterOffset], "\"'"); quoteStart >= 0 {
+		quote := line[quoteStart]
+		if quoteEnd := strings.IndexByte(line[characterOffset:], quote); quoteEnd >= 0 {
+			candidate := line[quoteStart+1 : characterOffset+quoteEnd]
+			if _, operationError := label.ParseTargetLabel("", candidate); operationError == nil {
+				return candidate
+			}
+		}
 	}
-	end := characterOffset
-	for end < len(line) && isLabelCharacter(line[end]) {
-		end++
+	start := strings.LastIndexAny(line[:characterOffset], " \t,[](){}=") + 1
+	endRelative := strings.IndexAny(line[characterOffset:], " \t,[](){}=")
+	end := len(line)
+	if endRelative >= 0 {
+		end = characterOffset + endRelative
 	}
-	label := line[start:end]
-	if strings.HasPrefix(label, ":") || strings.HasPrefix(label, "//") {
-		return label
+	candidate := strings.Trim(line[start:end], "\"'")
+	if _, operationError := label.ParseTargetLabel("", candidate); operationError == nil {
+		return candidate
 	}
 	return ""
-}
-
-func isLabelCharacter(character byte) bool {
-	return isWordCharacter(character) || character == ':' || character == '/' || character == '-' || character == '.'
 }
 
 func findWorkspaceRoot(directory string) string {

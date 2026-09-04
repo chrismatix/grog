@@ -165,6 +165,9 @@ func evaluateStarlarkWithOptions(path string, text string, readText func(path st
 	}
 	packageDTO, operationError := loading.EvaluateStarlark(path, []byte(text), options)
 	if operationError == nil {
+		operationError = loading.ValidatePackageRequiredFields(packageDTO)
+	}
+	if operationError == nil {
 		operationError = loading.ValidatePackageTimeouts(packageDTO)
 	}
 	if operationError == nil {

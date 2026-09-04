@@ -162,6 +162,33 @@ func StarlarkParameters(declarationKind string) []StarlarkParameter {
 	return append([]StarlarkParameter(nil), starlarkParameters[declarationKind]...)
 }
 
+// ValidatePackageRequiredFields validates non-empty values from the declaration schema.
+func ValidatePackageRequiredFields(packageDTO PackageDTO) error {
+	packageValue := reflect.ValueOf(packageDTO)
+	for _, declarationType := range buildDeclarationTypes {
+		declarations := packageValue.FieldByName(declarationType.packageField)
+		for index := range declarations.Len() {
+			declaration := declarations.Index(index)
+			if declaration.IsNil() {
+				continue
+			}
+			declaration = declaration.Elem()
+			for _, parameter := range starlarkParameters[declarationType.kind] {
+				if !parameter.Required {
+					continue
+				}
+				for fieldIndex := range declaration.NumField() {
+					fieldType := declaration.Type().Field(fieldIndex)
+					if serializedFieldName(fieldType, "starlark") == parameter.Name && declaration.Field(fieldIndex).Kind() == reflect.String && declaration.Field(fieldIndex).String() == "" {
+						return fmt.Errorf("%s requires %s", declarationType.kind, parameter.Name)
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func serializedFieldName(field reflect.StructField, format string) string {
 	name := strings.Split(field.Tag.Get(format), ",")[0]
 	if name == "-" {

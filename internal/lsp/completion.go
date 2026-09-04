@@ -32,7 +32,7 @@ func (server *server) completionItems(documentURI string, textPosition position)
 		}
 		return pathCompletionItems(path, text, textPosition, alreadyListed)
 	} else if field == "outputs" {
-		return outputPathCompletionItems(path, text, textPosition)
+		return outputPathCompletionItems(path, text, textPosition, yamlListValuesAt(text, textPosition, field))
 	}
 	return completionItemsFor(allBuildFieldNames("yaml"), 5)
 }
@@ -68,7 +68,7 @@ func (server *server) starlarkCompletionItems(documentURI string, text string, t
 			return pathCompletionItems(path, text, textPosition, alreadyListed)
 		}
 		if field == "outputs" && starlarkDeclarationHasField(callName, field) {
-			return outputPathCompletionItems(path, text, textPosition)
+			return outputPathCompletionItems(path, text, textPosition, stringListValuesAt(text, textPosition))
 		}
 		return nil
 	}
@@ -193,7 +193,7 @@ func preferredDependencyLabels(labels []string, prefix string) []string {
 	return append(preferred, deferred...)
 }
 
-func outputPathCompletionItems(currentPath string, text string, textPosition position) []map[string]any {
+func outputPathCompletionItems(currentPath string, text string, textPosition position, alreadyListed map[string]bool) []map[string]any {
 	prefix := pathCompletionPrefix(text, textPosition)
 	outputTypes := []struct {
 		prefix          string
@@ -201,12 +201,12 @@ func outputPathCompletionItems(currentPath string, text string, textPosition pos
 	}{{prefix: "dir::", directoriesOnly: true}, {prefix: "file::"}}
 	for _, outputType := range outputTypes {
 		if strings.HasPrefix(prefix, outputType.prefix) {
-			items := pathCompletionItemsWithPrefix(currentPath, strings.TrimPrefix(prefix, outputType.prefix), outputType.prefix, outputType.directoriesOnly, stringListValuesAt(text, textPosition))
+			items := pathCompletionItemsWithPrefix(currentPath, strings.TrimPrefix(prefix, outputType.prefix), outputType.prefix, outputType.directoriesOnly, alreadyListed)
 			addCompletionTextEdits(items, textPosition, prefix)
 			return items
 		}
 	}
-	items := pathCompletionItemsWithPrefix(currentPath, prefix, "", false, stringListValuesAt(text, textPosition))
+	items := pathCompletionItemsWithPrefix(currentPath, prefix, "", false, alreadyListed)
 	addCompletionTextEdits(items, textPosition, prefix)
 	return items
 }

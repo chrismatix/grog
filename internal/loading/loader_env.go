@@ -15,13 +15,14 @@ import (
 // Per-target values (GROG_TARGET, GROG_PACKAGE) are intentionally excluded;
 // the loader does not know which target a value would belong to.
 func LoaderEnv() map[string]string {
+	gitHash, _ := config.GetGitHash()
 	return loaderEnvironment(
 		config.Global.WorkspaceRoot,
 		config.Global.OS,
 		config.Global.Arch,
 		strings.Join(config.Global.PlatformTags, ","),
 		resolvedEnvironmentVariablesFilePath(),
-		loaderGitHash(config.Global.WorkspaceRoot),
+		gitHash,
 	)
 }
 
@@ -37,8 +38,6 @@ func loaderEnvironment(workspaceRoot string, operatingSystem string, architectur
 	}
 }
 
-// loaderGitHash mirrors execution.GetExtendedTargetEnv: outside a git repo,
-// the variable resolves to the empty string instead of failing the load.
 func loaderGitHash(workspaceRoot string) string {
 	command := exec.Command("git", "-C", workspaceRoot, "rev-parse", "HEAD")
 	output, _ := command.Output()

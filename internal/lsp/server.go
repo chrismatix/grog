@@ -205,6 +205,7 @@ func (server *server) handle(request message) error {
 					environmentFilePath = filepath.Join(config.Global.WorkspaceRoot, environmentFilePath)
 				}
 				if filepath.Clean(path) == filepath.Clean(environmentFilePath) {
+					_ = config.ReloadGlobalFromViper()
 					refreshBuildDiagnostics = true
 				}
 			}
