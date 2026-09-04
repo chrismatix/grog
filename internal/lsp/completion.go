@@ -290,24 +290,26 @@ func pathCompletionPrefix(text string, textPosition position) string {
 		return ""
 	}
 	prefix := line[:characterOffset]
-	stringDelimiter := byte(0)
+	stringDelimiter := ""
 	quoteStart := -1
 	for index := 0; index < len(prefix); index++ {
 		character := prefix[index]
-		if stringDelimiter != 0 {
-			if character == stringDelimiter && !starlarkCharacterEscaped(prefix, index) {
-				stringDelimiter = 0
+		if stringDelimiter != "" {
+			if strings.HasPrefix(prefix[index:], stringDelimiter) && !starlarkCharacterEscaped(prefix, index) {
+				index += len(stringDelimiter) - 1
+				stringDelimiter = ""
 				quoteStart = -1
 			}
 			continue
 		}
 		if character == '\'' || character == '"' {
-			stringDelimiter = character
+			stringDelimiter = starlarkStringDelimiter(prefix, index)
 			quoteStart = index
+			index += len(stringDelimiter) - 1
 		}
 	}
 	if quoteStart >= 0 {
-		return prefix[quoteStart+1:]
+		return prefix[quoteStart+len(stringDelimiter):]
 	}
 	start := strings.LastIndexAny(prefix, " \t,[](){}=") + 1
 	return prefix[start:]

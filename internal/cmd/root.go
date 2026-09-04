@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"grog/internal/cmd/cmds"
 	"grog/internal/cmd/cmds/traces"
@@ -226,33 +225,11 @@ func initConfig(cmd *cobra.Command) error {
 	viper.SetDefault("environment_variables", make(map[string]string))
 	viper.SetDefault("traces.enabled", false)
 
-	names := []string{"grog"}
-	if os.Getenv("CI") == "1" {
-		names = append([]string{"grog.ci"}, names...)
-	}
-	if viper.GetString("profile") != "" {
-		names = append([]string{"grog." + viper.GetString("profile")}, names...)
-	}
-
 	logger := console.InitLogger()
-
-	var found bool
-	for _, name := range names {
-		viper.SetConfigName(name)
-		if err := viper.ReadInConfig(); err != nil {
-			var configFileNotFoundError viper.ConfigFileNotFoundError
-			if errors.As(err, &configFileNotFoundError) {
-				continue
-			}
-			return err
-		}
-		found = true
-		logger.Debugf("Loaded config file: %s", viper.ConfigFileUsed())
-		break
+	if operationError := config.ReadSelectedConfigFromViper(); operationError != nil {
+		return operationError
 	}
-	if !found {
-		return fmt.Errorf("no grog config file found (tried: %v)", names)
-	}
+	logger.Debugf("Loaded config file: %s", viper.ConfigFileUsed())
 
 	// Determine effective log level precedence before unmarshalling into Global:
 	// 1) --log-level flag (if set)

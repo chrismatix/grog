@@ -70,6 +70,21 @@ func TestRefreshWatchedFilesUsesCurrentEnvironmentFile(t *testing.T) {
 	}
 }
 
+func TestWatchedFilesResolveRelativeEnvironmentFile(t *testing.T) {
+	previousConfiguration := config.Global
+	parentDirectory := t.TempDir()
+	workspaceRoot := filepath.Join(parentDirectory, "workspace")
+	config.Global = config.WorkspaceConfig{WorkspaceRoot: workspaceRoot, EnvironmentVariablesFile: "../shared.env"}
+	t.Cleanup(func() { config.Global = previousConfiguration })
+	registrations, operationError := json.Marshal(watchedFileRegistrations())
+	if operationError != nil {
+		t.Fatal(operationError)
+	}
+	if !strings.Contains(string(registrations), pathToURI(parentDirectory)) || !strings.Contains(string(registrations), `"pattern":"shared.env"`) {
+		t.Fatalf("missing resolved environment watcher: %s", registrations)
+	}
+}
+
 func framedMessage(payload string) string {
 	return fmt.Sprintf("Content-Length: %d\r\n\r\n%s", len(payload), payload)
 }
@@ -678,9 +693,16 @@ func TestYamlBlockOutputCompletionIgnoresEarlierLists(t *testing.T) {
 }
 
 func TestPathCompletionPrefix(t *testing.T) {
-	prefix := pathCompletionPrefix("target(inputs = [\"src/ma", position{Line: 0, Character: 24})
-	if prefix != "src/ma" {
-		t.Fatalf("prefix = %q", prefix)
+	for _, test := range []struct {
+		text string
+		want string
+	}{
+		{text: "target(inputs = [\"src/ma", want: "src/ma"},
+		{text: `target(command = """say " hi""", inputs = ["ma`, want: "ma"},
+	} {
+		if prefix := pathCompletionPrefix(test.text, positionForOffset(test.text, len(test.text))); prefix != test.want {
+			t.Errorf("prefix = %q, want %q", prefix, test.want)
+		}
 	}
 }
 

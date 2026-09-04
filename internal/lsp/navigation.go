@@ -201,6 +201,7 @@ func (server *server) indexWorkspaceLabels(workspaceRoot string) []indexedLabel 
 	labels := []indexedLabel{}
 	includeHidden := loading.WorkspaceIncludesHidden(workspaceRoot)
 	evaluationOptions := loading.StarlarkOptionsForWorkspace(workspaceRoot)
+	packageLoader := loading.NewPackageLoader(nil)
 	_ = filepath.WalkDir(workspaceRoot, func(path string, directoryEntry os.DirEntry, operationError error) error {
 		if operationError != nil || directoryEntry.IsDir() {
 			if !includeHidden && directoryEntry != nil && directoryEntry.IsDir() && filepath.Clean(path) != filepath.Clean(workspaceRoot) && strings.HasPrefix(directoryEntry.Name(), ".") {
@@ -211,7 +212,14 @@ func (server *server) indexWorkspaceLabels(workspaceRoot string) []indexedLabel 
 		if !isSupportedBuildFile(filepath.Base(path)) {
 			return nil
 		}
-		for _, declaration := range server.declarationsForPathWithOptions(path, server.documentText(pathToURI(path)), evaluationOptions) {
+		text := server.documentText(pathToURI(path))
+		var declarations []namedDeclaration
+		if isStarlarkFile(filepath.Base(path)) {
+			declarations = server.declarationsForPathWithOptions(path, text, evaluationOptions)
+		} else {
+			declarations = packageFileDeclarations(path, text, packageLoader)
+		}
+		for _, declaration := range declarations {
 			if loading.IsBuildLabelKind(declaration.kind) {
 				labels = append(labels, indexedLabel{path: path, name: declaration.name})
 			}
@@ -238,7 +246,7 @@ func pathWithinWorkspace(workspaceRoot string, path string) bool {
 
 func (server *server) declarationsForPath(path string, text string) []namedDeclaration {
 	if !isStarlarkFile(filepath.Base(path)) {
-		return packageFileDeclarations(path, text)
+		return packageFileDeclarations(path, text, loading.NewPackageLoader(nil))
 	}
 	options := loading.StarlarkOptionsForWorkspace(findWorkspaceRoot(filepath.Dir(path)))
 	return server.declarationsForPathWithOptions(path, text, options)
@@ -246,7 +254,7 @@ func (server *server) declarationsForPath(path string, text string) []namedDecla
 
 func (server *server) declarationsForPathWithOptions(path string, text string, options loading.StarlarkEvaluationOptions) []namedDeclaration {
 	if !isStarlarkFile(filepath.Base(path)) {
-		return packageFileDeclarations(path, text)
+		return packageFileDeclarations(path, text, loading.NewPackageLoader(nil))
 	}
 	declarations, operationError := evaluateStarlarkWithOptions(path, text, func(modulePath string) (string, error) {
 		moduleURI := pathToURI(modulePath)
@@ -262,11 +270,11 @@ func (server *server) declarationsForPathWithOptions(path string, text string, o
 	return declarations
 }
 
-func packageFileDeclarations(path string, text string) []namedDeclaration {
+func packageFileDeclarations(path string, text string, packageLoader *loading.PackageLoader) []namedDeclaration {
 	if loading.IsYAMLPackageFile(filepath.Base(path)) {
 		return declarationsForFile(filepath.Base(path), text)
 	}
-	packageDTO, matched, operationError := loading.LoadPackageFile(context.Background(), path)
+	packageDTO, matched, operationError := packageLoader.LoadIfMatched(context.Background(), path, filepath.Base(path))
 	if operationError != nil || !matched {
 		return nil
 	}
@@ -389,10 +397,10 @@ func watchedFileRegistrations() []map[string]any {
 		registrations = append(registrations, map[string]any{"globPattern": pattern, "kind": 7})
 	}
 	if environmentFilePath := config.Global.EnvironmentVariablesFile; environmentFilePath != "" {
-		var pattern any = "**/" + filepath.ToSlash(environmentFilePath)
-		if filepath.IsAbs(environmentFilePath) {
-			pattern = map[string]any{"baseUri": pathToURI(filepath.Dir(environmentFilePath)), "pattern": filepath.Base(environmentFilePath)}
+		if !filepath.IsAbs(environmentFilePath) {
+			environmentFilePath = filepath.Join(config.Global.WorkspaceRoot, environmentFilePath)
 		}
+		pattern := map[string]any{"baseUri": pathToURI(filepath.Dir(environmentFilePath)), "pattern": filepath.Base(environmentFilePath)}
 		registrations = append(registrations, map[string]any{"globPattern": pattern, "kind": 7})
 	}
 	return registrations

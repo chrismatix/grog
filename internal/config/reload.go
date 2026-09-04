@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -11,6 +12,32 @@ import (
 	"github.com/spf13/viper"
 	"github.com/subosito/gotenv"
 )
+
+// ReadSelectedConfigFromViper applies profile and CI precedence to Viper's config search.
+func ReadSelectedConfigFromViper() error {
+	if configFile := viper.ConfigFileUsed(); configFile != "" {
+		viper.AddConfigPath(filepath.Dir(configFile))
+	}
+	names := []string{"grog"}
+	if os.Getenv("CI") == "1" {
+		names = append([]string{"grog.ci"}, names...)
+	}
+	if profile := viper.GetString("profile"); profile != "" {
+		names = append([]string{"grog." + profile}, names...)
+	}
+	for _, name := range names {
+		viper.SetConfigName(name)
+		if operationError := viper.ReadInConfig(); operationError != nil {
+			var configFileNotFoundError viper.ConfigFileNotFoundError
+			if errors.As(operationError, &configFileNotFoundError) {
+				continue
+			}
+			return operationError
+		}
+		return nil
+	}
+	return fmt.Errorf("no grog config file found (tried: %v)", names)
+}
 
 // LoadGlobalFromViper refreshes Global from Viper's current settings.
 func LoadGlobalFromViper() error {
@@ -63,12 +90,12 @@ func LoadGlobalFromViper() error {
 	return nil
 }
 
-// ReloadGlobalFromViper rereads the active configuration file and refreshes Global.
+// ReloadGlobalFromViper reselects the active configuration file and refreshes Global.
 func ReloadGlobalFromViper() error {
 	if viper.ConfigFileUsed() == "" {
 		return nil
 	}
-	if operationError := viper.ReadInConfig(); operationError != nil {
+	if operationError := ReadSelectedConfigFromViper(); operationError != nil {
 		return operationError
 	}
 	return LoadGlobalFromViper()

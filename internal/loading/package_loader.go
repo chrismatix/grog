@@ -105,24 +105,13 @@ func IsStarlarkPackageFile(fileName string) bool {
 	return isPackageFileFormat(fileName, starlarkPackageFile)
 }
 
-// LoadPackageFile loads a file through the production loader registry.
-func LoadPackageFile(loadContext context.Context, filePath string) (PackageDTO, bool, error) {
-	fileName := filepath.Base(filePath)
-	for _, registration := range loaderRegistrations() {
-		if registration.matches(fileName) {
-			packageDTO, matched, operationError := registration.loader.Load(loadContext, filePath)
-			packageDTO.SourceFilePath = filePath
-			return packageDTO, matched, operationError
-		}
-	}
-	return PackageDTO{}, false, nil
-}
-
 // LoadIfMatched loads the package from the specified file name if it matches any of the supported file names.
 func (p *PackageLoader) LoadIfMatched(ctx context.Context, filePath string, fileName string) (PackageDTO, bool, error) {
 	for _, registration := range p.registrations {
 		if registration.matches(fileName) {
-			p.logger.Debugf("Loading package from %s using loader %s", filePath, registration.loader)
+			if p.logger != nil {
+				p.logger.Debugf("Loading package from %s using loader %s", filePath, registration.loader)
+			}
 			packageDTO, matched, err := registration.loader.Load(ctx, filePath)
 			packageDTO.SourceFilePath = filePath
 			return packageDTO, matched, err
