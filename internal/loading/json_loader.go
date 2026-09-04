@@ -1,6 +1,7 @@
 package loading
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -15,25 +16,18 @@ func (JsonLoader) Matches(fileName string) bool {
 }
 
 // Load reads the file at the specified filePath and unmarshals its content into a model.Package.
-func (j JsonLoader) Load(_ context.Context, filePath string) (PackageDTO, bool, error) {
-	var pkg PackageDTO
-
-	// Open the file.
-	file, err := os.Open(filePath)
-	if err != nil {
-		return pkg, false, err
+func (loader JsonLoader) Load(ctx context.Context, filePath string) (PackageDTO, bool, error) {
+	source, operationError := os.ReadFile(filePath)
+	if operationError != nil {
+		return PackageDTO{}, false, operationError
 	}
-	defer file.Close()
+	return loader.loadSource(ctx, filePath, source)
+}
 
-	// Decode JSON content.
-	decoder := json.NewDecoder(file)
-	err = decoder.Decode(&pkg)
-	if err != nil {
-		return pkg, true, fmt.Errorf(
-			"failed to decode JSON file %s: %w",
-			filePath,
-			err)
+func (JsonLoader) loadSource(_ context.Context, filePath string, source []byte) (PackageDTO, bool, error) {
+	var packageDTO PackageDTO
+	if operationError := json.NewDecoder(bytes.NewReader(source)).Decode(&packageDTO); operationError != nil {
+		return packageDTO, true, fmt.Errorf("failed to decode JSON file %s: %w", filePath, operationError)
 	}
-
-	return pkg, true, nil
+	return packageDTO, true, nil
 }

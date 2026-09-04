@@ -375,14 +375,15 @@ func TestConfigurationChangesRepublishBuildDiagnostics(t *testing.T) {
 	}
 	buildPath := filepath.Join(workspaceRoot, "BUILD.star")
 	buildText := "target(name = BUILD_NAME)\n"
+	modulePath := filepath.Join(workspaceRoot, "rules.star")
 	var output bytes.Buffer
-	server := &server{writer: &output, documents: map[string]string{pathToURI(buildPath): buildText}}
+	server := &server{writer: &output, documents: map[string]string{pathToURI(buildPath): buildText, pathToURI(modulePath): "value = BUILD_NAME\n"}}
 	params := json.RawMessage(fmt.Sprintf(`{"changes":[{"uri":%q}]}`, pathToURI(configurationPath)))
 	if operationError := server.handle(message{Method: "workspace/didChangeWatchedFiles", Params: params}); operationError != nil {
 		t.Fatal(operationError)
 	}
-	if !strings.Contains(output.String(), pathToURI(buildPath)) {
-		t.Fatalf("missing refreshed BUILD diagnostics: %s", output.String())
+	if !strings.Contains(output.String(), pathToURI(buildPath)) || !strings.Contains(output.String(), pathToURI(modulePath)) {
+		t.Fatalf("missing refreshed Starlark diagnostics: %s", output.String())
 	}
 }
 
@@ -505,6 +506,7 @@ func TestDiagnosticsForYamlAliasesAndMergeKeys(t *testing.T) {
 	tests := map[string]string{
 		"item alias":       "common: &common\n  name: build\ntargets:\n  - *common\n",
 		"collection alias": "common: &common [{name: build}]\ntargets: *common\n",
+		"name alias":       "target_name: &target_name build\ntargets: [{name: *target_name}]\n",
 		"merge":            "common: &common\n  name: database\n  up: start\nresources:\n  - <<: *common\n",
 	}
 	for name, text := range tests {
@@ -513,6 +515,14 @@ func TestDiagnosticsForYamlAliasesAndMergeKeys(t *testing.T) {
 				t.Fatalf("expected no diagnostics, got %#v", diagnostics)
 			}
 		})
+	}
+}
+
+func TestYamlDeclarationsDereferenceNameAlias(t *testing.T) {
+	text := "target_name: &target_name build\ntargets: [{name: *target_name}]\n"
+	declarations := declarationsForFile("BUILD.yaml", text)
+	if len(declarations) != 1 || declarations[0].name != "build" {
+		t.Fatalf("unexpected declarations: %#v", declarations)
 	}
 }
 
@@ -1206,6 +1216,27 @@ func TestWorkspaceLabelsUseAdditionalProductionLoaders(t *testing.T) {
 		if !found || location["uri"] == nil {
 			t.Errorf("expected definition for %q, got %#v", targetLabel, location)
 		}
+	}
+}
+
+func TestWorkspaceLabelsUseUnsavedPackageSource(t *testing.T) {
+	workspaceRoot := t.TempDir()
+	packageDirectory := filepath.Join(workspaceRoot, "json")
+	if operationError := os.Mkdir(packageDirectory, 0o755); operationError != nil {
+		t.Fatal(operationError)
+	}
+	path := filepath.Join(packageDirectory, "BUILD.json")
+	if operationError := os.WriteFile(path, []byte(`{"targets":[{"name":"saved"}]}`), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	openText := `{"targets":[{"name":"edited"}]}`
+	server := &server{documents: map[string]string{pathToURI(path): openText}}
+	labels := server.collectWorkspaceLabels(workspaceRoot, workspaceRoot)
+	if !slices.Contains(labels, "//json:edited") || slices.Contains(labels, "//json:saved") {
+		t.Fatalf("unexpected labels: %#v", labels)
+	}
+	if definition := server.labelDefinition(filepath.Join(workspaceRoot, "BUILD.star"), "//json:edited"); definition == nil {
+		t.Fatal("expected definition from unsaved source")
 	}
 }
 

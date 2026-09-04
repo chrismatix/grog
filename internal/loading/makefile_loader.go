@@ -2,6 +2,7 @@ package loading
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -18,24 +19,26 @@ func (MakefileLoader) Matches(fileName string) bool {
 }
 
 // Load reads the Makefile at filePath parses it to PackageDTO.
-func (m MakefileLoader) Load(_ context.Context, filePath string) (PackageDTO, bool, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return PackageDTO{}, false, err
+func (loader MakefileLoader) Load(ctx context.Context, filePath string) (PackageDTO, bool, error) {
+	source, operationError := os.ReadFile(filePath)
+	if operationError != nil {
+		return PackageDTO{}, false, operationError
 	}
-	defer file.Close()
+	return loader.loadSource(ctx, filePath, source)
+}
 
-	scanner := bufio.NewScanner(file)
+func (MakefileLoader) loadSource(_ context.Context, filePath string, source []byte) (PackageDTO, bool, error) {
+	scanner := bufio.NewScanner(bytes.NewReader(source))
 	parser := newMakefileParser(scanner)
-	packageDto, targetsFound, err := parser.parse()
-	if err != nil {
-		return packageDto, targetsFound, fmt.Errorf(
+	packageDTO, targetsFound, operationError := parser.parse()
+	if operationError != nil {
+		return packageDTO, targetsFound, fmt.Errorf(
 			"failed to parse Makefile %s: %w",
 			filePath,
-			err)
+			operationError)
 	}
 
-	return packageDto, targetsFound, nil
+	return packageDTO, targetsFound, nil
 }
 
 // makefileParser encapsulates the scanning logic and state.

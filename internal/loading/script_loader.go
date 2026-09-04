@@ -2,6 +2,7 @@ package loading
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -22,14 +23,16 @@ func (ScriptLoader) Matches(fileName string) bool {
 	return isPackageFileFormat(fileName, scriptPackageFile)
 }
 
-func (ScriptLoader) Load(_ context.Context, filePath string) (PackageDTO, bool, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return PackageDTO{}, false, err
+func (loader ScriptLoader) Load(ctx context.Context, filePath string) (PackageDTO, bool, error) {
+	source, operationError := os.ReadFile(filePath)
+	if operationError != nil {
+		return PackageDTO{}, false, operationError
 	}
-	defer file.Close()
+	return loader.loadSource(ctx, filePath, source)
+}
 
-	scanner := bufio.NewScanner(file)
+func (ScriptLoader) loadSource(_ context.Context, filePath string, source []byte) (PackageDTO, bool, error) {
+	scanner := bufio.NewScanner(bytes.NewReader(source))
 	parser := newScriptParser(scanner, filePath)
 	return parser.parse()
 }

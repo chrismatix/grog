@@ -93,11 +93,15 @@ type moduleLoadContext struct {
 }
 
 // Load reads the file at the specified filePath and evaluates it as Starlark code.
-func (StarlarkLoader) Load(_ context.Context, filePath string) (PackageDTO, bool, error) {
+func (loader StarlarkLoader) Load(ctx context.Context, filePath string) (PackageDTO, bool, error) {
 	source, operationError := os.ReadFile(filePath)
 	if operationError != nil {
 		return PackageDTO{}, false, operationError
 	}
+	return loader.loadSource(ctx, filePath, source)
+}
+
+func (StarlarkLoader) loadSource(_ context.Context, filePath string, source []byte) (PackageDTO, bool, error) {
 	environment := LoaderEnv()
 	for key, value := range config.Global.EnvironmentVariables {
 		environment[key] = value

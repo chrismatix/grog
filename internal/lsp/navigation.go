@@ -303,7 +303,7 @@ func packageFileDeclarations(path string, text string, packageLoader *loading.Pa
 	if loading.IsYAMLPackageFile(filepath.Base(path)) {
 		return declarationsForFile(filepath.Base(path), text)
 	}
-	packageDTO, matched, operationError := packageLoader.LoadIfMatched(context.Background(), path, filepath.Base(path))
+	packageDTO, matched, operationError := packageLoader.LoadSourceIfMatched(context.Background(), path, filepath.Base(path), []byte(text))
 	if operationError != nil || !matched {
 		return nil
 	}
@@ -354,11 +354,11 @@ func declarationsForFile(fileName string, text string) []namedDeclaration {
 		key := root.Content[index]
 		value := yamlDereferenceAlias(root.Content[index+1])
 		kind, isDeclarationList := declarationKinds[key.Value]
-		if !isDeclarationList || value.Kind != yaml.SequenceNode {
+		if !isDeclarationList || value == nil || value.Kind != yaml.SequenceNode {
 			continue
 		}
 		for _, item := range value.Content {
-			nameNode := yamlMappingValue(item, "name")
+			nameNode := yamlDereferenceAlias(yamlMappingValue(item, "name"))
 			if nameNode != nil && nameNode.Value != "" {
 				declarations = append(declarations, namedDeclaration{kind: kind, name: nameNode.Value, rangeValue: yamlNodeRange(text, nameNode)})
 			}

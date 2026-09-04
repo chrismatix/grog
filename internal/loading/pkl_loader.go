@@ -65,6 +65,16 @@ func withEnv(envVars map[string]string) func(*pkl.EvaluatorOptions) {
 
 // Load reads the file at the specified filePath and unmarshals its content into a model.Package.
 func (pl *PklLoader) Load(ctx context.Context, filePath string) (PackageDTO, bool, error) {
+	return pl.evaluateSource(ctx, filePath, pkl.FileSource(filePath))
+}
+
+func (pl *PklLoader) loadSource(ctx context.Context, filePath string, source []byte) (PackageDTO, bool, error) {
+	moduleSource := pkl.FileSource(filePath)
+	moduleSource.Contents = string(source)
+	return pl.evaluateSource(ctx, filePath, moduleSource)
+}
+
+func (pl *PklLoader) evaluateSource(ctx context.Context, filePath string, moduleSource *pkl.ModuleSource) (PackageDTO, bool, error) {
 	var pkg PackageDTO
 
 	evaluator, err := pl.getEvaluator(ctx)
@@ -82,7 +92,7 @@ func (pl *PklLoader) Load(ctx context.Context, filePath string) (PackageDTO, boo
 				evalErr = fmt.Errorf("panic occurred while evaluating module: %v", r)
 			}
 		}()
-		evalErr = evaluator.EvaluateModule(ctx, pkl.FileSource(filePath), &pkg)
+		evalErr = evaluator.EvaluateModule(ctx, moduleSource, &pkg)
 	}()
 
 	if evalErr != nil {

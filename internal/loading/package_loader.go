@@ -17,6 +17,11 @@ type Loader interface {
 	Load(ctx context.Context, filePath string) (PackageDTO, bool, error)
 }
 
+type registeredLoader interface {
+	Loader
+	loadSource(ctx context.Context, filePath string, source []byte) (PackageDTO, bool, error)
+}
+
 // PackageLoader facade that delegates to the correct loader based on the pattern.
 type PackageLoader struct {
 	registrations []loaderRegistration
@@ -25,7 +30,7 @@ type PackageLoader struct {
 
 type loaderRegistration struct {
 	format   packageFileFormat
-	loader   Loader
+	loader   registeredLoader
 	patterns []string
 }
 
@@ -118,5 +123,18 @@ func (p *PackageLoader) LoadIfMatched(ctx context.Context, filePath string, file
 		}
 	}
 
+	return PackageDTO{}, false, nil
+}
+
+// LoadSourceIfMatched loads in-memory source through the registered production loader.
+func (p *PackageLoader) LoadSourceIfMatched(ctx context.Context, filePath string, fileName string, source []byte) (PackageDTO, bool, error) {
+	for _, registration := range p.registrations {
+		if !registration.matches(fileName) {
+			continue
+		}
+		packageDTO, matched, operationError := registration.loader.loadSource(ctx, filePath, source)
+		packageDTO.SourceFilePath = filePath
+		return packageDTO, matched, operationError
+	}
 	return PackageDTO{}, false, nil
 }

@@ -36,7 +36,8 @@ func (server *server) publishDiagnosticsAfterChange(documentURI string) error {
 
 func (server *server) publishOpenPackageDiagnostics(excludedDocumentURI string) error {
 	for openDocumentURI := range server.documents {
-		if openDocumentURI != excludedDocumentURI && loading.IsPackageFile(filepath.Base(uriPath(openDocumentURI))) {
+		fileName := filepath.Base(uriPath(openDocumentURI))
+		if openDocumentURI != excludedDocumentURI && (loading.IsPackageFile(fileName) || loading.IsStarlarkSourceFile(fileName)) {
 			if operationError := server.publishDiagnostics(openDocumentURI); operationError != nil {
 				return operationError
 			}
@@ -417,17 +418,18 @@ func yamlSemanticDiagnostics(text string, root *yaml.Node) []diagnostic {
 	declarationKinds := yamlDeclarationKinds()
 	for index := 0; index+1 < len(root.Content); index += 2 {
 		key := root.Content[index]
-		value := yamlDereferenceAlias(root.Content[index+1])
+		rawValue := root.Content[index+1]
+		value := yamlDereferenceAlias(rawValue)
 		kind, isDeclarationList := declarationKinds[key.Value]
 		if !isDeclarationList {
 			continue
 		}
-		if value.Kind != yaml.SequenceNode {
-			diagnostics = append(diagnostics, yamlNodeDiagnostic(text, value, fmt.Sprintf("%s must be a list", key.Value)))
+		if value == nil || value.Kind != yaml.SequenceNode {
+			diagnostics = append(diagnostics, yamlNodeDiagnostic(text, rawValue, fmt.Sprintf("%s must be a list", key.Value)))
 			continue
 		}
 		for _, item := range value.Content {
-			nameNode := yamlMappingValue(item, "name")
+			nameNode := yamlDereferenceAlias(yamlMappingValue(item, "name"))
 			if nameNode == nil || nameNode.Value == "" {
 				diagnostics = append(diagnostics, yamlNodeDiagnostic(text, item, fmt.Sprintf("%s requires name", kind)))
 				continue
@@ -436,7 +438,7 @@ func yamlSemanticDiagnostics(text string, root *yaml.Node) []diagnostic {
 				if !parameter.Required || parameter.Name == "name" {
 					continue
 				}
-				fieldNode := yamlMappingValue(item, parameter.Name)
+				fieldNode := yamlDereferenceAlias(yamlMappingValue(item, parameter.Name))
 				if fieldNode == nil || fieldNode.Value == "" {
 					diagnostics = append(diagnostics, yamlNodeDiagnostic(text, item, fmt.Sprintf("%s requires %s", kind, parameter.Name)))
 				}
