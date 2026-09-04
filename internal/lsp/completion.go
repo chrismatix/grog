@@ -520,11 +520,20 @@ func shouldSuggestStarlarkCallParameters(text string, textPosition position) boo
 }
 
 func enclosingStarlarkCall(text string, textPosition position) string {
+	name, _ := enclosingStarlarkCallAt(text, textPosition)
+	return name
+}
+
+func enclosingStarlarkCallAt(text string, textPosition position) (string, int) {
 	offset := byteOffset(text, textPosition)
 	if offset < 0 || offset > len(text) {
-		return ""
+		return "", -1
 	}
-	callNames := []string{}
+	type call struct {
+		name          string
+		openingOffset int
+	}
+	calls := []call{}
 	stringDelimiter := ""
 	inComment := false
 	for index := 0; index < offset; index++ {
@@ -554,24 +563,26 @@ func enclosingStarlarkCall(text string, textPosition position) string {
 		switch character {
 		case '(':
 			end := index
+			for end > 0 && unicodeSpace(text[end-1]) {
+				end--
+			}
 			start := end
 			for start > 0 && isWordCharacter(text[start-1]) {
 				start--
 			}
-			callNames = append(callNames, text[start:end])
+			calls = append(calls, call{name: text[start:end], openingOffset: index})
 		case ')':
-			if len(callNames) > 0 {
-				callNames = callNames[:len(callNames)-1]
+			if len(calls) > 0 {
+				calls = calls[:len(calls)-1]
 			}
 		}
 	}
-	for index := len(callNames) - 1; index >= 0; index-- {
-		name := callNames[index]
-		if slices.Contains(loading.StarlarkBuiltinNames(), name) {
-			return name
+	for index := len(calls) - 1; index >= 0; index-- {
+		if slices.Contains(loading.StarlarkBuiltinNames(), calls[index].name) {
+			return calls[index].name, calls[index].openingOffset
 		}
 	}
-	return ""
+	return "", -1
 }
 
 func positionForOffset(text string, targetOffset int) position {
@@ -665,7 +676,7 @@ func isWordCharacter(character byte) bool {
 }
 
 func signatureHelp(text string, textPosition position) any {
-	declarationKind := enclosingStarlarkCall(text, textPosition)
+	declarationKind, openingOffset := enclosingStarlarkCallAt(text, textPosition)
 	parameters := loading.StarlarkParameters(declarationKind)
 	if len(parameters) == 0 {
 		return nil
@@ -679,20 +690,15 @@ func signatureHelp(text string, textPosition position) any {
 		names = append(names, name)
 	}
 	label := declarationKind + "(" + strings.Join(names, ", ") + ")"
-	return map[string]any{"signatures": []map[string]any{{"label": label}}, "activeSignature": 0, "activeParameter": starlarkActiveParameter(text, textPosition, declarationKind, parameters)}
+	return map[string]any{"signatures": []map[string]any{{"label": label}}, "activeSignature": 0, "activeParameter": starlarkActiveParameter(text, textPosition, openingOffset, parameters)}
 }
 
-func starlarkActiveParameter(text string, textPosition position, declarationKind string, parameters []loading.StarlarkParameter) int {
+func starlarkActiveParameter(text string, textPosition position, openingOffset int, parameters []loading.StarlarkParameter) int {
 	offset := byteOffset(text, textPosition)
-	if offset < 0 || offset > len(text) {
+	if offset < 0 || offset > len(text) || openingOffset < 0 || openingOffset >= offset {
 		return 0
 	}
-	prefix := text[:offset]
-	openingOffset := strings.LastIndex(prefix, declarationKind+"(")
-	if openingOffset < 0 {
-		return 0
-	}
-	arguments := prefix[openingOffset+len(declarationKind)+1:]
+	arguments := text[openingOffset+1 : offset]
 	activeParameter := 0
 	segmentStart := 0
 	equalsOffset := -1

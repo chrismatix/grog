@@ -359,11 +359,15 @@ func watchedFileRegistrations() []map[string]any {
 	for _, extension := range loading.StarlarkSourceExtensions() {
 		patterns = append(patterns, "**/*"+extension)
 	}
-	if config.Global.EnvironmentVariablesFile != "" {
-		patterns = append(patterns, "**/"+filepath.Base(config.Global.EnvironmentVariablesFile))
-	}
-	registrations := make([]map[string]any, 0, len(patterns))
+	registrations := make([]map[string]any, 0, len(patterns)+1)
 	for _, pattern := range patterns {
+		registrations = append(registrations, map[string]any{"globPattern": pattern, "kind": 7})
+	}
+	if environmentFilePath := config.Global.EnvironmentVariablesFile; environmentFilePath != "" {
+		var pattern any = "**/" + filepath.ToSlash(environmentFilePath)
+		if filepath.IsAbs(environmentFilePath) {
+			pattern = map[string]any{"baseUri": pathToURI(filepath.Dir(environmentFilePath)), "pattern": filepath.Base(environmentFilePath)}
+		}
 		registrations = append(registrations, map[string]any{"globPattern": pattern, "kind": 7})
 	}
 	return registrations

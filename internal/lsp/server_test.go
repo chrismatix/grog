@@ -57,14 +57,15 @@ func TestServeRegistersBuildFileWatchers(t *testing.T) {
 
 func TestRefreshWatchedFilesUsesCurrentEnvironmentFile(t *testing.T) {
 	previousConfiguration := config.Global
-	config.Global.EnvironmentVariablesFile = "new.env"
+	environmentFilePath := filepath.Join(t.TempDir(), "new.env")
+	config.Global.EnvironmentVariablesFile = environmentFilePath
 	t.Cleanup(func() { config.Global = previousConfiguration })
 	var output bytes.Buffer
 	server := &server{writer: &output}
 	if operationError := server.refreshWatchedFiles(); operationError != nil {
 		t.Fatal(operationError)
 	}
-	if !strings.Contains(output.String(), `"method":"client/unregisterCapability"`) || !strings.Contains(output.String(), `**/new.env`) {
+	if !strings.Contains(output.String(), `"method":"client/unregisterCapability"`) || !strings.Contains(output.String(), pathToURI(filepath.Dir(environmentFilePath))) || !strings.Contains(output.String(), `"pattern":"new.env"`) {
 		t.Fatalf("missing refreshed watcher: %s", output.String())
 	}
 }
@@ -734,6 +735,20 @@ func TestStarlarkTargetCompletionSuggestsTargetFieldsAfterPartialIdentifier(t *t
 		if item["label"] == "actual" || item["label"] == "alias" {
 			t.Fatalf("did not expect target completion to suggest %s", item["label"])
 		}
+	}
+}
+
+func TestStarlarkCallHelpAllowsWhitespaceBeforeParenthesis(t *testing.T) {
+	text := "target (\n  na"
+	server := &server{documents: map[string]string{"file:///repo/BUILD.star": text}}
+	if items := server.completionItems("file:///repo/BUILD.star", positionForOffset(text, len(text))); !hasCompletionLabel(items, "name") {
+		t.Fatalf("expected parameter completion, got %#v", items)
+	}
+
+	text = `target (name = "build", command = "`
+	help, isMap := signatureHelp(text, positionForOffset(text, len(text))).(map[string]any)
+	if !isMap || help["activeParameter"] != 1 {
+		t.Fatalf("expected command parameter to be active, got %#v", help)
 	}
 }
 
