@@ -3,13 +3,15 @@ package lsp
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
-	"grog/internal/loading"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"grog/internal/loading"
 )
 
 func TestServeLifecycle(t *testing.T) {
@@ -190,7 +192,8 @@ func TestModuleChangesRepublishBuildDiagnostics(t *testing.T) {
 			pathToURI(modulePath): moduleText,
 		},
 	}
-	if operationError := server.publishDiagnosticsAfterChange(pathToURI(modulePath)); operationError != nil {
+	params := json.RawMessage(fmt.Sprintf(`{"changes":[{"uri":%q}]}`, pathToURI(modulePath)))
+	if operationError := server.handle(message{Method: "workspace/didChangeWatchedFiles", Params: params}); operationError != nil {
 		t.Fatal(operationError)
 	}
 	if !strings.Contains(output.String(), pathToURI(buildPath)) || !strings.Contains(output.String(), "missing argument") {
@@ -266,6 +269,23 @@ func TestDiagnosticsForYamlMatchesLoaderUnknownFieldBehavior(t *testing.T) {
 	diagnostics := diagnosticsFor("file:///repo/BUILD.yaml", "targets:\n  - name: build\n    commmand: go build ./...\n")
 	if len(diagnostics) != 0 {
 		t.Fatalf("expected unknown field to match loader behavior, got %#v", diagnostics)
+	}
+}
+
+func TestDiagnosticsValidateLabels(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		documentURI string
+		text        string
+	}{
+		{name: "starlark", documentURI: "file:///repo/BUILD.star", text: `target(name = "build", dependencies = ["build"])`},
+		{name: "yaml", documentURI: "file:///repo/BUILD.yaml", text: "aliases:\n  - name: release\n    actual: build\n"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if diagnostics := diagnosticsFor(test.documentURI, test.text); len(diagnostics) == 0 {
+				t.Fatal("expected invalid label diagnostic")
+			}
+		})
 	}
 }
 
@@ -390,6 +410,17 @@ func TestYamlDependencyCompletionInsideBlockSequence(t *testing.T) {
 	text := "targets:\n  - name: build\n  - name: test\n    dependencies:\n      - \":bu"
 	server := &server{documents: map[string]string{pathToURI(buildPath): text}}
 	items := server.completionItems(pathToURI(buildPath), position{Line: 4, Character: 12})
+	if !hasCompletionLabel(items, ":build") {
+		t.Fatalf("expected :build completion item, got %#v", items)
+	}
+}
+
+func TestYamlBlockDependencyCompletionIgnoresEarlierLists(t *testing.T) {
+	temporaryDirectory := t.TempDir()
+	buildPath := filepath.Join(temporaryDirectory, "BUILD.yaml")
+	text := "targets:\n  - name: build\n  - name: first\n    dependencies: [\":build\"]\n  - name: second\n    dependencies:\n      - \":bu"
+	server := &server{documents: map[string]string{pathToURI(buildPath): text}}
+	items := server.completionItems(pathToURI(buildPath), positionForOffset(text, len(text)))
 	if !hasCompletionLabel(items, ":build") {
 		t.Fatalf("expected :build completion item, got %#v", items)
 	}
@@ -549,6 +580,28 @@ func TestDefinitionForStarlarkFunction(t *testing.T) {
 	definition := server.definition("file:///repo/BUILD.star", position{Line: 3, Character: 2})
 	if definition == nil {
 		t.Fatalf("expected definition")
+	}
+}
+
+func TestStarlarkDefinitionUsesTopLevelAssignment(t *testing.T) {
+	text := "def helper():\n  exported = 1\n\nexported = 2\n"
+	definitionRange, found := starlarkIdentifierDefinitionRange(text, "exported")
+	if !found || definitionRange.Start.Line != 3 {
+		t.Fatalf("expected top-level definition, got %#v", definitionRange)
+	}
+}
+
+func TestSignatureHelpTracksActiveParameter(t *testing.T) {
+	text := `target(command = "go build", name = "`
+	help, isMap := signatureHelp(text, positionForOffset(text, len(text))).(map[string]any)
+	if !isMap || help["activeParameter"] != 0 {
+		t.Fatalf("expected name parameter to be active, got %#v", help)
+	}
+
+	text = `target(name = "build", command = "`
+	help, isMap = signatureHelp(text, positionForOffset(text, len(text))).(map[string]any)
+	if !isMap || help["activeParameter"] != 1 {
+		t.Fatalf("expected command parameter to be active, got %#v", help)
 	}
 }
 

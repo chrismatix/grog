@@ -31,6 +31,10 @@ func (server *server) publishDiagnosticsAfterChange(documentURI string) error {
 	if !loading.IsStarlarkSourceFile(fileName) || (loading.StarlarkLoader{}).Matches(fileName) {
 		return nil
 	}
+	return server.publishOpenStarlarkBuildDiagnostics()
+}
+
+func (server *server) publishOpenStarlarkBuildDiagnostics() error {
 	for openDocumentURI := range server.documents {
 		if (loading.StarlarkLoader{}).Matches(filepath.Base(uriPath(openDocumentURI))) {
 			if operationError := server.publishDiagnostics(openDocumentURI); operationError != nil {
@@ -65,7 +69,7 @@ func diagnosticsForReader(documentURI string, text string, readText func(path st
 		return starlarkDiagnostics(path, text, readText)
 	}
 	if (loading.YamlLoader{}).Matches(name) {
-		return yamlDiagnostics(text)
+		return yamlDiagnostics(path, text)
 	}
 	return []diagnostic{}
 }
@@ -142,7 +146,8 @@ func starlarkErrorPath(operationError error) string {
 
 func evaluateStarlark(path string, text string, readText func(path string) (string, error)) ([]namedDeclaration, error) {
 	declarations := []namedDeclaration{}
-	options := loading.StarlarkOptionsForWorkspace(findWorkspaceRoot(filepath.Dir(path)))
+	workspaceRoot := findWorkspaceRoot(filepath.Dir(path))
+	options := loading.StarlarkOptionsForWorkspace(workspaceRoot)
 	options.ReadFile = func(path string) ([]byte, error) {
 		content, operationError := readText(path)
 		return []byte(content), operationError
@@ -158,6 +163,12 @@ func evaluateStarlark(path string, text string, readText func(path string) (stri
 	packageDTO, operationError := loading.EvaluateStarlark(path, []byte(text), options)
 	if operationError == nil {
 		operationError = loading.ValidatePackageTimeouts(packageDTO)
+	}
+	if operationError == nil {
+		packagePath, relativePathError := filepath.Rel(workspaceRoot, filepath.Dir(path))
+		if relativePathError == nil {
+			operationError = loading.ValidatePackageLabels(packageDTO, filepath.ToSlash(packagePath))
+		}
 	}
 	return declarations, operationError
 }
@@ -367,12 +378,20 @@ func yamlNodeRange(text string, node *yaml.Node) rangeValue {
 	return rangeValue{Start: start, End: end}
 }
 
-func yamlDiagnostics(text string) []diagnostic {
+func yamlDiagnostics(path string, text string) []diagnostic {
 	packageDTO, operationError := loading.DecodeYAML([]byte(text))
 	if operationError != nil {
 		return []diagnostic{diagnosticFromError(text, operationError)}
 	}
 	if operationError := loading.ValidatePackageTimeouts(packageDTO); operationError != nil {
+		return []diagnostic{diagnosticFromError(text, operationError)}
+	}
+	workspaceRoot := findWorkspaceRoot(filepath.Dir(path))
+	packagePath, operationError := filepath.Rel(workspaceRoot, filepath.Dir(path))
+	if operationError == nil {
+		operationError = loading.ValidatePackageLabels(packageDTO, filepath.ToSlash(packagePath))
+	}
+	if operationError != nil {
 		return []diagnostic{diagnosticFromError(text, operationError)}
 	}
 	var root yaml.Node

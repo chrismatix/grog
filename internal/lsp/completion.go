@@ -20,7 +20,11 @@ func (server *server) completionItems(documentURI string, textPosition position)
 	}
 	field := yamlFieldAt(text, textPosition)
 	if field == "dependencies" || field == "actual" {
-		return server.labelCompletionItems(path, text, textPosition, yamlBuildFieldIsCollection(field))
+		alreadyListed := map[string]bool{}
+		if yamlBuildFieldIsCollection(field) {
+			alreadyListed = yamlListValuesAt(text, textPosition, field)
+		}
+		return server.labelCompletionItems(path, text, textPosition, alreadyListed)
 	} else if field == "inputs" || field == "exclude_inputs" || field == "bin_output" {
 		return pathCompletionItems(path, text, textPosition)
 	} else if field == "outputs" {
@@ -46,7 +50,11 @@ func (server *server) starlarkCompletionItems(documentURI string, text string, t
 	callName := enclosingStarlarkCall(text, textPosition)
 	if inStringAt(text, textPosition) {
 		if (field == "dependencies" || field == "actual") && starlarkDeclarationHasField(callName, field) {
-			return server.labelCompletionItems(path, text, textPosition, loading.BuildFieldIsCollection("starlark", callName, field))
+			alreadyListed := map[string]bool{}
+			if loading.BuildFieldIsCollection("starlark", callName, field) {
+				alreadyListed = stringListValuesAt(text, textPosition)
+			}
+			return server.labelCompletionItems(path, text, textPosition, alreadyListed)
 		}
 		if (field == "inputs" || field == "exclude_inputs" || field == "bin_output") && starlarkDeclarationHasField(callName, field) {
 			return pathCompletionItems(path, text, textPosition)
@@ -107,14 +115,10 @@ func yamlBuildFieldIsCollection(field string) bool {
 	return false
 }
 
-func (server *server) labelCompletionItems(currentPath string, text string, textPosition position, excludeAlreadyListed bool) []map[string]any {
+func (server *server) labelCompletionItems(currentPath string, text string, textPosition position, alreadyListed map[string]bool) []map[string]any {
 	prefix := pathCompletionPrefix(text, textPosition)
 	workspaceRoot := findWorkspaceRoot(filepath.Dir(currentPath))
 	labels := server.collectWorkspaceLabels(workspaceRoot, filepath.Dir(currentPath))
-	alreadyListed := map[string]bool{}
-	if excludeAlreadyListed {
-		alreadyListed = stringListValuesAt(text, textPosition)
-	}
 	items := []map[string]any{}
 	for _, label := range preferredDependencyLabels(labels, prefix) {
 		if prefix != "" && !strings.HasPrefix(label, prefix) || alreadyListed[label] {
@@ -126,6 +130,43 @@ func (server *server) labelCompletionItems(currentPath string, text string, text
 		}
 	}
 	return items
+}
+
+func yamlListValuesAt(text string, textPosition position, field string) map[string]bool {
+	lines := strings.Split(text, "\n")
+	if textPosition.Line < 0 || textPosition.Line >= len(lines) {
+		return map[string]bool{}
+	}
+	fieldLine := -1
+	fieldIndent := 0
+	for lineNumber := textPosition.Line; lineNumber >= 0; lineNumber-- {
+		trimmedLine := strings.TrimSpace(lines[lineNumber])
+		if name, _, found := strings.Cut(trimmedLine, ":"); found && strings.TrimSpace(name) == field {
+			fieldLine = lineNumber
+			fieldIndent = len(lines[lineNumber]) - len(strings.TrimLeft(lines[lineNumber], " \t"))
+			break
+		}
+	}
+	if fieldLine < 0 {
+		return map[string]bool{}
+	}
+	if fieldLine == textPosition.Line && strings.Contains(lines[fieldLine], "[") {
+		return stringListValuesAt(text, textPosition)
+	}
+	values := map[string]bool{}
+	valuePattern := regexp.MustCompile(`^-\s*["']([^"']+)["']`)
+	for lineNumber := fieldLine + 1; lineNumber < textPosition.Line; lineNumber++ {
+		line := lines[lineNumber]
+		trimmedLine := strings.TrimSpace(line)
+		indent := len(line) - len(strings.TrimLeft(line, " \t"))
+		if trimmedLine != "" && indent <= fieldIndent {
+			break
+		}
+		if matches := valuePattern.FindStringSubmatch(trimmedLine); len(matches) == 2 {
+			values[matches[1]] = true
+		}
+	}
+	return values
 }
 
 func preferredDependencyLabels(labels []string, prefix string) []string {
@@ -602,5 +643,70 @@ func signatureHelp(text string, textPosition position) any {
 		names = append(names, name)
 	}
 	label := declarationKind + "(" + strings.Join(names, ", ") + ")"
-	return map[string]any{"signatures": []map[string]any{{"label": label}}, "activeSignature": 0, "activeParameter": 0}
+	return map[string]any{"signatures": []map[string]any{{"label": label}}, "activeSignature": 0, "activeParameter": starlarkActiveParameter(text, textPosition, declarationKind, parameters)}
+}
+
+func starlarkActiveParameter(text string, textPosition position, declarationKind string, parameters []loading.StarlarkParameter) int {
+	offset := byteOffset(text, textPosition)
+	if offset < 0 || offset > len(text) {
+		return 0
+	}
+	prefix := text[:offset]
+	openingOffset := strings.LastIndex(prefix, declarationKind+"(")
+	if openingOffset < 0 {
+		return 0
+	}
+	arguments := prefix[openingOffset+len(declarationKind)+1:]
+	activeParameter := 0
+	segmentStart := 0
+	equalsOffset := -1
+	depth := 0
+	inString := byte(0)
+	inComment := false
+	for index := 0; index < len(arguments); index++ {
+		character := arguments[index]
+		if inComment {
+			if character == '\n' {
+				inComment = false
+			}
+			continue
+		}
+		if inString != 0 {
+			if character == inString && !starlarkCharacterEscaped(arguments, index) {
+				inString = 0
+			}
+			continue
+		}
+		switch character {
+		case '\'', '"':
+			inString = character
+		case '#':
+			inComment = true
+		case '(', '[', '{':
+			depth++
+		case ')', ']', '}':
+			if depth > 0 {
+				depth--
+			}
+		case ',':
+			if depth == 0 {
+				activeParameter++
+				segmentStart = index + 1
+				equalsOffset = -1
+			}
+		case '=':
+			if depth == 0 {
+				equalsOffset = index
+			}
+		}
+	}
+	if equalsOffset >= segmentStart {
+		name := strings.TrimSpace(arguments[segmentStart:equalsOffset])
+		for index, parameter := range parameters {
+			if parameter.Name == name {
+				return index
+			}
+		}
+	}
+	return min(activeParameter, len(parameters)-1)
 }

@@ -371,9 +371,26 @@ func pathToURIForOperatingSystem(path string, operatingSystem string) string {
 }
 
 func starlarkIdentifierDefinitionRange(text string, identifier string) (rangeValue, bool) {
+	file, operationError := syntax.Parse("", text, 0)
+	if operationError == nil {
+		for _, statement := range file.Stmts {
+			var definition *syntax.Ident
+			switch statement := statement.(type) {
+			case *syntax.DefStmt:
+				definition = statement.Name
+			case *syntax.AssignStmt:
+				definition, _ = statement.LHS.(*syntax.Ident)
+			}
+			if definition != nil && definition.Name == identifier {
+				start, end := definition.Span()
+				return rangeFromSyntaxPositions(text, start, end), true
+			}
+		}
+		return rangeValue{}, false
+	}
 	patterns := []*regexp.Regexp{
-		regexp.MustCompile(`^\s*def\s+` + regexp.QuoteMeta(identifier) + `\s*\(`),
-		regexp.MustCompile(`^\s*` + regexp.QuoteMeta(identifier) + `\s*=`),
+		regexp.MustCompile(`^def\s+` + regexp.QuoteMeta(identifier) + `\s*\(`),
+		regexp.MustCompile(`^` + regexp.QuoteMeta(identifier) + `\s*=`),
 	}
 	lines := strings.Split(text, "\n")
 	for lineNumber, line := range lines {

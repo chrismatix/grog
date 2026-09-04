@@ -7,8 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strconv"
 	"strings"
+
+	"grog/internal/loading"
 )
 
 var errExit = errors.New("language server exit")
@@ -177,7 +180,15 @@ func (server *server) handle(request message) error {
 		server.invalidateLabelIndex()
 		return server.notify("textDocument/publishDiagnostics", map[string]any{"uri": params.TextDocument.URI, "diagnostics": []diagnostic{}})
 	case "workspace/didChangeWatchedFiles":
+		var params didChangeWatchedFilesParams
+		_ = json.Unmarshal(request.Params, &params)
 		server.invalidateLabelIndex()
+		for _, change := range params.Changes {
+			fileName := filepath.Base(uriPath(change.URI))
+			if loading.IsStarlarkSourceFile(fileName) && !(loading.StarlarkLoader{}).Matches(fileName) {
+				return server.publishOpenStarlarkBuildDiagnostics()
+			}
+		}
 		return nil
 	case "textDocument/completion":
 		var params positionedTextDocumentParams
@@ -268,6 +279,11 @@ type didChangeParams struct {
 }
 type textDocumentParams struct {
 	TextDocument textDocumentIdentifier `json:"textDocument"`
+}
+type didChangeWatchedFilesParams struct {
+	Changes []struct {
+		URI string `json:"uri"`
+	} `json:"changes"`
 }
 
 type positionedTextDocumentParams struct {
