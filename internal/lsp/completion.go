@@ -468,11 +468,23 @@ func starlarkCharacterEscaped(text string, index int) bool {
 
 func yamlFieldAt(text string, textPosition position) string {
 	lines := strings.Split(text, "\n")
+	if textPosition.Line < 0 || textPosition.Line >= len(lines) {
+		return ""
+	}
+	currentLine := lines[textPosition.Line]
+	currentIndent := len(currentLine) - len(strings.TrimLeft(currentLine, " \t"))
 	for lineNumber := textPosition.Line; lineNumber >= 0 && lineNumber < len(lines); lineNumber-- {
-		line := strings.TrimSpace(lines[lineNumber])
+		rawLine := lines[lineNumber]
+		indent := len(rawLine) - len(strings.TrimLeft(rawLine, " \t"))
+		line := strings.TrimSpace(rawLine)
 		line = strings.TrimSpace(strings.TrimPrefix(line, "-"))
 		if field, _, found := strings.Cut(line, ":"); found && yamlFieldName(field) {
-			return strings.TrimSpace(field)
+			if lineNumber == textPosition.Line || indent < currentIndent {
+				return strings.TrimSpace(field)
+			}
+		}
+		if lineNumber < textPosition.Line && strings.HasPrefix(strings.TrimSpace(rawLine), "-") && indent <= currentIndent {
+			return ""
 		}
 	}
 	return ""

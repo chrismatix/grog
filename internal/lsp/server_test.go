@@ -13,6 +13,8 @@ import (
 
 	"grog/internal/config"
 	"grog/internal/loading"
+
+	"github.com/spf13/viper"
 )
 
 func TestServeLifecycle(t *testing.T) {
@@ -217,6 +219,29 @@ func TestDiagnosticsMapsDuplicateMacroDeclarationsToLoad(t *testing.T) {
 	}
 }
 
+func TestDiagnosticsMapTransitiveDeclarationsToDirectLoad(t *testing.T) {
+	workspaceRoot := t.TempDir()
+	buildPath := filepath.Join(workspaceRoot, "BUILD.star")
+	otherPath := filepath.Join(workspaceRoot, "other.star")
+	middlePath := filepath.Join(workspaceRoot, "middle.star")
+	leafPath := filepath.Join(workspaceRoot, "leaf.star")
+	text := "load(\"other.star\", \"noop\")\nload(\"middle.star\", \"make\")\nmake()\nmake()\n"
+	modules := map[string]string{
+		otherPath:  "def noop():\n  pass\n",
+		middlePath: "load(\"leaf.star\", leaf_make = \"make\")\ndef make():\n  leaf_make()\n",
+		leafPath:   "def make():\n  target(name = \"same\")\n",
+	}
+	diagnostics := starlarkDiagnostics(buildPath, text, func(path string) (string, error) {
+		if moduleText, found := modules[path]; found {
+			return moduleText, nil
+		}
+		return text, nil
+	})
+	if len(diagnostics) != 1 || diagnostics[0].Range.Start.Line != 1 {
+		t.Fatalf("expected duplicate declaration on the second load, got %#v", diagnostics)
+	}
+}
+
 func TestModuleChangesRepublishBuildDiagnostics(t *testing.T) {
 	workspaceRoot := t.TempDir()
 	buildPath := filepath.Join(workspaceRoot, "BUILD.star")
@@ -281,6 +306,36 @@ func TestConfigurationChangesRepublishBuildDiagnostics(t *testing.T) {
 	}
 	if !strings.Contains(output.String(), pathToURI(buildPath)) {
 		t.Fatalf("missing refreshed BUILD diagnostics: %s", output.String())
+	}
+}
+
+func TestConfigurationReloadErrorsAreReported(t *testing.T) {
+	previousConfiguration := config.Global
+	t.Cleanup(func() {
+		config.Global = previousConfiguration
+		viper.Reset()
+	})
+	viper.Reset()
+	workspaceRoot := t.TempDir()
+	configurationPath := filepath.Join(workspaceRoot, "grog.toml")
+	if operationError := os.WriteFile(configurationPath, []byte("environment_variables_file = \"missing.env\"\n"), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	viper.SetConfigFile(configurationPath)
+	viper.Set("workspace_root", workspaceRoot)
+	if operationError := viper.ReadInConfig(); operationError != nil {
+		t.Fatal(operationError)
+	}
+	config.Global = config.WorkspaceConfig{WorkspaceRoot: workspaceRoot, EnvironmentVariablesFile: "missing.env"}
+	var output bytes.Buffer
+	server := &server{writer: &output, documents: map[string]string{}}
+	missingPath := filepath.Join(workspaceRoot, "missing.env")
+	params := json.RawMessage(fmt.Sprintf(`{"changes":[{"uri":%q}]}`, pathToURI(missingPath)))
+	if operationError := server.handle(message{Method: "workspace/didChangeWatchedFiles", Params: params}); operationError != nil {
+		t.Fatal(operationError)
+	}
+	if !strings.Contains(output.String(), `"method":"window/showMessage"`) || !strings.Contains(output.String(), "Failed to reload") {
+		t.Fatalf("missing configuration error: %s", output.String())
 	}
 }
 
@@ -524,6 +579,15 @@ func TestYamlBlockDependencyCompletionIgnoresEarlierLists(t *testing.T) {
 	items := server.completionItems(pathToURI(buildPath), positionForOffset(text, len(text)))
 	if !hasCompletionLabel(items, ":build") {
 		t.Fatalf("expected :build completion item, got %#v", items)
+	}
+}
+
+func TestYamlFieldCompletionStopsAtPreviousListItem(t *testing.T) {
+	text := "targets:\n  - name: first\n    dependencies:\n      - \":other\"\n  - na"
+	server := &server{documents: map[string]string{"file:///repo/BUILD.yaml": text}}
+	items := server.completionItems("file:///repo/BUILD.yaml", positionForOffset(text, len(text)))
+	if !hasCompletionLabel(items, "name") {
+		t.Fatalf("expected field completion, got %#v", items)
 	}
 }
 

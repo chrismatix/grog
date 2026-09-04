@@ -191,7 +191,9 @@ func (server *server) handle(request message) error {
 			fileName := filepath.Base(path)
 			if strings.HasPrefix(fileName, "grog") && filepath.Ext(fileName) == ".toml" {
 				previousEnvironmentFile := config.Global.EnvironmentVariablesFile
-				_ = config.ReloadGlobalFromViper()
+				if operationError := config.ReloadGlobalFromViper(); operationError != nil {
+					return server.notify("window/showMessage", map[string]any{"type": 1, "message": "Failed to reload grog configuration: " + operationError.Error()})
+				}
 				watchRegistrationChanged = watchRegistrationChanged || previousEnvironmentFile != config.Global.EnvironmentVariablesFile
 				refreshBuildDiagnostics = true
 			}
@@ -201,7 +203,9 @@ func (server *server) handle(request message) error {
 					environmentFilePath = filepath.Join(config.Global.WorkspaceRoot, environmentFilePath)
 				}
 				if filepath.Clean(path) == filepath.Clean(environmentFilePath) {
-					_ = config.ReloadGlobalFromViper()
+					if operationError := config.ReloadGlobalFromViper(); operationError != nil {
+						return server.notify("window/showMessage", map[string]any{"type": 1, "message": "Failed to reload grog configuration: " + operationError.Error()})
+					}
 					refreshBuildDiagnostics = true
 				}
 			}

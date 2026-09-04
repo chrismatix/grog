@@ -81,7 +81,11 @@ func starlarkDiagnostics(path string, text string, readText func(path string) (s
 	declarations, operationError := evaluateStarlark(path, text, readText)
 	for index, declaration := range declarations {
 		if declaration.path != "" && filepath.Clean(declaration.path) != filepath.Clean(path) {
-			if loadRange, found := starlarkLoadRange(path, text, declaration.path, ""); found {
+			loadedPath := declaration.path
+			if directPath, found := starlarkDirectLoadPath(path, text, declaration.path, readText); found {
+				loadedPath = directPath
+			}
+			if loadRange, found := starlarkLoadRange(path, text, loadedPath, ""); found {
 				declarations[index].rangeValue = loadRange
 			}
 		}
@@ -92,6 +96,52 @@ func starlarkDiagnostics(path string, text string, readText func(path string) (s
 		diagnostics = append([]diagnostic{starlarkDiagnosticFromError(path, text, operationError)}, diagnostics...)
 	}
 	return diagnostics
+}
+
+func starlarkDirectLoadPath(buildPath string, text string, targetPath string, readText func(path string) (string, error)) (string, bool) {
+	file, operationError := syntax.Parse(buildPath, text, 0)
+	if operationError != nil {
+		return "", false
+	}
+	workspaceRoot := findWorkspaceRoot(filepath.Dir(buildPath))
+	for _, statement := range file.Stmts {
+		loadStatement, isLoad := statement.(*syntax.LoadStmt)
+		if !isLoad {
+			continue
+		}
+		directPath := loading.ResolveStarlarkModulePath(workspaceRoot, buildPath, loadStatement.ModuleName())
+		if filepath.Clean(directPath) == filepath.Clean(targetPath) || starlarkModuleLoadsPath(workspaceRoot, directPath, targetPath, readText, map[string]bool{}) {
+			return directPath, true
+		}
+	}
+	return "", false
+}
+
+func starlarkModuleLoadsPath(workspaceRoot string, modulePath string, targetPath string, readText func(path string) (string, error), visited map[string]bool) bool {
+	modulePath = filepath.Clean(modulePath)
+	if visited[modulePath] {
+		return false
+	}
+	visited[modulePath] = true
+	text, operationError := readText(modulePath)
+	if operationError != nil {
+		return false
+	}
+	file, operationError := syntax.Parse(modulePath, text, 0)
+	if operationError != nil {
+		return false
+	}
+	for _, statement := range file.Stmts {
+		loadStatement, isLoad := statement.(*syntax.LoadStmt)
+		if !isLoad {
+			continue
+		}
+		loadedPath := loading.ResolveStarlarkModulePath(workspaceRoot, modulePath, loadStatement.ModuleName())
+		if filepath.Clean(loadedPath) == filepath.Clean(targetPath) || starlarkModuleLoadsPath(workspaceRoot, loadedPath, targetPath, readText, visited) {
+			return true
+		}
+	}
+	return false
 }
 
 func starlarkDiagnosticFromError(path string, text string, operationError error) diagnostic {
