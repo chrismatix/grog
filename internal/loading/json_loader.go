@@ -10,8 +10,8 @@ import (
 // JsonLoader implements the Loader interface for JSON files.
 type JsonLoader struct{}
 
-func (j JsonLoader) Matches(fileName string) bool {
-	return fileName == "BUILD.json"
+func (JsonLoader) Matches(fileName string) bool {
+	return isPackageFileFormat(fileName, jsonPackageFile)
 }
 
 // Load reads the file at the specified filePath and unmarshals its content into a model.Package.

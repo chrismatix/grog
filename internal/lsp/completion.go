@@ -536,9 +536,15 @@ func yamlFieldAt(text string, textPosition position) string {
 		if character != ':' {
 			continue
 		}
+		if index+1 < len(currentLine) && !unicodeSpace(currentLine[index+1]) && !strings.ContainsRune("[{\"'},]", rune(currentLine[index+1])) {
+			continue
+		}
 		start := index
 		for start > 0 && isWordCharacter(currentLine[start-1]) {
 			start--
+		}
+		if start > 0 && !unicodeSpace(currentLine[start-1]) && !strings.ContainsRune("[{,-", rune(currentLine[start-1])) {
+			continue
 		}
 		if yamlFieldName(currentLine[start:index]) {
 			activeField = currentLine[start:index]

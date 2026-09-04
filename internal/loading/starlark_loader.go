@@ -21,16 +21,15 @@ import (
 // StarlarkLoader implements the Loader interface for Starlark files.
 type StarlarkLoader struct{}
 
-var starlarkBuildFileNames = []string{"BUILD.star", "BUILD.bzl"}
 var starlarkSourceExtensions = []string{".star", ".bzl"}
 
 func (StarlarkLoader) Matches(fileName string) bool {
-	return slices.Contains(starlarkBuildFileNames, fileName)
+	return IsStarlarkPackageFile(fileName)
 }
 
 // IsStarlarkSourceFile reports whether tooling should treat a file as Starlark.
 func IsStarlarkSourceFile(fileName string) bool {
-	if (StarlarkLoader{}).Matches(fileName) {
+	if IsStarlarkPackageFile(fileName) {
 		return true
 	}
 	for _, extension := range starlarkSourceExtensions {

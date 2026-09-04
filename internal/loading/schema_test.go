@@ -2,6 +2,7 @@ package loading
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -24,6 +25,15 @@ func TestStarlarkSchemaMatchesLoaderDeclarations(t *testing.T) {
 	slices.Sort(declarationKinds)
 	if builtins := StarlarkBuiltinNames(); !slices.Equal(declarationKinds, builtins) {
 		t.Fatalf("declaration schemas = %v, builtins = %v", declarationKinds, builtins)
+	}
+}
+
+func TestPackageFilePatternsMatchLoaderRegistry(t *testing.T) {
+	for _, pattern := range PackageFilePatterns() {
+		fileName := strings.Replace(pattern, "*", "sample", 1)
+		if !IsPackageFile(fileName) {
+			t.Errorf("pattern %q does not match %q", pattern, fileName)
+		}
 	}
 }
 

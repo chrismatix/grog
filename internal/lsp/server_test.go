@@ -427,6 +427,20 @@ func TestDiagnosticsForYamlResource(t *testing.T) {
 	}
 }
 
+func TestDiagnosticsForYamlAliasesAndMergeKeys(t *testing.T) {
+	tests := map[string]string{
+		"alias": "common: &common\n  name: build\ntargets:\n  - *common\n",
+		"merge": "common: &common\n  name: database\n  up: start\nresources:\n  - <<: *common\n",
+	}
+	for name, text := range tests {
+		t.Run(name, func(t *testing.T) {
+			if diagnostics := diagnosticsFor("file:///repo/BUILD.yaml", text); len(diagnostics) != 0 {
+				t.Fatalf("expected no diagnostics, got %#v", diagnostics)
+			}
+		})
+	}
+}
+
 func TestDiagnosticsForYamlMatchesLoaderUnknownFieldBehavior(t *testing.T) {
 	diagnostics := diagnosticsFor("file:///repo/BUILD.yaml", "targets:\n  - name: build\n    commmand: go build ./...\n")
 	if len(diagnostics) != 0 {
@@ -620,6 +634,18 @@ func TestYamlFieldAtUsesFlowMappingKeyAtCursor(t *testing.T) {
 	textPosition := positionForOffset(text, strings.Index(text, ":lib")+3)
 	if field := yamlFieldAt(text, textPosition); field != "dependencies" {
 		t.Fatalf("field = %q", field)
+	}
+}
+
+func TestYamlFieldAtIgnoresColonInUnquotedLabel(t *testing.T) {
+	for _, text := range []string{
+		`targets: [{name: app, dependencies: [//pkg:bu]}]`,
+		`targets: [{name: app, dependencies: [//pkg:]}]`,
+	} {
+		textPosition := positionForOffset(text, strings.Index(text, "]"))
+		if field := yamlFieldAt(text, textPosition); field != "dependencies" {
+			t.Fatalf("field = %q for %q", field, text)
+		}
 	}
 }
 
@@ -1068,6 +1094,34 @@ func TestWorkspaceLabelsExcludeEnvironments(t *testing.T) {
 	labels := server.collectWorkspaceLabels(workspaceRoot, workspaceRoot)
 	if slices.Contains(labels, "//:container") || !slices.Contains(labels, "//:build") {
 		t.Fatalf("unexpected labels: %#v", labels)
+	}
+}
+
+func TestWorkspaceLabelsUseAdditionalProductionLoaders(t *testing.T) {
+	workspaceRoot := t.TempDir()
+	files := map[string]string{
+		"json/BUILD.json":     `{"targets":[{"name":"json_target"}]}`,
+		"make/Makefile":       "# @grog\n# name: make_target\nmake_target:\n\ttrue\n",
+		"script/tool.grog.sh": "#!/usr/bin/env bash\n# @grog\n# name: script_target\ntrue\n",
+	}
+	for relativePath, text := range files {
+		path := filepath.Join(workspaceRoot, relativePath)
+		if operationError := os.MkdirAll(filepath.Dir(path), 0o755); operationError != nil {
+			t.Fatal(operationError)
+		}
+		if operationError := os.WriteFile(path, []byte(text), 0o755); operationError != nil {
+			t.Fatal(operationError)
+		}
+	}
+	server := &server{documents: map[string]string{}}
+	for _, targetLabel := range []string{"//json:json_target", "//make:make_target", "//script:script_target"} {
+		if labels := server.collectWorkspaceLabels(workspaceRoot, workspaceRoot); !slices.Contains(labels, targetLabel) {
+			t.Errorf("expected %q, got %#v", targetLabel, labels)
+		}
+		location, found := server.labelDefinition(filepath.Join(workspaceRoot, "BUILD.star"), targetLabel).(map[string]any)
+		if !found || location["uri"] == nil {
+			t.Errorf("expected definition for %q, got %#v", targetLabel, location)
+		}
 	}
 }
 

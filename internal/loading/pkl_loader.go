@@ -22,8 +22,8 @@ type PklLoader struct {
 	evaluatorOnce sync.Once
 }
 
-func (pl *PklLoader) Matches(fileName string) bool {
-	return fileName == "BUILD.pkl"
+func (*PklLoader) Matches(fileName string) bool {
+	return isPackageFileFormat(fileName, pklPackageFile)
 }
 
 // getEvaluator lazily loads and caches the evaluator.

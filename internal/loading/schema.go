@@ -84,10 +84,33 @@ var starlarkParameters = map[string][]StarlarkParameter{
 
 // BuildFileNames returns every file name accepted by a package loader.
 func BuildFileNames() []string {
-	fileNames := make([]string, 0, len(starlarkBuildFileNames)+len(yamlBuildFileNames))
-	fileNames = append(fileNames, starlarkBuildFileNames...)
-	fileNames = append(fileNames, yamlBuildFileNames...)
+	fileNames := []string{}
+	for _, pattern := range PackageFilePatterns() {
+		if !strings.Contains(pattern, "*") {
+			fileNames = append(fileNames, pattern)
+		}
+	}
 	return fileNames
+}
+
+// PackageDeclarations returns declaration names using the production schema.
+func PackageDeclarations(packageDTO PackageDTO) []StarlarkDeclaration {
+	packageValue := reflect.ValueOf(packageDTO)
+	declarations := []StarlarkDeclaration{}
+	for _, declarationType := range buildDeclarationTypes {
+		values := packageValue.FieldByName(declarationType.packageField)
+		for index := range values.Len() {
+			value := values.Index(index)
+			if value.IsNil() {
+				continue
+			}
+			name := value.Elem().FieldByName("Name")
+			if name.IsValid() && name.Kind() == reflect.String {
+				declarations = append(declarations, StarlarkDeclaration{Kind: declarationType.kind, Name: name.String()})
+			}
+		}
+	}
+	return declarations
 }
 
 // BuildDeclarationSchemas returns declaration names and package collections.

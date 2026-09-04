@@ -13,8 +13,8 @@ import (
 // MakefileLoader implements the Loader interface for Makefiles.
 type MakefileLoader struct{}
 
-func (m MakefileLoader) Matches(fileName string) bool {
-	return fileName == "Makefile"
+func (MakefileLoader) Matches(fileName string) bool {
+	return isPackageFileFormat(fileName, makePackageFile)
 }
 
 // Load reads the Makefile at filePath parses it to PackageDTO.

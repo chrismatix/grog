@@ -1,6 +1,7 @@
 package lsp
 
 import (
+	"context"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -237,7 +238,7 @@ func pathWithinWorkspace(workspaceRoot string, path string) bool {
 
 func (server *server) declarationsForPath(path string, text string) []namedDeclaration {
 	if !isStarlarkFile(filepath.Base(path)) {
-		return declarationsForFile(filepath.Base(path), text)
+		return packageFileDeclarations(path, text)
 	}
 	options := loading.StarlarkOptionsForWorkspace(findWorkspaceRoot(filepath.Dir(path)))
 	return server.declarationsForPathWithOptions(path, text, options)
@@ -245,7 +246,7 @@ func (server *server) declarationsForPath(path string, text string) []namedDecla
 
 func (server *server) declarationsForPathWithOptions(path string, text string, options loading.StarlarkEvaluationOptions) []namedDeclaration {
 	if !isStarlarkFile(filepath.Base(path)) {
-		return declarationsForFile(filepath.Base(path), text)
+		return packageFileDeclarations(path, text)
 	}
 	declarations, operationError := evaluateStarlarkWithOptions(path, text, func(modulePath string) (string, error) {
 		moduleURI := pathToURI(modulePath)
@@ -257,6 +258,30 @@ func (server *server) declarationsForPathWithOptions(path string, text string, o
 	}, options)
 	if operationError != nil {
 		return starlarkNamedDeclarations(text)
+	}
+	return declarations
+}
+
+func packageFileDeclarations(path string, text string) []namedDeclaration {
+	if loading.IsYAMLPackageFile(filepath.Base(path)) {
+		return declarationsForFile(filepath.Base(path), text)
+	}
+	packageDTO, matched, operationError := loading.LoadPackageFile(context.Background(), path)
+	if operationError != nil || !matched {
+		return nil
+	}
+	declarations := []namedDeclaration{}
+	for _, declaration := range loading.PackageDeclarations(packageDTO) {
+		start := position{}
+		if offset := strings.Index(text, declaration.Name); offset >= 0 {
+			start = positionForOffset(text, offset)
+		}
+		declarations = append(declarations, namedDeclaration{
+			kind:       declaration.Kind,
+			name:       declaration.Name,
+			path:       path,
+			rangeValue: rangeValue{Start: start, End: position{Line: start.Line, Character: start.Character + utf16Length(declaration.Name)}},
+		})
 	}
 	return declarations
 }
@@ -348,13 +373,13 @@ func isStarlarkFile(fileName string) bool {
 }
 
 func isSupportedBuildFile(fileName string) bool {
-	return (loading.StarlarkLoader{}).Matches(fileName) || (loading.YamlLoader{}).Matches(fileName)
+	return loading.IsPackageFile(fileName)
 }
 
 func watchedFileRegistrations() []map[string]any {
 	patterns := []string{"**/grog*.toml"}
-	for _, fileName := range loading.BuildFileNames() {
-		patterns = append(patterns, "**/"+fileName)
+	for _, pattern := range loading.PackageFilePatterns() {
+		patterns = append(patterns, "**/"+pattern)
 	}
 	for _, extension := range loading.StarlarkSourceExtensions() {
 		patterns = append(patterns, "**/*"+extension)

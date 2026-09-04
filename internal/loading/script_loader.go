@@ -19,7 +19,7 @@ import (
 type ScriptLoader struct{}
 
 func (ScriptLoader) Matches(fileName string) bool {
-	return strings.HasSuffix(fileName, ".grog.sh") || strings.HasSuffix(fileName, ".grog.py")
+	return isPackageFileFormat(fileName, scriptPackageFile)
 }
 
 func (ScriptLoader) Load(_ context.Context, filePath string) (PackageDTO, bool, error) {

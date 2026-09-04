@@ -36,7 +36,7 @@ func (server *server) publishDiagnosticsAfterChange(documentURI string) error {
 
 func (server *server) publishOpenStarlarkBuildDiagnostics(excludedDocumentURI string) error {
 	for openDocumentURI := range server.documents {
-		if openDocumentURI != excludedDocumentURI && (loading.StarlarkLoader{}).Matches(filepath.Base(uriPath(openDocumentURI))) {
+		if openDocumentURI != excludedDocumentURI && loading.IsStarlarkPackageFile(filepath.Base(uriPath(openDocumentURI))) {
 			if operationError := server.publishDiagnostics(openDocumentURI); operationError != nil {
 				return operationError
 			}
@@ -68,7 +68,7 @@ func diagnosticsForReader(documentURI string, text string, readText func(path st
 	if isStarlarkFile(name) {
 		return starlarkDiagnostics(path, text, readText)
 	}
-	if (loading.YamlLoader{}).Matches(name) {
+	if loading.IsYAMLPackageFile(name) {
 		return yamlDiagnostics(path, text)
 	}
 	return []diagnostic{}
@@ -402,12 +402,40 @@ func yamlDeclarationKinds() map[string]string {
 }
 
 func yamlMappingValue(node *yaml.Node, key string) *yaml.Node {
-	if node == nil || node.Kind != yaml.MappingNode {
+	return yamlMappingValueVisited(node, key, map[*yaml.Node]bool{})
+}
+
+func yamlMappingValueVisited(node *yaml.Node, key string, visited map[*yaml.Node]bool) *yaml.Node {
+	if node == nil || visited[node] {
+		return nil
+	}
+	visited[node] = true
+	if node.Kind == yaml.AliasNode {
+		return yamlMappingValueVisited(node.Alias, key, visited)
+	}
+	if node.Kind != yaml.MappingNode {
 		return nil
 	}
 	for index := 0; index+1 < len(node.Content); index += 2 {
-		if node.Content[index].Value == key {
+		if node.Content[index].Value == key && key != "<<" {
 			return node.Content[index+1]
+		}
+	}
+	for index := 0; index+1 < len(node.Content); index += 2 {
+		if node.Content[index].Value != "<<" {
+			continue
+		}
+		merged := node.Content[index+1]
+		if merged.Kind == yaml.SequenceNode {
+			for _, item := range merged.Content {
+				if value := yamlMappingValueVisited(item, key, visited); value != nil {
+					return value
+				}
+			}
+			continue
+		}
+		if value := yamlMappingValueVisited(merged, key, visited); value != nil {
+			return value
 		}
 	}
 	return nil
