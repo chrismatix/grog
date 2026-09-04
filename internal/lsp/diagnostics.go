@@ -247,7 +247,10 @@ func starlarkErrorPath(operationError error) string {
 }
 
 func evaluateStarlark(path string, text string, readText func(path string) (string, error)) ([]namedDeclaration, error) {
-	options := loading.StarlarkOptionsForWorkspace(findWorkspaceRoot(filepath.Dir(path)))
+	options, operationError := loading.StarlarkOptionsForWorkspace(findWorkspaceRoot(filepath.Dir(path)))
+	if operationError != nil {
+		return nil, operationError
+	}
 	return evaluateStarlarkWithOptions(path, text, readText, options)
 }
 
@@ -414,7 +417,7 @@ func yamlSemanticDiagnostics(text string, root *yaml.Node) []diagnostic {
 	declarationKinds := yamlDeclarationKinds()
 	for index := 0; index+1 < len(root.Content); index += 2 {
 		key := root.Content[index]
-		value := root.Content[index+1]
+		value := yamlDereferenceAlias(root.Content[index+1])
 		kind, isDeclarationList := declarationKinds[key.Value]
 		if !isDeclarationList {
 			continue
@@ -443,6 +446,15 @@ func yamlSemanticDiagnostics(text string, root *yaml.Node) []diagnostic {
 	}
 	diagnostics = append(diagnostics, duplicateNameDiagnostics(declarations)...)
 	return diagnostics
+}
+
+func yamlDereferenceAlias(node *yaml.Node) *yaml.Node {
+	visited := map[*yaml.Node]bool{}
+	for node != nil && node.Kind == yaml.AliasNode && !visited[node] {
+		visited[node] = true
+		node = node.Alias
+	}
+	return node
 }
 
 func yamlDeclarationKinds() map[string]string {

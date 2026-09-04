@@ -186,6 +186,25 @@ func TestStarlarkDiagnosticsReadWorkspaceVariables(t *testing.T) {
 	}
 }
 
+func TestStarlarkDiagnosticsReportMalformedWorkspaceConfiguration(t *testing.T) {
+	previousConfiguration := config.Global
+	config.Global = config.WorkspaceConfig{WorkspaceRoot: t.TempDir()}
+	viper.Reset()
+	t.Setenv("CI", "")
+	t.Cleanup(func() {
+		config.Global = previousConfiguration
+		viper.Reset()
+	})
+	workspaceRoot := t.TempDir()
+	if operationError := os.WriteFile(filepath.Join(workspaceRoot, "grog.toml"), []byte("platform_tag = ["), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	diagnostics := diagnosticsFor(pathToURI(filepath.Join(workspaceRoot, "BUILD.star")), `target(name = "build")`)
+	if len(diagnostics) == 0 || !strings.Contains(diagnostics[0].Message, "parse workspace configuration") {
+		t.Fatalf("expected configuration diagnostic, got %#v", diagnostics)
+	}
+}
+
 func TestDiagnosticsUsesOpenLoadedModule(t *testing.T) {
 	workspaceRoot := t.TempDir()
 	modulePath := filepath.Join(workspaceRoot, "rules.star")
@@ -484,8 +503,9 @@ func TestDiagnosticsForYamlResource(t *testing.T) {
 
 func TestDiagnosticsForYamlAliasesAndMergeKeys(t *testing.T) {
 	tests := map[string]string{
-		"alias": "common: &common\n  name: build\ntargets:\n  - *common\n",
-		"merge": "common: &common\n  name: database\n  up: start\nresources:\n  - <<: *common\n",
+		"item alias":       "common: &common\n  name: build\ntargets:\n  - *common\n",
+		"collection alias": "common: &common [{name: build}]\ntargets: *common\n",
+		"merge":            "common: &common\n  name: database\n  up: start\nresources:\n  - <<: *common\n",
 	}
 	for name, text := range tests {
 		t.Run(name, func(t *testing.T) {

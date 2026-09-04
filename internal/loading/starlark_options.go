@@ -1,6 +1,7 @@
 package loading
 
 import (
+	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
@@ -16,7 +17,7 @@ import (
 )
 
 // StarlarkOptionsForWorkspace returns tooling evaluation defaults for a workspace.
-func StarlarkOptionsForWorkspace(workspaceRoot string) StarlarkEvaluationOptions {
+func StarlarkOptionsForWorkspace(workspaceRoot string) (StarlarkEvaluationOptions, error) {
 	if filepath.Clean(config.Global.WorkspaceRoot) == filepath.Clean(workspaceRoot) && config.Global.OS != "" && config.Global.Arch != "" {
 		environmentFilePath := config.Global.EnvironmentVariablesFile
 		if environmentFilePath != "" && !filepath.IsAbs(environmentFilePath) {
@@ -24,16 +25,23 @@ func StarlarkOptionsForWorkspace(workspaceRoot string) StarlarkEvaluationOptions
 		}
 		environment := loaderEnvironment(workspaceRoot, config.Global.OS, config.Global.Arch, strings.Join(config.Global.PlatformTags, ","), environmentFilePath, loaderGitHash(workspaceRoot))
 		maps.Copy(environment, config.Global.EnvironmentVariables)
-		return StarlarkEvaluationOptions{WorkspaceRoot: workspaceRoot, Environment: environment, PlatformTags: config.Global.PlatformTags}
+		return StarlarkEvaluationOptions{WorkspaceRoot: workspaceRoot, Environment: environment, PlatformTags: config.Global.PlatformTags}, nil
 	}
 	operatingSystem := runtime.GOOS
 	architecture := runtime.GOARCH
 	gitHash := loaderGitHash(workspaceRoot)
 	environment := loaderEnvironment(workspaceRoot, operatingSystem, architecture, "", "", gitHash)
 	options := StarlarkEvaluationOptions{WorkspaceRoot: workspaceRoot, Environment: environment}
-	configurationBytes, operationError := os.ReadFile(filepath.Join(workspaceRoot, "grog.toml"))
+	configurationPath, operationError := config.SelectedWorkspaceConfigPath(workspaceRoot)
 	if operationError != nil {
-		return options
+		return options, fmt.Errorf("select workspace configuration: %w", operationError)
+	}
+	if configurationPath == "" {
+		return options, nil
+	}
+	configurationBytes, operationError := os.ReadFile(configurationPath)
+	if operationError != nil {
+		return options, fmt.Errorf("read workspace configuration: %w", operationError)
 	}
 	var configuration struct {
 		EnvironmentVariables     map[string]string `toml:"environment_variables"`
@@ -42,8 +50,8 @@ func StarlarkOptionsForWorkspace(workspaceRoot string) StarlarkEvaluationOptions
 		Architecture             string            `toml:"arch"`
 		PlatformTags             []string          `toml:"platform_tag"`
 	}
-	if toml.Unmarshal(configurationBytes, &configuration) != nil {
-		return options
+	if operationError := toml.Unmarshal(configurationBytes, &configuration); operationError != nil {
+		return options, fmt.Errorf("parse workspace configuration %s: %w", configurationPath, operationError)
 	}
 	if configuration.OperatingSystem != "" {
 		operatingSystem = configuration.OperatingSystem
@@ -59,16 +67,18 @@ func StarlarkOptionsForWorkspace(workspaceRoot string) StarlarkEvaluationOptions
 			environmentFilePath = filepath.Join(workspaceRoot, environmentFilePath)
 		}
 		options.Environment["GROG_ENV_FILE"] = environmentFilePath
-		if environmentVariables, readError := gotenv.Read(environmentFilePath); readError == nil {
-			for name, value := range environmentVariables {
-				options.Environment[name] = value
-			}
+		environmentVariables, readError := gotenv.Read(environmentFilePath)
+		if readError != nil {
+			return options, fmt.Errorf("read environment variables file %s: %w", environmentFilePath, readError)
+		}
+		for name, value := range environmentVariables {
+			options.Environment[name] = value
 		}
 	}
 	for name, value := range configuration.EnvironmentVariables {
 		options.Environment[name] = value
 	}
-	return options
+	return options, nil
 }
 
 func standardStarlarkEnvironment(workspaceRoot string, operatingSystem string, architecture string) map[string]string {

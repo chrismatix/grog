@@ -207,7 +207,10 @@ func (server *server) collectWorkspaceLabels(workspaceRoot string, currentDirect
 func (server *server) indexWorkspaceLabels(workspaceRoot string) []indexedLabel {
 	labels := []indexedLabel{}
 	includeHidden := loading.WorkspaceIncludesHidden(workspaceRoot)
-	evaluationOptions := loading.StarlarkOptionsForWorkspace(workspaceRoot)
+	evaluationOptions, optionsError := loading.StarlarkOptionsForWorkspace(workspaceRoot)
+	if optionsError != nil {
+		return labels
+	}
 	packageLoader := loading.NewPackageLoader(nil)
 	_ = filepath.WalkDir(workspaceRoot, func(path string, directoryEntry os.DirEntry, operationError error) error {
 		if operationError != nil || directoryEntry.IsDir() {
@@ -271,7 +274,10 @@ func (server *server) declarationsForPath(path string, text string) []namedDecla
 	if !isStarlarkFile(filepath.Base(path)) {
 		return packageFileDeclarations(path, text, loading.NewPackageLoader(nil))
 	}
-	options := loading.StarlarkOptionsForWorkspace(findWorkspaceRoot(filepath.Dir(path)))
+	options, operationError := loading.StarlarkOptionsForWorkspace(findWorkspaceRoot(filepath.Dir(path)))
+	if operationError != nil {
+		return starlarkNamedDeclarations(text)
+	}
 	return server.declarationsForPathWithOptions(path, text, options)
 }
 
@@ -346,7 +352,7 @@ func declarationsForFile(fileName string, text string) []namedDeclaration {
 	}
 	for index := 0; index+1 < len(root.Content); index += 2 {
 		key := root.Content[index]
-		value := root.Content[index+1]
+		value := yamlDereferenceAlias(root.Content[index+1])
 		kind, isDeclarationList := declarationKinds[key.Value]
 		if !isDeclarationList || value.Kind != yaml.SequenceNode {
 			continue

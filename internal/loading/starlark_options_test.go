@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"grog/internal/config"
+
+	"github.com/spf13/viper"
 )
 
 func TestStarlarkOptionsForWorkspaceUsesEffectiveConfiguration(t *testing.T) {
@@ -22,7 +24,10 @@ func TestStarlarkOptionsForWorkspaceUsesEffectiveConfiguration(t *testing.T) {
 	}
 	t.Cleanup(func() { config.Global = previousConfiguration })
 
-	options := StarlarkOptionsForWorkspace(workspaceRoot)
+	options, operationError := StarlarkOptionsForWorkspace(workspaceRoot)
+	if operationError != nil {
+		t.Fatal(operationError)
+	}
 	if options.Environment["GROG_PLATFORM"] != "custom-os/custom-arch" || options.Environment["PROFILE_VALUE"] != "enabled" {
 		t.Fatalf("unexpected environment: %#v", options.Environment)
 	}
@@ -52,8 +57,50 @@ func TestStarlarkOptionsForWorkspaceUsesGitHash(t *testing.T) {
 			t.Fatalf("%v: %v: %s", arguments, operationError, output)
 		}
 	}
-	options := StarlarkOptionsForWorkspace(workspaceRoot)
+	options, operationError := StarlarkOptionsForWorkspace(workspaceRoot)
+	if operationError != nil {
+		t.Fatal(operationError)
+	}
 	if options.Environment["GROG_GIT_HASH"] == "" {
 		t.Fatal("expected GROG_GIT_HASH")
+	}
+}
+
+func TestStarlarkOptionsForWorkspaceUsesSelectedProfile(t *testing.T) {
+	previousConfiguration := config.Global
+	config.Global = config.WorkspaceConfig{WorkspaceRoot: t.TempDir()}
+	viper.Reset()
+	viper.Set("profile", "dev")
+	t.Setenv("CI", "")
+	t.Cleanup(func() {
+		config.Global = previousConfiguration
+		viper.Reset()
+	})
+	workspaceRoot := t.TempDir()
+	if operationError := os.WriteFile(filepath.Join(workspaceRoot, "grog.toml"), []byte("platform_tag = [\"base\"]\n"), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	if operationError := os.WriteFile(filepath.Join(workspaceRoot, "grog.dev.toml"), []byte("platform_tag = [\"profile\"]\n"), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	options, operationError := StarlarkOptionsForWorkspace(workspaceRoot)
+	if operationError != nil {
+		t.Fatal(operationError)
+	}
+	if len(options.PlatformTags) != 1 || options.PlatformTags[0] != "profile" {
+		t.Fatalf("platform tags = %v", options.PlatformTags)
+	}
+}
+
+func TestStarlarkOptionsForWorkspaceReportsMalformedConfiguration(t *testing.T) {
+	previousConfiguration := config.Global
+	config.Global = config.WorkspaceConfig{WorkspaceRoot: t.TempDir()}
+	t.Cleanup(func() { config.Global = previousConfiguration })
+	workspaceRoot := t.TempDir()
+	if operationError := os.WriteFile(filepath.Join(workspaceRoot, "grog.toml"), []byte("platform_tag = ["), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	if _, operationError := StarlarkOptionsForWorkspace(workspaceRoot); operationError == nil {
+		t.Fatal("expected malformed configuration error")
 	}
 }
