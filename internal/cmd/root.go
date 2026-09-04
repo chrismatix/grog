@@ -8,16 +8,13 @@ import (
 	"grog/internal/cmd/flagtypes"
 	"grog/internal/config"
 	"grog/internal/console"
-	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 
-	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/subosito/gotenv"
 )
 
 var Version string
@@ -279,84 +276,12 @@ func initConfig(cmd *cobra.Command) error {
 		}
 	}
 
-	// Merge all config sources into the global
-	if err := viper.Unmarshal(&config.Global); err != nil {
-		return fmt.Errorf("failed to parse config: %w", err)
+	if err := config.LoadGlobalFromViper(); err != nil {
+		return err
 	}
-
-	config.Global.HashAlgorithm = strings.ToLower(config.Global.HashAlgorithm)
 
 	logger.Debugf("Using config file: %s", viper.ConfigFileUsed())
 	logger.Debugf("Running on %s", config.Global.GetPlatform())
 
-	platform := viper.GetString("platform")
-	if config.Global.AllPlatforms && platform != "" {
-		return fmt.Errorf("--platform cannot be used with --all-platforms")
-	}
-	if platform != "" {
-		parts := strings.SplitN(platform, "/", 2)
-		if len(parts) != 2 {
-			return fmt.Errorf("invalid platform %s, expected os/arch", platform)
-		}
-		config.Global.OS = parts[0]
-		config.Global.Arch = parts[1]
-	}
-
-	if err := readInEnvironmentVariablesConfig(); err != nil {
-		return err
-	}
-
 	return nil
-}
-
-// Viper always normalizes all configuration keys to be lower-case
-// but users should be able to specify upper case environment_variables
-// So as a workaround we load the section here a second time _if_ there are env vars.
-//
-// When environment_variables_file is set, variables are loaded from the file
-// first, then inline environment_variables from grog.toml are merged on top
-// (inline values take precedence over file values).
-func readInEnvironmentVariablesConfig() error {
-	merged := make(map[string]string)
-
-	// Phase 1: Load variables from file if configured.
-	if config.Global.EnvironmentVariablesFile != "" {
-		envFilePath := config.Global.EnvironmentVariablesFile
-		if !filepath.IsAbs(envFilePath) {
-			envFilePath = filepath.Join(config.Global.WorkspaceRoot, envFilePath)
-		}
-
-		f, err := os.Open(envFilePath)
-		if err != nil {
-			return fmt.Errorf("failed to open environment_variables_file %q: %w", envFilePath, err)
-		}
-		defer f.Close()
-
-		fileEnv := gotenv.Parse(f)
-		maps.Copy(merged, fileEnv)
-	}
-
-	// Phase 2: Load inline environment_variables from grog.toml (preserving case).
-	if len(config.Global.EnvironmentVariables) > 0 {
-		raw, err := os.ReadFile(viper.ConfigFileUsed())
-		if err != nil {
-			return err
-		}
-
-		var helper EnvVarsHelper
-		err = toml.Unmarshal(raw, &helper)
-		if err != nil {
-			return err
-		}
-
-		// Inline values override file-loaded values.
-		maps.Copy(merged, helper.EnvironmentVariables)
-	}
-
-	config.Global.EnvironmentVariables = merged
-	return nil
-}
-
-type EnvVarsHelper struct {
-	EnvironmentVariables map[string]string `toml:"environment_variables"`
 }

@@ -47,7 +47,7 @@ func TestServeRegistersBuildFileWatchers(t *testing.T) {
 	if operationError := Serve(context.Background(), strings.NewReader(input), &output); operationError != nil {
 		t.Fatal(operationError)
 	}
-	if !strings.Contains(output.String(), `"method":"client/registerCapability"`) || !strings.Contains(output.String(), `**/BUILD.yaml`) {
+	if !strings.Contains(output.String(), `"method":"client/registerCapability"`) || !strings.Contains(output.String(), `**/BUILD.yaml`) || !strings.Contains(output.String(), `**/grog*.toml`) {
 		t.Fatalf("missing watched-file registration: %s", output.String())
 	}
 }
@@ -222,6 +222,25 @@ func TestModuleCloseRepublishesBuildDiagnostics(t *testing.T) {
 		t.Fatal(operationError)
 	}
 	if !strings.Contains(output.String(), pathToURI(buildPath)) || strings.Contains(output.String(), "missing argument") {
+		t.Fatalf("missing refreshed BUILD diagnostics: %s", output.String())
+	}
+}
+
+func TestConfigurationChangesRepublishBuildDiagnostics(t *testing.T) {
+	workspaceRoot := t.TempDir()
+	configurationPath := filepath.Join(workspaceRoot, "grog.toml")
+	if operationError := os.WriteFile(configurationPath, []byte("[environment_variables]\nBUILD_NAME = \"build\"\n"), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	buildPath := filepath.Join(workspaceRoot, "BUILD.star")
+	buildText := "target(name = BUILD_NAME)\n"
+	var output bytes.Buffer
+	server := &server{writer: &output, documents: map[string]string{pathToURI(buildPath): buildText}}
+	params := json.RawMessage(fmt.Sprintf(`{"changes":[{"uri":%q}]}`, pathToURI(configurationPath)))
+	if operationError := server.handle(message{Method: "workspace/didChangeWatchedFiles", Params: params}); operationError != nil {
+		t.Fatal(operationError)
+	}
+	if !strings.Contains(output.String(), pathToURI(buildPath)) {
 		t.Fatalf("missing refreshed BUILD diagnostics: %s", output.String())
 	}
 }
@@ -469,6 +488,20 @@ func TestYamlBlockDependencyCompletionIgnoresEarlierLists(t *testing.T) {
 	}
 }
 
+func TestYamlBlockPathCompletionIgnoresEarlierLists(t *testing.T) {
+	temporaryDirectory := t.TempDir()
+	if operationError := os.WriteFile(filepath.Join(temporaryDirectory, "main.go"), nil, 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	buildPath := filepath.Join(temporaryDirectory, "BUILD.yaml")
+	text := "targets:\n  - name: first\n    inputs: [main.go]\n  - name: second\n    inputs:\n      - \"ma"
+	server := &server{documents: map[string]string{pathToURI(buildPath): text}}
+	items := server.completionItems(pathToURI(buildPath), positionForOffset(text, len(text)))
+	if !hasCompletionLabel(items, "main.go") {
+		t.Fatalf("expected main.go completion item, got %#v", items)
+	}
+}
+
 func TestPathCompletionPrefix(t *testing.T) {
 	prefix := pathCompletionPrefix("target(inputs = [\"src/ma", position{Line: 0, Character: 24})
 	if prefix != "src/ma" {
@@ -541,7 +574,8 @@ func TestPathCompletionSkipsAlreadyListedPaths(t *testing.T) {
 	if operationError := os.WriteFile(filepath.Join(temporaryDirectory, "more.go"), []byte(""), 0644); operationError != nil {
 		t.Fatalf("create more file: %v", operationError)
 	}
-	items := pathCompletionItems(filepath.Join(temporaryDirectory, "BUILD.star"), `target(inputs = ["main.go", "m`, position{Line: 0, Character: 30}, true)
+	text := `target(inputs = ["main.go", "m`
+	items := pathCompletionItems(filepath.Join(temporaryDirectory, "BUILD.star"), text, position{Line: 0, Character: 30}, stringListValuesAt(text, position{Line: 0, Character: 30}))
 	if hasCompletionLabel(items, "main.go") {
 		t.Fatalf("did not expect already listed path, got %#v", items)
 	}
@@ -551,7 +585,7 @@ func TestPathCompletionSkipsAlreadyListedPaths(t *testing.T) {
 }
 
 func TestDotPathCompletionFiltersHiddenFiles(t *testing.T) {
-	items := pathCompletionItems("/repo/BUILD.star", `target(inputs = [".g`, position{Line: 0, Character: 21}, true)
+	items := pathCompletionItems("/repo/BUILD.star", `target(inputs = [".g`, position{Line: 0, Character: 21}, map[string]bool{})
 	for _, item := range items {
 		label, _ := item["label"].(string)
 		if label != "" && !strings.HasPrefix(label, ".g") {
@@ -627,6 +661,15 @@ func TestStarlarkCompletionClosesStringAfterEvenBackslashes(t *testing.T) {
 	items := server.completionItems("file:///repo/BUILD.star", positionForOffset(text, len(text)))
 	if !hasCompletionLabel(items, "name") {
 		t.Fatalf("expected parameter completion after closed string, got %#v", items)
+	}
+}
+
+func TestStarlarkCompletionRecognizesTripleQuotedStrings(t *testing.T) {
+	text := "target(name = \"first\", command = \"\"\"say \" hi\"\"\")\ntarget(\n  na"
+	server := &server{documents: map[string]string{"file:///repo/BUILD.star": text}}
+	items := server.completionItems("file:///repo/BUILD.star", positionForOffset(text, len(text)))
+	if !hasCompletionLabel(items, "name") {
+		t.Fatalf("expected parameter completion after triple-quoted string, got %#v", items)
 	}
 }
 
@@ -841,6 +884,20 @@ func TestWorkspaceLabelsIncludeHiddenDirectoriesWhenConfigured(t *testing.T) {
 	server := &server{documents: map[string]string{}}
 	if labels := server.collectWorkspaceLabels(workspaceRoot, workspaceRoot); !slices.Contains(labels, "//.tools:generator") {
 		t.Fatalf("expected hidden package label, got %#v", labels)
+	}
+}
+
+func TestWorkspaceLabelsDoNotSkipHiddenWorkspaceRoot(t *testing.T) {
+	workspaceRoot := filepath.Join(t.TempDir(), ".project")
+	if operationError := os.Mkdir(workspaceRoot, 0o755); operationError != nil {
+		t.Fatal(operationError)
+	}
+	if operationError := os.WriteFile(filepath.Join(workspaceRoot, "BUILD.star"), []byte(`target(name = "build")`), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	server := &server{documents: map[string]string{}}
+	if labels := server.collectWorkspaceLabels(workspaceRoot, workspaceRoot); !slices.Contains(labels, "//:build") {
+		t.Fatalf("expected root package label, got %#v", labels)
 	}
 }
 

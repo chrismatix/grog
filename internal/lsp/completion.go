@@ -26,7 +26,11 @@ func (server *server) completionItems(documentURI string, textPosition position)
 		}
 		return server.labelCompletionItems(path, text, textPosition, alreadyListed)
 	} else if field == "inputs" || field == "exclude_inputs" || field == "bin_output" {
-		return pathCompletionItems(path, text, textPosition, yamlBuildFieldIsCollection(field))
+		alreadyListed := map[string]bool{}
+		if yamlBuildFieldIsCollection(field) {
+			alreadyListed = yamlListValuesAt(text, textPosition, field)
+		}
+		return pathCompletionItems(path, text, textPosition, alreadyListed)
 	} else if field == "outputs" {
 		return outputPathCompletionItems(path, text, textPosition)
 	}
@@ -57,7 +61,11 @@ func (server *server) starlarkCompletionItems(documentURI string, text string, t
 			return server.labelCompletionItems(path, text, textPosition, alreadyListed)
 		}
 		if (field == "inputs" || field == "exclude_inputs" || field == "bin_output") && starlarkDeclarationHasField(callName, field) {
-			return pathCompletionItems(path, text, textPosition, loading.BuildFieldIsCollection("starlark", callName, field))
+			alreadyListed := map[string]bool{}
+			if loading.BuildFieldIsCollection("starlark", callName, field) {
+				alreadyListed = stringListValuesAt(text, textPosition)
+			}
+			return pathCompletionItems(path, text, textPosition, alreadyListed)
 		}
 		if field == "outputs" && starlarkDeclarationHasField(callName, field) {
 			return outputPathCompletionItems(path, text, textPosition)
@@ -203,12 +211,8 @@ func outputPathCompletionItems(currentPath string, text string, textPosition pos
 	return items
 }
 
-func pathCompletionItems(currentPath string, text string, textPosition position, excludeAlreadyListed bool) []map[string]any {
+func pathCompletionItems(currentPath string, text string, textPosition position, alreadyListed map[string]bool) []map[string]any {
 	prefix := pathCompletionPrefix(text, textPosition)
-	alreadyListed := map[string]bool{}
-	if excludeAlreadyListed {
-		alreadyListed = stringListValuesAt(text, textPosition)
-	}
 	items := pathCompletionItemsWithPrefix(currentPath, prefix, "", false, alreadyListed)
 	addCompletionTextEdits(items, textPosition, prefix)
 	return items
@@ -419,7 +423,7 @@ func inStringAt(text string, textPosition position) bool {
 	if offset < 0 || offset > len(text) {
 		return false
 	}
-	inString := byte(0)
+	stringDelimiter := ""
 	inComment := false
 	for index := 0; index < offset; index++ {
 		character := text[index]
@@ -429,19 +433,29 @@ func inStringAt(text string, textPosition position) bool {
 			}
 			continue
 		}
-		if inString != 0 {
-			if character == inString && !starlarkCharacterEscaped(text, index) {
-				inString = 0
+		if stringDelimiter != "" {
+			if strings.HasPrefix(text[index:], stringDelimiter) && !starlarkCharacterEscaped(text, index) {
+				index += len(stringDelimiter) - 1
+				stringDelimiter = ""
 			}
 			continue
 		}
 		if character == '\'' || character == '"' {
-			inString = character
+			stringDelimiter = starlarkStringDelimiter(text, index)
+			index += len(stringDelimiter) - 1
 		} else if character == '#' {
 			inComment = true
 		}
 	}
-	return inString != 0
+	return stringDelimiter != ""
+}
+
+func starlarkStringDelimiter(text string, index int) string {
+	delimiter := string(text[index])
+	if strings.HasPrefix(text[index:], delimiter+delimiter+delimiter) {
+		return delimiter + delimiter + delimiter
+	}
+	return delimiter
 }
 
 func starlarkCharacterEscaped(text string, index int) bool {
@@ -499,7 +513,7 @@ func enclosingStarlarkCall(text string, textPosition position) string {
 		return ""
 	}
 	callNames := []string{}
-	inString := byte(0)
+	stringDelimiter := ""
 	inComment := false
 	for index := 0; index < offset; index++ {
 		character := text[index]
@@ -509,14 +523,16 @@ func enclosingStarlarkCall(text string, textPosition position) string {
 			}
 			continue
 		}
-		if inString != 0 {
-			if character == inString && !starlarkCharacterEscaped(text, index) {
-				inString = 0
+		if stringDelimiter != "" {
+			if strings.HasPrefix(text[index:], stringDelimiter) && !starlarkCharacterEscaped(text, index) {
+				index += len(stringDelimiter) - 1
+				stringDelimiter = ""
 			}
 			continue
 		}
 		if character == '\'' || character == '"' {
-			inString = character
+			stringDelimiter = starlarkStringDelimiter(text, index)
+			index += len(stringDelimiter) - 1
 			continue
 		}
 		if character == '#' {
@@ -669,7 +685,7 @@ func starlarkActiveParameter(text string, textPosition position, declarationKind
 	segmentStart := 0
 	equalsOffset := -1
 	depth := 0
-	inString := byte(0)
+	stringDelimiter := ""
 	inComment := false
 	for index := 0; index < len(arguments); index++ {
 		character := arguments[index]
@@ -679,15 +695,17 @@ func starlarkActiveParameter(text string, textPosition position, declarationKind
 			}
 			continue
 		}
-		if inString != 0 {
-			if character == inString && !starlarkCharacterEscaped(arguments, index) {
-				inString = 0
+		if stringDelimiter != "" {
+			if strings.HasPrefix(arguments[index:], stringDelimiter) && !starlarkCharacterEscaped(arguments, index) {
+				index += len(stringDelimiter) - 1
+				stringDelimiter = ""
 			}
 			continue
 		}
 		switch character {
 		case '\'', '"':
-			inString = character
+			stringDelimiter = starlarkStringDelimiter(arguments, index)
+			index += len(stringDelimiter) - 1
 		case '#':
 			inComment = true
 		case '(', '[', '{':

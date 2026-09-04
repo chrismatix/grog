@@ -145,9 +145,12 @@ func starlarkErrorPath(operationError error) string {
 }
 
 func evaluateStarlark(path string, text string, readText func(path string) (string, error)) ([]namedDeclaration, error) {
+	options := loading.StarlarkOptionsForWorkspace(findWorkspaceRoot(filepath.Dir(path)))
+	return evaluateStarlarkWithOptions(path, text, readText, options)
+}
+
+func evaluateStarlarkWithOptions(path string, text string, readText func(path string) (string, error), options loading.StarlarkEvaluationOptions) ([]namedDeclaration, error) {
 	declarations := []namedDeclaration{}
-	workspaceRoot := findWorkspaceRoot(filepath.Dir(path))
-	options := loading.StarlarkOptionsForWorkspace(workspaceRoot)
 	options.ReadFile = func(path string) ([]byte, error) {
 		content, operationError := readText(path)
 		return []byte(content), operationError
@@ -168,7 +171,7 @@ func evaluateStarlark(path string, text string, readText func(path string) (stri
 		operationError = loading.ValidatePackageOutputs(packageDTO)
 	}
 	if operationError == nil {
-		packagePath, relativePathError := filepath.Rel(workspaceRoot, filepath.Dir(path))
+		packagePath, relativePathError := filepath.Rel(options.WorkspaceRoot, filepath.Dir(path))
 		if relativePathError == nil {
 			operationError = loading.ValidatePackageLabels(packageDTO, filepath.ToSlash(packagePath))
 		}

@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"grog/internal/config"
 	"grog/internal/loading"
 )
 
@@ -190,11 +191,29 @@ func (server *server) handle(request message) error {
 		var params didChangeWatchedFilesParams
 		_ = json.Unmarshal(request.Params, &params)
 		server.invalidateLabelIndex()
+		refreshBuildDiagnostics := false
 		for _, change := range params.Changes {
-			fileName := filepath.Base(uriPath(change.URI))
-			if loading.IsStarlarkSourceFile(fileName) && !(loading.StarlarkLoader{}).Matches(fileName) {
-				return server.publishOpenStarlarkBuildDiagnostics()
+			path := uriPath(change.URI)
+			fileName := filepath.Base(path)
+			if strings.HasPrefix(fileName, "grog") && filepath.Ext(fileName) == ".toml" {
+				_ = config.ReloadGlobalFromViper()
+				refreshBuildDiagnostics = true
 			}
+			environmentFilePath := config.Global.EnvironmentVariablesFile
+			if environmentFilePath != "" {
+				if !filepath.IsAbs(environmentFilePath) {
+					environmentFilePath = filepath.Join(config.Global.WorkspaceRoot, environmentFilePath)
+				}
+				if filepath.Clean(path) == filepath.Clean(environmentFilePath) {
+					refreshBuildDiagnostics = true
+				}
+			}
+			if loading.IsStarlarkSourceFile(fileName) && !(loading.StarlarkLoader{}).Matches(fileName) {
+				refreshBuildDiagnostics = true
+			}
+		}
+		if refreshBuildDiagnostics {
+			return server.publishOpenStarlarkBuildDiagnostics()
 		}
 		return nil
 	case "textDocument/completion":

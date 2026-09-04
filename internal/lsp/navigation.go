@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"grog/internal/config"
 	"grog/internal/label"
 	"grog/internal/loading"
 
@@ -195,9 +196,10 @@ func (server *server) collectWorkspaceLabels(workspaceRoot string, currentDirect
 func (server *server) indexWorkspaceLabels(workspaceRoot string) []indexedLabel {
 	labels := []indexedLabel{}
 	includeHidden := loading.WorkspaceIncludesHidden(workspaceRoot)
+	evaluationOptions := loading.StarlarkOptionsForWorkspace(workspaceRoot)
 	_ = filepath.WalkDir(workspaceRoot, func(path string, directoryEntry os.DirEntry, operationError error) error {
 		if operationError != nil || directoryEntry.IsDir() {
-			if !includeHidden && directoryEntry != nil && directoryEntry.IsDir() && strings.HasPrefix(directoryEntry.Name(), ".") && directoryEntry.Name() != "." {
+			if !includeHidden && directoryEntry != nil && directoryEntry.IsDir() && filepath.Clean(path) != filepath.Clean(workspaceRoot) && strings.HasPrefix(directoryEntry.Name(), ".") {
 				return filepath.SkipDir
 			}
 			return nil
@@ -205,7 +207,7 @@ func (server *server) indexWorkspaceLabels(workspaceRoot string) []indexedLabel 
 		if !isSupportedBuildFile(filepath.Base(path)) {
 			return nil
 		}
-		for _, declaration := range server.declarationsForPath(path, server.documentText(pathToURI(path))) {
+		for _, declaration := range server.declarationsForPathWithOptions(path, server.documentText(pathToURI(path)), evaluationOptions) {
 			if loading.IsBuildLabelKind(declaration.kind) {
 				labels = append(labels, indexedLabel{path: path, name: declaration.name})
 			}
@@ -234,14 +236,22 @@ func (server *server) declarationsForPath(path string, text string) []namedDecla
 	if !isStarlarkFile(filepath.Base(path)) {
 		return declarationsForFile(filepath.Base(path), text)
 	}
-	declarations, operationError := evaluateStarlark(path, text, func(modulePath string) (string, error) {
+	options := loading.StarlarkOptionsForWorkspace(findWorkspaceRoot(filepath.Dir(path)))
+	return server.declarationsForPathWithOptions(path, text, options)
+}
+
+func (server *server) declarationsForPathWithOptions(path string, text string, options loading.StarlarkEvaluationOptions) []namedDeclaration {
+	if !isStarlarkFile(filepath.Base(path)) {
+		return declarationsForFile(filepath.Base(path), text)
+	}
+	declarations, operationError := evaluateStarlarkWithOptions(path, text, func(modulePath string) (string, error) {
 		moduleURI := pathToURI(modulePath)
 		if moduleText, isOpen := server.documents[moduleURI]; isOpen {
 			return moduleText, nil
 		}
 		content, readError := os.ReadFile(modulePath)
 		return string(content), readError
-	})
+	}, options)
 	if operationError != nil {
 		return starlarkNamedDeclarations(text)
 	}
@@ -339,12 +349,15 @@ func isSupportedBuildFile(fileName string) bool {
 }
 
 func watchedFileRegistrations() []map[string]any {
-	patterns := make([]string, 0)
+	patterns := []string{"**/grog*.toml"}
 	for _, fileName := range loading.BuildFileNames() {
 		patterns = append(patterns, "**/"+fileName)
 	}
 	for _, extension := range loading.StarlarkSourceExtensions() {
 		patterns = append(patterns, "**/*"+extension)
+	}
+	if config.Global.EnvironmentVariablesFile != "" {
+		patterns = append(patterns, "**/"+filepath.Base(config.Global.EnvironmentVariablesFile))
 	}
 	registrations := make([]map[string]any, 0, len(patterns))
 	for _, pattern := range patterns {
