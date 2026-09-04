@@ -304,6 +304,25 @@ func TestWatchedBuildModuleChangesRepublishDependents(t *testing.T) {
 	}
 }
 
+func TestWatchedPackageChangesRepublishSiblingDiagnostics(t *testing.T) {
+	workspaceRoot := t.TempDir()
+	starlarkPath := filepath.Join(workspaceRoot, "BUILD.star")
+	starlarkText := `target(name = "build")`
+	jsonPath := filepath.Join(workspaceRoot, "BUILD.json")
+	if operationError := os.WriteFile(jsonPath, []byte(`{"targets":[{"name":"build"}]}`), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	var output bytes.Buffer
+	server := &server{writer: &output, documents: map[string]string{pathToURI(starlarkPath): starlarkText}}
+	params := json.RawMessage(fmt.Sprintf(`{"changes":[{"uri":%q}]}`, pathToURI(jsonPath)))
+	if operationError := server.handle(message{Method: "workspace/didChangeWatchedFiles", Params: params}); operationError != nil {
+		t.Fatal(operationError)
+	}
+	if !strings.Contains(output.String(), pathToURI(starlarkPath)) || !strings.Contains(output.String(), "duplicate declaration") {
+		t.Fatalf("missing sibling diagnostics refresh: %s", output.String())
+	}
+}
+
 func TestModuleCloseRepublishesBuildDiagnostics(t *testing.T) {
 	workspaceRoot := t.TempDir()
 	buildPath := filepath.Join(workspaceRoot, "BUILD.star")
@@ -1167,6 +1186,20 @@ func TestWorkspaceLabelsUseAdditionalProductionLoaders(t *testing.T) {
 		if !found || location["uri"] == nil {
 			t.Errorf("expected definition for %q, got %#v", targetLabel, location)
 		}
+	}
+}
+
+func TestPackageDeclarationRangeUsesNameField(t *testing.T) {
+	packageDirectory := t.TempDir()
+	path := filepath.Join(packageDirectory, "BUILD.json")
+	text := `{"targets":[{"command":"build","name":"build"}]}`
+	if operationError := os.WriteFile(path, []byte(text), 0o644); operationError != nil {
+		t.Fatal(operationError)
+	}
+	declarations := packageFileDeclarations(path, text, loading.NewPackageLoader(nil))
+	want := positionForOffset(text, strings.LastIndex(text, "build"))
+	if len(declarations) != 1 || declarations[0].rangeValue.Start != want {
+		t.Fatalf("unexpected declaration range: %#v, want %#v", declarations, want)
 	}
 }
 

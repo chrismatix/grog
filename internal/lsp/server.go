@@ -176,8 +176,8 @@ func (server *server) handle(request message) error {
 		if operationError := server.notify("textDocument/publishDiagnostics", map[string]any{"uri": params.TextDocument.URI, "diagnostics": []diagnostic{}}); operationError != nil {
 			return operationError
 		}
-		if loading.IsStarlarkSourceFile(fileName) {
-			return server.publishOpenStarlarkBuildDiagnostics("")
+		if loading.IsStarlarkSourceFile(fileName) || loading.IsPackageFile(fileName) {
+			return server.publishOpenPackageDiagnostics("")
 		}
 		return nil
 	case "workspace/didChangeWatchedFiles":
@@ -209,7 +209,7 @@ func (server *server) handle(request message) error {
 					refreshBuildDiagnostics = true
 				}
 			}
-			if loading.IsStarlarkSourceFile(fileName) {
+			if loading.IsStarlarkSourceFile(fileName) || loading.IsPackageFile(fileName) {
 				refreshBuildDiagnostics = true
 			}
 		}
@@ -219,7 +219,7 @@ func (server *server) handle(request message) error {
 			}
 		}
 		if refreshBuildDiagnostics {
-			return server.publishOpenStarlarkBuildDiagnostics("")
+			return server.publishOpenPackageDiagnostics("")
 		}
 		return nil
 	case "textDocument/completion":

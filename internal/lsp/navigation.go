@@ -303,18 +303,29 @@ func packageFileDeclarations(path string, text string, packageLoader *loading.Pa
 	}
 	declarations := []namedDeclaration{}
 	for _, declaration := range loading.PackageDeclarations(packageDTO) {
-		start := position{}
-		if offset := strings.Index(text, declaration.Name); offset >= 0 {
-			start = positionForOffset(text, offset)
-		}
 		declarations = append(declarations, namedDeclaration{
 			kind:       declaration.Kind,
 			name:       declaration.Name,
 			path:       path,
-			rangeValue: rangeValue{Start: start, End: position{Line: start.Line, Character: start.Character + utf16Length(declaration.Name)}},
+			rangeValue: packageDeclarationRange(text, declaration.Name),
 		})
 	}
 	return declarations
+}
+
+func packageDeclarationRange(text string, name string) rangeValue {
+	patterns := []*regexp.Regexp{
+		regexp.MustCompile(`(?m)\bname\b["']?\s*[:=]\s*["']?(` + regexp.QuoteMeta(name) + `)`),
+		regexp.MustCompile(`(?m)^\s*(` + regexp.QuoteMeta(name) + `)\s*:`),
+	}
+	for _, pattern := range patterns {
+		match := pattern.FindStringSubmatchIndex(text)
+		if len(match) == 4 {
+			start := positionForOffset(text, match[2])
+			return rangeValue{Start: start, End: position{Line: start.Line, Character: start.Character + utf16Length(name)}}
+		}
+	}
+	return rangeValue{}
 }
 
 func declarationsForFile(fileName string, text string) []namedDeclaration {
