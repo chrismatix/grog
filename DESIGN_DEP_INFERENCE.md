@@ -131,10 +131,11 @@ target re-runs it and fails if the working tree differs. This is what the privat
 
 ### (B) Dependency provider in the loader (recommended)
 
-`grog.toml` declares a named provider: a command emitting a machine-readable package-path → package-path
-mapping. A target opts in by naming providers. Grog runs each referenced provider once per invocation, caches
-its output on a content hash of declared inputs, and merges the resulting edges into the targets that opted in,
-after loading and before graph construction.
+A BUILD file declares a named provider: a command emitting a machine-readable package-path → package-path
+mapping. A target opts in by naming providers by label. Grog runs each referenced provider once per invocation,
+caches its output on a content hash of declared inputs, and merges the resulting edges into the targets that
+opted in, after loading and before graph construction. A provider is a loaded declaration, not a graph node: it
+is never scheduled, never built, and never appears in `grog deps`.
 
 - **Load cost:** one subprocess per *referenced* provider per invocation on a cold cache; on a warm cache, one
   file-hash pass over the provider's declared inputs (a few dozen `Cargo.toml`s, ~ms with xxh3) plus a cache
@@ -147,17 +148,50 @@ after loading and before graph construction.
 - **Fresh clone:** needs whatever the provider needs. For cargo/uv/node the recommended built-ins parse
   manifests and lockfiles and need no toolchain at all; go needs `go`.
 - **`grog changes`:** see §5.7. Mostly falls out; one coarse rule closes the remaining gap.
-- **It subsumes (A).** Set `command = "cat tools/grog/inferred-deps.json"` and you have the committed-graph
-  model — with the file maintained by an ordinary grog target — inside the same mechanism, with no live tool
-  dependency and no new concepts. That is the strongest argument for (B): it is a superset, not an alternative.
+- **It subsumes (A).** Set `command = "cat inferred-deps.json"` and you have the committed-graph model — with
+  the file maintained by an ordinary grog target — inside the same mechanism, with no live tool dependency and
+  no new concepts. That is the strongest argument for (B): it is a superset, not an alternative.
 
-**(B′) Provider as a build target.** A tempting variant: express the provider as an ordinary target whose output
-is the mapping file, and let grog build it during loading. It would reuse caching, remote caching and `changes`
-with no new machinery at all. Rejected: it inverts the phase order. Building a target requires a graph;
-producing the graph requires the target's output. Resolving that means a two-pass load (load a partial graph,
-execute a subset, reload) on *every* invocation, plus a rule for what a provider target may itself depend on,
-plus a new failure mode where `grog check` has to execute code. The content-hash cache in (B) buys ~95% of the
-benefit for ~10% of the complexity. Worth revisiting only if providers grow expensive dependencies of their own.
+### (B′) Provider as a node in the build graph
+
+The provider is an ordinary target whose output is the mapping file; grog builds it, reads its output, and
+derives the edges. This is the strongest alternative and it deserves more than the dismissal it got in the first
+draft of this document, which claimed it was circular. It is not.
+
+**It is a bootstrap, not a cycle.** There are two graphs: G0 as loaded, and G1 = G0 + inferred edges. A provider
+target lives entirely in G0, so the order is: load G0 → execute the provider's closure within G0 → read its
+output → derive G1 → build what the user asked for. That terminates, provided no target in a provider's closure
+itself declares `dependency_providers` — a rule that is checkable on G0 right after loading.
+
+**What it wins, honestly:**
+
+- **No parallel input mechanism.** The provider's `inputs` are declared and resolved exactly like any target's.
+  Option (B) as originally written invented a second glob-and-hash path next to `resolveInputs` / `HashFiles`,
+  which was its weakest part.
+- **Caching for free.** No separate cache key, no separate CAS entry — the whole of PR 2 below disappears.
+- **Providers may depend on build outputs.** A provider that needs generated code, or one written in Rust that
+  must be compiled first, becomes expressible. (B) cannot do this at all.
+
+**What rules it out: every graph-loading command becomes a build.** `internal/cmd/cmds/build.go:190` is the only
+place that acquires the workspace lock today, so `deps`, `rdeps`, `graph`, `check` and `changes` are pure reads —
+and `internal/completions/targets.go:65` calls `loading.LoadPackages` on **every Tab keypress**. Under (B′) each
+of those may have to run the execution engine: take the workspace lock, write the CAS, emit trace spans, start
+resources. Tab-completion firing `cargo metadata` and contending on the workspace lock is bad. `grog changes
+--since=main` — the command monorepos run on every PR, which today executes nothing — becoming a build is worse.
+A cached subprocess on a read path is a far smaller thing than an execution-engine invocation on a read path.
+
+Two further costs, smaller but real: the bootstrap restriction is a new concept users hit and must understand
+(most naturally when the provider's own package is itself a workspace member), and every per-invocation
+setting — `--tag` filters, platform selection, `load_outputs`, `fail_fast`, tracing — needs defined semantics
+across two build phases instead of one.
+
+**The synthesis, and what §5 now specifies.** Take (B′)'s declaration site without its execution model: declare
+the provider **in a BUILD file** with `inputs` and `command` and *no* `dependencies`, so it reuses the loader's
+input resolution and the standard hashing, but is never a graph node and never touched by the execution engine.
+That captures the first two wins above, deletes the `grog.toml` table entirely, and keeps loading execution-free.
+It gives up only the third — providers depending on build outputs — which is the right thing to trade away:
+a provider that needs generated code can generate it itself, and the alternative is paying for a possible build
+on every `grog deps`.
 
 ### (C) Inline hooks in the helper libraries
 
@@ -176,26 +210,31 @@ Rejected.
 
 ### Comparison
 
-| | (A) codegen | (B) provider | (C) inline hooks |
-|---|---|---|---|
-| Works in YAML / Starlark / Pkl identically | yes | yes | **no** |
-| Load-time cost, warm | zero | ~ms (hash + cache read) | O(packages × metadata size) |
-| Load-time cost, cold | zero | one subprocess per provider | same as warm |
-| Cache-able output | n/a | yes, local + remote CAS | n/a |
-| Fresh clone without toolchain | yes | yes for cargo/uv/node, no for go | yes |
-| Reproducible across machines | yes | mostly (content-hash keyed) | yes |
-| Contributor workflow cost | regenerate + review churn | none | none |
-| Drift possible | yes, between regenerations | no | no |
-| New public API surface | a target convention | 1 target field + 1 config table | a Starlark file-read builtin |
+| | (A) codegen | (B) provider | (B′) provider as build node | (C) inline hooks |
+|---|---|---|---|---|
+| Works in YAML / Starlark / Pkl identically | yes | yes | yes | **no** |
+| Load-time cost, warm | zero | ~ms (hash + cache read) | ~ms, but through the execution engine | O(packages × metadata size) |
+| Load-time cost, cold | zero | one subprocess per provider | one bootstrap build | same as warm |
+| Cache-able output | n/a | yes, local + remote CAS | yes, for free | n/a |
+| Read-path commands stay reads | yes | yes | **no** — `deps`, `changes`, completion may build | yes |
+| Fresh clone without toolchain | yes | yes for cargo/uv/node, no for go | same as (B) | yes |
+| Reproducible across machines | yes | mostly (content-hash keyed) | mostly | yes |
+| Contributor workflow cost | regenerate + review churn | none | none | none |
+| Drift possible | yes, between regenerations | no | no | no |
+| Provider may depend on build outputs | n/a | no | **yes** | no |
+| New public API surface | a target convention | 1 target field + 1 BUILD node kind | 1 target field + a bootstrap phase | a Starlark file-read builtin |
 
 ## 5. Recommendation
 
-Adopt **(B)**. One target field, one config table, one output format.
+Adopt **(B)** with (B′)'s declaration site: one target field, one new BUILD-file node kind, one output format,
+and nothing in `grog.toml`.
 
 ### 5.1 The target field
 
-Name: `dependency_providers`. A list of provider names. Present on `TargetDTO` with all four struct tags, and
-therefore identical in YAML, JSON, Starlark, Pkl, and the `# @grog` script annotation (which is parsed as YAML).
+Name: `dependency_providers`. A list of **labels** pointing at provider declarations (§5.2). Present on
+`TargetDTO` with all four struct tags, and therefore identical in YAML, JSON, Starlark, Pkl, and the `# @grog`
+script annotation (which is parsed as YAML). Ordinary label rules apply, so `":cargo"` addresses a provider
+declared in the same package and `"//:cargo"` one declared at the workspace root.
 
 <details><summary>YAML</summary>
 
@@ -206,7 +245,7 @@ targets:
       - src/**/*
       - Cargo.toml
     dependency_providers:
-      - cargo
+      - //:cargo
 ```
 
 </details>
@@ -217,7 +256,7 @@ targets:
 target(
     name = "greet",
     inputs = ["src/**/*", "Cargo.toml"],
-    dependency_providers = ["cargo"],
+    dependency_providers = ["//:cargo"],
 )
 ```
 
@@ -233,7 +272,7 @@ new {
     "Cargo.toml"
   }
   dependency_providers {
-    "cargo"
+    "//:cargo"
   }
 }
 ```
@@ -250,39 +289,93 @@ Semantics:
    convention linking a directory to a target name — the registration is the link. `//crates/format:format`,
    `//crates/format:sources` and `//crates/format:lib` all work identically.
 4. Explicit `dependencies` are kept. The merged list is the deduplicated union, sorted for hash stability.
-5. Naming an undefined provider is a load error listing the available names.
+5. A label that resolves to no provider declaration is a load error listing the declared providers. Provider
+   labels share the package namespace with targets, aliases and resources, so a name collision is caught by the
+   existing duplicate-label check.
 
 Two properties worth stating plainly: this is one field, and it is opt-in per target. A package can stay fully
 hand-managed by not naming a provider, and a package can participate in two ecosystems by naming two.
 
-### 5.2 The config table
+### 5.2 The provider declaration
 
-```toml
-[dependency_providers.cargo]
-command = "builtin:cargo"
-inputs = ["Cargo.toml", "crates/*/Cargo.toml"]
-working_directory = "."
+A provider is declared in a BUILD file as a new top-level node kind, alongside `target`, `alias`, `resource` and
+`environment`:
+
+<details><summary>YAML</summary>
+
+```yaml
+dependency_providers:
+  - name: cargo
+    command: builtin:cargo
+    inputs:
+      - Cargo.toml
+      - Cargo.lock
+      - crates/*/Cargo.toml
 ```
 
-| Key                 | Default                     | Meaning                                                                                          |
-| ------------------- | --------------------------- | ------------------------------------------------------------------------------------------------ |
-| `command`           | `builtin:<provider name>`   | Shell command producing the mapping on stdout, or `builtin:<name>` to select a shipped provider. |
-| `inputs`            | the built-in's defaults     | Workspace-relative globs whose content forms the cache key.                                     |
-| `working_directory` | `.`                         | Relative to the workspace root. Also the base for the paths the provider emits.                 |
+</details>
 
-A provider whose name matches a built-in needs no `[dependency_providers.<name>]` block at all — writing
-`dependency_providers = ["cargo"]` in a BUILD file is enough. Declaring the block **replaces** the built-in
-entirely, which is how overriding works; there is no merge, no partial override, no precedence table.
+<details><summary>Starlark</summary>
 
-`command = "builtin:cargo"` is also how a second cargo workspace in the same repo is expressed: give it a
-different provider name and point it at the built-in with a different `working_directory`.
+```starlark
+dependency_provider(
+    name = "cargo",
+    command = "builtin:cargo",
+    inputs = ["Cargo.toml", "Cargo.lock", "crates/*/Cargo.toml"],
+)
+```
+
+</details>
+
+<details><summary>Pkl</summary>
+
+```pkl
+dependency_providers {
+  new {
+    name = "cargo"
+    command = "builtin:cargo"
+    inputs {
+      "Cargo.toml"
+      "Cargo.lock"
+      "crates/*/Cargo.toml"
+    }
+  }
+}
+```
+
+</details>
+
+| Field     | Default                 | Meaning                                                                                            |
+| --------- | ----------------------- | --------------------------------------------------------------------------------------------------- |
+| `name`    | required                | Unique within the package. The provider is addressed by its label.                                  |
+| `command` | required                | Shell command producing the mapping on stdout, or `builtin:<name>` to select a shipped provider.    |
+| `inputs`  | the built-in's defaults | Globs relative to the declaring package, resolved and hashed exactly like a target's `inputs`.      |
+
+**The declaring package is the provider's working directory and its path root.** That single rule replaces the
+`working_directory` config key, makes `inputs` behave identically to every other `inputs` in grog, and gives the
+paths the provider emits an unambiguous base. A cargo workspace rooted at the repo root declares its provider in
+the root BUILD file, so `inputs` are workspace-relative and emitted paths resolve against the workspace root. A
+second cargo workspace under `tools/rust` declares `//tools/rust:cargo`, and its emitted `crates/format`
+resolves to the package `tools/rust/crates/format`.
+
+There is no `grog.toml` surface for dependency inference at all. Overriding a built-in means declaring a
+provider with the same label and a different `command`; there is no merge, no partial override and no
+precedence table.
+
+**What this costs.** The zero-configuration quick start is gone: `dependency_providers = ["cargo"]` no longer
+works on its own, and a cargo workspace now needs a five-line declaration in its root BUILD file before any
+crate can reference it. That is a real regression for the trivial case and it is worth it — it buys one
+mechanism instead of two, a provider that is greppable in the repo's own build files rather than in a config
+file, `inputs` that behave like every other `inputs`, and `grog changes` noticing an edit to the declaration for
+free. Resolving a bare name to an implicit built-in was considered and rejected: it is a second addressing mode
+for one saved block.
 
 ### 5.3 The provider protocol
 
 **Invocation.** The command runs through the same shell path as target commands (including the default
-`set -eu`, subject to `disable_default_shell_flags`), with cwd = `working_directory`, and the environment a
-target command would get: the process environment, plus `grog.toml` `environment_variables`, plus the `GROG_*`
-loader variables from `loader_env.go`, plus `GROG_PROVIDER_NAME`.
+`set -eu`, subject to `disable_default_shell_flags`), with cwd = the declaring package's directory, and the
+environment a target command would get: the process environment, plus `grog.toml` `environment_variables`, plus
+the `GROG_*` loader variables from `loader_env.go`, plus `GROG_PROVIDER_LABEL`.
 
 **Output.** A single JSON document on stdout:
 
@@ -298,7 +391,8 @@ loader variables from `loader_env.go`, plus `GROG_PROVIDER_NAME`.
 }
 ```
 
-- Keys are slash-separated directory paths relative to `working_directory`. `""` is the root package. Keys are
+- Keys are slash-separated directory paths relative to the declaring package. `""` is the declaring package
+  itself. Keys are
   **always** paths, never labels — the provider speaks directories, because a directory is the one concept
   every ecosystem and grog already share.
 - Values in `dependencies` are the same, with one escape hatch: an entry starting with `//` is taken as a
@@ -320,10 +414,11 @@ loader variables from `loader_env.go`, plus `GROG_PROVIDER_NAME`.
 | A registered package's dependency names a package with no registered target | **Load error.** This is the drift case the feature exists to catch; silently dropping it reintroduces exactly the bug. |
 | Cycle among inferred edges | The existing `analysis.BuildGraph` cycle error, unchanged. |
 
-**Caching.** Key = hash(protocol version, provider name, resolved `command`, `working_directory`, the sorted
-list of files matching `inputs`, and their content hashes). Value = the provider's stdout, stored in the
-existing CAS (`internal/caching`), so a configured remote cache serves it to cold runners. Failed runs are never
-cached. Because the key is content-addressed, a stale entry cannot win.
+**Caching.** Key = hash(protocol version, provider label, resolved `command`, and the sorted list of resolved
+input paths with their content hashes). Because the declaration is loaded like any other node, the inputs are
+already resolved by `resolveInputs` and hashable by `HashFiles` — there is no second glob-and-hash path. Value =
+the provider's stdout, stored in the existing CAS (`internal/caching`), so a configured remote cache serves it
+to cold runners. Failed runs are never cached. Because the key is content-addressed, a stale entry cannot win.
 
 The cost model, steady state: hash ~50 `Cargo.toml` files with xxh3 (sub-millisecond), one CAS read, one JSON
 parse. Cold: one `cargo metadata` / `go list`. This is what makes S4 tolerable.
@@ -339,7 +434,7 @@ before the caller builds the node map:
 
 ```
 walk + load packages (unchanged, concurrent)
-  → collect registrations: provider name → package path → target
+  → collect declarations (label → command, resolved inputs) and registrations (label → package path → target)
   → for each referenced provider, concurrently: hash inputs, CAS lookup, run on miss, parse
   → resolve package paths to labels via the registration map; merge into Target.Dependencies
   → BuildNodeMapFromPackages → analysis.BuildGraph (unchanged)
@@ -347,9 +442,11 @@ walk + load packages (unchanged, concurrent)
 
 Providers not named by any target never run — that is story S6.
 
-An obvious later optimisation, deliberately not in v1: start the input hashing and CAS lookup for every provider
-configured in `grog.toml` concurrently with the walk, since the cache key does not depend on the loaded
-packages. Worth doing only if it shows up in a profile.
+Two consequences worth stating: a provider declaration is loaded but never scheduled, so `grog build //...`
+does not build it and `grog deps` does not show it; and because the declaration is discovered by the same walk,
+its input hashing cannot start until the walk finds it. The obvious later optimisation — overlapping provider
+hashing with the walk — is therefore only available once a declaration has been seen, which is fine in practice
+since providers are declared at or near the root. Deliberately not in v1.
 
 ### 5.5 What a helper library looks like
 
@@ -361,7 +458,7 @@ def cargo_crate(name, bin = False):
         name = name,
         inputs = ["src/**/*", "Cargo.toml"],
         dependencies = ["//tools/grog:rust"],
-        dependency_providers = ["cargo"],
+        dependency_providers = ["//:cargo"],
     )
     ...
 ```
@@ -394,7 +491,7 @@ class Crate {
         "//tools/grog:rust"
       }
       dependency_providers {
-        "cargo"
+        "//:cargo"
       }
     }
     ...
@@ -411,15 +508,18 @@ inherit every inferred edge without changing.
 emits `server → lib/proto` (verified, §9). `examples/codegen` has no ecosystem workspace tying the languages
 together, so it gets a custom provider:
 
-```toml
-[dependency_providers.proto]
-command = "python3 tools/grog/proto_provider.py"
-inputs = ["src/**/*.proto", "src/**/BUILD.yaml"]
+```starlark
+# BUILD.star at the workspace root
+dependency_provider(
+    name = "proto",
+    command = "python3 tools/grog/proto_provider.py",
+    inputs = ["src/**/*.proto", "src/**/BUILD.yaml"],
+)
 ```
 
 emitting `{"src/go": {"dependencies": ["//src/protobuf:codegen"]}, ...}` — the label escape hatch, used for
 exactly the case it was added for. Rust consumers then write
-`dependency_providers = ["cargo", "proto"]` and get the union.
+`dependency_providers = ["//:cargo", "//:proto"]` and get the union.
 
 ### 5.7 Interaction with `grog changes`
 
@@ -436,8 +536,10 @@ is whether a manifest-only change flags the right targets.
 
 ## 6. Batteries included
 
-Four built-ins ship as Go code inside grog, addressed as `builtin:<name>`. They implement the same protocol
-internally and produce the same document; they simply skip the subprocess and JSON round-trip. Go rather than
+Four built-ins ship as Go code inside grog, selected by writing `command = "builtin:<name>"` on a declaration.
+They implement the same protocol internally and produce the same document; they simply skip the subprocess and
+JSON round-trip. Omitting `inputs` on such a declaration takes the built-in's defaults, so the whole declaration
+is a name and a command. Go rather than
 shipped scripts because it avoids a `jq`/Python dependency, works identically on every platform grog targets,
 and keeps the fiddly manifest-path-to-directory arithmetic in tested code.
 
@@ -457,34 +559,40 @@ edge rule — a dependency whose name matches a workspace member — is identica
 things to document and three to keep in sync.
 
 **Writing a custom provider.** Any executable that prints the document. The bar is a dozen lines (§9). It is
-declared with `command`, and named in `dependency_providers` alongside built-ins.
+declared the same way a built-in is, with `command` pointing at the executable instead of `builtin:<name>`, and
+referenced by label alongside built-ins.
 
-**Overriding a built-in.** Declare `[dependency_providers.cargo]` with your own `command`. The block replaces
-the built-in wholesale. Users who want to *extend* a built-in shell out to it — there is no plugin chain, and
-adding one would be the first place this design goes wrong.
+**Overriding a built-in.** Change `command` on the declaration. There is nothing else to replace — the built-in
+is a value of one field, not a separate configuration layer. Users who want to *extend* a built-in shell out to
+it; there is no plugin chain, and adding one would be the first place this design goes wrong.
 
 ## 7. Migration and implementation plan
 
 ### 7.1 Migration of the existing examples
 
-Purely subtractive. `examples/rust_monorepo`: drop the `deps` parameter from `tools/grog/rust.star` and the
-`dependencies` property from `rust.pkl`'s `Crate`, add `dependency_providers` to the filegroup, delete
-`deps = [...]` from four BUILD files. Same shape for `python_uv_monorepo`; its helper's `deps` and
+Nearly subtractive. `examples/rust_monorepo`: add a four-line `dependency_provider(name = "cargo")` to the root
+BUILD file, drop the `deps` parameter from `tools/grog/rust.star` and the `dependencies` property from
+`rust.pkl`'s `Crate`, add `dependency_providers = ["//:cargo"]` to the filegroup, delete `deps = [...]` from
+four BUILD files. Same shape for `python_uv_monorepo`; its helper's `deps` and
 `test_deps` parameters are already unused by the example itself once the uv provider covers `dependencies` and
 `dev-dependencies`, so both can go from the public signature. `examples/js` needs an edge added before it is
 worth migrating at all (§7.2, PR 3).
 `examples/codegen` gets the custom proto provider. Docs: a new
 `docs/src/content/docs/topics/dependency-inference.mdx`, plus the guides losing their `deps = [...]` lines and
-gaining a short section, plus `reference/target-configuration.mdx` and `reference/configuration.md` rows.
+gaining a short section, plus a `dependency_providers` row and a `dependency_provider` node section in
+`reference/target-configuration.mdx`. `reference/configuration.md` is untouched — there is no `grog.toml`
+surface.
 
 ### 7.2 PR-sized steps
 
 **PR 1 — protocol, one provider, no cache.** The smallest change that deletes hand-written deps from
 `examples/rust_monorepo`.
 - `dependency_providers` on `TargetDTO` (4 tags), `starlark.UnpackArgs`, `pkl/package.pkl`.
-- `[dependency_providers.<name>]` in `WorkspaceConfig`.
-- `internal/loading/dependency_inference.go`: registration collection, provider execution at the workspace root,
-  JSON parse, path→label resolution, merge. Errors per the §5.3 table.
+- `DependencyProviderDTO` and `PackageDTO.DependencyProviders`, plus the `dependency_provider()` Starlark
+  builtin, the Pkl class, and the YAML/JSON list — the same four-loader treatment `resource` already has.
+  Its `inputs` go through the existing `resolveInputs`, and its label through the existing duplicate-label check.
+- `internal/loading/dependency_inference.go`: declaration and registration collection, provider execution in the
+  declaring package, JSON parse, path→label resolution, merge. Errors per the §5.3 table.
 - `builtin:cargo`.
 - Migrate `examples/rust_monorepo` (Starlark + Pkl helpers, four BUILD files).
 - Integration scenario: a cargo-shaped test repo where adding a `path` dependency to a manifest invalidates the
@@ -494,13 +602,15 @@ gaining a short section, plus `reference/target-configuration.mdx` and `referenc
 No caching in PR 1: the built-in cargo provider is manifest parsing, single-digit milliseconds on the example,
 and shipping the protocol and the cache in one PR makes both harder to review.
 
-**PR 2 — provider output caching.** `inputs` on the provider config, cache key per §5.3, CAS storage, debug
-logging of hit/miss, `grog check` reporting per-provider timing. This is what makes `builtin:go` viable.
+**PR 2 — provider output caching.** Cache key per §5.3 over the already-resolved `inputs`, CAS storage, debug
+logging of hit/miss, `grog check` reporting per-provider timing. Smaller than it would have been under a
+`grog.toml` declaration: `resolveInputs` and `HashFiles` are reused rather than reimplemented. This is what
+makes `builtin:go` viable.
 
 **PR 3 — `builtin:uv` and `builtin:node`.** Both are pure file parsing. Migrate `examples/python_uv_monorepo`
 and update the Python guide. `examples/js` needs a real cross-package edge before it can demonstrate anything —
 make `@monorepo/ui-components` depend on `@monorepo/theme`, which the example arguably should have had anyway,
-then add `dependency_providers = ["node"]` to its build targets.
+then declare `//:node` and reference it from the package build targets.
 
 **PR 4 — `builtin:go`, plus the `grog changes` rule** from §5.7.
 
@@ -550,9 +660,11 @@ Documenting the remote-cache path is probably enough.
 reports different content between runs (absolute paths, timestamps, resolver nondeterminism). A `grog check
 --verify-providers` that runs each provider twice and diffs would be cheap and is worth adding early.
 
-**Q7 — Multiple workspaces of the same ecosystem.** Handled by `command = "builtin:cargo"` plus
-`working_directory` under a second provider name. Untested against a real repo shape; the emitted paths being
-relative to `working_directory` rather than the workspace root is the part most likely to surprise.
+**Q7 — Two names for one word.** `dependency_providers` is a package-level list of *declarations* in a BUILD
+file and a target-level list of *references*. The values differ visibly (objects versus label strings) and it
+mirrors how `targets` / `resources` already work, but it is the one place in this API where the same key means
+two things depending on where it sits. Renaming the target field (`infer_dependencies_from`) was considered and
+rejected as worse on every axis except this one.
 
 **Q8 — Provider output size.** A pathological monorepo could produce a multi-megabyte mapping. The document is
 parsed once per invocation, not per package, so this is a non-issue until it isn't; the CAS handles the storage.
@@ -565,6 +677,17 @@ alongside the hashes — worth doing while touching this code.
 **Q10 — Trust.** A provider is an arbitrary command that runs on `grog check` and on tab-completion paths that
 load the graph. Cloning a repo and running `grog build` already executes its BUILD files' commands, so this is
 not a new trust boundary, but it moves execution earlier — into loading. Worth one paragraph in the docs.
+
+**Q11 — The lost quick start.** Requiring a declaration costs the zero-configuration case (§5.2): a cargo
+workspace cannot just write `dependency_providers = ["cargo"]` any more. The alternative — resolving a bare
+name to an implicit built-in rooted at the workspace root — is four lines saved in exchange for a second
+addressing mode, and the current answer is no. Revisit if adoption feedback says the declaration is the thing
+that stops people trying the feature.
+
+**Q12 — Provider declarations outside the root.** The declaring package being the path root is clean for a
+workspace rooted at the repo root and for a nested second workspace. It is untested against a repo that wants a
+provider whose inputs sit *above* its declaring package, which is inexpressible by construction — the answer is
+"declare it higher up", but that may collide with where a team wants their build files.
 
 ## 9. Appendix: protocol validated against the real examples
 

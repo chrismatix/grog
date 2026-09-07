@@ -52,14 +52,6 @@ async_cache_writes = true # default
 # docker = 1
 # integration_tests = 2
 
-# Dependency Providers
-# Optional. Only needed to override a built-in (cargo, uv, node, go) or to
-# define your own. Targets opt in with dependency_providers = ["<name>"].
-# [dependency_providers.cargo]
-# command = "builtin:cargo"
-# inputs = ["Cargo.toml", "crates/*/Cargo.toml", "Cargo.lock"]
-# working_directory = "."
-
 [cache]
 backend = "gcs"  # Options: "" (local), "gcs", "s3", "azure"
 
@@ -121,20 +113,6 @@ For instance, to set or override the `fail_fast` option set `GROG_FAIL_FAST=fals
 Groups not listed in `[concurrency_groups]` default to capacity `1` — in other words, naming a group is enough to serialize those targets, with no further config needed.
 
 Typical uses: limiting concurrent docker builds (`docker = 1`), capping shared-DB integration tests (`integration_tests = 2`), or reserving headroom on a machine with a fixed resource like a GPU.
-
-### Dependency Providers
-
-`[dependency_providers.<name>]` configures a [dependency provider](/topics/dependency-inference): a command that tells Grog which packages depend on which, so BUILD files do not have to repeat what `Cargo.toml`, `uv.lock`, `package.json` or `go list` already say. A target opts in with `dependency_providers = ["<name>"]`.
-
-The built-in providers `cargo`, `uv`, `node` and `go` need no configuration at all — a block is only required to override one or to define a new provider.
-
-| Key                 | Default                 | Description                                                                                              |
-| ------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `command`           | `builtin:<name>`        | Shell command printing the provider mapping to stdout, or `builtin:<name>` to select a shipped provider. |
-| `inputs`            | the built-in's defaults | Globs relative to `working_directory` whose contents form the provider's cache key.                      |
-| `working_directory` | `.`                     | Where the command runs, relative to the workspace root. Also the base for the paths the provider emits.  |
-
-Declaring a block replaces the built-in of the same name entirely. Provider output is cached in the content-addressable store keyed on the `inputs` contents, so `--enable-cache=false` re-runs providers on every load.
 
 ### Trace Settings
 
