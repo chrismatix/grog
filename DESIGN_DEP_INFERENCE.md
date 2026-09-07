@@ -350,6 +350,7 @@ dependency_providers {
 | `name`    | required                | Unique within the package. The provider is addressed by its label.                                  |
 | `command` | required                | Shell command producing the mapping on stdout, or `builtin:<name>` to select a shipped provider.    |
 | `inputs`  | the built-in's defaults | Globs relative to the declaring package, resolved and hashed exactly like a target's `inputs`.      |
+| `timeout` | `60s`                   | Bounds the command, parsed like `target.timeout`. A provider runs on read-path commands and on tab-completion, so an unbounded one hangs the CLI. |
 
 **The declaring package is the provider's working directory and its path root.** That single rule replaces the
 `working_directory` config key, makes `inputs` behave identically to every other `inputs` in grog, and gives the
@@ -371,6 +372,12 @@ free. Resolving a bare name to an implicit built-in was considered and rejected:
 for one saved block.
 
 ### 5.3 The provider protocol
+
+**Requirements on the command.** All five follow from the provider running on the load path, on every
+graph-reading command, with its output cached: it must be **side-effect free** (it may not run at all on a cache
+hit, and may run concurrently with other providers — note that bare `cargo metadata` rewrites `Cargo.lock`,
+hence `--locked` in the built-in), **deterministic**, must write **only** the document to stdout with
+diagnostics on stderr, must be **non-interactive** (stdin is closed), and must finish within `timeout`.
 
 **Invocation.** The command runs through the same shell path as target commands (including the default
 `set -eu`, subject to `disable_default_shell_flags`), with cwd = the declaring package's directory, and the
@@ -402,12 +409,18 @@ the `GROG_*` loader variables from `loader_env.go`, plus `GROG_PROVIDER_LABEL`.
   later without a format break. `version` gates that.
 - Unknown keys in the document are ignored; unknown keys inside a package object are ignored. Forward
   compatibility is cheap here and worth having.
+- Paths must be relative, `/`-separated, free of a leading `./`, a trailing `/`, and any `..` segment. Violations
+  are a load error, not something grog normalises — a provider emitting absolute paths is broken in a way that
+  would otherwise surface as a mysterious missing package.
+- Omitting a package means the same as an empty `dependencies` list; a package listing itself is dropped.
 
 **Resolution and error handling.**
 
 | Situation | Behaviour |
 | --- | --- |
 | Non-zero exit | Load fails. The provider's stderr is included verbatim in the error. |
+| Exceeds `timeout` | The process is killed and the load fails. |
+| Output path is absolute, or escapes the declaring package | Load fails naming the offending entry. |
 | Unparseable stdout | Load fails, quoting the first 2 KiB of stdout. |
 | `version` newer than supported | Load fails asking for a grog upgrade. |
 | Key names a package with no registered target for this provider | **Ignored**, logged at debug. A workspace legitimately contains members grog does not build. |

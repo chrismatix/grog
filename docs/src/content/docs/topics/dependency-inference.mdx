@@ -369,6 +369,7 @@ dependency_providers {
 | `name`    | `string`   | Unique within the package. Shares the namespace with targets, aliases and resources.                           |
 | `command` | `string`   | Shell command printing the [mapping](#the-provider-protocol) to stdout, or `builtin:<name>` for a shipped one.  |
 | `inputs`  | `string[]` | Globs relative to the declaring package whose contents form the [cache key](#caching). Defaults to the built-in's. |
+| `timeout` | `string`   | Bounds the command. Defaults to `60s` — a provider runs on read-path commands, so it may not hang them. |
 
 <Aside type="note" title="A provider is not a build target">
   Declarations are loaded, never scheduled. A provider has no `dependencies` and no `outputs`, `grog build
@@ -428,8 +429,31 @@ dependency_provider(
 ## Writing a custom provider
 
 A provider is any command that prints a JSON document. Nothing else — no plugin API, no linking against Grog.
+Implementing one is four steps:
+
+1. Write an executable in whatever language you like that prints the [document](#the-provider-protocol) to
+   stdout.
+2. Declare it with `dependency_provider`, giving it the `inputs` its answer depends on.
+3. Reference it by label from the targets that should receive its edges.
+4. Run `grog check` to see the package and edge counts it produced, and `grog deps` on a target to see the
+   merged result.
 
 ### The provider protocol
+
+**Requirements on the command.** Five, and they follow from where it runs — on the load path, on every
+command that reads the graph, with its output cached:
+
+1. **Side-effect free.** It may run concurrently with other providers, and on a cache hit it does not run at
+   all, so nothing may depend on it having run. It must not write into the workspace. This bites in a
+   non-obvious place: bare `cargo metadata` will re-resolve and rewrite `Cargo.lock`, which is why the built-in
+   passes `--locked`.
+2. **Deterministic.** Same inputs, same bytes. Absolute paths, timestamps and map iteration order in the output
+   all churn the cache key and invalidate targets for nothing.
+3. **stdout is the document and nothing else.** Diagnostics go to stderr, which Grog reports verbatim on
+   failure and logs at debug on success. stdout is the artifact that gets cached.
+4. **Non-interactive.** stdin is closed. A provider that prompts hangs every `grog` command, including shell
+   completion.
+5. **Bounded.** It must finish within the declaration's `timeout` (default `60s`).
 
 **Invocation.** The command runs through the same shell as target commands (including the default `set -eu`,
 subject to [`disable_default_shell_flags`](/reference/configuration)), with the working directory set to the
@@ -451,9 +475,15 @@ package the provider is declared in. Its environment is what a target command ge
 ```
 
 - Keys are slash-separated **directory paths** relative to the declaring package. `""` is that package itself.
+- Paths must be relative, `/`-separated, without a leading `./`, a trailing `/`, or any `..` segment. A path
+  that escapes the declaring package or arrives absolute is a load error rather than something Grog silently
+  normalises.
 - Entries in `dependencies` are the same kind of path — with one escape hatch: an entry starting with `//` is
   taken as a literal Grog label, for when you need to point at a specific target rather than a package's
   registered one.
+- A package may be omitted entirely; that means the same as an empty `dependencies` list. List every workspace
+  member anyway so the counts `grog check` reports are meaningful.
+- A package listing itself is dropped, not an error.
 - Order does not matter. Grog sorts every list before merging, so a provider that shuffles its output produces
   byte-identical results and no cache churn.
 - Unknown fields are ignored, so newer providers stay loadable. `version` is required.
