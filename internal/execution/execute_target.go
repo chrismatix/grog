@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"text/template"
 
@@ -194,7 +195,7 @@ func GetExtendedTargetEnv(ctx context.Context, target *model.Target) []string {
 		"GROG_PLATFORM="+config.Global.GetPlatform(),
 		"GROG_PLATFORM_TAGS="+strings.Join(config.Global.PlatformTags, ","),
 		"GROG_PACKAGE="+target.Label.Package,
-		"GROG_WORKSPACE_ROOT="+config.Global.WorkspaceRoot,
+		"GROG_WORKSPACE_ROOT="+filepath.ToSlash(config.Global.WorkspaceRoot),
 		"GROG_GIT_HASH="+gitHash,
 	)
 }
