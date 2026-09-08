@@ -244,7 +244,7 @@ func (e *Executor) getBinToolPaths(target *model.Target) (BinToolMap, error) {
 		if dep.HasBinOutput() {
 			// Say a target in pkg foo/bar defines a bin output pointing to ../dist/bin.exe
 			// then we want to resolve it to /workspace_path/foo/dist/bin.exe
-			binToolPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(dep.Label.Package, dep.BinOutput.Identifier))
+			binToolPath := filepath.ToSlash(config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(dep.Label.Package, dep.BinOutput.Identifier)))
 
 			binTools[dep.Label.String()] = binToolPath
 			// If the dependency is in the same package we want to allow the shorthand
@@ -349,7 +349,7 @@ func getTargetOutputIdentifiers(target *model.Target) []string {
 		}
 		if targetOutput.Type == string(handlers.FileHandler) || targetOutput.Type == string(handlers.DirHandler) {
 			workspaceRelativePath := filepath.Join(target.Label.Package, targetOutput.Identifier)
-			identifiers = append(identifiers, config.GetPathAbsoluteToWorkspaceRoot(workspaceRelativePath))
+			identifiers = append(identifiers, filepath.ToSlash(config.GetPathAbsoluteToWorkspaceRoot(workspaceRelativePath)))
 			continue
 		}
 		identifiers = append(identifiers, targetOutput.Identifier)

@@ -63,9 +63,8 @@ func TestFileSystemCache_SetGetExistsDelete(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Get returned error: %v", err)
 			}
-			defer reader.Close()
-
 			contentBytes, err := io.ReadAll(reader)
+			reader.Close()
 			if err != nil {
 				t.Fatalf("failed reading cached content: %v", err)
 			}
@@ -86,6 +85,35 @@ func TestFileSystemCache_SetGetExistsDelete(t *testing.T) {
 				t.Fatalf("expected key %q to be deleted", testCase.key)
 			}
 		})
+	}
+}
+
+func TestFileSystemCachePreservesKeys(t *testing.T) {
+	cache := NewFileSystemCacheForTest(t.TempDir(), t.TempDir())
+	expectedKeys := []string{"nested/sha256%3Acafe", "nested/sha256:cafe"}
+	for _, key := range expectedKeys {
+		if err := cache.Set(t.Context(), "cas", key, strings.NewReader(key)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	keys, err := cache.ListKeys(t.Context(), "cas", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	slices.Sort(keys)
+	if !slices.Equal(keys, expectedKeys) {
+		t.Fatalf("listed keys %q, want %q", keys, expectedKeys)
+	}
+	for _, key := range expectedKeys {
+		reader, err := cache.Get(t.Context(), "cas", key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		content, err := io.ReadAll(reader)
+		reader.Close()
+		if err != nil || string(content) != key {
+			t.Fatalf("key %q returned %q: %v", key, content, err)
+		}
 	}
 }
 
@@ -140,7 +168,7 @@ func TestFileSystemCacheSetForCasDoesNotDoubleNestCasDirectory(t *testing.T) {
 		t.Fatalf("Set failed: %v", err)
 	}
 
-	filePath := filepath.Join(cache.sharedCasDir, digest)
+	filePath := cache.buildFilePath("cas", digest)
 	fileBytes, err := os.ReadFile(filePath)
 	if err != nil {
 		t.Fatalf("failed to read cached file at %q: %v", filePath, err)

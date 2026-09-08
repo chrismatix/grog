@@ -571,5 +571,5 @@ func resolvedEnvironmentVariablesFilePath() string {
 	if !filepath.IsAbs(environmentVariablesFilePath) {
 		environmentVariablesFilePath = filepath.Join(config.Global.WorkspaceRoot, environmentVariablesFilePath)
 	}
-	return filepath.Clean(environmentVariablesFilePath)
+	return filepath.ToSlash(filepath.Clean(environmentVariablesFilePath))
 }

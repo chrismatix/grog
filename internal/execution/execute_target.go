@@ -10,9 +10,11 @@ import (
 	"grog/internal/console"
 	"grog/internal/logs"
 	"grog/internal/model"
+	"grog/internal/shell"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"text/template"
 	"time"
@@ -135,7 +137,7 @@ func runTargetCommand(
 	// Extra args (from "grog test //target -- -k foo") follow the script path so
 	// they expand to $@. With a script file $0 is the path, so no placeholder.
 	shellArgs := append([]string{scriptPath}, ExtraArgsFromContext(ctx)...)
-	cmd := exec.CommandContext(ctx, "sh", shellArgs...)
+	cmd := shell.Command(ctx, shellArgs...)
 	cmd.WaitDelay = 1 * time.Second // cancellation grace time
 
 	// Attach env variables to the existing environment
@@ -230,7 +232,7 @@ func GetExtendedTargetEnv(ctx context.Context, target *model.Target) []string {
 		"GROG_PLATFORM="+config.Global.GetPlatform(),
 		"GROG_PLATFORM_TAGS="+strings.Join(config.Global.PlatformTags, ","),
 		"GROG_PACKAGE="+target.Label.Package,
-		"GROG_WORKSPACE_ROOT="+config.Global.WorkspaceRoot,
+		"GROG_WORKSPACE_ROOT="+filepath.ToSlash(config.Global.WorkspaceRoot),
 		"GROG_GIT_HASH="+gitHash,
 	)
 }

@@ -46,6 +46,15 @@ curl -L https://grog.build/latest/grog-linux-amd64 -o /usr/local/bin/grog
 chmod +x /usr/local/bin/grog
 ```
 
+Windows (x64, PowerShell):
+
+```powershell
+Invoke-WebRequest https://grog.build/latest/grog-windows-amd64.exe -OutFile grog.exe
+.\grog.exe version
+```
+
+Move `grog.exe` to a directory on `PATH`. Install [Git for Windows](https://gitforwindows.org/) with Git on `PATH`; Grog uses its POSIX shell for target commands and scripts. Native Windows executables work as `bin_output`. Symlink outputs require Windows Developer Mode or administrator privileges. The default cache lives in `%USERPROFILE%\.grog`.
+
 ## Documentation
 
 Grog's documentation is available at [grog.build](https://grog.build).

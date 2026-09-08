@@ -131,7 +131,7 @@ func TestDirectoryOutputHandler_WriteAndLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read symlink: %v", err)
 	}
-	if linkTarget != "nested/nested.txt" {
+	if filepath.ToSlash(linkTarget) != "nested/nested.txt" {
 		t.Fatalf("restored symlink target mismatch, got %s, want nested/nested.txt", linkTarget)
 	}
 
@@ -139,7 +139,7 @@ func TestDirectoryOutputHandler_WriteAndLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read upward symlink: %v", err)
 	}
-	if uplinkTarget != "../file.txt" {
+	if filepath.ToSlash(uplinkTarget) != "../file.txt" {
 		t.Fatalf("restored upward symlink target mismatch, got %s, want ../file.txt", uplinkTarget)
 	}
 }

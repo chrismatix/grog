@@ -1,0 +1,62 @@
+name: Windows
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - uses: jdx/mise-action@v4
+        with:
+          install_args: pkl
+
+      - uses: msys2/setup-msys2@v2
+        id: msys2
+        with:
+          msystem: UCRT64
+          install: mingw-w64-ucrt-x86_64-gcc
+
+      - name: Configure compiler
+        run: '"${{ steps.msys2.outputs.msys2-location }}\ucrt64\bin" >> $env:GITHUB_PATH'
+
+      - name: Build Windows release
+        run: ./.github/release-windows.ps1
+
+      - name: Verify standalone executable
+        run: |
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          ./dist/grog-windows-amd64.exe version
+
+      - name: Unit tests
+        run: go test ./internal/... -timeout 180s
+
+      - name: Windows integration tests
+        run: |
+          Copy-Item dist/grog-windows-amd64.exe dist/grog.exe
+          go test ./integration/... -run TestWindows -timeout 180s -v
+
+      - name: Upload Windows release
+        uses: actions/upload-artifact@v4
+        with:
+          name: grog-windows-amd64
+          path: |
+            dist/grog-windows-amd64.exe
+            dist/grog-windows-amd64.exe.sha256
+          if-no-files-found: error

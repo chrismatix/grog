@@ -1,6 +1,7 @@
 package loading
 
 import (
+	"path/filepath"
 	"strings"
 
 	"grog/internal/config"
@@ -22,7 +23,7 @@ func LoaderEnv() map[string]string {
 		"GROG_PLATFORM":       config.Global.GetPlatform(),
 		"GROG_PLATFORM_TAGS":  strings.Join(config.Global.PlatformTags, ","),
 		"GROG_ENV_FILE":       resolvedEnvironmentVariablesFilePath(),
-		"GROG_WORKSPACE_ROOT": config.Global.WorkspaceRoot,
+		"GROG_WORKSPACE_ROOT": filepath.ToSlash(config.Global.WorkspaceRoot),
 		"GROG_GIT_HASH":       loaderGitHash(),
 	}
 }
@@ -43,6 +44,6 @@ func addLoaderEnvToStarlark(dict starlark.StringDict) {
 	dict["GROG_PLATFORM"] = starlark.String(config.Global.GetPlatform())
 	dict["GROG_PLATFORM_TAGS"] = platformTagsStarlarkList()
 	dict["GROG_ENV_FILE"] = starlark.String(resolvedEnvironmentVariablesFilePath())
-	dict["GROG_WORKSPACE_ROOT"] = starlark.String(config.Global.WorkspaceRoot)
+	dict["GROG_WORKSPACE_ROOT"] = starlark.String(filepath.ToSlash(config.Global.WorkspaceRoot))
 	dict["GROG_GIT_HASH"] = starlark.String(loaderGitHash())
 }

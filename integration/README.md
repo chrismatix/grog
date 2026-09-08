@@ -36,6 +36,31 @@ Run the integration tests with `make test`.
 
 To update a single test fixture you can run `make test update={test case name}`
 
+## Windows and QEMU
+
+The Windows workflow builds the release executable and runs unit tests plus `TestWindowsWorkflow`. The latter covers nested packages, paths with spaces, resources, cache restoration, tainting, native executables, scripts, traces, and timeouts. The existing snapshot and Unix PTY tests remain in the Linux suite.
+
+On Windows x64, install Go, Git for Windows, PKL, and the MSYS2 `mingw-w64-ucrt-x86_64-gcc` package. Add Go, Git, PKL, and `C:\msys64\ucrt64\bin` to `PATH`, then run from a checkout:
+
+```powershell
+./.github/release-windows.ps1
+Copy-Item dist/grog-windows-amd64.exe dist/grog.exe
+go test ./internal/...
+go test ./integration/... -run TestWindows -v
+```
+
+For local Linux verification, [Dockur](https://github.com/dockur/windows) provisions a Windows evaluation guest using QEMU/KVM:
+
+```sh
+vm_directory=$(mktemp -d)
+docker run --name grog-windows --device=/dev/kvm --device=/dev/net/tun \
+  --cap-add NET_ADMIN -e VERSION=2022 -e RAM_SIZE=8G -e CPU_CORES=8 \
+  -p 127.0.0.1:8006:8006 -v "$vm_directory:/storage" \
+  -v "$PWD:/shared" --stop-timeout 60 dockurr/windows
+```
+
+The guest can access the checkout at `\\host.lan\Data`. Copy it to a local Windows directory before building; exclude the `.git` file when copying a Linux worktree, then initialize a Git repository for release metadata. Run the same PowerShell commands above. Stop the container after testing; the guest disk remains in `vm_directory` for reuse.
+
 ## Gated scenarios
 
 Scenarios that talk to a cloud registry/cache (e.g. GAR) are skipped

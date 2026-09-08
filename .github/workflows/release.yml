@@ -9,6 +9,9 @@ permissions:
   contents: write
 
 jobs:
+  release-windows:
+    uses: ./.github/workflows/windows.yml
+
   release-bin:
     name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
     strategy:
@@ -85,7 +88,7 @@ jobs:
 
   publish:
     name: Publish release
-    needs: [release-bin, release-pkl]
+    needs: [release-bin, release-windows, release-pkl]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
@@ -97,7 +100,7 @@ jobs:
         run: |
           mkdir -p dist
           cp artifacts/grog-*/* dist/
-          cd dist && shasum -a 256 * > SHASUMS256.txt
+          cd dist && shasum -a 256 -- * > SHASUMS256.txt
 
       - name: Draft Release Notes
         uses: release-drafter/release-drafter@v6

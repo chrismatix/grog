@@ -303,7 +303,7 @@ func (d *DirectoryOutputHandler) writeDirectoryRecursive(
 			}
 			dir.Symlinks = append(dir.Symlinks, &gen.SymlinkNode{
 				Name:   entry.Name(),
-				Target: target,
+				Target: filepath.ToSlash(target),
 			})
 
 		case entry.IsDir():

@@ -124,7 +124,7 @@ func detectOutputConflicts(graph *dag.DirectedTargetGraph) error {
 }
 
 func cleanOutputPath(target *model.Target, output string) string {
-	return filepath.Clean(filepath.Join(target.Label.Package, output))
+	return filepath.ToSlash(filepath.Clean(filepath.Join(target.Label.Package, output)))
 }
 
 func pathWithin(path, dir string) bool {
@@ -132,7 +132,7 @@ func pathWithin(path, dir string) bool {
 		return true
 	}
 
-	dirWithSeparator := dir + string(filepath.Separator)
+	dirWithSeparator := dir + "/"
 	return strings.HasPrefix(path, dirWithSeparator)
 }
 

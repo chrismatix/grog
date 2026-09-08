@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 )
@@ -51,6 +52,9 @@ func NewFileSystemCache(ctx context.Context) (*FileSystemCache, error) {
 
 // buildFilePath constructs the full file path for a cached item.
 func (fsc *FileSystemCache) buildFilePath(path, key string) string {
+	if runtime.GOOS == "windows" {
+		key = strings.NewReplacer("%", "%25", ":", "%3A").Replace(key)
+	}
 	dir := fsc.getDir(path)
 	return filepath.Join(dir, key)
 }
@@ -109,7 +113,13 @@ func (fsc *FileSystemCache) Set(ctx context.Context, path, key string, content i
 		return err
 	}
 
-	return os.Rename(tmpFile.Name(), filePath)
+	err = os.Rename(tmpFile.Name(), filePath)
+	if runtime.GOOS == "windows" && path == "cas" && os.IsPermission(err) {
+		if _, statError := os.Stat(filePath); statError == nil {
+			return nil
+		}
+	}
+	return err
 }
 
 // Delete removes a cached file by its key.
@@ -224,6 +234,11 @@ func (w *fsStagedWriter) Commit(_ context.Context, path, key string) error {
 
 	if err := os.Rename(stagedPath, finalPath); err != nil {
 		_ = os.Remove(stagedPath)
+		if runtime.GOOS == "windows" && path == "cas" && os.IsPermission(err) {
+			if _, statError := os.Stat(finalPath); statError == nil {
+				return nil
+			}
+		}
 		return fmt.Errorf("rename staging file: %w", err)
 	}
 	return nil
@@ -268,6 +283,10 @@ func (fsc *FileSystemCache) ListKeys(ctx context.Context, path string, suffix st
 		rel, relErr := filepath.Rel(dir, filePath)
 		if relErr != nil {
 			return relErr
+		}
+		rel = filepath.ToSlash(rel)
+		if runtime.GOOS == "windows" {
+			rel = strings.NewReplacer("%3A", ":", "%25", "%").Replace(rel)
 		}
 		if suffix == "" || strings.HasSuffix(rel, suffix) {
 			keys = append(keys, rel)

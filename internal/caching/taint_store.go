@@ -2,9 +2,12 @@ package caching
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"grog/internal/config"
 	"grog/internal/label"
@@ -28,6 +31,9 @@ func NewTaintStore() *TaintStore {
 }
 
 func (ts *TaintStore) entryPath(targetLabel label.TargetLabel) string {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(ts.dir, fmt.Sprintf("%x", sha256.Sum256([]byte(targetLabel.String()))))
+	}
 	return filepath.Join(ts.dir, targetLabel.String())
 }
 

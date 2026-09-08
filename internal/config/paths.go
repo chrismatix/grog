@@ -57,12 +57,12 @@ func MustFindWorkspaceRoot() string {
 
 func GetPathRelativeToWorkspaceRoot(path string) (string, error) {
 	workspaceRoot := Global.WorkspaceRoot
-	// error if path is not under workspace root
-	if !strings.HasPrefix(path, workspaceRoot) {
+	relativePath, err := filepath.Rel(workspaceRoot, path)
+	if err != nil || relativePath == ".." || strings.HasPrefix(relativePath, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("path %s is not under workspace root %s", path, workspaceRoot)
 	}
 
-	return path[len(workspaceRoot)+1:], nil
+	return filepath.ToSlash(relativePath), nil
 }
 
 func GetPathAbsoluteToWorkspaceRoot(path string) string {
@@ -77,5 +77,5 @@ func GetPackagePath(path string) (string, error) {
 	}
 	// get dir and remove the last slash
 	dirPath := filepath.Dir(relativePath)
-	return strings.TrimSuffix(dirPath, "/"), nil
+	return filepath.ToSlash(dirPath), nil
 }
