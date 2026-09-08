@@ -3,6 +3,7 @@ package analysis
 import (
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -124,7 +125,11 @@ func detectOutputConflicts(graph *dag.DirectedTargetGraph) error {
 }
 
 func cleanOutputPath(target *model.Target, output string) string {
-	return filepath.ToSlash(filepath.Clean(filepath.Join(target.Label.Package, output)))
+	outputPath := filepath.ToSlash(filepath.Clean(filepath.Join(target.Label.Package, output)))
+	if runtime.GOOS == "windows" {
+		outputPath = strings.ToLower(outputPath)
+	}
+	return outputPath
 }
 
 func pathWithin(path, dir string) bool {

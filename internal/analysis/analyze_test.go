@@ -1,6 +1,7 @@
 package analysis
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -9,6 +10,41 @@ import (
 	"grog/internal/model"
 	"grog/internal/output"
 )
+
+func TestBuildGraphOutputConflictCaseSensitivity(t *testing.T) {
+	for _, testCase := range []struct {
+		name          string
+		firstPackage  string
+		secondPackage string
+		firstOutput   string
+		secondOutput  string
+	}{
+		{name: "files", firstOutput: "out/result.txt", secondOutput: "OUT/result.txt"},
+		{name: "directories", firstOutput: "dir::out", secondOutput: "dir::OUT/nested"},
+		{name: "directory and file", firstOutput: "dir::out", secondOutput: "OUT/result.txt"},
+		{name: "packages", firstPackage: "package", secondPackage: "PACKAGE", firstOutput: "result.txt", secondOutput: "result.txt"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			firstOutputs, err := output.ParseOutputs([]string{testCase.firstOutput})
+			require.NoError(t, err)
+			secondOutputs, err := output.ParseOutputs([]string{testCase.secondOutput})
+			require.NoError(t, err)
+			firstLabel := label.TL(testCase.firstPackage, "first")
+			secondLabel := label.TL(testCase.secondPackage, "second")
+			nodes := model.BuildNodeMap{
+				firstLabel:  &model.Target{Label: firstLabel, Outputs: firstOutputs},
+				secondLabel: &model.Target{Label: secondLabel, Outputs: secondOutputs},
+			}
+
+			_, err = BuildGraph(nodes)
+			if runtime.GOOS == "windows" {
+				require.ErrorContains(t, err, "conflicting outputs detected")
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
 
 func TestBuildGraphDetectsIndependentOutputConflicts(t *testing.T) {
 	firstOutputs, err := output.ParseOutputs([]string{"dist/app.tar"})
