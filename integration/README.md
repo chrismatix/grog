@@ -40,7 +40,7 @@ To update a single test fixture you can run `make test update={test case name}`
 
 The Windows workflow builds the release executable and runs unit tests plus `TestWindowsWorkflow`. The latter covers nested packages, paths with spaces, resources, cache restoration, tainting, native executables, scripts, traces, and timeouts. The existing snapshot and Unix PTY tests remain in the Linux suite.
 
-On Windows x64, install Go, Git for Windows, PKL, and the MSYS2 `mingw-w64-ucrt-x86_64-gcc` package. Add Go, Git, PKL, and `C:\msys64\ucrt64\bin` to `PATH`, then run from a checkout:
+On Windows x64, install Go, Git for Windows, PKL, and [WinLibs GCC 16.2.0 (POSIX, SEH, UCRT)](https://github.com/brechtsanders/winlibs_mingw/releases/tag/16.2.0posix-14.0.0-ucrt-r1), matching the compiler pinned in the Windows workflow. Add Go, Git, PKL, and the extracted `mingw64\bin` directory to `PATH`, then run from a checkout:
 
 ```powershell
 ./.github/release-windows.ps1
@@ -48,6 +48,8 @@ Copy-Item dist/grog-windows-amd64.exe dist/grog.exe
 go test ./internal/...
 go test ./integration/... -run TestWindows -v
 ```
+
+The prebuilt DuckDB library requires emulated TLS symbols that [MSYS2's GCC 16 runtime no longer provides](https://www.msys2.org/news/#2026-05-11-native-thread-local-storage-tls-with-gcc-16); use the pinned WinLibs compiler for both builds and tests.
 
 For local Linux verification, [Dockur](https://github.com/dockur/windows) provisions a Windows evaluation guest using QEMU/KVM:
 
