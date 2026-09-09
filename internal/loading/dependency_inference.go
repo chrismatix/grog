@@ -138,7 +138,7 @@ func runDependencyProvider(loadContext context.Context, provider *model.Dependen
 			return document, fmt.Errorf("provider %s failed: %w", provider.Label, operationError)
 		}
 	} else {
-		command, cleanup, operationError := shell.NewCommand(providerContext, shell.WithDefaultFlags("exec 0<&-\n"+provider.Command))
+		command, cleanup, operationError := shell.NewCommand(providerContext, shell.WithDefaultFlags(provider.Command))
 		if operationError != nil {
 			return document, fmt.Errorf("provider %s failed: %w", provider.Label, operationError)
 		}
