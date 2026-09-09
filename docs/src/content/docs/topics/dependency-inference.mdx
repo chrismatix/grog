@@ -24,18 +24,18 @@ The second copy drifts. When it drifts _downward_ — the BUILD file lists fewer
 under-invalidates: a change to `format` leaves `greet`'s cached test result in place and the build silently
 passes on broken code.
 
-**Dependency inference** deletes the second copy. A _dependency provider_ reads the graph your package manager
+**Dependency inference** deletes the second copy. A _dependency resolver_ reads the graph your package manager
 already resolved and hands it to Grog at load time. You keep writing `Cargo.toml`; Grog keeps the graph in sync.
 
 <Aside type="note" title="Inference over-approximates, never under-approximates">
   Where a dependency is conditional — a `cfg(windows)` dependency, an optional feature, an environment marker —
-  the built-in providers include it. An extra edge costs you a rebuild. A missing edge costs you correctness.
+  the built-in resolvers include it. An extra edge costs you a rebuild. A missing edge costs you correctness.
 </Aside>
 
 ## Quick start
 
-Two steps. First, declare a provider in the BUILD file of the directory your workspace is rooted at — for a
-Cargo workspace, the repo root. `cargo` is [built in](#built-in-providers), so the declaration is a name and a
+Two steps. First, declare a resolver in the BUILD file of the directory your workspace is rooted at — for a
+Cargo workspace, the repo root. `cargo` is [built in](#built-in-resolvers), so the declaration is a name and a
 command:
 
 <Tabs syncKey="build-file-format">
@@ -43,7 +43,7 @@ command:
 
 ```yaml
 # BUILD.yaml at the workspace root
-dependency_providers:
+dependency_resolvers:
   - name: cargo
     command: builtin:cargo
 ```
@@ -53,7 +53,7 @@ dependency_providers:
 
 ```starlark
 # BUILD.star at the workspace root
-dependency_provider(
+dependency_resolver(
     name = "cargo",
     command = "builtin:cargo",
 )
@@ -66,7 +66,7 @@ dependency_provider(
 // BUILD.pkl at the workspace root
 amends "@grog/package.pkl"
 
-dependency_providers {
+dependency_resolvers {
   new {
     name = "cargo"
     command = "builtin:cargo"
@@ -90,7 +90,7 @@ targets:
     inputs:
       - src/**/*
       - Cargo.toml
-    dependency_providers:
+    dependency_resolvers:
       - //:cargo
 ```
 
@@ -102,7 +102,7 @@ targets:
 target(
     name = "greet",
     inputs = ["src/**/*", "Cargo.toml"],
-    dependency_providers = ["//:cargo"],
+    dependency_resolvers = ["//:cargo"],
 )
 ```
 
@@ -120,7 +120,7 @@ targets {
       "src/**/*"
       "Cargo.toml"
     }
-    dependency_providers {
+    dependency_resolvers {
       "//:cargo"
     }
   }
@@ -131,7 +131,7 @@ targets {
 </Tabs>
 
 That is the whole setup — no `grog.toml`, no script to install, no code generation step. Every crate that names
-the provider gets its path dependencies wired automatically:
+the resolver gets its path dependencies wired automatically:
 
 ```bash
 $ grog deps //crates/cli:cli
@@ -151,7 +151,7 @@ def cargo_crate(name, bin = False):
         name = name,
         inputs = ["src/**/*", "Cargo.toml"],
         dependencies = ["//tools/grog:rust"],
-        dependency_providers = ["//:cargo"],
+        dependency_resolvers = ["//:cargo"],
     )
     # ...build, test and lint targets depend on ":" + name as before
 ```
@@ -184,7 +184,7 @@ class Crate {
       dependencies {
         "//tools/grog:rust"
       }
-      dependency_providers {
+      dependency_resolvers {
         "//:cargo"
       }
     }
@@ -210,25 +210,25 @@ targets {
 ## How the wiring works
 
 Package managers describe dependencies between **directories**. Grog describes them between **labels**. A
-provider bridges the two by emitting directory-to-directory edges; naming a provider on a target says "this
-target represents my package to that provider".
+resolver bridges the two by emitting directory-to-directory edges; naming a resolver on a target says "this
+target represents my package to that resolver".
 
-The directories a provider talks about are relative to **the package the provider is declared in**. Declare
+The directories a resolver talks about are relative to **the package the resolver is declared in**. Declare
 `//:cargo` at the repo root and it speaks workspace-relative paths; declare `//tools/rust:cargo` and its
 `crates/format` means `tools/rust/crates/format`. That one rule is why there is no working-directory setting to
 configure.
 
 ```mermaid
 flowchart LR
-  M["crates/greet/Cargo.toml<br/>format = { path = &quot;../format&quot; }"] --> P["cargo provider"]
+  M["crates/greet/Cargo.toml<br/>format = { path = &quot;../format&quot; }"] --> P["cargo resolver"]
   P --> E["crates/greet → crates/format"]
   E --> G["//crates/greet:greet<br/>depends on<br/>//crates/format:format"]
 ```
 
 Three rules cover the whole model:
 
-1. **Naming a provider registers the target.** `dependency_providers = ["//:cargo"]` marks that target as its
-   package's endpoint for that provider. At most one target per package may register a given provider.
+1. **Naming a resolver registers the target.** `dependency_resolvers = ["//:cargo"]` marks that target as its
+   package's endpoint for that resolver. At most one target per package may register a given resolver.
 2. **The registered target receives the package's edges** as additional `dependencies`, and is also what other
    packages' edges point _at_.
 3. **There is no naming convention.** The registration is the link, so `//crates/format:format`,
@@ -238,20 +238,20 @@ Three rules cover the whole model:
 Because every other target in the package already depends on the filegroup, `:build`, `:test` and `:lint` inherit
 every inferred edge without being touched.
 
-A target may register with several providers and receives the union — useful when a package is both a workspace
+A target may register with several resolvers and receives the union — useful when a package is both a workspace
 member and a consumer of generated code:
 
 ```starlark
 target(
     name = "server",
     inputs = ["server/**/*.py", "pyproject.toml"],
-    dependency_providers = ["//:uv", "//:proto"],
+    dependency_resolvers = ["//:uv", "//:proto"],
 )
 ```
 
-## Built-in providers
+## Built-in resolvers
 
-Four providers ship with Grog. Write `command = "builtin:<name>"` on a declaration and leave `inputs` off to
+Four resolvers ship with Grog. Write `command = "builtin:<name>"` on a declaration and leave `inputs` off to
 take the defaults below; nothing else is required.
 
 | Name    | Reads                                                                                             | Needs a toolchain |
@@ -282,13 +282,13 @@ here — a uv workspace graph is acyclic by construction.
 Default `inputs`: `uv.lock`, `pyproject.toml`.
 
 <Aside type="caution">
-  The provider reads the lockfile, not your imports. A stale `uv.lock` yields a stale graph — keep `uv sync`
+  The resolver reads the lockfile, not your imports. A stale `uv.lock` yields a stale graph — keep `uv sync`
   or `UV_LOCKED=1` in your CI so the lockfile cannot drift from the manifests.
 </Aside>
 
 ### node
 
-One provider covers npm, yarn and pnpm workspaces: only the file listing the member globs differs
+One resolver covers npm, yarn and pnpm workspaces: only the file listing the member globs differs
 (`pnpm-workspace.yaml`, else `workspaces` in the root `package.json`), while the edge rule — a
 `dependencies`, `devDependencies` or `peerDependencies` entry whose _name_ matches another workspace member — is
 identical in all three. pnpm's `workspace:*` protocol is a version spec, not a different graph.
@@ -299,7 +299,7 @@ Default `inputs`: `pnpm-workspace.yaml`, `package.json`, `*/package.json`, `*/*/
 
 Import edges between directories inside your module(s), from `go list`. This is the one built-in that shells out
 to its toolchain and the one where a large repo notices the cost, so it is also the one that benefits most from
-[provider caching](#caching). Test-only imports are excluded for the same cycle reason as Cargo's
+[resolver caching](#caching). Test-only imports are excluded for the same cycle reason as Cargo's
 `[dev-dependencies]`.
 
 Default `inputs`: `go.mod`, `go.sum`, `go.work`, `**/*.go`.
@@ -310,21 +310,21 @@ Default `inputs`: `go.mod`, `go.sum`, `go.work`, `**/*.go`.
 
 | Field                  | Type       | Description                                                                                        |
 | ---------------------- | ---------- | ---------------------------------------------------------------------------------------------------- |
-| `dependency_providers` | `label[]`  | Labels of the provider declarations this target registers with. Inferred edges are merged into `dependencies`. |
+| `dependency_resolvers` | `label[]`  | Labels of the resolver declarations this target registers with. Inferred edges are merged into `dependencies`. |
 
-Ordinary label rules apply: `":cargo"` addresses a provider declared in the same package, `"//:cargo"` one
+Ordinary label rules apply: `":cargo"` addresses a resolver declared in the same package, `"//:cargo"` one
 declared at the workspace root. Available in `BUILD.yaml`, `BUILD.json`, `BUILD.star`, `BUILD.pkl` and in
 [Grog script](/topics/grog-scripts) annotations, with identical semantics.
 
-### Provider declaration
+### Resolver declaration
 
-A provider is declared in a BUILD file, alongside `targets`, `aliases` and `resources`:
+A resolver is declared in a BUILD file, alongside `targets`, `aliases` and `resources`:
 
 <Tabs syncKey="build-file-format">
   <TabItem label="YAML">
 
 ```yaml
-dependency_providers:
+dependency_resolvers:
   - name: cargo
     command: builtin:cargo
     inputs:
@@ -337,7 +337,7 @@ dependency_providers:
   <TabItem label="Starlark">
 
 ```starlark
-dependency_provider(
+dependency_resolver(
     name = "cargo",
     command = "builtin:cargo",
     inputs = ["Cargo.toml", "Cargo.lock", "crates/*/Cargo.toml"],
@@ -348,7 +348,7 @@ dependency_provider(
   <TabItem label="Pkl">
 
 ```pkl
-dependency_providers {
+dependency_resolvers {
   new {
     name = "cargo"
     command = "builtin:cargo"
@@ -367,19 +367,19 @@ dependency_providers {
 | Field     | Type       | Description                                                                                                    |
 | --------- | ---------- | ---------------------------------------------------------------------------------------------------------------- |
 | `name`    | `string`   | Unique within the package. Shares the namespace with targets, aliases and resources.                           |
-| `command` | `string`   | Shell command printing the [mapping](#the-provider-protocol) to stdout, or `builtin:<name>` for a shipped one.  |
+| `command` | `string`   | Shell command printing the [mapping](#the-resolver-protocol) to stdout, or `builtin:<name>` for a shipped one.  |
 | `inputs`  | `string[]` | Globs relative to the declaring package whose contents form the [cache key](#caching). Defaults to the built-in's. |
-| `timeout` | `string`   | Bounds the command. Defaults to `60s` — a provider runs on read-path commands, so it may not hang them. |
+| `timeout` | `string`   | Bounds the command. Defaults to `60s` — a resolver runs on read-path commands, so it may not hang them. |
 
-<Aside type="note" title="A provider is not a build target">
-  Declarations are loaded, never scheduled. A provider has no `dependencies` and no `outputs`, `grog build
+<Aside type="note" title="A resolver is not a build target">
+  Declarations are loaded, never scheduled. A resolver has no `dependencies` and no `outputs`, `grog build
   //...` does not build it, and it never appears in `grog deps`. It cannot consume another target's output — a
-  provider that needs generated code has to generate it itself. That restriction is what keeps `grog deps`,
+  resolver that needs generated code has to generate it itself. That restriction is what keeps `grog deps`,
   `grog changes` and shell completion from ever triggering a build.
 </Aside>
 
 <Aside type="tip">
-  `dependency_providers` at the package level is a list of declarations; on a target it is a list of labels
+  `dependency_resolvers` at the package level is a list of declarations; on a target it is a list of labels
   referencing them. Same word, two positions — the values tell them apart.
 </Aside>
 
@@ -391,7 +391,7 @@ The default `inputs` are deliberately broad. If your crates all live two levels 
 resolved on every load, and a `**` pattern over a large repo is a second tree walk:
 
 ```starlark
-dependency_provider(
+dependency_resolver(
     name = "cargo",
     command = "builtin:cargo",
     inputs = ["Cargo.toml", "Cargo.lock", "crates/*/Cargo.toml"],
@@ -400,17 +400,17 @@ dependency_provider(
 
 ### A second workspace of the same ecosystem
 
-Declare a second provider in that workspace's own package. Its paths are relative to where it is declared, so
+Declare a second resolver in that workspace's own package. Its paths are relative to where it is declared, so
 targets under `tools/rust/crates/*` get correct labels with nothing else to configure:
 
 ```starlark
 # tools/rust/BUILD.star
-dependency_provider(name = "cargo", command = "builtin:cargo")
+dependency_resolver(name = "cargo", command = "builtin:cargo")
 ```
 
 ```starlark
 # tools/rust/crates/codegen/BUILD.star
-target(name = "codegen", dependency_providers = ["//tools/rust:cargo"], ...)
+target(name = "codegen", dependency_resolvers = ["//tools/rust:cargo"], ...)
 ```
 
 ### Replacing a built-in
@@ -419,31 +419,31 @@ Change `command`. There is nothing else to override — the built-in is a value 
 configuration layer:
 
 ```starlark
-dependency_provider(
+dependency_resolver(
     name = "cargo",
-    command = "python3 tools/grog/cargo_provider.py",
+    command = "python3 tools/grog/cargo_resolver.py",
     inputs = ["Cargo.toml", "crates/*/Cargo.toml"],
 )
 ```
 
-## Writing a custom provider
+## Writing a custom resolver
 
-A provider is any command that prints a JSON document. Nothing else — no plugin API, no linking against Grog.
+A resolver is any command that prints a JSON document. Nothing else — no plugin API, no linking against Grog.
 Implementing one is four steps:
 
-1. Write an executable in whatever language you like that prints the [document](#the-provider-protocol) to
+1. Write an executable in whatever language you like that prints the [document](#the-resolver-protocol) to
    stdout.
-2. Declare it with `dependency_provider`, giving it the `inputs` its answer depends on.
+2. Declare it with `dependency_resolver`, giving it the `inputs` its answer depends on.
 3. Reference it by label from the targets that should receive its edges.
 4. Run `grog check` to see the package and edge counts it produced, and `grog deps` on a target to see the
    merged result.
 
-### The provider protocol
+### The resolver protocol
 
 **Requirements on the command.** Five, and they follow from where it runs — on the load path, on every
 command that reads the graph, with its output cached:
 
-1. **Side-effect free.** It may run concurrently with other providers, and on a cache hit it does not run at
+1. **Side-effect free.** It may run concurrently with other resolvers, and on a cache hit it does not run at
    all, so nothing may depend on it having run. It must not write into the workspace. This bites in a
    non-obvious place: bare `cargo metadata` will re-resolve and rewrite `Cargo.lock`, which is why the built-in
    passes `--locked`.
@@ -451,14 +451,14 @@ command that reads the graph, with its output cached:
    all churn the cache key and invalidate targets for nothing.
 3. **stdout is the document and nothing else.** Diagnostics go to stderr, which Grog reports verbatim on
    failure and logs at debug on success. stdout is the artifact that gets cached.
-4. **Non-interactive.** stdin is closed. A provider that prompts hangs every `grog` command, including shell
+4. **Non-interactive.** stdin is closed. A resolver that prompts hangs every `grog` command, including shell
    completion.
 5. **Bounded.** It must finish within the declaration's `timeout` (default `60s`).
 
 **Invocation.** The command runs through the same shell as target commands (including the default `set -eu`,
 subject to [`disable_default_shell_flags`](/reference/configuration)), with the working directory set to the
-package the provider is declared in. Its environment is what a target command gets: the process environment,
-`grog.toml` `environment_variables`, the `GROG_*` variables, plus `GROG_PROVIDER_LABEL`.
+package the resolver is declared in. Its environment is what a target command gets: the process environment,
+`grog.toml` `environment_variables`, the `GROG_*` variables, plus `GROG_RESOLVER_LABEL`.
 
 **Output.** One JSON document on stdout:
 
@@ -484,23 +484,23 @@ package the provider is declared in. Its environment is what a target command ge
 - A package may be omitted entirely; that means the same as an empty `dependencies` list. List every workspace
   member anyway so the counts `grog check` reports are meaningful.
 - A package listing itself is dropped, not an error.
-- Order does not matter. Grog sorts every list before merging, so a provider that shuffles its output produces
+- Order does not matter. Grog sorts every list before merging, so a resolver that shuffles its output produces
   byte-identical results and no cache churn.
-- Unknown fields are ignored, so newer providers stay loadable. `version` is required.
+- Unknown fields are ignored, so newer resolvers stay loadable. `version` is required.
 
 **Exit status.** Zero with a valid document, or non-zero with a message on stderr, which Grog reports verbatim.
-There is no partial success: a provider that cannot determine the graph must fail rather than emit a subset,
+There is no partial success: a resolver that cannot determine the graph must fail rather than emit a subset,
 because a missing edge is the exact bug inference exists to prevent.
 
 ### A worked example
 
 Say `protoc` output is consumed by packages that share no package manager, as in
-[`examples/codegen`](https://github.com/chrismatix/grog/tree/main/examples/codegen). A provider that maps each
+[`examples/codegen`](https://github.com/chrismatix/grog/tree/main/examples/codegen). A resolver that maps each
 consumer directory to the codegen target is about a dozen lines:
 
 ```python
 #!/usr/bin/env python3
-# tools/grog/proto_provider.py
+# tools/grog/proto_resolver.py
 import json
 import sys
 from pathlib import Path
@@ -523,9 +523,9 @@ Declare it and name it from the consumers:
 
 ```starlark
 # BUILD.star at the workspace root
-dependency_provider(
+dependency_resolver(
     name = "proto",
-    command = "python3 tools/grog/proto_provider.py",
+    command = "python3 tools/grog/proto_resolver.py",
     inputs = ["src/**/*.proto", "src/**/*.go", "src/**/*.py", "src/**/*.rs"],
 )
 ```
@@ -539,7 +539,7 @@ targets:
     command: go build ./...
     inputs:
       - "**/*.go"
-    dependency_providers:
+    dependency_resolvers:
       - //:proto
 ```
 
@@ -551,7 +551,7 @@ target(
     name = "go",
     command = "go build ./...",
     inputs = ["**/*.go"],
-    dependency_providers = ["//:proto"],
+    dependency_resolvers = ["//:proto"],
 )
 ```
 
@@ -565,7 +565,7 @@ new {
   inputs {
     "**/*.go"
   }
-  dependency_providers {
+  dependency_resolvers {
     "//:proto"
   }
 }
@@ -574,20 +574,20 @@ new {
   </TabItem>
 </Tabs>
 
-<Aside type="tip" title="Cross-language often needs no custom provider">
+<Aside type="tip" title="Cross-language often needs no custom resolver">
   If the generated package is _also_ a workspace member — as `lib/proto` is in the
-  [uv example](/guides/python) — the language provider already emits the edge. Reach for a custom provider only
+  [uv example](/guides/python) — the language resolver already emits the edge. Reach for a custom resolver only
   when no package manager spans the boundary.
 </Aside>
 
 ## Caching
 
-Providers run **at load time**, so their cost lands on every `grog build`, `grog test`, `grog changes` and shell
-completion. Grog therefore caches provider output the same way it caches target output.
+Resolvers run **at load time**, so their cost lands on every `grog build`, `grog test`, `grog changes` and shell
+completion. Grog therefore caches resolver output the same way it caches target output.
 
-The cache key is a hash of the protocol version, the provider's label, its resolved `command`, and the contents
+The cache key is a hash of the protocol version, the resolver's label, its resolved `command`, and the contents
 of every file matching `inputs` — resolved by exactly the same globbing that resolves a target's inputs. The
-value is the provider's stdout, stored in the [content-addressable store](/topics/remote-caching), so with a
+value is the resolver's stdout, stored in the [content-addressable store](/topics/remote-caching), so with a
 remote cache configured a cold CI runner downloads the mapping instead of running `go list`.
 
 What that costs in practice:
@@ -596,24 +596,24 @@ What that costs in practice:
 | --- | --- |
 | Cache hit | Hash the `inputs` files, one cache read, one JSON parse |
 | Cache miss | The above plus one subprocess |
-| No provider referenced | Nothing at all — providers only run when a target names them |
+| No resolver referenced | Nothing at all — resolvers only run when a target names them |
 
-Failed runs are never cached, and because the key is content-addressed a stale entry cannot win. Provider
-caching follows the global cache setting, so `--enable-cache=false` re-runs providers on every load.
+Failed runs are never cached, and because the key is content-addressed a stale entry cannot win. Resolver
+caching follows the global cache setting, so `--enable-cache=false` re-runs resolvers on every load.
 
-<Aside type="caution" title="Providers must be deterministic">
-  Sorting handles ordering noise, but a provider whose _content_ varies between runs — absolute paths,
-  timestamps, a resolver that is not stable — will churn the cache key and invalidate targets for no reason.
+<Aside type="caution" title="Resolvers must be deterministic">
+  Sorting handles ordering noise, but a resolver whose _content_ varies between runs — absolute paths,
+  timestamps, an unstable upstream tool — will churn the cache key and invalidate targets for no reason.
 </Aside>
 
 ## Using a committed mapping
 
-If you would rather not run a tool at load time at all — a locked-down CI image, or a provider that is too slow
+If you would rather not run a tool at load time at all — a locked-down CI image, or a resolver that is too slow
 even cached — commit the mapping and read it back with `cat`:
 
 ```starlark
 # BUILD.star at the workspace root
-dependency_provider(
+dependency_resolver(
     name = "cargo",
     command = "cat tools/grog/inferred-deps.json",
     inputs = ["tools/grog/inferred-deps.json"],
@@ -626,9 +626,9 @@ Then keep the file honest with an ordinary Grog target:
 # tools/grog/BUILD.yaml
 targets:
   - name: inferred-deps
-    command: python3 cargo_provider.py > inferred-deps.json
+    command: python3 cargo_resolver.py > inferred-deps.json
     inputs:
-      - cargo_provider.py
+      - cargo_resolver.py
     dependencies:
       - //:workspace
     outputs:
@@ -637,7 +637,7 @@ targets:
 
 This gives you the fully reproducible, toolchain-free story of a code-generation approach without a second
 mechanism to learn — but note that the file can now drift between regenerations, which is precisely what live
-providers avoid. Use it when you need it, not by default.
+resolvers avoid. Use it when you need it, not by default.
 
 ## Inspecting and troubleshooting
 
@@ -649,25 +649,25 @@ grog rdeps //crates/format:format   # who depends on this crate
 grog graph -o mermaid               # the whole graph
 ```
 
-`grog check` runs every referenced provider and reports what it found:
+`grog check` runs every referenced resolver and reports what it found:
 
 ```bash
 $ grog check
-provider //:cargo: builtin:cargo, cache hit, 4 packages, 3 edges
+resolver //:cargo: builtin:cargo, cache hit, 4 packages, 3 edges
 Build graph is valid.
 ```
 
-Run with `--log-level debug` to see each provider's command, cache key and full mapping.
+Run with `--log-level debug` to see each resolver's command, cache key and full mapping.
 
 ### Errors
 
 | Message | Cause and fix |
 | --- | --- |
-| `no dependency provider at //:cargo2 (referenced by //crates/cli:cli); declared: //:cargo, //:proto` | A typo, or a declaration you have not written yet. |
-| `provider //:cargo registered twice in package crates/cli: //crates/cli:cli and //crates/cli:build` | Only one target per package may register a provider. Register the filegroup and let the rest depend on it. |
-| `provider //:cargo reports crates/greet depends on crates/format, which has no target registered for //:cargo` | A workspace member with no BUILD file, or one whose target does not name the provider. Add the field, or remove the crate from the workspace. |
-| `provider //:cargo failed: exec: "cargo": executable file not found in $PATH` | The provider's tool is missing. Install it, warm the remote cache, or switch to a [committed mapping](#using-a-committed-mapping). |
-| `cycle detected: //crates/a:a -> //crates/b:b -> //crates/a:a` | The inferred graph is cyclic. Usually a dev-dependency edge from a custom provider — see [limitations](#limitations). |
+| `no dependency resolver at //:cargo2 (referenced by //crates/cli:cli); declared: //:cargo, //:proto` | A typo, or a declaration you have not written yet. |
+| `resolver //:cargo registered twice in package crates/cli: //crates/cli:cli and //crates/cli:build` | Only one target per package may register a resolver. Register the filegroup and let the rest depend on it. |
+| `resolver //:cargo reports crates/greet depends on crates/format, which has no target registered for //:cargo` | A workspace member with no BUILD file, or one whose target does not name the resolver. Add the field, or remove the crate from the workspace. |
+| `resolver //:cargo failed: exec: "cargo": executable file not found in $PATH` | The resolver's tool is missing. Install it, warm the remote cache, or switch to a [committed mapping](#using-a-committed-mapping). |
+| `cycle detected: //crates/a:a -> //crates/b:b -> //crates/a:a` | The inferred graph is cyclic. Usually a dev-dependency edge from a custom resolver — see [limitations](#limitations). |
 
 A workspace member that has **no** registered target at all is ignored, not an error: a repo may legitimately
 contain packages Grog does not build. It is only an error when a package Grog _does_ build depends on one.
@@ -681,17 +681,17 @@ up to date. Two details are worth knowing:
   (`Cargo.toml`, `pyproject.toml` and `package.json` are inputs in every guide's helper library), so the change
   is detected the ordinary way and `--dependents=transitive` propagates it.
 - For a manifest that is _not_ any target's input — most importantly a root workspace file adding or removing
-  members — Grog falls back to a conservative rule: if any file matched by a provider's `inputs` appears in the
-  diff, every target registered with that provider counts as changed.
+  members — Grog falls back to a conservative rule: if any file matched by a resolver's `inputs` appears in the
+  diff, every target registered with that resolver counts as changed.
 
 ## Limitations
 
-- **Dev dependencies and test-only imports are excluded** by the `cargo` and `go` providers. Both ecosystems
+- **Dev dependencies and test-only imports are excluded** by the `cargo` and `go` resolvers. Both ecosystems
   permit cycles there, and because inferred edges land on the package filegroup that every target depends on,
   importing them would turn legal workspaces into Grog cycles. Add those labels by hand on the `:test` target.
 - **Conditional dependencies are included unconditionally.** A `cfg(windows)`-only crate is an edge on Linux
   too. If that crate has no BUILD file you will get the "no target registered" error on every platform.
 - **One registered target per package.** Packages needing different inferred graphs for different targets are
   not expressible today; split the package or add the extra labels by hand.
-- **Providers run before the build, not as part of it.** They cannot depend on build outputs. A provider that
+- **Resolvers run before the build, not as part of it.** They cannot depend on build outputs. A resolver that
   needs generated code has to generate it itself.
