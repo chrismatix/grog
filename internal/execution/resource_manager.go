@@ -8,7 +8,6 @@ import (
 	"io"
 	"maps"
 	"os"
-	"os/exec"
 	"slices"
 	"sort"
 	"strings"
@@ -23,6 +22,7 @@ import (
 	"grog/internal/hashing"
 	"grog/internal/logs"
 	"grog/internal/model"
+	"grog/internal/shell"
 	"grog/internal/worker"
 )
 
@@ -322,35 +322,28 @@ func (m *ResourceManager) runHookCommand(
 	command string,
 	environment []string,
 ) ([]byte, error) {
-	script := command
-	if !config.Global.DisableDefaultShellFlags {
-		script = "set -eu\n" + command
-	}
-
-	scriptPath, cleanup, err := writeCommandScript(script)
+	shellCommand, cleanup, err := shell.NewCommand(ctx, shell.WithDefaultFlags(command))
 	if err != nil {
 		return nil, err
 	}
 	defer cleanup()
 
-	cmd := exec.CommandContext(ctx, "sh", scriptPath)
-	cmd.WaitDelay = 1 * time.Second
-	cmd.Dir = config.GetPathAbsoluteToWorkspaceRoot(resource.Label.Package)
-	cmd.Env = environment
+	shellCommand.Dir = config.GetPathAbsoluteToWorkspaceRoot(resource.Label.Package)
+	shellCommand.Env = environment
 
 	resourceLogs := logs.NewTargetLogFile(model.Target{Label: resource.Label})
 	var buffer bytes.Buffer
 	if logWriter, logErr := resourceLogs.Open(); logErr == nil {
 		defer logWriter.Close()
 		multiOut := io.MultiWriter(&buffer, logWriter)
-		cmd.Stdout = multiOut
-		cmd.Stderr = multiOut
+		shellCommand.Stdout = multiOut
+		shellCommand.Stderr = multiOut
 	} else {
-		cmd.Stdout = &buffer
-		cmd.Stderr = &buffer
+		shellCommand.Stdout = &buffer
+		shellCommand.Stderr = &buffer
 	}
 
-	if err := cmd.Run(); err != nil {
+	if err := shellCommand.Run(); err != nil {
 		return buffer.Bytes(), err
 	}
 	return buffer.Bytes(), nil
