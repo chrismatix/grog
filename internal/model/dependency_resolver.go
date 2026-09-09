@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-// DependencyProvider declares a command that infers dependencies during loading.
-type DependencyProvider struct {
+// DependencyResolver declares a command that infers dependencies during loading.
+type DependencyResolver struct {
 	SourceFilePath string
 	Label          label.TargetLabel
 	Command        string

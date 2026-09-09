@@ -102,17 +102,17 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 			}
 		}
 
-		var dependencyProviders []label.TargetLabel
-		for _, provider := range target.DependencyProviders {
-			providerLabel, parseError := label.ParseTargetLabel(packagePath, provider)
+		var dependencyResolvers []label.TargetLabel
+		for _, resolver := range target.DependencyResolvers {
+			resolverLabel, parseError := label.ParseTargetLabel(packagePath, resolver)
 			if parseError != nil {
-				return nil, fmt.Errorf("failed to parse dependency provider for target %s: %w", targetLabel, parseError)
+				return nil, fmt.Errorf("failed to parse dependency resolver for target %s: %w", targetLabel, parseError)
 			}
-			dependencyProviders = append(dependencyProviders, providerLabel)
+			dependencyResolvers = append(dependencyResolvers, resolverLabel)
 		}
 
 		targets[targetLabel] = &model.Target{
-			DependencyProviders:  dependencyProviders,
+			DependencyResolvers:  dependencyResolvers,
 			SourceFilePath:       pkg.SourceFilePath,
 			Label:                targetLabel,
 			Command:              target.Command,
@@ -199,40 +199,40 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 		}
 	}
 
-	dependencyProviders := make(map[label.TargetLabel]*model.DependencyProvider)
-	for _, provider := range pkg.DependencyProviders {
-		providerLabel, enrichmentError := label.ParseTargetLabel(packagePath, ":"+provider.Name)
+	dependencyResolvers := make(map[label.TargetLabel]*model.DependencyResolver)
+	for _, resolver := range pkg.DependencyResolvers {
+		resolverLabel, enrichmentError := label.ParseTargetLabel(packagePath, ":"+resolver.Name)
 		if enrichmentError != nil {
-			return nil, fmt.Errorf("invalid dependency provider name: %w", enrichmentError)
+			return nil, fmt.Errorf("invalid dependency resolver name: %w", enrichmentError)
 		}
-		if targets[providerLabel] != nil || aliases[providerLabel] != nil || resources[providerLabel] != nil || dependencyProviders[providerLabel] != nil {
-			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", provider.Name, pkg.SourceFilePath)
+		if targets[resolverLabel] != nil || aliases[resolverLabel] != nil || resources[resolverLabel] != nil || dependencyResolvers[resolverLabel] != nil {
+			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", resolver.Name, pkg.SourceFilePath)
 		}
-		if provider.Command == "" {
-			return nil, fmt.Errorf("dependency provider %s must define a command (package file %s)", providerLabel, pkg.SourceFilePath)
+		if resolver.Command == "" {
+			return nil, fmt.Errorf("dependency resolver %s must define a command (package file %s)", resolverLabel, pkg.SourceFilePath)
 		}
 		timeout := 60 * time.Second
-		if provider.Timeout != "" {
-			timeout, enrichmentError = time.ParseDuration(provider.Timeout)
+		if resolver.Timeout != "" {
+			timeout, enrichmentError = time.ParseDuration(resolver.Timeout)
 			if enrichmentError != nil {
-				return nil, fmt.Errorf("failed to parse timeout for dependency provider %s: %w", providerLabel, enrichmentError)
+				return nil, fmt.Errorf("failed to parse timeout for dependency resolver %s: %w", resolverLabel, enrichmentError)
 			}
 		}
-		inputs := provider.Inputs
-		if len(inputs) == 0 && provider.Command == "builtin:cargo" {
+		inputs := resolver.Inputs
+		if len(inputs) == 0 && resolver.Command == "builtin:cargo" {
 			inputs = []string{"Cargo.toml", "*/Cargo.toml", "*/*/Cargo.toml", "Cargo.lock"}
 		}
 		resolvedInputs, enrichmentError := resolveInputs(logger, absolutePackagePath, inputs, nil)
 		if enrichmentError != nil {
-			return nil, fmt.Errorf("failed to resolve inputs for dependency provider %s: %w", providerLabel, enrichmentError)
+			return nil, fmt.Errorf("failed to resolve inputs for dependency resolver %s: %w", resolverLabel, enrichmentError)
 		}
-		dependencyProviders[providerLabel] = &model.DependencyProvider{
-			SourceFilePath: pkg.SourceFilePath, Label: providerLabel, Command: provider.Command, Inputs: resolvedInputs, Timeout: timeout,
+		dependencyResolvers[resolverLabel] = &model.DependencyResolver{
+			SourceFilePath: pkg.SourceFilePath, Label: resolverLabel, Command: resolver.Command, Inputs: resolvedInputs, Timeout: timeout,
 		}
 	}
 
 	return &model.Package{
-		DependencyProviders: dependencyProviders,
+		DependencyResolvers: dependencyResolvers,
 		Path:                packagePath,
 		Targets:             targets,
 		Aliases:             aliases,
