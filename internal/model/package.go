@@ -8,6 +8,7 @@ import (
 
 // Package defines all the information that a package needs to build.
 type Package struct {
+	DependencyProviders map[label.TargetLabel]*DependencyProvider `json:"dependency_providers,omitempty"`
 	// Record the path to this package relative to the workspace root
 	Path string
 
