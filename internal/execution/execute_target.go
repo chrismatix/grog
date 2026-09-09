@@ -10,12 +10,12 @@ import (
 	"grog/internal/console"
 	"grog/internal/logs"
 	"grog/internal/model"
+	"grog/internal/shell"
 	"io"
 	"os"
 	"os/exec"
 	"strings"
 	"text/template"
-	"time"
 )
 
 //go:embed run_sh.sh.tmpl
@@ -122,21 +122,11 @@ func runTargetCommand(
 		return nil, err
 	}
 
-	// Execute the rendered script as a file rather than `sh -c "<script>"`: a
-	// single argv element is capped at MAX_ARG_STRLEN (128 KB), which the
-	// per-dependency output prelude can exceed ("argument list too long").
-	// `sh` reads the file as data, so it needs no execute bit.
-	scriptPath, cleanup, err := writeCommandScript(templatedCommand)
+	cmd, cleanup, err := shell.NewCommand(ctx, templatedCommand, ExtraArgsFromContext(ctx)...)
 	if err != nil {
 		return nil, err
 	}
 	defer cleanup()
-
-	// Extra args (from "grog test //target -- -k foo") follow the script path so
-	// they expand to $@. With a script file $0 is the path, so no placeholder.
-	shellArgs := append([]string{scriptPath}, ExtraArgsFromContext(ctx)...)
-	cmd := exec.CommandContext(ctx, "sh", shellArgs...)
-	cmd.WaitDelay = 1 * time.Second // cancellation grace time
 
 	// Attach env variables to the existing environment
 	cmd.Env = append(GetExtendedTargetEnv(ctx, target), resourceEnvironment...)
@@ -187,28 +177,6 @@ func runTargetCommand(
 	return buffer.Bytes(), nil
 }
 
-// writeCommandScript writes the rendered shell script to a temp file and returns
-// its path plus a cleanup func. Running a file avoids the per-argument size limit
-// (MAX_ARG_STRLEN) that large dependency-output preludes can exceed under `sh -c`.
-func writeCommandScript(script string) (string, func(), error) {
-	noop := func() {}
-	f, err := os.CreateTemp("", "grog-cmd-*.sh")
-	if err != nil {
-		return "", noop, fmt.Errorf("failed to create command script file: %w", err)
-	}
-	cleanup := func() { _ = os.Remove(f.Name()) }
-	if _, err := f.WriteString(script); err != nil {
-		_ = f.Close()
-		cleanup()
-		return "", noop, fmt.Errorf("failed to write command script file: %w", err)
-	}
-	if err := f.Close(); err != nil {
-		cleanup()
-		return "", noop, fmt.Errorf("failed to close command script file: %w", err)
-	}
-	return f.Name(), cleanup, nil
-}
-
 func GetExtendedTargetEnv(ctx context.Context, target *model.Target) []string {
 	gitHash, err := config.GetGitHash()
 	if err != nil {
@@ -241,10 +209,7 @@ func getCommand(toolMap BinToolMap, outputMap OutputIdentifierMap, transitiveOut
 		return "", fmt.Errorf("failed to parse run template: %w", err)
 	}
 
-	userCommand := command
-	if !config.Global.DisableDefaultShellFlags {
-		userCommand = fmt.Sprintf("set -eu\n%s", command)
-	}
+	userCommand := shell.WithDefaultFlags(command)
 
 	data := templateData{
 		BinToolMap:              toolMap,

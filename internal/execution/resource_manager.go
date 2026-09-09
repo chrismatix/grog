@@ -8,7 +8,6 @@ import (
 	"io"
 	"maps"
 	"os"
-	"os/exec"
 	"slices"
 	"sort"
 	"strings"
@@ -23,6 +22,7 @@ import (
 	"grog/internal/hashing"
 	"grog/internal/logs"
 	"grog/internal/model"
+	"grog/internal/shell"
 	"grog/internal/worker"
 )
 
@@ -322,19 +322,12 @@ func (m *ResourceManager) runHookCommand(
 	command string,
 	environment []string,
 ) ([]byte, error) {
-	script := command
-	if !config.Global.DisableDefaultShellFlags {
-		script = "set -eu\n" + command
-	}
-
-	scriptPath, cleanup, err := writeCommandScript(script)
+	cmd, cleanup, err := shell.NewCommand(ctx, shell.WithDefaultFlags(command))
 	if err != nil {
 		return nil, err
 	}
 	defer cleanup()
 
-	cmd := exec.CommandContext(ctx, "sh", scriptPath)
-	cmd.WaitDelay = 1 * time.Second
 	cmd.Dir = config.GetPathAbsoluteToWorkspaceRoot(resource.Label.Package)
 	cmd.Env = environment
 
