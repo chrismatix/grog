@@ -1,24 +1,26 @@
 targets:
-  - name: build
+  - name: format
     inputs:
       - "src/**/*.rs"
       - "Cargo.toml"
+    dependency_providers: ["//:cargo"]
     dependencies:
       - //:workspace
+
+  - name: build
+    dependencies:
+      - //:workspace
+      - :format
     command: cargo build -p format --release
 
   - name: test
-    inputs:
-      - "src/**/*.rs"
-      - "Cargo.toml"
     dependencies:
       - //:workspace
+      - :format
     command: cargo test -p format
 
   - name: clippy
-    inputs:
-      - "src/**/*.rs"
-      - "Cargo.toml"
     dependencies:
       - //:workspace
+      - :format
     command: cargo clippy -p format --all-targets -- -D warnings
