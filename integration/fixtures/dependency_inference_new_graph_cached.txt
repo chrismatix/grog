@@ -1,0 +1,6 @@
+INFO: 4 packages loaded, 3 targets configured.
+INFO: Selected 3 targets.
+INFO: //crates/app:sources    DONE (cached)
+INFO: //crates/leaf:sources   DONE (cached)
+INFO: //crates/shared:sources DONE (cached)
+INFO: Build completed successfully. 3 targets completed (3 cache hits).

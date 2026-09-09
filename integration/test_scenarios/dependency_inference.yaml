@@ -1,0 +1,22 @@
+name: dependency inference
+repo: dependency_inference
+cases:
+  - name: dependency_inference_initial
+    grog_args: [build, "//..."]
+  - name: dependency_inference_cached
+    grog_args: [build, "//..."]
+  - name: dependency_inference_add_path_dependency
+    setup_command: |
+      cp crates/shared/Cargo.toml Cargo.toml.backup
+      cp crates/leaf/source.txt source.txt.backup
+      printf '\n[dependencies]\nleaf = { path = "../leaf" }\n' >> crates/shared/Cargo.toml
+  - name: dependency_inference_manifest_invalidates_downstream
+    grog_args: [build, "//..."]
+  - name: dependency_inference_new_graph_cached
+    grog_args: [build, "//..."]
+  - name: dependency_inference_change_leaf
+    setup_command: "printf 'leaf version two\n' > crates/leaf/source.txt"
+  - name: dependency_inference_new_edge_invalidates_transitively
+    grog_args: [build, "//..."]
+  - name: dependency_inference_restore
+    setup_command: "mv Cargo.toml.backup crates/shared/Cargo.toml; mv source.txt.backup crates/leaf/source.txt"
