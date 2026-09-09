@@ -25,6 +25,10 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 	aliases := make(map[label.TargetLabel]*model.Alias)
 	absolutePackagePath := config.GetPathAbsoluteToWorkspaceRoot(packagePath)
 
+	if packagePath == "." {
+		packagePath = ""
+	}
+
 	for _, target := range pkg.Targets {
 		var deps []label.TargetLabel
 		// parse labels
@@ -98,7 +102,17 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 			}
 		}
 
+		var dependencyProviders []label.TargetLabel
+		for _, provider := range target.DependencyProviders {
+			providerLabel, err := label.ParseTargetLabel(packagePath, provider)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse dependency provider for target %s: %w", targetLabel, err)
+			}
+			dependencyProviders = append(dependencyProviders, providerLabel)
+		}
+
 		targets[targetLabel] = &model.Target{
+			DependencyProviders:  dependencyProviders,
 			SourceFilePath:       pkg.SourceFilePath,
 			Label:                targetLabel,
 			Command:              target.Command,
@@ -185,11 +199,44 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 		}
 	}
 
+	dependencyProviders := make(map[label.TargetLabel]*model.DependencyProvider)
+	for _, provider := range pkg.DependencyProviders {
+		providerLabel, err := label.ParseTargetLabel(packagePath, ":"+provider.Name)
+		if err != nil {
+			return nil, fmt.Errorf("invalid dependency provider name: %w", err)
+		}
+		if targets[providerLabel] != nil || aliases[providerLabel] != nil || resources[providerLabel] != nil || dependencyProviders[providerLabel] != nil {
+			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", provider.Name, pkg.SourceFilePath)
+		}
+		if provider.Command == "" {
+			return nil, fmt.Errorf("dependency provider %s must define a command (package file %s)", providerLabel, pkg.SourceFilePath)
+		}
+		timeout := 60 * time.Second
+		if provider.Timeout != "" {
+			timeout, err = time.ParseDuration(provider.Timeout)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse timeout for dependency provider %s: %w", providerLabel, err)
+			}
+		}
+		inputs := provider.Inputs
+		if len(inputs) == 0 && provider.Command == "builtin:cargo" {
+			inputs = []string{"Cargo.toml", "*/Cargo.toml", "*/*/Cargo.toml", "Cargo.lock"}
+		}
+		resolvedInputs, err := resolveInputs(logger, absolutePackagePath, inputs, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve inputs for dependency provider %s: %w", providerLabel, err)
+		}
+		dependencyProviders[providerLabel] = &model.DependencyProvider{
+			SourceFilePath: pkg.SourceFilePath, Label: providerLabel, Command: provider.Command, Inputs: resolvedInputs, Timeout: timeout,
+		}
+	}
+
 	return &model.Package{
-		Path:      packagePath,
-		Targets:   targets,
-		Aliases:   aliases,
-		Resources: resources,
+		DependencyProviders: dependencyProviders,
+		Path:                packagePath,
+		Targets:             targets,
+		Aliases:             aliases,
+		Resources:           resources,
 	}, nil
 }
 
