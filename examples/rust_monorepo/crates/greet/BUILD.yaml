@@ -1,11 +1,11 @@
 targets:
   - name: build
+    dependency_providers: ["//:cargo"]
     inputs:
       - "src/**/*.rs"
       - "Cargo.toml"
     dependencies:
       - //:workspace
-      - //crates/format:build
     command: cargo build -p greet --release
 
   - name: test
@@ -14,7 +14,7 @@ targets:
       - "Cargo.toml"
     dependencies:
       - //:workspace
-      - //crates/format:build
+      - :build
     command: cargo test -p greet
 
   - name: clippy
@@ -23,5 +23,5 @@ targets:
       - "Cargo.toml"
     dependencies:
       - //:workspace
-      - //crates/format:build
+      - :build
     command: cargo clippy -p greet --all-targets -- -D warnings
