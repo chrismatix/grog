@@ -46,7 +46,7 @@ needs a few things Cargo alone does not give you:
    compiling, `crates/server:clippy` and `crates/format:test` are running
    on other cores.
 
-The root `cargo` dependency provider reads the Cargo manifests and infers the
+The root `cargo` dependency resolver reads the Cargo manifests and infers the
 cross-crate edges for each crate's input filegroup (`:cli`, `:format`, `:greet`,
 and `:server`). Build, test, and clippy targets depend on that filegroup, so
 dependency changes invalidate each action even if a compiled binary is unchanged.

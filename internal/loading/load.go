@@ -142,28 +142,28 @@ func mergePackages(from *model.Package, into *model.Package) error {
 		into.Resources = make(map[label.TargetLabel]*model.Resource)
 	}
 
-	if into.DependencyProviders == nil {
-		into.DependencyProviders = make(map[label.TargetLabel]*model.DependencyProvider)
+	if into.DependencyResolvers == nil {
+		into.DependencyResolvers = make(map[label.TargetLabel]*model.DependencyResolver)
 	}
-	for providerLabel, provider := range from.DependencyProviders {
-		if existing := into.DependencyProviders[providerLabel]; existing != nil {
-			return fmt.Errorf("duplicate dependency provider label: %s (defined in %s and %s)", providerLabel, existing.SourceFilePath, provider.SourceFilePath)
+	for resolverLabel, resolver := range from.DependencyResolvers {
+		if existing := into.DependencyResolvers[resolverLabel]; existing != nil {
+			return fmt.Errorf("duplicate dependency resolver label: %s (defined in %s and %s)", resolverLabel, existing.SourceFilePath, resolver.SourceFilePath)
 		}
-		if existing := into.Targets[providerLabel]; existing != nil {
-			return fmt.Errorf("duplicate dependency provider label: %s (defined in %s and as target in %s)", providerLabel, provider.SourceFilePath, existing.SourceFilePath)
+		if existing := into.Targets[resolverLabel]; existing != nil {
+			return fmt.Errorf("duplicate dependency resolver label: %s (defined in %s and as target in %s)", resolverLabel, resolver.SourceFilePath, existing.SourceFilePath)
 		}
-		if existing := into.Aliases[providerLabel]; existing != nil {
-			return fmt.Errorf("duplicate dependency provider label: %s (defined in %s and as alias in %s)", providerLabel, provider.SourceFilePath, existing.SourceFilePath)
+		if existing := into.Aliases[resolverLabel]; existing != nil {
+			return fmt.Errorf("duplicate dependency resolver label: %s (defined in %s and as alias in %s)", resolverLabel, resolver.SourceFilePath, existing.SourceFilePath)
 		}
-		if existing := into.Resources[providerLabel]; existing != nil {
-			return fmt.Errorf("duplicate dependency provider label: %s (defined in %s and as resource in %s)", providerLabel, provider.SourceFilePath, existing.SourceFilePath)
+		if existing := into.Resources[resolverLabel]; existing != nil {
+			return fmt.Errorf("duplicate dependency resolver label: %s (defined in %s and as resource in %s)", resolverLabel, resolver.SourceFilePath, existing.SourceFilePath)
 		}
-		into.DependencyProviders[providerLabel] = provider
+		into.DependencyResolvers[resolverLabel] = resolver
 	}
 
 	for fromTargetLabel, fromTarget := range from.Targets {
-		if existing := into.DependencyProviders[fromTargetLabel]; existing != nil {
-			return fmt.Errorf("duplicate target label: %s (defined in %s and as dependency provider in %s)", fromTargetLabel, fromTarget.SourceFilePath, existing.SourceFilePath)
+		if existing := into.DependencyResolvers[fromTargetLabel]; existing != nil {
+			return fmt.Errorf("duplicate target label: %s (defined in %s and as dependency resolver in %s)", fromTargetLabel, fromTarget.SourceFilePath, existing.SourceFilePath)
 		}
 		if intoTarget, exists := into.Targets[fromTargetLabel]; exists {
 			return fmt.Errorf("duplicate target label: %s (defined in %s and %s)", fromTargetLabel, intoTarget.SourceFilePath, fromTarget.SourceFilePath)
@@ -178,8 +178,8 @@ func mergePackages(from *model.Package, into *model.Package) error {
 	}
 
 	for fromAliasLabel, fromAlias := range from.Aliases {
-		if existing := into.DependencyProviders[fromAliasLabel]; existing != nil {
-			return fmt.Errorf("duplicate alias label: %s (defined in %s and as dependency provider in %s)", fromAliasLabel, fromAlias.SourceFilePath, existing.SourceFilePath)
+		if existing := into.DependencyResolvers[fromAliasLabel]; existing != nil {
+			return fmt.Errorf("duplicate alias label: %s (defined in %s and as dependency resolver in %s)", fromAliasLabel, fromAlias.SourceFilePath, existing.SourceFilePath)
 		}
 		if intoAlias, exists := into.Aliases[fromAliasLabel]; exists {
 			return fmt.Errorf("duplicate target label: %s (defined in %s and %s)", fromAliasLabel, intoAlias.SourceFilePath, fromAlias.SourceFilePath)
@@ -194,8 +194,8 @@ func mergePackages(from *model.Package, into *model.Package) error {
 	}
 
 	for fromResourceLabel, fromResource := range from.Resources {
-		if existing := into.DependencyProviders[fromResourceLabel]; existing != nil {
-			return fmt.Errorf("duplicate resource label: %s (defined in %s and as dependency provider in %s)", fromResourceLabel, fromResource.SourceFilePath, existing.SourceFilePath)
+		if existing := into.DependencyResolvers[fromResourceLabel]; existing != nil {
+			return fmt.Errorf("duplicate resource label: %s (defined in %s and as dependency resolver in %s)", fromResourceLabel, fromResource.SourceFilePath, existing.SourceFilePath)
 		}
 		if intoResource, exists := into.Resources[fromResourceLabel]; exists {
 			return fmt.Errorf("duplicate resource label: %s (defined in %s and %s)", fromResourceLabel, intoResource.SourceFilePath, fromResource.SourceFilePath)

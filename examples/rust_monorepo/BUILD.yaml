@@ -1,4 +1,4 @@
-dependency_providers:
+dependency_resolvers:
   - name: cargo
     command: builtin:cargo
 

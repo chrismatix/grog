@@ -37,7 +37,7 @@ func TestCargoDependencies(t *testing.T) {
 	}
 }
 
-func TestCargoProviderErrors(t *testing.T) {
+func TestCargoResolverErrors(t *testing.T) {
 	for _, testCase := range []struct {
 		name          string
 		root          string
@@ -65,7 +65,7 @@ func TestCargoProviderErrors(t *testing.T) {
 	}
 }
 
-func TestCargoProviderRootMemberAndReadOnly(t *testing.T) {
+func TestCargoResolverRootMemberAndReadOnly(t *testing.T) {
 	directory := t.TempDir()
 	require.NoError(t, os.CopyFS(directory, os.DirFS("testdata/cargo")))
 	rootManifest := []byte("[workspace]\nmembers = ['.', 'crates/*']\n[package]\nname = 'root'\nversion = '0.1.0'\n[dependencies]\napp = { path = 'crates/app' }\n")
@@ -88,10 +88,10 @@ func TestCargoProviderRootMemberAndReadOnly(t *testing.T) {
 	require.ErrorIs(t, operationError, context.Canceled)
 }
 
-func TestCargoProviderRustExample(t *testing.T) {
+func TestCargoResolverRustExample(t *testing.T) {
 	document, operationError := cargoDependencies(t.Context(), "../../examples/rust_monorepo")
 	require.NoError(t, operationError)
-	require.Equal(t, map[string]providerPackage{
+	require.Equal(t, map[string]resolverPackage{
 		"crates/cli":    {Dependencies: []string{"crates/greet"}},
 		"crates/format": {Dependencies: []string{}},
 		"crates/greet":  {Dependencies: []string{"crates/format"}},

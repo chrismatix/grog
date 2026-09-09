@@ -51,7 +51,7 @@ func (o *ociPushDestinations) UnmarshalJSON(data []byte) error {
 // TargetDTO is used for deserializing a target in a loader.
 // The target is used internally is in model.Target.
 type TargetDTO struct {
-	DependencyProviders []string `json:"dependency_providers,omitempty" yaml:"dependency_providers,omitempty" pkl:"dependency_providers" starlark:"dependency_providers"`
+	DependencyResolvers []string `json:"dependency_resolvers,omitempty" yaml:"dependency_resolvers,omitempty" pkl:"dependency_resolvers" starlark:"dependency_resolvers"`
 	Name                string   `json:"name" yaml:"name" pkl:"name" starlark:"name"`
 	Command             string   `json:"command" yaml:"command" pkl:"command" starlark:"command"`
 	Dependencies        []string `json:"dependencies,omitempty" yaml:"dependencies,omitempty" pkl:"dependencies" starlark:"dependencies"`
@@ -93,8 +93,8 @@ type ResourceDTO struct {
 	Dependencies []string          `json:"dependencies,omitempty" yaml:"dependencies,omitempty" pkl:"dependencies" starlark:"dependencies"`
 }
 
-// DependencyProviderDTO is a load-time dependency provider declaration.
-type DependencyProviderDTO struct {
+// DependencyResolverDTO is a load-time dependency resolver declaration.
+type DependencyResolverDTO struct {
 	Name    string   `json:"name" yaml:"name" pkl:"name" starlark:"name"`
 	Command string   `json:"command" yaml:"command" pkl:"command" starlark:"command"`
 	Inputs  []string `json:"inputs,omitempty" yaml:"inputs,omitempty" pkl:"inputs" starlark:"inputs"`
@@ -111,7 +111,7 @@ type EnvironmentDTO struct {
 // PackageDTO is used for deserializing a package in a loader.
 // The package that we use internally is in model.Package.
 type PackageDTO struct {
-	DependencyProviders []*DependencyProviderDTO `json:"dependency_providers" yaml:"dependency_providers" pkl:"dependency_providers" starlark:"dependency_providers"`
+	DependencyResolvers []*DependencyResolverDTO `json:"dependency_resolvers" yaml:"dependency_resolvers" pkl:"dependency_resolvers" starlark:"dependency_resolvers"`
 	// Record the path to the source file that defines this package.
 	// Note that in the final model package this is stored on the target level not the package
 	SourceFilePath string

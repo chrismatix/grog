@@ -24,9 +24,9 @@ type cargoManifest struct {
 	Target            map[string]cargoDependencyTables `toml:"target"`
 }
 
-func cargoDependencies(providerContext context.Context, workspaceDirectory string) (providerDocument, error) {
-	document := providerDocument{Version: 1, Packages: make(map[string]providerPackage)}
-	workspaceManifest, operationError := readCargoManifest(providerContext, filepath.Join(workspaceDirectory, "Cargo.toml"))
+func cargoDependencies(resolverContext context.Context, workspaceDirectory string) (resolverDocument, error) {
+	document := resolverDocument{Version: 1, Packages: make(map[string]resolverPackage)}
+	workspaceManifest, operationError := readCargoManifest(resolverContext, filepath.Join(workspaceDirectory, "Cargo.toml"))
 	if operationError != nil {
 		return document, operationError
 	}
@@ -48,11 +48,11 @@ func cargoDependencies(providerContext context.Context, workspaceDirectory strin
 		}
 	}
 	for memberDirectory, memberPath := range members {
-		manifest, operationError := readCargoManifest(providerContext, filepath.Join(memberDirectory, "Cargo.toml"))
+		manifest, operationError := readCargoManifest(resolverContext, filepath.Join(memberDirectory, "Cargo.toml"))
 		if operationError != nil {
 			return document, operationError
 		}
-		reportedPackage := providerPackage{Dependencies: []string{}}
+		reportedPackage := resolverPackage{Dependencies: []string{}}
 		dependencyTables := []map[string]any{manifest.Dependencies, manifest.BuildDependencies}
 		for _, conditional := range manifest.Target {
 			dependencyTables = append(dependencyTables, conditional.Dependencies, conditional.BuildDependencies)
@@ -77,12 +77,12 @@ func cargoDependencies(providerContext context.Context, workspaceDirectory strin
 		reportedPackage.Dependencies = slices.Compact(reportedPackage.Dependencies)
 		document.Packages[memberPath] = reportedPackage
 	}
-	return document, providerContext.Err()
+	return document, resolverContext.Err()
 }
 
-func readCargoManifest(providerContext context.Context, manifestPath string) (cargoManifest, error) {
+func readCargoManifest(resolverContext context.Context, manifestPath string) (cargoManifest, error) {
 	var manifest cargoManifest
-	if operationError := providerContext.Err(); operationError != nil {
+	if operationError := resolverContext.Err(); operationError != nil {
 		return manifest, operationError
 	}
 	contents, operationError := os.ReadFile(manifestPath)

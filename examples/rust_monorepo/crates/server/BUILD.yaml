@@ -3,7 +3,7 @@ targets:
     inputs:
       - "src/**/*.rs"
       - "Cargo.toml"
-    dependency_providers: ["//:cargo"]
+    dependency_resolvers: ["//:cargo"]
     dependencies:
       - //:workspace
 

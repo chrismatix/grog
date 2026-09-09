@@ -2,4 +2,4 @@ targets:
   - name: sources
     inputs: ["Cargo.toml", "source.txt"]
     command: echo building leaf
-    dependency_providers: ["//:cargo"]
+    dependency_resolvers: ["//:cargo"]
