@@ -1,0 +1,3 @@
+dependency_providers:
+  - name: cargo
+    command: builtin:cargo

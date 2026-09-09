@@ -1,0 +1,6 @@
+name: dependency inference missing registration
+repo: dependency_inference_missing
+cases:
+  - name: dependency_inference_unregistered_dependency
+    grog_args: [check]
+    expect_fail: true
