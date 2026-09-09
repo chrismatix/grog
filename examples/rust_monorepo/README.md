@@ -8,7 +8,7 @@ independently per crate.
 crates/
 ├── format/   # leaf lib  – string helpers
 ├── greet/    # lib       – depends on format
-├── cli/      # binary    – depends on format + greet
+├── cli/      # binary    – depends on greet
 └── server/   # binary    – depends on greet (tiny stdlib HTTP server)
 ```
 
@@ -45,6 +45,12 @@ needs a few things Cargo alone does not give you:
    Grog parallelizes the _DAG of actions_: while `crates/cli:build` is
    compiling, `crates/server:clippy` and `crates/format:test` are running
    on other cores.
+
+The root `cargo` dependency provider reads the Cargo manifests and infers the
+cross-crate edges for each crate's input filegroup (`:cli`, `:format`, `:greet`,
+and `:server`). Build, test, and clippy targets depend on that filegroup, so
+dependency changes invalidate each action even if a compiled binary is unchanged.
+Adding a Cargo path dependency requires no BUILD file edit.
 
 ## Try it
 
