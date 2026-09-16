@@ -1,0 +1,6 @@
+INFO: 4 packages loaded, 3 targets configured.
+INFO: Selected 3 targets.
+INFO: //proto/base:generate  DONE (cached)
+INFO: //proto/order:generate DONE (cached)
+INFO: //proto/user:generate  DONE (cached)
+INFO: Build completed successfully. 3 targets completed (3 cache hits).
