@@ -1,0 +1,8 @@
+# uv.lock is the resolver's input, not any target's, so a lockfile edit
+# re-runs the resolver and only invalidates the packages whose edges changed.
+dependency_resolvers:
+  - name: uv
+    command: python3 tools/resolve_uv_workspace.py
+    inputs:
+      - "tools/resolve_uv_workspace.py"
+      - "uv.lock"
