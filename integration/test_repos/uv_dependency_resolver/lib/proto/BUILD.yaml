@@ -1,6 +1,0 @@
-targets:
-  # Workspace dependencies come from uv.lock, so none are listed here.
-  - name: sources
-    inputs: ["**/*.py", "pyproject.toml"]
-    command: echo checking demo-proto
-    dependency_resolvers: ["//:uv"]

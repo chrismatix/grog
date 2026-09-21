@@ -2,6 +2,6 @@ INFO: 5 packages loaded, 4 targets configured.
 INFO: Selected 4 targets.
 INFO: //cli:sources        DONE
 INFO: //lib/format:sources DONE (cached)
-INFO: //lib/proto:sources  DONE (cached)
+INFO: //lib/proto:_uv      DONE (cached)
 INFO: //server:sources     DONE (cached)
 INFO: Build completed successfully. 4 targets completed (3 cache hits).

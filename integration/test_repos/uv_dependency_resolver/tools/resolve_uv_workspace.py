@@ -42,6 +42,11 @@ for package in lock["package"]:
             if dependency_directory and dependency_directory != directory:
                 dependency_directories.add(dependency_directory)
 
-    packages[directory] = {"dependencies": sorted(dependency_directories)}
+    # Declaring inputs lets grog synthesize a filegroup for a member that has
+    # no BUILD file, so it can still be depended on and invalidated.
+    packages[directory] = {
+        "dependencies": sorted(dependency_directories),
+        "inputs": ["**/*.py", "pyproject.toml"],
+    }
 
 json.dump({"version": 1, "packages": packages}, sys.stdout)

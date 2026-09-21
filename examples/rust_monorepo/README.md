@@ -46,11 +46,12 @@ needs a few things Cargo alone does not give you:
    compiling, `crates/server:clippy` and `crates/format:test` are running
    on other cores.
 
-The root `cargo` dependency resolver reads the Cargo manifests and infers the
-cross-crate edges for each crate's input filegroup (`:cli`, `:format`, `:greet`,
-and `:server`). Build, test, and clippy targets depend on that filegroup, so
-dependency changes invalidate each action even if a compiled binary is unchanged.
-Adding a Cargo path dependency requires no BUILD file edit.
+No BUILD file in this workspace lists a source file or another crate. The
+root `cargo` dependency resolver reads the Cargo manifests and synthesizes a
+`:_cargo` filegroup per crate — its inputs from the crate's layout, its
+dependencies from the crate's `path` entries. Build, test, and clippy targets
+depend on `:_cargo`, so adding a source file or a path dependency needs no
+BUILD file edit and still invalidates every downstream action.
 
 ## Try it
 
