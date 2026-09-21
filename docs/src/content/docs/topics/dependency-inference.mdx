@@ -440,6 +440,9 @@ reads the graph, with its output cached.
 4. **Non-interactive.** stdin is the null device, so a read returns EOF. A resolver that waits for input hangs
    every `grog` command, including shell completion.
 5. **Bounded.** It must finish within the declaration's `timeout` (default `60s`).
+6. **Complete.** Report every edge whose change should rebuild the importing package, including conditional
+   ones. An omitted edge is the silent staleness inference exists to remove, and nothing downstream can detect
+   it — the built-in resolvers over-approximate for this reason, and a resolver you write should too.
 
 **Invocation.** The command runs through the same shell as target commands (including the default `set -eu`,
 subject to [`disable_default_shell_flags`](/reference/configuration)), with the working directory set to the
@@ -671,4 +674,8 @@ changed.
   too, and if it has no BUILD file you get the "no target registered" error on every platform.
 - **One registered target per package.** A package needing different inferred graphs for different targets is
   not expressible; split it, or add the extra labels by hand.
+- **A package with no registered target cannot be depended on.** It is ignored while nothing points at it, and a
+  load error as soon as a participating package does. Letting a resolver declare a package's `inputs` so Grog can
+  synthesize the missing filegroup is the planned fix; until then, register a target or drop the package from
+  the workspace.
 - **Resolvers cannot depend on build outputs**, since they run before the build rather than as part of it.

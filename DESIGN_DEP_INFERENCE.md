@@ -43,6 +43,12 @@ The design is governed by one invariant:
 Extra edges cost rebuilds; missing edges cost correctness. Every ambiguous call below — platform-conditional
 dependencies, optional features, dev-dependencies — resolves toward the superset.
 
+The invariant binds **resolver authors**, not just BUILD files. Moving the graph out of BUILD files moves the
+place where under-invalidation can originate along with it: a resolver that omits an edge produces exactly the
+silent staleness this feature exists to remove, and no amount of care in a BUILD file can compensate. The
+built-in resolvers are the reference implementation of meeting it, which is why they exclude nothing they are
+unsure about (§6) and why Q13 makes completeness an explicit obligation once resolvers can declare inputs.
+
 ## 2. User stories
 
 **S1 — Rust, cargo workspace.** `examples/rust_monorepo`. Four crates, three path dependencies. The author
@@ -397,7 +403,12 @@ the `GROG_*` loader variables from `loader_env.go`, plus `GROG_RESOLVER_LABEL`.
   literal grog label. This is the format's only flexibility point, and it exists so a custom resolver can point
   at a specific target (`//lib/proto:codegen`) without grog inventing a naming convention.
 - Each package's value is an object, not a bare list, so `inputs`, `test_dependencies` or similar can be added
-  later without a format break. `version` gates that.
+  later without a format break. `version` gates that. Q13 describes the `inputs` extension; because a resolver
+  that omits the field behaves exactly as it does today, adding it needs no `version` bump.
+- A path-base asymmetry to note before that extension lands: keys and `dependencies` entries are relative to the
+  resolver's declaring package, but a package's own `inputs` would have to be relative to **that package**, or
+  every entry would repeat its key as a prefix. Two bases in one document is unavoidable and needs saying out
+  loud.
 - Unknown keys in the document are ignored; unknown keys inside a package object are ignored. Forward
   compatibility is cheap here and worth having.
 - Paths must be relative, `/`-separated, and free of a leading `./`, a trailing `/`, or any `..` segment.
@@ -691,6 +702,50 @@ people trying the feature.
 workspace rooted at the repo root and for a nested second workspace. It is untested against a repo that wants a
 resolver whose inputs sit above its declaring package, which is inexpressible by construction. The answer is
 "declare it higher up", which may collide with where a team wants its build files.
+
+**Q13 — Resolver-synthesized filegroups (accepted, v2).** Today a package that no target registers cannot be
+depended on: the load fails (§5.3). The accepted answer is to let a package object carry `inputs`, consulted
+*only* when no target in that package registers the resolver, and to synthesize a filegroup from it:
+
+```json
+{
+  "crates/greet":  { "dependencies": ["crates/format"] },
+  "crates/format": { "dependencies": [], "inputs": ["src/**/*.rs", "Cargo.toml", "build.rs"] }
+}
+```
+
+When a real target is registered the field is ignored, so there is one rule and no mode flag. Four decisions go
+with it:
+
+- **Synthetic labels are named after the resolver**, `//crates/format:_cargo` rather than `:_format`. Two
+  resolvers may synthesize for the same directory — a crate that is also a uv member — where `_format` collides
+  and `_cargo` / `_uv` do not, and the name says where a label you cannot grep came from. `_` is already legal
+  in `validateName`.
+- **The synthetic target's `SourceFilePath` is the BUILD file that declared the resolver.** Every target in grog
+  carries a defining file and it is load-bearing, not decorative: `changes.go:91` and `explain_changes.go:110`
+  treat a changed defining file as a change signal, and the duplicate-label errors in `load.go` print it.
+  Pointing synthetic targets at the resolver's declaration is honest — that declaration is why they exist — and
+  it makes editing the declaration conservatively flag everything it synthesized.
+- **Completeness becomes a resolver obligation.** A resolver stops describing edges between targets someone
+  wrote and starts creating nodes, so a resolver bug now yields *missing invalidation* rather than a load error.
+  A cargo resolver emitting `src/**/*.rs` under-invalidates a crate with `[lib] path = "lib.rs"` or an unlisted
+  `build.rs`. The built-in must therefore emit a deliberate superset (`src/**/*`, `build.rs`, `benches/**/*`,
+  `tests/**/*`, `Cargo.toml`, plus manifest `include`) and be tested against a crate with a non-default layout
+  before this ships.
+- **Not PR 1 or PR 2.** It wants the cargo resolver's layout handling to be solid first, so it lands after the
+  built-ins.
+
+Two alternatives were rejected and are recorded so they are not re-proposed. A synthetic target with **no**
+inputs makes the graph look right while carrying no invalidation at all, turning a loud failure into a silently
+wrong build. A synthetic target with **grog-guessed** inputs has grog globbing the directory, hashing `target/`,
+`node_modules`, `.venv` and build outputs, because input globs do not respect gitignore the way package
+discovery does. The idea works only because the resolver, which knows the ecosystem's layout, declares the
+inputs.
+
+This supersedes Q1's `ignore_missing_packages` for the common case: a package with resolver-declared inputs needs
+no escape hatch. Q4 still needs one, since a `cfg(windows)`-only crate that genuinely is not built anywhere must
+remain droppable. Neither integration repo added in PR 1 exercises synthesis — both register real targets — so
+the coverage it needs is a package with no BUILD file plus the non-default-layout crate above.
 
 ## 9. Appendix: protocol validated against the real examples
 
