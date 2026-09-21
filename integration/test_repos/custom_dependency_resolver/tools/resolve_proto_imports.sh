@@ -2,9 +2,10 @@
 # A custom grog dependency resolver.
 #
 # A protobuf import names a workspace-relative path, so the directory holding
-# the imported file is the package that the importing package depends on. All
-# this script has to do is turn those directory pairs into the JSON document
-# grog expects on stdout; grog resolves the directories to target labels.
+# the imported file is the package that the importing package depends on. This
+# script turns those directory pairs into the JSON document grog expects on
+# stdout. It also declares each package's inputs, so a package with no BUILD
+# file of its own still gets a filegroup grog can invalidate.
 set -eu
 
 proto_files=$(find . -name '*.proto' | sed 's|^\./||' | sort)
@@ -18,7 +19,7 @@ for proto_file in $proto_files; do
 		printf '%s"%s"' "$dependency_separator" "$(dirname "$imported_path")"
 		dependency_separator=","
 	done
-	printf ']}'
+	printf '],"inputs":["*.proto"]}'
 	package_separator=","
 done
 printf '}}\n'

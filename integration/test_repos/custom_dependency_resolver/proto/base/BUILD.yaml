@@ -1,6 +1,0 @@
-targets:
-  # No dependencies are listed: the resolver derives them from the imports.
-  - name: generate
-    inputs: ["*.proto"]
-    command: echo generating base
-    dependency_resolvers: ["//:protos"]

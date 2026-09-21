@@ -1,5 +1,6 @@
 # The resolver runs in the package that declares it, so its inputs and the
-# paths it prints are both relative to the workspace root.
+# paths it prints are both relative to the workspace root. proto/base has no
+# BUILD file: the resolver's inputs stand in for one as //proto/base:_protos.
 dependency_resolvers:
   - name: protos
     command: sh tools/resolve_proto_imports.sh

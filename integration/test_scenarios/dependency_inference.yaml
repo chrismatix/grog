@@ -9,7 +9,7 @@ cases:
     setup_command: |
       cp crates/shared/Cargo.toml Cargo.toml.backup
       cp crates/leaf/source.txt source.txt.backup
-      printf '\n[dependencies]\nleaf = { path = "../leaf" }\n' >> crates/shared/Cargo.toml
+      printf 'leaf = { path = "../leaf" }\n' >> crates/shared/Cargo.toml
   - name: dependency_inference_manifest_invalidates_downstream
     grog_args: [build, "//..."]
   - name: dependency_inference_new_graph_cached
@@ -18,5 +18,11 @@ cases:
     setup_command: "printf 'leaf version two\n' > crates/leaf/source.txt"
   - name: dependency_inference_new_edge_invalidates_transitively
     grog_args: [build, "//..."]
+  # crates/util has no BUILD file and a non-default [lib] path; the resolver's
+  # inputs give it //crates/util:_cargo, which shared depends on.
+  - name: dependency_inference_edit_unbuilt_crate
+    setup_command: "cp crates/util/util.rs util.rs.backup; printf 'util version two\n' > crates/util/util.rs"
+  - name: dependency_inference_synthesized_filegroup_invalidates_dependents
+    grog_args: [build, "//..."]
   - name: dependency_inference_restore
-    setup_command: "mv Cargo.toml.backup crates/shared/Cargo.toml; mv source.txt.backup crates/leaf/source.txt"
+    setup_command: "mv Cargo.toml.backup crates/shared/Cargo.toml; mv source.txt.backup crates/leaf/source.txt; mv util.rs.backup crates/util/util.rs"
