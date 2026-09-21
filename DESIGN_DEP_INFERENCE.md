@@ -47,7 +47,7 @@ The invariant binds **resolver authors**, not just BUILD files. Moving the graph
 place where under-invalidation can originate along with it: a resolver that omits an edge produces exactly the
 silent staleness this feature exists to remove, and no amount of care in a BUILD file can compensate. The
 built-in resolvers are the reference implementation of meeting it, which is why they exclude nothing they are
-unsure about (§6) and why Q13 makes completeness an explicit obligation once resolvers can declare inputs.
+unsure about (§6) and why §5.8 makes completeness an explicit obligation for resolvers that declare inputs.
 
 ## 2. User stories
 
@@ -402,13 +402,14 @@ the `GROG_*` loader variables from `loader_env.go`, plus `GROG_RESOLVER_LABEL`.
 - Values in `dependencies` are the same, with one escape hatch: an entry starting with `//` is taken as a
   literal grog label. This is the format's only flexibility point, and it exists so a custom resolver can point
   at a specific target (`//lib/proto:codegen`) without grog inventing a naming convention.
-- Each package's value is an object, not a bare list, so `inputs`, `test_dependencies` or similar can be added
-  later without a format break. `version` gates that. Q13 describes the `inputs` extension; because a resolver
-  that omits the field behaves exactly as it does today, adding it needs no `version` bump.
-- A path-base asymmetry to note before that extension lands: keys and `dependencies` entries are relative to the
-  resolver's declaring package, but a package's own `inputs` would have to be relative to **that package**, or
-  every entry would repeat its key as a prefix. Two bases in one document is unavoidable and needs saying out
-  loud.
+- A package object may carry `inputs`: globs whose files make up the package. They are consulted only when no
+  target in that package registers the resolver, in which case grog synthesizes a filegroup from them (§5.8).
+  A resolver that omits the field behaves as if the package had none.
+- One path-base asymmetry: keys and `dependencies` entries are relative to the resolver's declaring package, but
+  `inputs` are relative to **the package being described**, or every entry would repeat its key as a prefix.
+  Two bases in one document is unavoidable and needs saying out loud.
+- Each package's value is an object, not a bare list, so `test_dependencies` or similar can be added later
+  without a format break. `version` gates that.
 - Unknown keys in the document are ignored; unknown keys inside a package object are ignored. Forward
   compatibility is cheap here and worth having.
 - Paths must be relative, `/`-separated, and free of a leading `./`, a trailing `/`, or any `..` segment.
@@ -425,8 +426,10 @@ the `GROG_*` loader variables from `loader_env.go`, plus `GROG_RESOLVER_LABEL`.
 | Output path is absolute, or escapes the declaring package | Load fails naming the offending entry. |
 | Unparseable stdout | Load fails, quoting the first 2 KiB of stdout. |
 | `version` newer than supported | Load fails asking for a grog upgrade. |
-| Key names a package with no registered target for this resolver | **Ignored**, logged at debug. A workspace legitimately contains members grog does not build. |
-| A registered package's dependency names a package with no registered target | **Load error.** This is the drift case the feature exists to catch; dropping it silently reintroduces the bug. |
+| Key names a package with no registered target, and the entry carries `inputs` | A filegroup `//<package>:_<resolver name>` is **synthesized** from them (§5.8). |
+| Key names a package with no registered target and no `inputs` | **Ignored**, logged at debug. A workspace legitimately contains members grog does not build. |
+| A dependency names a package that is neither registered nor synthesized | **Load error.** This is the drift case the feature exists to catch; dropping it silently reintroduces the bug. |
+| A synthesized label collides with a target, alias or resource | **Load error** naming the resolver and the file that defines the existing node. |
 | Cycle among inferred edges | The existing `analysis.BuildGraph` cycle error, unchanged. |
 
 **Caching.** Key = hash(protocol version, resolver label, resolved `command`, and the sorted list of resolved
@@ -450,12 +453,14 @@ before the caller builds the node map:
 ```
 walk + load packages (unchanged, concurrent)
   → collect declarations (label → command, resolved inputs) and registrations (label → package path → target)
-  → for each referenced resolver, concurrently: hash inputs, CAS lookup, run on miss, parse
+  → for each declared resolver, concurrently: hash inputs, CAS lookup, run on miss, parse
+  → synthesize a filegroup for every reported package that registers nothing but carries inputs (§5.8)
   → resolve package paths to labels via the registration map; merge into Target.Dependencies
   → BuildNodeMapFromPackages → analysis.BuildGraph (unchanged)
 ```
 
-Resolvers not named by any target never run — that is story S6.
+Every declared resolver runs, because a package it synthesizes for may register nothing at all. A repo that
+declares no resolver runs nothing — that is story S6.
 
 Two consequences. A resolver declaration is loaded but never scheduled, so `grog build //...` does not build it
 and `grog deps` does not show it. And because the declaration is found by the same walk, its input hashing
@@ -465,15 +470,18 @@ v1.
 
 ### 5.5 What a helper library looks like
 
-The `deps` parameter disappears from the public signature. Starlark:
+Neither `deps` nor `inputs` survive in the public signature: the crate's files and its cross-crate edges both
+come from `//:cargo`, which synthesizes `:_cargo` for every crate. The helper only hangs the cargo invocations
+off that label. Starlark:
 
 ```starlark
 def cargo_crate(name, bin = False):
+    cargo_dependencies = [":_cargo", "//:workspace"]
     target(
-        name = name,
-        inputs = ["src/**/*", "Cargo.toml"],
-        dependencies = ["//tools/grog:rust"],
-        dependency_resolvers = ["//:cargo"],
+        name = "build",
+        command = "cargo build -p %s --release --locked" % name,
+        dependencies = cargo_dependencies,
+        concurrency_group = "cargo",
     )
     ...
 ```
@@ -495,27 +503,26 @@ class Crate {
   name: String
   bin: Boolean = false
 
+  local cargo_dependencies: Listing<String> = new Listing<String> {
+    ":_cargo"
+    "//:workspace"
+  }
+
   fixed targets: Listing<package.Target> = new Listing<package.Target> {
     new {
-      name = self.name
-      inputs {
-        "src/**/*"
-        "Cargo.toml"
-      }
-      dependencies {
-        "//tools/grog:rust"
-      }
-      dependency_resolvers {
-        "//:cargo"
-      }
+      name = "build"
+      command = "cargo build -p \(self.name) --release --locked"
+      dependencies = cargo_dependencies
+      concurrency_group = "cargo"
     }
     ...
   }
 }
 ```
 
-Only the filegroup registers. `:deps-lock`, `:build`, `:test` and `:lint` already depend on `:<name>`, so they
-inherit every inferred edge without changing.
+A crate that wants hand-curated inputs instead — a generated-code directory the resolver cannot know about —
+registers a filegroup with `dependency_resolvers = ["//:cargo"]` and takes over from the synthesized one; the
+edges still arrive, the inputs are its own.
 
 ### 5.6 The protobuf story, concretely
 
@@ -549,17 +556,59 @@ is whether a manifest-only change flags the right targets.
   diff, every target registered with that resolver is treated as changed.** Coarse but correct. Refining it by
   running the resolver at both revisions and diffing the mappings is a later PR.
 
+### 5.8 Synthesized targets
+
+A package that registers no target for a resolver is not, on its own, an error; it is simply outside that
+resolver's graph until something depends on it. When the resolver declared `inputs` for the package, grog closes
+the gap by synthesizing a filegroup:
+
+```json
+{
+  "crates/greet":  { "dependencies": ["crates/format"], "inputs": ["src/**/*", "Cargo.toml"] },
+  "crates/format": { "dependencies": [],                "inputs": ["src/**/*", "Cargo.toml"] }
+}
+```
+
+With no BUILD file anywhere under `crates/`, this yields `//crates/greet:_cargo` depending on
+`//crates/format:_cargo`. A target that registers the resolver takes precedence and the entry's `inputs` are
+ignored, so there is one rule and no mode flag. Four decisions go with it:
+
+- **Synthetic labels are named after the resolver**, `//crates/format:_cargo` rather than `:_format`. Two
+  resolvers may synthesize for the same directory — a crate that is also a uv member — where `_format` collides
+  and `_cargo` / `_uv` do not, and the name says where a label you cannot grep came from. `_` is already legal in
+  `validateName`.
+- **The synthetic target's `SourceFilePath` is the BUILD file that declared the resolver.** Every target in grog
+  carries a defining file and it is load-bearing: `changes.go:91` and `explain_changes.go:110` treat a changed
+  defining file as a change signal, and the duplicate-label errors print it. Pointing synthetic targets at the
+  resolver's declaration is honest — that declaration is why they exist — and it makes editing the declaration
+  conservatively flag everything it synthesized.
+- **Completeness is a resolver obligation.** A resolver that declares inputs stops describing edges between
+  targets someone wrote and starts creating nodes, so a resolver bug now yields *missing invalidation* rather than
+  a load error. A cargo resolver emitting `src/**/*.rs` under-invalidates a crate with `[lib] path = "lib.rs"`
+  or an unlisted `build.rs`. The built-in therefore emits a deliberate superset (§6) and is tested against a crate
+  with a non-default layout.
+- **An empty `inputs` list synthesizes nothing.** A filegroup with no inputs has a constant hash and would carry
+  an edge that never invalidates — the exact failure this feature exists to remove — so it is treated as absent.
+
+Two alternatives were rejected and are recorded so they are not re-proposed. A synthetic target with **no**
+inputs makes the graph look right while carrying no invalidation at all, turning a loud failure into a silently
+wrong build. A synthetic target with **grog-guessed** inputs has grog globbing the directory, hashing `target/`,
+`node_modules`, `.venv` and build outputs, because input globs do not respect gitignore the way package
+discovery does. The idea works only because the resolver, which knows the ecosystem's layout, declares the
+inputs.
+
 ## 6. Batteries included
 
 Four built-ins ship as Go code inside grog, selected by writing `command = "builtin:<name>"` on a declaration.
 They implement the same protocol internally and produce the same document, skipping only the subprocess and
-JSON round-trip. Omitting `inputs` on such a declaration takes the built-in's defaults, so the declaration is a
+JSON round-trip. Each emits `inputs` for every member it reports, so a member with no BUILD file still gets a
+filegroup (§5.8). Omitting `inputs` on such a declaration takes the built-in's defaults, so the declaration is a
 name and a command. Go rather than shipped scripts because it avoids a `jq`/Python dependency, works identically
 on every platform grog targets, and keeps the manifest-path-to-directory arithmetic in tested code.
 
 | Name    | Implementation                                                                         | Default `inputs`                                          | Needs a toolchain |
 | ------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------- | ----------------- |
-| `cargo` | Parse the workspace `Cargo.toml` members and each member manifest's `[dependencies]` and `[build-dependencies]` for `path` entries. Fall back to `cargo metadata --no-deps --format-version 1` only if a manifest cannot be read. | `Cargo.toml`, `*/Cargo.toml`, `*/*/Cargo.toml`, `Cargo.lock` | no |
+| `cargo` | Parse the workspace `Cargo.toml` members and each member manifest's `[dependencies]`, `[build-dependencies]` and `[target.*]` tables for `path` entries. Inputs are the superset `Cargo.toml`, `build.rs`, `src/**/*`, `tests/**/*`, `benches/**/*`, `examples/**/*`, plus `[lib] path`, `[[bin]] path` and `[package] include`. Never shells out to `cargo`. | `Cargo.toml`, `*/Cargo.toml`, `*/*/Cargo.toml`, `Cargo.lock` | no |
 | `uv`    | Parse `uv.lock`: packages with `source = { editable = <dir> }` or `{ directory = <dir> }` are workspace members; their `dependencies` and `dev-dependencies` name other members. | `uv.lock`, `pyproject.toml`                              | no |
 | `node`  | Member globs from `pnpm-workspace.yaml` if present, else `workspaces` in the root `package.json`; then each member's `dependencies` / `devDependencies` / `peerDependencies` whose *name* matches another member. | `pnpm-workspace.yaml`, `package.json`, `*/package.json`, `*/*/package.json` | no |
 | `go`    | `go list -deps -e -json ./...`, keep imports under the module path, map each to its directory. | `go.mod`, `go.sum`, `go.work`, `**/*.go`                   | yes (`go`)        |
@@ -584,10 +633,10 @@ it. There is no plugin chain, and adding one would be the first place this desig
 
 ### 7.1 Migration of the existing examples
 
-Mostly subtractive. `examples/rust_monorepo`: add a four-line `dependency_resolver(name = "cargo")` to the root
-BUILD file, drop the `deps` parameter from `tools/grog/rust.star` and the `dependencies` property from
-`rust.pkl`'s `Crate`, add `dependency_resolvers = ["//:cargo"]` to the filegroup, delete `deps = [...]` from
-four BUILD files. Same shape for `python_uv_monorepo`; its helper's `deps` and
+Subtractive. `examples/rust_monorepo`: add a four-line `dependency_resolver(name = "cargo")` to the root BUILD
+file, delete every crate's hand-written filegroup, and point `build`, `test` and `clippy` at `:_cargo`. No
+BUILD file in the workspace lists a source file or another crate afterwards. The helper libraries on
+`language-guides` lose both `deps` and their `inputs` (§5.5). Same shape for `python_uv_monorepo`; its helper's `deps` and
 `test_deps` parameters are already unused by the example itself once the uv resolver covers `dependencies` and
 `dev-dependencies`, so both can go from the public signature. `examples/js` needs an edge added before it is
 worth migrating at all (§7.2, PR 3).
@@ -606,12 +655,13 @@ surface.
   builtin, the Pkl class, and the YAML/JSON list — the same four-loader treatment `resource` already has.
   Its `inputs` go through the existing `resolveInputs`, and its label through the existing duplicate-label check.
 - `internal/loading/dependency_inference.go`: declaration and registration collection, resolver execution in the
-  declaring package, JSON parse, path→label resolution, merge. Errors per the §5.3 table.
-- `builtin:cargo`.
-- Migrate `examples/rust_monorepo` (Starlark + Pkl helpers, four BUILD files).
-- Integration scenario: a cargo-shaped test repo where adding a `path` dependency to a manifest invalidates the
-  dependent's cached target with no BUILD file edit; and a negative scenario for the unresolvable-dependency
-  error.
+  declaring package, JSON parse, synthesis (§5.8), path→label resolution, merge. Errors per the §5.3 table.
+- `builtin:cargo`, emitting the input superset.
+- Migrate `examples/rust_monorepo` (four BUILD files, no filegroups left).
+- Integration coverage: a cargo-shaped repo where adding a `path` dependency invalidates the dependent with no
+  BUILD file edit, and where a crate with no BUILD file and a non-default `[lib] path` is depended on through its
+  synthesized filegroup; a negative scenario for the unresolvable-dependency error; and two custom resolvers, one
+  in shell and one in Python, each with a package that has no BUILD file.
 
 No caching in PR 1: the built-in cargo resolver is manifest parsing, single-digit milliseconds on the example,
 and shipping the protocol and the cache together makes both harder to review.
@@ -637,11 +687,11 @@ resolver diffing for precise `changes`; speculative resolver warm-up overlapped 
 
 ## 8. Open questions and risks
 
-**Q1 — A registered package depends on a package grog does not build.** §5.3 makes this a hard error, since
-silence is the bug being fixed. But a workspace that legitimately contains a crate excluded from grog then
-cannot use inference at all. The likely answer is a per-resolver `ignore_missing_packages = true`, which is the
-kind of knob this design is trying not to grow. Deferred until someone hits it: adding it later is compatible,
-removing it is not.
+**Q1 — A registered package depends on a package grog does not build.** Resolved by §5.8 for the common case: a
+package no target registers gets a filegroup synthesized from the inputs its resolver declares, so it can be
+depended on without a BUILD file. The error remains only when the resolver declares no inputs, which is the
+resolver's choice. What §5.8 does not cover is Q4's crate that genuinely is not built on this platform; that
+still needs a way to drop the edge.
 
 **Q2 — Cycles from dev-dependencies and test imports.** Cargo permits `A dev-depends-on B, B depends-on A`; Go
 permits the same through test files. Because inferred edges attach to the package filegroup that *every* target
@@ -702,50 +752,6 @@ people trying the feature.
 workspace rooted at the repo root and for a nested second workspace. It is untested against a repo that wants a
 resolver whose inputs sit above its declaring package, which is inexpressible by construction. The answer is
 "declare it higher up", which may collide with where a team wants its build files.
-
-**Q13 — Resolver-synthesized filegroups (accepted, v2).** Today a package that no target registers cannot be
-depended on: the load fails (§5.3). The accepted answer is to let a package object carry `inputs`, consulted
-*only* when no target in that package registers the resolver, and to synthesize a filegroup from it:
-
-```json
-{
-  "crates/greet":  { "dependencies": ["crates/format"] },
-  "crates/format": { "dependencies": [], "inputs": ["src/**/*.rs", "Cargo.toml", "build.rs"] }
-}
-```
-
-When a real target is registered the field is ignored, so there is one rule and no mode flag. Four decisions go
-with it:
-
-- **Synthetic labels are named after the resolver**, `//crates/format:_cargo` rather than `:_format`. Two
-  resolvers may synthesize for the same directory — a crate that is also a uv member — where `_format` collides
-  and `_cargo` / `_uv` do not, and the name says where a label you cannot grep came from. `_` is already legal
-  in `validateName`.
-- **The synthetic target's `SourceFilePath` is the BUILD file that declared the resolver.** Every target in grog
-  carries a defining file and it is load-bearing, not decorative: `changes.go:91` and `explain_changes.go:110`
-  treat a changed defining file as a change signal, and the duplicate-label errors in `load.go` print it.
-  Pointing synthetic targets at the resolver's declaration is honest — that declaration is why they exist — and
-  it makes editing the declaration conservatively flag everything it synthesized.
-- **Completeness becomes a resolver obligation.** A resolver stops describing edges between targets someone
-  wrote and starts creating nodes, so a resolver bug now yields *missing invalidation* rather than a load error.
-  A cargo resolver emitting `src/**/*.rs` under-invalidates a crate with `[lib] path = "lib.rs"` or an unlisted
-  `build.rs`. The built-in must therefore emit a deliberate superset (`src/**/*`, `build.rs`, `benches/**/*`,
-  `tests/**/*`, `Cargo.toml`, plus manifest `include`) and be tested against a crate with a non-default layout
-  before this ships.
-- **Not PR 1 or PR 2.** It wants the cargo resolver's layout handling to be solid first, so it lands after the
-  built-ins.
-
-Two alternatives were rejected and are recorded so they are not re-proposed. A synthetic target with **no**
-inputs makes the graph look right while carrying no invalidation at all, turning a loud failure into a silently
-wrong build. A synthetic target with **grog-guessed** inputs has grog globbing the directory, hashing `target/`,
-`node_modules`, `.venv` and build outputs, because input globs do not respect gitignore the way package
-discovery does. The idea works only because the resolver, which knows the ecosystem's layout, declares the
-inputs.
-
-This supersedes Q1's `ignore_missing_packages` for the common case: a package with resolver-declared inputs needs
-no escape hatch. Q4 still needs one, since a `cfg(windows)`-only crate that genuinely is not built anywhere must
-remain droppable. Neither integration repo added in PR 1 exercises synthesis — both register real targets — so
-the coverage it needs is a package with no BUILD file plus the non-default-layout crate above.
 
 ## 9. Appendix: protocol validated against the real examples
 
