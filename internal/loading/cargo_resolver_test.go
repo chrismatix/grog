@@ -33,8 +33,10 @@ func TestCargoDependencies(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			require.Contains(t, document.Packages, testCase.packagePath)
 			require.Equal(t, testCase.dependencies, document.Packages[testCase.packagePath].Dependencies)
+			require.Subset(t, document.Packages[testCase.packagePath].Inputs, []string{"Cargo.toml", "build.rs", "src/**/*", "tests/**/*"})
 		})
 	}
+	require.Contains(t, document.Packages["crates/platform"].Inputs, "lib.rs")
 }
 
 func TestCargoResolverErrors(t *testing.T) {
@@ -91,15 +93,20 @@ func TestCargoResolverRootMemberAndReadOnly(t *testing.T) {
 func TestCargoResolverRustExample(t *testing.T) {
 	document, operationError := cargoDependencies(t.Context(), "../../examples/rust_monorepo")
 	require.NoError(t, operationError)
-	require.Equal(t, map[string]resolverPackage{
-		"crates/cli":    {Dependencies: []string{"crates/greet"}},
-		"crates/format": {Dependencies: []string{}},
-		"crates/greet":  {Dependencies: []string{"crates/format"}},
-		"crates/server": {Dependencies: []string{"crates/greet"}},
-	}, document.Packages)
+	dependencies := make(map[string][]string, len(document.Packages))
+	for packagePath, reportedPackage := range document.Packages {
+		dependencies[packagePath] = reportedPackage.Dependencies
+		require.Subset(t, reportedPackage.Inputs, []string{"Cargo.toml", "src/**/*"}, packagePath)
+	}
+	require.Equal(t, map[string][]string{
+		"crates/cli":    {"crates/greet"},
+		"crates/format": {},
+		"crates/greet":  {"crates/format"},
+		"crates/server": {"crates/greet"},
+	}, dependencies)
 }
 
-func TestRustExampleRegistersInputFilegroups(t *testing.T) {
+func TestRustExampleSynthesizesCrateFilegroups(t *testing.T) {
 	originalConfig := config.Global
 	t.Cleanup(func() { config.Global = originalConfig })
 	workspaceDirectory, operationError := filepath.Abs("../../examples/rust_monorepo")
@@ -117,19 +124,15 @@ func TestRustExampleRegistersInputFilegroups(t *testing.T) {
 	} {
 		t.Run(testCase.crate, func(t *testing.T) {
 			packagePath := "crates/" + testCase.crate
-			var filegroup *model.Target
-			for _, target := range nodes.GetTargets() {
-				if target.Label == label.TL(packagePath, testCase.crate) {
-					filegroup = target
-				}
-			}
-			require.NotNil(t, filegroup)
+			filegroup, isTarget := nodes[label.TL(packagePath, "_cargo")].(*model.Target)
+			require.True(t, isTarget)
 			require.Empty(t, filegroup.Command)
-			require.Empty(t, filegroup.Outputs)
+			require.Equal(t, filepath.Join(workspaceDirectory, "BUILD.yaml"), filegroup.SourceFilePath)
 			require.Contains(t, filegroup.Inputs, "Cargo.toml")
-			expectedDependencies := []label.TargetLabel{label.TL("", "workspace")}
+			require.Contains(t, filegroup.UnresolvedInputs, "src/**/*")
+			var expectedDependencies []label.TargetLabel
 			if testCase.dependency != "" {
-				expectedDependencies = append(expectedDependencies, label.TL("crates/"+testCase.dependency, testCase.dependency))
+				expectedDependencies = []label.TargetLabel{label.TL("crates/"+testCase.dependency, "_cargo")}
 			}
 			require.Equal(t, expectedDependencies, filegroup.Dependencies)
 			for _, target := range nodes.GetTargets() {
@@ -137,7 +140,6 @@ func TestRustExampleRegistersInputFilegroups(t *testing.T) {
 					continue
 				}
 				require.Contains(t, target.Dependencies, filegroup.Label)
-				require.NotContains(t, target.Dependencies, label.TL(packagePath, "build"))
 			}
 		})
 	}

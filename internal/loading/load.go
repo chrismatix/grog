@@ -18,10 +18,7 @@ func LoadAllPackages(ctx context.Context) ([]*model.Package, error) {
 	if loadError != nil {
 		return nil, loadError
 	}
-	if loadError := inferDependencies(ctx, packages); loadError != nil {
-		return nil, loadError
-	}
-	return packages, nil
+	return inferDependencies(ctx, packages)
 }
 
 // LoadPackages loads all packages in the given directory and its subdirectories.
