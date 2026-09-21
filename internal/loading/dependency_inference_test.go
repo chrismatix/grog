@@ -35,6 +35,13 @@ func inferenceTestPackages(t *testing.T, command string) []*model.Package {
 	return packages
 }
 
+// inferDependenciesError keeps the assertions below on the error alone; the
+// packages are mutated in place, so callers still see the merged edges.
+func inferDependenciesError(loadContext context.Context, packages []*model.Package) error {
+	_, operationError := inferDependencies(loadContext, packages)
+	return operationError
+}
+
 func TestDependencyInferenceProtocol(t *testing.T) {
 	for _, testCase := range []struct {
 		name                 string
@@ -48,7 +55,7 @@ func TestDependencyInferenceProtocol(t *testing.T) {
 		{name: "unknown fields", output: `{"version":1,"future":true,"packages":{"app":{"future":42}}}`},
 		{name: "omitted packages", output: `{"version":1,"packages":{}}`},
 		{name: "unregistered output ignored", output: `{"version":1,"packages":{"unused":{"dependencies":["missing"]}}}`},
-		{name: "unresolvable dependency", output: `{"version":1,"packages":{"app":{"dependencies":["missing"]}}}`, expectedError: "resolver //:custom reports app depends on missing, which has no target registered for //:custom"},
+		{name: "unresolvable dependency", output: `{"version":1,"packages":{"app":{"dependencies":["missing"]}}}`, expectedError: "resolver //:custom reports app depends on missing, which has no target registered for //:custom and no inputs to synthesize one from"},
 		{name: "missing version", output: `{"packages":{}}`, expectedError: "resolver //:custom must return version 1"},
 		{name: "old version", output: `{"version":0,"packages":{}}`, expectedError: "must return version 1"},
 		{name: "new version", output: `{"version":2,"packages":{}}`, expectedError: "resolver //:custom returned unsupported version 2; upgrade grog"},
@@ -62,7 +69,7 @@ func TestDependencyInferenceProtocol(t *testing.T) {
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			packages := inferenceTestPackages(t, "printf '%s' '"+testCase.output+"'")
-			operationError := inferDependencies(t.Context(), packages)
+			operationError := inferDependenciesError(t.Context(), packages)
 			if testCase.expectedError != "" {
 				require.ErrorContains(t, operationError, testCase.expectedError)
 				return
@@ -93,7 +100,7 @@ func TestDependencyInferencePaths(t *testing.T) {
 					output, operationError := json.Marshal(document)
 					require.NoError(t, operationError)
 					packages := inferenceTestPackages(t, "printf '%s' '"+string(output)+"'")
-					require.ErrorContains(t, inferDependencies(t.Context(), packages), "invalid path")
+					require.ErrorContains(t, inferDependenciesError(t.Context(), packages), "invalid path")
 				})
 			}
 		})
@@ -122,7 +129,7 @@ func TestDependencyInferenceExecution(t *testing.T) {
 				packages[0].DependencyResolvers[label.TL("", "custom")].Timeout = 20 * time.Millisecond
 			}
 			started := time.Now()
-			operationError := inferDependencies(t.Context(), packages)
+			operationError := inferDependenciesError(t.Context(), packages)
 			if testCase.expectedError != "" {
 				require.ErrorContains(t, operationError, testCase.expectedError)
 			} else {
@@ -142,22 +149,27 @@ func TestDependencyInferenceRegistrations(t *testing.T) {
 			switch testCase {
 			case "unknown resolver":
 				target.DependencyResolvers = []label.TargetLabel{label.TL("", "missing")}
-				require.EqualError(t, inferDependencies(t.Context(), packages), "no dependency resolver at //:missing (referenced by //app:sources); declared: //:custom")
+				require.EqualError(t, inferDependenciesError(t.Context(), packages), "no dependency resolver at //:missing (referenced by //app:sources); declared: //:custom")
 			case "duplicate registration":
 				otherLabel := label.TL("app", "build")
 				packages[1].Targets[otherLabel] = &model.Target{Label: otherLabel, DependencyResolvers: []label.TargetLabel{resolverLabel}}
-				require.EqualError(t, inferDependencies(t.Context(), packages), "resolver //:custom registered twice in package app: //app:build and //app:sources")
-			case "unused resolver", "no resolvers":
+				require.EqualError(t, inferDependenciesError(t.Context(), packages), "resolver //:custom registered twice in package app: //app:build and //app:sources")
+			case "unused resolver":
+				// A declared resolver runs even when nothing registers: it may
+				// synthesize for packages that have no BUILD file at all.
+				packages[0].DependencyResolvers[resolverLabel].Command = `touch invoked; printf '%s' '{"version":1,"packages":{}}'`
+				require.NoError(t, inferDependenciesError(t.Context(), packages[:1]))
+				_, operationError := os.Stat(filepath.Join(config.Global.WorkspaceRoot, "invoked"))
+				require.NoError(t, operationError)
+			case "no resolvers":
 				packages[0].DependencyResolvers[resolverLabel].Command = "touch invoked; exit 1"
-				if testCase == "no resolvers" {
-					packages[0].DependencyResolvers = nil
-				}
-				require.NoError(t, inferDependencies(t.Context(), packages[:1]))
+				packages[0].DependencyResolvers = nil
+				require.NoError(t, inferDependenciesError(t.Context(), packages[:1]))
 				_, operationError := os.Stat(filepath.Join(config.Global.WorkspaceRoot, "invoked"))
 				require.ErrorIs(t, operationError, os.ErrNotExist)
 			case "duplicate reference":
 				target.DependencyResolvers = append(target.DependencyResolvers, resolverLabel)
-				require.NoError(t, inferDependencies(t.Context(), packages))
+				require.NoError(t, inferDependenciesError(t.Context(), packages))
 			}
 		})
 	}
@@ -182,7 +194,7 @@ func TestDependencyInferenceNestedRootAndEnvironment(t *testing.T) {
 		targetLabel := label.TL(packagePath, "sources")
 		packages[index+1].Targets = map[label.TargetLabel]*model.Target{targetLabel: {Label: targetLabel, DependencyResolvers: []label.TargetLabel{resolverLabel}}}
 	}
-	require.NoError(t, inferDependencies(t.Context(), packages))
+	require.NoError(t, inferDependenciesError(t.Context(), packages))
 	require.Equal(t, []label.TargetLabel{label.TL("tools/rust/.hidden", "sources")}, packages[1].Targets[label.TL("tools/rust", "sources")].Dependencies)
 }
 
@@ -205,7 +217,7 @@ func TestDependencyInferenceConcurrentResolversMerge(t *testing.T) {
 	}
 	target := packages[1].Targets[label.TL("app", "sources")]
 	target.Dependencies = []label.TargetLabel{label.TL("z", "explicit"), label.TL("lib", "sources"), label.TL("a", "explicit")}
-	require.NoError(t, inferDependencies(t.Context(), packages))
+	require.NoError(t, inferDependenciesError(t.Context(), packages))
 	require.Equal(t, []label.TargetLabel{label.TL("a", "explicit"), label.TL("lib", "sources"), label.TL("z", "explicit")}, target.Dependencies)
 	for _, name := range []string{"first", "second"} {
 		contents, operationError := os.ReadFile(filepath.Join(config.Global.WorkspaceRoot, name))
@@ -225,7 +237,7 @@ func TestDependencyInferenceGraphErrors(t *testing.T) {
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			packages := inferenceTestPackages(t, "printf '%s' '"+testCase.output+"'")
-			require.NoError(t, inferDependencies(t.Context(), packages))
+			require.NoError(t, inferDependenciesError(t.Context(), packages))
 			nodes, operationError := model.BuildNodeMapFromPackages(packages)
 			require.NoError(t, operationError)
 			_, operationError = analysis.BuildGraph(nodes)
@@ -236,7 +248,7 @@ func TestDependencyInferenceGraphErrors(t *testing.T) {
 
 func TestDependencyResolverMalformedOutputLimit(t *testing.T) {
 	packages := inferenceTestPackages(t, "printf '%s' '"+strings.Repeat("x", 4096)+"'")
-	operationError := inferDependencies(t.Context(), packages)
+	operationError := inferDependenciesError(t.Context(), packages)
 	require.ErrorContains(t, operationError, strings.Repeat("x", 2048))
 	require.NotContains(t, operationError.Error(), strings.Repeat("x", 2049))
 }
@@ -261,7 +273,7 @@ func TestDependencyInferenceCancellation(t *testing.T) {
 	packages := inferenceTestPackages(t, "exec sleep 30")
 	loadContext, cancel := context.WithCancel(t.Context())
 	cancel()
-	require.ErrorIs(t, inferDependencies(loadContext, packages), context.Canceled)
+	require.ErrorIs(t, inferDependenciesError(loadContext, packages), context.Canceled)
 }
 
 func TestDependencyResolverStarlarkModule(t *testing.T) {
@@ -277,4 +289,76 @@ declare_resolver()
 	require.NoError(t, operationError)
 	require.Len(t, packageDTO.DependencyResolvers, 1)
 	require.Equal(t, "custom", packageDTO.DependencyResolvers[0].Name)
+}
+
+func TestDependencyInferenceSynthesis(t *testing.T) {
+	resolverLabel := label.TL("", "custom")
+	synthesizedLabel := label.TL("gen", "_custom")
+	for _, testCase := range []struct {
+		name          string
+		output        string
+		prepare       func(packages []*model.Package)
+		expectedError string
+		check         func(t *testing.T, packages []*model.Package)
+	}{
+		{
+			name:   "unregistered package with inputs is synthesized",
+			output: `{"version":1,"packages":{"app":{"dependencies":["gen"]},"gen":{"dependencies":["lib"],"inputs":["gen.txt"]}}}`,
+			check: func(t *testing.T, packages []*model.Package) {
+				var synthesized *model.Target
+				for _, loadedPackage := range packages {
+					if loadedPackage.Path == "gen" {
+						synthesized = loadedPackage.Targets[synthesizedLabel]
+					}
+				}
+				require.NotNil(t, synthesized)
+				require.Equal(t, "BUILD.yaml", synthesized.SourceFilePath)
+				require.Equal(t, []string{"gen.txt"}, synthesized.Inputs)
+				require.Equal(t, []label.TargetLabel{label.TL("lib", "sources")}, synthesized.Dependencies)
+				require.Equal(t, []label.TargetLabel{synthesizedLabel}, packages[1].Targets[label.TL("app", "sources")].Dependencies)
+			},
+		},
+		{
+			name:   "registered package ignores inputs",
+			output: `{"version":1,"packages":{"app":{"dependencies":[],"inputs":["ignored.txt"]}}}`,
+			check: func(t *testing.T, packages []*model.Package) {
+				require.Len(t, packages, 3)
+				require.Nil(t, packages[1].Targets[label.TL("app", "_custom")])
+			},
+		},
+		{
+			name:          "empty inputs do not synthesize",
+			output:        `{"version":1,"packages":{"app":{"dependencies":["gen"]},"gen":{"dependencies":[],"inputs":[]}}}`,
+			expectedError: "no target registered for //:custom and no inputs to synthesize one from",
+		},
+		{
+			name:   "synthesized label collides with a target",
+			output: `{"version":1,"packages":{"gen":{"dependencies":[],"inputs":["gen.txt"]}}}`,
+			prepare: func(packages []*model.Package) {
+				packages[1].Path = "gen"
+				packages[1].Targets[synthesizedLabel] = &model.Target{Label: synthesizedLabel, SourceFilePath: "gen/BUILD.yaml"}
+			},
+			expectedError: "resolver //:custom cannot synthesize //gen:_custom: a target with that name is defined in gen/BUILD.yaml",
+		},
+		{
+			name:          "inputs must be package-relative",
+			output:        `{"version":1,"packages":{"gen":{"dependencies":[],"inputs":["../escape"]}}}`,
+			expectedError: "resolver //:custom: inputs of gen: invalid path",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			packages := inferenceTestPackages(t, "printf '%s' '"+testCase.output+"'")
+			packages[0].DependencyResolvers[resolverLabel].SourceFilePath = "BUILD.yaml"
+			if testCase.prepare != nil {
+				testCase.prepare(packages)
+			}
+			packages, operationError := inferDependencies(t.Context(), packages)
+			if testCase.expectedError != "" {
+				require.ErrorContains(t, operationError, testCase.expectedError)
+				return
+			}
+			require.NoError(t, operationError)
+			testCase.check(t, packages)
+		})
+	}
 }

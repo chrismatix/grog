@@ -19,6 +19,15 @@ type cargoManifest struct {
 	Workspace struct {
 		Members []string `toml:"members"`
 	} `toml:"workspace"`
+	Package struct {
+		Include []string `toml:"include"`
+	} `toml:"package"`
+	Lib struct {
+		Path string `toml:"path"`
+	} `toml:"lib"`
+	Bin []struct {
+		Path string `toml:"path"`
+	} `toml:"bin"`
 	Dependencies      map[string]any                   `toml:"dependencies"`
 	BuildDependencies map[string]any                   `toml:"build-dependencies"`
 	Target            map[string]cargoDependencyTables `toml:"target"`
@@ -52,7 +61,7 @@ func cargoDependencies(resolverContext context.Context, workspaceDirectory strin
 		if operationError != nil {
 			return document, operationError
 		}
-		reportedPackage := resolverPackage{Dependencies: []string{}}
+		reportedPackage := resolverPackage{Dependencies: []string{}, Inputs: cargoInputs(manifest)}
 		dependencyTables := []map[string]any{manifest.Dependencies, manifest.BuildDependencies}
 		for _, conditional := range manifest.Target {
 			dependencyTables = append(dependencyTables, conditional.Dependencies, conditional.BuildDependencies)
@@ -78,6 +87,23 @@ func cargoDependencies(resolverContext context.Context, workspaceDirectory strin
 		document.Packages[memberPath] = reportedPackage
 	}
 	return document, resolverContext.Err()
+}
+
+// cargoInputs over-approximates on purpose: a listed file the crate lacks is
+// skipped when hashing, while one left out would under-invalidate silently.
+func cargoInputs(manifest cargoManifest) []string {
+	inputs := []string{"Cargo.toml", "build.rs", "src/**/*", "tests/**/*", "benches/**/*", "examples/**/*"}
+	if manifest.Lib.Path != "" {
+		inputs = append(inputs, manifest.Lib.Path)
+	}
+	for _, binary := range manifest.Bin {
+		if binary.Path != "" {
+			inputs = append(inputs, binary.Path)
+		}
+	}
+	inputs = append(inputs, manifest.Package.Include...)
+	slices.Sort(inputs)
+	return slices.Compact(inputs)
 }
 
 func readCargoManifest(resolverContext context.Context, manifestPath string) (cargoManifest, error) {
