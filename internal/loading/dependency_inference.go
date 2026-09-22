@@ -188,10 +188,11 @@ func synthesizeFilegroup(loadContext context.Context, resolver *model.Dependency
 		return nil, nil, fmt.Errorf("resolver %s: failed to resolve inputs for %s: %w", resolver.Label, targetLabel, operationError)
 	}
 	target := &model.Target{
-		SourceFilePath:   resolver.SourceFilePath,
-		Label:            targetLabel,
-		Inputs:           resolvedInputs,
-		UnresolvedInputs: inputs,
+		SourceFilePath:      resolver.SourceFilePath,
+		Label:               targetLabel,
+		Inputs:              resolvedInputs,
+		UnresolvedInputs:    inputs,
+		DependencyResolvers: []label.TargetLabel{resolver.Label},
 	}
 	owningPackage.Targets[targetLabel] = target
 	return target, createdPackage, nil
