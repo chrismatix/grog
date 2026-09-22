@@ -24,12 +24,12 @@ the build is wrong. Nothing reports this. It usually surfaces when CI passes on 
 
 The ground truth exists in machine-readable form in every ecosystem we care about:
 
-| Ecosystem | Source of truth                                            | Needs a toolchain? |
-| --------- | ---------------------------------------------------------- | ------------------ |
-| Cargo     | `cargo metadata --no-deps`, or the workspace `Cargo.toml`s | no (manifests)     |
-| uv        | `uv.lock` (`source = { editable = "<dir>" }`)              | no (lockfile)      |
-| npm / yarn / pnpm | root member globs + member-name matches in `package.json`   | no (manifests)     |
-| Go        | `go list -deps`                                            | yes (`go`)         |
+| Ecosystem         | Source of truth                                            | Needs a toolchain? |
+| ----------------- | ---------------------------------------------------------- | ------------------ |
+| Cargo             | `cargo metadata --no-deps`, or the workspace `Cargo.toml`s | no (manifests)     |
+| uv                | `uv.lock` (`source = { editable = "<dir>" }`)              | no (lockfile)      |
+| npm / yarn / pnpm | root member globs + member-name matches in `package.json`  | no (manifests)     |
+| Go                | `go list -deps`                                            | yes (`go`)         |
 
 The current workaround in a private monorepo is a committed `// @inferred_deps` block per BUILD file, a
 regeneration script, and a CI drift check. This document proposes replacing that with a grog feature.
@@ -73,7 +73,7 @@ module takes seconds — and it is what decides whether caching is optional or m
 **S5 — Protobuf codegen crossing languages.** `examples/codegen`. `src/protobuf:codegen` runs `protoc` and emits
 Go and Python stubs; `src/go`, `src/python` and `src/rust` consume them. Two halves:
 
-- Where the generated package is *also* an ecosystem workspace member — as in `examples/python_uv_monorepo`,
+- Where the generated package is _also_ an ecosystem workspace member — as in `examples/python_uv_monorepo`,
   where `lib/proto` is a uv member — the language resolver already yields the edge, and nothing extra is
   needed. Crossing a language boundary does not require a separate mechanism.
 - Where it is not — the Rust consumer that pulls stubs in through `build.rs`, or a Go module that vendors
@@ -102,7 +102,7 @@ Relevant facts about `internal/loading`, which constrain the answer more than ta
   file-reading builtin (`starlark_loader.go` predeclares `json`, `math`, `time` and the `GROG_*` env, and
   nothing else). Pkl has `read()`. Any mechanism that must work identically in all three therefore has to live
   below the loader, in Go.
-- `hashing.GetTargetChangeHash` folds the *change hashes of direct dependencies* into a target's hash. Inferred
+- `hashing.GetTargetChangeHash` folds the _change hashes of direct dependencies_ into a target's hash. Inferred
   edges therefore need no special hashing treatment: once merged into `Dependencies`, invalidation is the
   existing machinery.
 - `MustLoadGraphForBuild` and `MustLoadGraphForQuery` both funnel through `LoadAllPackages`, so anything
@@ -140,7 +140,7 @@ caches its output on a content hash of declared inputs, and merges the resulting
 opted in, after loading and before graph construction. A resolver is a loaded declaration, not a graph node: it
 is never scheduled, never built, and never appears in `grog deps`.
 
-- **Load cost:** one subprocess per *referenced* resolver per invocation on a cold cache; on a warm cache, one
+- **Load cost:** one subprocess per _referenced_ resolver per invocation on a cold cache; on a warm cache, one
   file-hash pass over the resolver's declared inputs (a few dozen `Cargo.toml`s, ~ms with xxh3) plus a cache
   read. Zero for repos that use no resolvers.
 - **Caching:** the existing CAS, local and remote. A cold CI runner with a remote cache configured gets the
@@ -209,19 +209,19 @@ Rejected.
 
 ### Comparison
 
-| | (A) codegen | (B) resolver | (B′) resolver as build node | (C) inline hooks |
-|---|---|---|---|---|
-| Works in YAML / Starlark / Pkl identically | yes | yes | yes | **no** |
-| Load-time cost, warm | zero | ~ms (hash + cache read) | ~ms, but through the execution engine | O(packages × metadata size) |
-| Load-time cost, cold | zero | one subprocess per resolver | one bootstrap build | same as warm |
-| Cache-able output | n/a | yes, local + remote CAS | yes, for free | n/a |
-| Read-path commands stay reads | yes | yes | **no** — `deps`, `changes`, completion may build | yes |
-| Fresh clone without toolchain | yes | yes for cargo/uv/node, no for go | same as (B) | yes |
-| Reproducible across machines | yes | mostly (content-hash keyed) | mostly | yes |
-| Contributor workflow cost | regenerate + review churn | none | none | none |
-| Drift possible | yes, between regenerations | no | no | no |
-| Resolver may depend on build outputs | n/a | no | **yes** | no |
-| New public API surface | a target convention | 1 target field + 1 BUILD node kind | 1 target field + a bootstrap phase | a Starlark file-read builtin |
+|                                            | (A) codegen                | (B) resolver                       | (B′) resolver as build node                      | (C) inline hooks             |
+| ------------------------------------------ | -------------------------- | ---------------------------------- | ------------------------------------------------ | ---------------------------- |
+| Works in YAML / Starlark / Pkl identically | yes                        | yes                                | yes                                              | **no**                       |
+| Load-time cost, warm                       | zero                       | ~ms (hash + cache read)            | ~ms, but through the execution engine            | O(packages × metadata size)  |
+| Load-time cost, cold                       | zero                       | one subprocess per resolver        | one bootstrap build                              | same as warm                 |
+| Cache-able output                          | n/a                        | yes, local + remote CAS            | yes, for free                                    | n/a                          |
+| Read-path commands stay reads              | yes                        | yes                                | **no** — `deps`, `changes`, completion may build | yes                          |
+| Fresh clone without toolchain              | yes                        | yes for cargo/uv/node, no for go   | same as (B)                                      | yes                          |
+| Reproducible across machines               | yes                        | mostly (content-hash keyed)        | mostly                                           | yes                          |
+| Contributor workflow cost                  | regenerate + review churn  | none                               | none                                             | none                         |
+| Drift possible                             | yes, between regenerations | no                                 | no                                               | no                           |
+| Resolver may depend on build outputs       | n/a                        | no                                 | **yes**                                          | no                           |
+| New public API surface                     | a target convention        | 1 target field + 1 BUILD node kind | 1 target field + a bootstrap phase               | a Starlark file-read builtin |
 
 ## 5. Recommendation
 
@@ -344,11 +344,11 @@ dependency_resolvers {
 
 </details>
 
-| Field     | Default                 | Meaning                                                                                            |
-| --------- | ----------------------- | --------------------------------------------------------------------------------------------------- |
-| `name`    | required                | Unique within the package. The resolver is addressed by its label.                                  |
-| `command` | required                | Shell command producing the mapping on stdout, or `builtin:<name>` to select a shipped resolver.    |
-| `inputs`  | the built-in's defaults | Globs relative to the declaring package, resolved and hashed exactly like a target's `inputs`.      |
+| Field     | Default                 | Meaning                                                                                                                                           |
+| --------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`    | required                | Unique within the package. The resolver is addressed by its label.                                                                                |
+| `command` | required                | Shell command producing the mapping on stdout, or `builtin:<name>` to select a shipped resolver.                                                  |
+| `inputs`  | the built-in's defaults | Globs relative to the declaring package, resolved and hashed exactly like a target's `inputs`.                                                    |
 | `timeout` | `60s`                   | Bounds the command, parsed like `target.timeout`. A resolver runs on read-path commands and on tab-completion, so an unbounded one hangs the CLI. |
 
 **The declaring package is the resolver's working directory and its path root.** This replaces the
@@ -388,9 +388,9 @@ the `GROG_*` loader variables from `loader_env.go`, plus `GROG_RESOLVER_LABEL`.
 {
   "version": 1,
   "packages": {
-    "crates/cli":    { "dependencies": ["crates/greet"] },
+    "crates/cli": { "dependencies": ["crates/greet"] },
     "crates/format": { "dependencies": [] },
-    "crates/greet":  { "dependencies": ["crates/format"] },
+    "crates/greet": { "dependencies": ["crates/format"] },
     "crates/server": { "dependencies": ["crates/greet"] }
   }
 }
@@ -419,21 +419,23 @@ the `GROG_*` loader variables from `loader_env.go`, plus `GROG_RESOLVER_LABEL`.
 
 **Resolution and error handling.**
 
-| Situation | Behaviour |
-| --- | --- |
-| Non-zero exit | Load fails. The resolver's stderr is included verbatim in the error. |
-| Exceeds `timeout` | The process is killed and the load fails. |
-| Output path is absolute, or escapes the declaring package | Load fails naming the offending entry. |
-| Unparseable stdout | Load fails, quoting the first 2 KiB of stdout. |
-| `version` newer than supported | Load fails asking for a grog upgrade. |
-| Key names a package with no registered target, and the entry carries `inputs` | A filegroup `//<package>:_<resolver name>` is **synthesized** from them (§5.8). |
-| Key names a package with no registered target and no `inputs` | **Ignored**, logged at debug. A workspace legitimately contains members grog does not build. |
-| A dependency names a package that is neither registered nor synthesized | **Load error.** This is the drift case the feature exists to catch; dropping it silently reintroduces the bug. |
-| A synthesized label collides with a target, alias or resource | **Load error** naming the resolver and the file that defines the existing node. |
-| Cycle among inferred edges | The existing `analysis.BuildGraph` cycle error, unchanged. |
+| Situation                                                                     | Behaviour                                                                                                      |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Non-zero exit                                                                 | Load fails. The resolver's stderr is included verbatim in the error.                                           |
+| Exceeds `timeout`                                                             | The process is killed and the load fails.                                                                      |
+| Output path is absolute, or escapes the declaring package                     | Load fails naming the offending entry.                                                                         |
+| Unparseable stdout                                                            | Load fails, quoting the first 2 KiB of stdout.                                                                 |
+| `version` newer than supported                                                | Load fails asking for a grog upgrade.                                                                          |
+| Key names a package with no registered target, and the entry carries `inputs` | A filegroup `//<package>:_<resolver name>` is **synthesized** from them (§5.8).                                |
+| Key names a package with no registered target and no `inputs`                 | **Ignored**, logged at debug. A workspace legitimately contains members grog does not build.                   |
+| A dependency names a package that is neither registered nor synthesized       | **Load error.** This is the drift case the feature exists to catch; dropping it silently reintroduces the bug. |
+| A synthesized label collides with a target, alias or resource                 | **Load error** naming the resolver and the file that defines the existing node.                                |
+| Cycle among inferred edges                                                    | The existing `analysis.BuildGraph` cycle error, unchanged.                                                     |
 
-**Caching.** Key = hash(protocol version, resolver label, resolved `command`, and the sorted list of resolved
-input paths with their content hashes). Because the declaration is loaded like any other node, the inputs are
+**Caching.** Key = hash(protocol version, resolver label, resolved `command`, the grog version for a `builtin:`
+command, and the sorted list of resolved input paths with their content hashes). A built-in's behaviour changes
+with grog, so its identity has to be in the key; a custom resolver's executable is hashed only if listed in
+`inputs`, which the docs require. Because the declaration is loaded like any other node, the inputs are
 already resolved by `resolveInputs` and hashable by `HashFiles` — there is no second glob-and-hash path. Value =
 the resolver's stdout, stored in the existing CAS (`internal/caching`), so a configured remote cache serves it
 to cold runners. Failed runs are never cached. Because the key is content-addressed, a stale entry cannot win.
@@ -442,7 +444,7 @@ Steady-state cost: hash ~50 `Cargo.toml` files with xxh3 (sub-millisecond), one 
 one `cargo metadata` or `go list`. This is what makes S4 tolerable.
 
 **Determinism.** Grog sorts every edge list before merging, so a resolver that emits packages or dependencies
-in a varying order still produces byte-identical results. A resolver whose *content* varies between runs will
+in a varying order still produces byte-identical results. A resolver whose _content_ varies between runs will
 churn target hashes; that is the resolver's bug, and the docs say so.
 
 ### 5.4 Where it runs
@@ -551,7 +553,7 @@ is whether a manifest-only change flags the right targets.
 - The common case already works. `Cargo.toml` and `pyproject.toml` are declared `inputs` of the package
   filegroup in both existing helper libraries, so adding a dependency touches an input of the target that
   receives the new edge, and `--dependents=transitive` propagates from there.
-- The gap is a change to a manifest that is *not* any target's input — most importantly the root workspace
+- The gap is a change to a manifest that is _not_ any target's input — most importantly the root workspace
   manifest adding or removing members. Rule: **if any file matched by a resolver's `inputs` appears in the
   diff, every target registered with that resolver is treated as changed.** Coarse but correct. Refining it by
   running the resolver at both revisions and diffing the mappings is a later PR.
@@ -564,8 +566,8 @@ the gap by synthesizing a filegroup:
 
 ```json
 {
-  "crates/greet":  { "dependencies": ["crates/format"], "inputs": ["src/**/*", "Cargo.toml"] },
-  "crates/format": { "dependencies": [],                "inputs": ["src/**/*", "Cargo.toml"] }
+  "crates/greet": { "dependencies": ["crates/format"], "inputs": ["src/**/*", "Cargo.toml"] },
+  "crates/format": { "dependencies": [], "inputs": ["src/**/*", "Cargo.toml"] }
 }
 ```
 
@@ -583,7 +585,7 @@ ignored, so there is one rule and no mode flag. Four decisions go with it:
   resolver's declaration is honest — that declaration is why they exist — and it makes editing the declaration
   conservatively flag everything it synthesized.
 - **Completeness is a resolver obligation.** A resolver that declares inputs stops describing edges between
-  targets someone wrote and starts creating nodes, so a resolver bug now yields *missing invalidation* rather than
+  targets someone wrote and starts creating nodes, so a resolver bug now yields _missing invalidation_ rather than
   a load error. A cargo resolver emitting `src/**/*.rs` under-invalidates a crate with `[lib] path = "lib.rs"`
   or an unlisted `build.rs`. The built-in therefore emits a deliberate superset (§6) and is tested against a crate
   with a non-default layout.
@@ -606,12 +608,12 @@ filegroup (§5.8). Omitting `inputs` on such a declaration takes the built-in's 
 name and a command. Go rather than shipped scripts because it avoids a `jq`/Python dependency, works identically
 on every platform grog targets, and keeps the manifest-path-to-directory arithmetic in tested code.
 
-| Name    | Implementation                                                                         | Default `inputs`                                          | Needs a toolchain |
-| ------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------- | ----------------- |
-| `cargo` | Parse the workspace `Cargo.toml` members and each member manifest's `[dependencies]`, `[build-dependencies]` and `[target.*]` tables for `path` entries. Inputs are the superset `Cargo.toml`, `build.rs`, `src/**/*`, `tests/**/*`, `benches/**/*`, `examples/**/*`, plus `[lib] path`, `[[bin]] path` and `[package] include`. Never shells out to `cargo`. | `Cargo.toml`, `*/Cargo.toml`, `*/*/Cargo.toml`, `Cargo.lock` | no |
-| `uv`    | Parse `uv.lock`: packages with `source = { editable = <dir> }` or `{ directory = <dir> }` are workspace members; their `dependencies` and `dev-dependencies` name other members. | `uv.lock`, `pyproject.toml`                              | no |
-| `node`  | Member globs from `pnpm-workspace.yaml` if present, else `workspaces` in the root `package.json`; then each member's `dependencies` / `devDependencies` / `peerDependencies` whose *name* matches another member. | `pnpm-workspace.yaml`, `package.json`, `*/package.json`, `*/*/package.json` | no |
-| `go`    | `go list -deps -e -json ./...`, keep imports under the module path, map each to its directory. | `go.mod`, `go.sum`, `go.work`, `**/*.go`                   | yes (`go`)        |
+| Name    | Implementation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Default `inputs`                                                            | Needs a toolchain |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- | ----------------- |
+| `cargo` | Members are `[workspace] members` minus `exclude`, plus the root package when the root manifest has `[package]`. Edges come from `path` entries in each member's `[dependencies]`, `[build-dependencies]` and `[target.*]` tables, with `workspace = true` resolved through `[workspace.dependencies]`. Inputs are the superset `Cargo.toml`, `build.rs`, `src/**/*`, `tests/**/*`, `benches/**/*`, `examples/**/*`, plus `[lib] path`, `[[bin]] path` and `[package] include`. Never shells out to `cargo`. | `Cargo.toml`, `Cargo.lock`, and `<pattern>/Cargo.toml` per member pattern   | no                |
+| `uv`    | Parse `uv.lock`: packages with `source = { editable = <dir> }` or `{ directory = <dir> }` are workspace members; their `dependencies` name other members. Dev groups are excluded, as for cargo: uv does not forbid member cycles.                                                                                                                                                                                                                                                                           | `uv.lock`, `pyproject.toml`                                                 | no                |
+| `node`  | Member globs from `pnpm-workspace.yaml` if present, else `workspaces` in the root `package.json`; then each member's `dependencies` / `devDependencies` / `peerDependencies` whose _name_ matches another member.                                                                                                                                                                                                                                                                                            | `pnpm-workspace.yaml`, `package.json`, `*/package.json`, `*/*/package.json` | no                |
+| `go`    | `go list -e -json ./...`, then imports from every `.go` file the package lists, including `IgnoredGoFiles` excluded by build constraints, so the mapping is the union over platforms and independent of `GOOS`/`GOARCH`/tags. Keep imports under the module path, map each to its directory.                                                                                                                                                                                                                 | `go.mod`, `go.sum`, `go.work`, `**/*.go`                                    | yes (`go`)        |
 
 Three of the four need no toolchain, which preserves most of architecture (A)'s fresh-clone property. Only `go`
 requires its tool, and it is also the one that most needs the cache.
@@ -650,6 +652,7 @@ surface.
 
 **PR 1 — protocol, one resolver, no cache.** The smallest change that deletes hand-written deps from
 `examples/rust_monorepo`.
+
 - `dependency_resolvers` on `TargetDTO` (4 tags), `starlark.UnpackArgs`, `pkl/package.pkl`.
 - `DependencyResolverDTO` and `PackageDTO.DependencyResolvers`, plus the `dependency_resolver()` Starlark
   builtin, the Pkl class, and the YAML/JSON list — the same four-loader treatment `resource` already has.
@@ -694,16 +697,17 @@ resolver's choice. What §5.8 does not cover is Q4's crate that genuinely is not
 still needs a way to drop the edge.
 
 **Q2 — Cycles from dev-dependencies and test imports.** Cargo permits `A dev-depends-on B, B depends-on A`; Go
-permits the same through test files. Because inferred edges attach to the package filegroup that *every* target
+permits the same through test files. Because inferred edges attach to the package filegroup that _every_ target
 in the package hangs off, importing dev-dependency edges would turn those legal shapes into grog cycles and a
 hard load failure. v1 therefore excludes cargo `[dev-dependencies]` and Go `TestImports`. The cost is an
 under-approximation for test targets, contradicting the §1 invariant, worked around by a hand-written dependency
 on the `:test` target. The proper fix is per-target-kind edges — `test_dependencies` in the resolver document,
-routed to a differently-registered target — and it is the most likely v2 feature. The uv built-in does include
-`dev-dependencies`, because Python's workspace graph is acyclic by construction.
+routed to a differently-registered target — and it is the most likely v2 feature. The uv built-in excludes dev
+groups for the same reason: uv does not forbid member cycles, and a test-only edge back to a dependant is the
+common way to get one.
 
 **Q3 — Resolver input globs and walk cost.** `**/Cargo.toml` over a large repo is a second full tree walk. The
-recommended defaults avoid `**` where possible (`*/Cargo.toml`, `*/*/Cargo.toml`), and the fix is to feed
+cargo defaults derive their manifest globs from the workspace's own member patterns, and the fix is to feed
 resolver input matching off the `gocodewalker` pass that already runs. Not in v1; the docs should warn against
 casual `**/*` inputs. The `go` built-in's `**/*.go` default is the worst offender and the one that most needs
 the walker integration.
@@ -723,8 +727,8 @@ enough.
 reports different content between runs (absolute paths, timestamps, a non-deterministic upstream tool). A `grog check
 --verify-resolvers` that runs each resolver twice and diffs would be cheap and worth adding early.
 
-**Q7 — Two names for one word.** `dependency_resolvers` is a package-level list of *declarations* in a BUILD
-file and a target-level list of *references*. The values differ visibly (objects versus label strings) and it
+**Q7 — Two names for one word.** `dependency_resolvers` is a package-level list of _declarations_ in a BUILD
+file and a target-level list of _references_. The values differ visibly (objects versus label strings) and it
 mirrors how `targets` / `resources` already work, but it is the one place in this API where the same key means
 two things depending on where it sits. Renaming the target field to `infer_dependencies_from` was considered and
 rejected as worse on every axis except this one.
@@ -733,7 +737,7 @@ rejected as worse on every axis except this one.
 parsed once per invocation rather than per package, and the CAS handles the storage, so this is unlikely to
 matter before it is measured.
 
-**Q9 — Hash sensitivity.** `hashTargetDefinition` folds in dependency *change hashes*, not dependency *labels*.
+**Q9 — Hash sensitivity.** `hashTargetDefinition` folds in dependency _change hashes_, not dependency _labels_.
 Swapping an inferred edge `A → B` for `A → C` where `B` and `C` happen to have identical change hashes would
 not invalidate `A`. Pre-existing, very unlikely, and cheap to close by hashing the sorted label list alongside
 the hashes. Worth doing while touching this code.
@@ -762,9 +766,9 @@ Two throwaway prototypes, both pure file parsing, both run against the `language
 ```json
 {
   "packages": {
-    "crates/cli":    { "dependencies": ["crates/greet"] },
+    "crates/cli": { "dependencies": ["crates/greet"] },
     "crates/format": { "dependencies": [] },
-    "crates/greet":  { "dependencies": ["crates/format"] },
+    "crates/greet": { "dependencies": ["crates/format"] },
     "crates/server": { "dependencies": ["crates/greet"] }
   },
   "version": 1
@@ -776,10 +780,10 @@ Two throwaway prototypes, both pure file parsing, both run against the `language
 ```json
 {
   "packages": {
-    "cli":        { "dependencies": ["lib/format"] },
+    "cli": { "dependencies": ["lib/format"] },
     "lib/format": { "dependencies": [] },
-    "lib/proto":  { "dependencies": [] },
-    "server":     { "dependencies": ["lib/format", "lib/proto"] }
+    "lib/proto": { "dependencies": [] },
+    "server": { "dependencies": ["lib/format", "lib/proto"] }
   },
   "version": 1
 }

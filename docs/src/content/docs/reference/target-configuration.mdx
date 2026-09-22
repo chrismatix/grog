@@ -19,23 +19,23 @@ Grog uses this information to ensure incremental, cached, and parallel builds.
 
 ## Fields Reference
 
-| Field                   | Type                     | Description                                                                                      |
-| ----------------------- | ------------------------ | ------------------------------------------------------------------------------------------------ |
-| `name`                  | `string`                 | Unique identifier for the target within its package                                              |
-| `command`               | `string`                 | Shell command or script to execute in the target's package directory                             |
-| `inputs`                | `string[]`               | File paths or glob patterns that, when changed, will trigger a rebuild                           |
-| `exclude_inputs`        | `string[]`               | File paths or glob patterns to exclude from inputs                                               |
-| `outputs`               | `string[]`               | Files or directories produced by the target                                                      |
-| `dependencies`          | `label[]`                | Labels of other targets that must be built before this one                                       |
+| Field                   | Type                     | Description                                                                                                  |
+| ----------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `name`                  | `string`                 | Unique identifier for the target within its package                                                          |
+| `command`               | `string`                 | Shell command or script to execute in the target's package directory                                         |
+| `inputs`                | `string[]`               | File paths or glob patterns that, when changed, will trigger a rebuild                                       |
+| `exclude_inputs`        | `string[]`               | File paths or glob patterns to exclude from inputs                                                           |
+| `outputs`               | `string[]`               | Files or directories produced by the target                                                                  |
+| `dependencies`          | `label[]`                | Labels of other targets that must be built before this one                                                   |
 | `dependency_resolvers`  | `label[]`                | Labels of [dependency resolvers](/topics/dependency-inference) that supply this target's cross-package edges |
-| `platforms`             | `string[]`               | Specific platform identifiers where this target can run (e.g. `linux/amd64`)                     |
-| `tags`                  | `string[]`               | Metadata tags that affect target behavior (e.g., "no-cache", "testonly")                         |
-| `fingerprint`           | `Record<string, string>` | Extra identity inputs used to invalidate the target's cache entry                                |
-| `bin_output`            | `Output`                 | Specifically identifies a binary output from the target                                          |
-| `binary_requires_push`  | `boolean`                | When `true`, `grog run` of this binary fails unless the `--push` flag is set                     |
-| `timeout`               | `string`                 | Maximum time allowed for the target command to run                                               |
-| `environment_variables` | `Record<string, string>` | Additional environment variables set when running the target                                     |
-| `concurrency_group`     | `string`                 | Name of a concurrency group. Members compete for the group's capacity (default `1` = serialized) |
+| `platforms`             | `string[]`               | Specific platform identifiers where this target can run (e.g. `linux/amd64`)                                 |
+| `tags`                  | `string[]`               | Metadata tags that affect target behavior (e.g., "no-cache", "testonly")                                     |
+| `fingerprint`           | `Record<string, string>` | Extra identity inputs used to invalidate the target's cache entry                                            |
+| `bin_output`            | `Output`                 | Specifically identifies a binary output from the target                                                      |
+| `binary_requires_push`  | `boolean`                | When `true`, `grog run` of this binary fails unless the `--push` flag is set                                 |
+| `timeout`               | `string`                 | Maximum time allowed for the target command to run                                                           |
+| `environment_variables` | `Record<string, string>` | Additional environment variables set when running the target                                                 |
+| `concurrency_group`     | `string`                 | Name of a concurrency group. Members compete for the group's capacity (default `1` = serialized)             |
 
 <Aside type="note">
   Targets with names ending in `test` are automatically treated as test targets. They will be
