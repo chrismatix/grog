@@ -17,7 +17,8 @@ func TestCargoDependencies(t *testing.T) {
 	document, operationError := cargoDependencies(t.Context(), "testdata/cargo")
 	require.NoError(t, operationError)
 	require.Equal(t, 1, document.Version)
-	require.Len(t, document.Packages, 6)
+	require.Len(t, document.Packages, 7)
+	require.NotContains(t, document.Packages, "crates/excluded")
 	for _, testCase := range []struct {
 		name         string
 		packagePath  string
@@ -29,6 +30,7 @@ func TestCargoDependencies(t *testing.T) {
 		{"glob member leaf", "crates/leaf", []string{}},
 		{"glob member generator", "crates/generator", []string{}},
 		{"glob member platform", "crates/platform", []string{}},
+		{"inherited workspace dependency, excluded path ignored", "crates/inherit", []string{"crates/shared"}},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			require.Contains(t, document.Packages, testCase.packagePath)
@@ -37,6 +39,11 @@ func TestCargoDependencies(t *testing.T) {
 		})
 	}
 	require.Contains(t, document.Packages["crates/platform"].Inputs, "lib.rs")
+}
+
+func TestCargoDefaultInputs(t *testing.T) {
+	require.Equal(t, []string{"Cargo.toml", "Cargo.lock", "crates/*/Cargo.toml"}, cargoDefaultInputs("testdata/cargo"))
+	require.Equal(t, []string{"Cargo.toml", "Cargo.lock"}, cargoDefaultInputs(t.TempDir()))
 }
 
 func TestCargoResolverErrors(t *testing.T) {
@@ -70,7 +77,8 @@ func TestCargoResolverErrors(t *testing.T) {
 func TestCargoResolverRootMemberAndReadOnly(t *testing.T) {
 	directory := t.TempDir()
 	require.NoError(t, os.CopyFS(directory, os.DirFS("testdata/cargo")))
-	rootManifest := []byte("[workspace]\nmembers = ['.', 'crates/*']\n[package]\nname = 'root'\nversion = '0.1.0'\n[dependencies]\napp = { path = 'crates/app' }\n")
+	// The root package is a member by having [package], without listing '.'.
+	rootManifest := []byte("[workspace]\nmembers = ['crates/*']\n[package]\nname = 'root'\nversion = '0.1.0'\n[dependencies]\napp = { path = 'crates/app' }\n")
 	require.NoError(t, os.WriteFile(filepath.Join(directory, "Cargo.toml"), rootManifest, 0444))
 	lockFile := filepath.Join(directory, "Cargo.lock")
 	require.NoError(t, os.WriteFile(lockFile, []byte("unchanged lockfile\n"), 0444))

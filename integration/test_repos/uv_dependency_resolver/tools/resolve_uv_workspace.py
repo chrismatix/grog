@@ -30,8 +30,8 @@ for package in lock["package"]:
     if directory is None:
         continue  # resolved from an index rather than the workspace
 
-    # Dev dependencies are included: a uv workspace graph cannot be cyclic,
-    # so unlike cargo there is no risk of importing a cycle.
+    # Dev groups are included here. uv does not forbid cycles between
+    # members, so grog reports one as a graph error if the workspace has it.
     dependency_groups = [package.get("dependencies", [])]
     dependency_groups.extend(package.get("dev-dependencies", {}).values())
 

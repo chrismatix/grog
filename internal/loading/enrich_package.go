@@ -220,7 +220,7 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 		}
 		inputs := resolver.Inputs
 		if len(inputs) == 0 && resolver.Command == "builtin:cargo" {
-			inputs = []string{"Cargo.toml", "*/Cargo.toml", "*/*/Cargo.toml", "Cargo.lock"}
+			inputs = cargoDefaultInputs(absolutePackagePath)
 		}
 		resolvedInputs, enrichmentError := resolveInputs(logger, absolutePackagePath, inputs, nil)
 		if enrichmentError != nil {

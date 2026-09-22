@@ -1,0 +1,7 @@
+[package]
+name = "inherit"
+version = "0.1.0"
+
+[dependencies]
+shared = { workspace = true }
+excluded = { path = "../excluded" }
