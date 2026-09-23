@@ -696,6 +696,16 @@ func (e *Executor) LoadDependencyOutputs(
 			continue
 		}
 
+		// A dependency without outputs of its own materializes nothing, so
+		// stopping at it would hide the outputs of everything behind it.
+		// Depending on such an aggregator has to mean the same as depending on
+		// the targets it groups.
+		if len(localDep.AllOutputs()) == 0 {
+			if passThroughErr := e.LoadDependencyOutputs(ctx, localDep, update); passThroughErr != nil {
+				return passThroughErr
+			}
+		}
+
 		targetResult, err := e.targetCache.Load(ctx, localDep.ChangeHash)
 
 		var loadErr error

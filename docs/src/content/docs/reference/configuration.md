@@ -97,7 +97,7 @@ For instance, to set or override the `fail_fast` option set `GROG_FAIL_FAST=fals
 - **enable_cache**: Controls whether caching is enabled. Defaults to `true`.
 - **load_outputs**: Determines what outputs are loaded from the cache. Available options are:
   - `all` (default): Load all outputs from the cache.
-  - `minimal`: Only load outputs of a target if a **direct dependant** needs to be re-built. This setting is useful to save bandwidth and disk space in CI settings.
+  - `minimal`: Only load outputs of a target if a **direct dependant** needs to be re-built. Targets without outputs of their own are transparent here — depending on an aggregator target also loads the outputs of the targets it groups. This setting is useful to save bandwidth and disk space in CI settings.
 - **hash_algorithm**: Selects the hash function used for cache keys and change detection. [`xxh3`](https://xxhash.com/) (default) offers extremely fast, 128-bit hashes with a negligible collision probability for typical builds, while `sha256` is slower but cryptographically strong—use it if you are hashing untrusted inputs or want a vanishingly small risk of collisions despite the performance cost.
 - **all_platforms**: When set to `true` skips the platform selection step and builds all targets for all platforms ([read more](/topics/querying)).
 - **platform_tag**: A list of custom [platform tags](/topics/multi-platform-builds#platform-tags) the host opts into. Tags participate in target matching alongside the host's auto-detected `os/arch` and are included in the cache key (unless the target carries the `multiplatform-cache` tag). Can also be set via `GROG_PLATFORM_TAG=a,b` or `--platform-tag` (repeatable).
