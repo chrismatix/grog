@@ -40,6 +40,25 @@ cases:
       # Fails if output_1.txt does not exist but output_2.txt and output_3.txt exist
       [ ! -f output_1.txt ] && [ -f output_2.txt ] && [ -f output_3.txt ] || exit 1
 
+  - name: load_minimal_outputs_clear_outputs_aggregator
+    setup_command: "rm *.txt"
+
+  - name: taint_aggregator_consumer
+    grog_args:
+      - taint
+      - //:target_d
+
+  - name: load_minimal_outputs_rebuild_through_aggregator
+    grog_args:
+      - build
+      - //:target_d
+
+  - name: assert_outputs_behind_aggregator_were_loaded
+    setup_command: |
+      # target_d only runs if output_1.txt was loaded through the aggregator,
+      # which produces no outputs of its own.
+      [ -f output_1.txt ] && [ -f output_4.txt ] || exit 1
+
   - name: load_minimal_outputs_clear_outputs_2
     setup_command: "rm *.txt"
 

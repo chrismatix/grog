@@ -34,6 +34,25 @@ targets {
     }
   }
 
+  // Groups target_a without producing anything of its own.
+  new {
+    name = "aggregator"
+    dependencies {
+      ":target_a"
+    }
+  }
+
+  new {
+    name = "target_d"
+    command = "cat output_1.txt > output_4.txt"
+    dependencies {
+      ":aggregator"
+    }
+    outputs {
+      "output_4.txt"
+    }
+  }
+
   new {
     name = "runnable_target"
     inputs {
