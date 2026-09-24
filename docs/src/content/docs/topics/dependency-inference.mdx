@@ -430,64 +430,60 @@ because a missing edge is the exact bug inference exists to prevent.
 
 ### A worked example
 
-Say `protoc` output is consumed by packages that share no package manager, as in
-[`examples/codegen`](https://github.com/chrismatix/grog/tree/main/examples/codegen). A resolver that maps each
-consumer directory to the codegen target is about a dozen lines:
+[`examples/custom_resolver`](https://github.com/chrismatix/grog/tree/main/examples/custom_resolver) is a
+runnable version of everything on this page: three protobuf packages whose imports form a chain, a 25-line
+Python resolver that reads those imports, and one package with no BUILD file at all. The resolver walks the
+`.proto` files, takes each `import "…"` path's directory as a dependency, and declares `*.proto` as the
+package's inputs:
 
 ```python
 #!/usr/bin/env python3
-# tools/grog/proto_resolver.py
+# tools/resolve_proto_imports.py
 import json
+import re
 import sys
 from pathlib import Path
 
-CODEGEN_LABEL = "//src/protobuf:codegen"
+IMPORT = re.compile(r'^import "([^"]+)";', re.MULTILINE)
 
 packages = {}
-for source_file in Path("src").rglob("*"):
-    if source_file.suffix not in {".go", ".py", ".rs"}:
-        continue
-    if "pb." not in source_file.read_text(errors="ignore"):
-        continue
-    package_directory = str(source_file.parent.relative_to("."))
-    packages.setdefault(package_directory, {"dependencies": [CODEGEN_LABEL]})
+for proto_file in sorted(Path("proto").rglob("*.proto")):
+    package_directory = proto_file.parent.as_posix()
+    imported_directories = {
+        Path(imported).parent.as_posix() for imported in IMPORT.findall(proto_file.read_text())
+    }
+    packages[package_directory] = {
+        "dependencies": sorted(imported_directories - {package_directory}),
+        "inputs": ["*.proto"],
+    }
 
 json.dump({"version": 1, "packages": packages}, sys.stdout)
 ```
 
-Declare it and name it from the consumers:
-
-```starlark
-# BUILD.star at the workspace root
-dependency_resolver(
-    name = "proto",
-    command = "python3 tools/grog/proto_resolver.py",
-    inputs = ["src/**/*.proto", "src/**/*.go", "src/**/*.py", "src/**/*.rs"],
-)
-```
+Declare it with the files its answer depends on — the protos and the script itself:
 
 <Tabs syncKey="build-file-format">
   <TabItem label="YAML">
 
 ```yaml
-targets:
-  - name: go
-    command: go build ./...
+# BUILD.yaml at the workspace root
+dependency_resolvers:
+  - name: protos
+    command: python3 tools/resolve_proto_imports.py
     inputs:
-      - "**/*.go"
-    dependency_resolvers:
-      - //:proto
+      - tools/resolve_proto_imports.py
+      - proto/*/*.proto
 ```
 
   </TabItem>
   <TabItem label="Starlark">
 
 ```starlark
-target(
-    name = "go",
-    command = "go build ./...",
-    inputs = ["**/*.go"],
-    dependency_resolvers = ["//:proto"],
+# BUILD.star at the workspace root
+dependency_resolver(
+    name = "protos",
+    command = "python3 tools/resolve_proto_imports.py",
+    inputs = ["tools/resolve_proto_imports.py", "proto/*/*.proto"],
 )
 ```
 
@@ -495,20 +491,40 @@ target(
   <TabItem label="Pkl">
 
 ```pkl
-new {
-  name = "go"
-  command = "go build ./..."
-  inputs {
-    "**/*.go"
-  }
-  dependency_resolvers {
-    "//:proto"
+// BUILD.pkl at the workspace root
+amends "@grog/package.pkl"
+
+dependency_resolvers {
+  new {
+    name = "protos"
+    command = "python3 tools/resolve_proto_imports.py"
+    inputs {
+      "tools/resolve_proto_imports.py"
+      "proto/*/*.proto"
+    }
   }
 }
 ```
 
   </TabItem>
 </Tabs>
+
+Every package now has a `:_protos` filegroup, and a target that consumes the protos depends on that and nothing
+else:
+
+```yaml
+# proto/order/BUILD.yaml
+targets:
+  - name: generate
+    command: grep -h '^message' *.proto > messages.txt
+    dependencies:
+      - :_protos
+    outputs:
+      - messages.txt
+```
+
+`proto/base` has no BUILD file, and `grog build //...` still reports the critical path
+`//proto/base:_protos -> //proto/user:_protos -> //proto/order:_protos -> //proto/order:generate`.
 
 <Aside type="tip" title="Cross-language often needs no custom resolver">
   If the generated package is also a workspace member, as `lib/proto` is in the [uv
