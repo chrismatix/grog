@@ -1,0 +1,145 @@
+/// Grog targets for a uv workspace. `Library` is the per-package standard
+/// (filegroup, pytest, ruff); `Image` adds a Docker image installed from the
+/// resolved uv.lock. python.star is the Starlark twin of this module.
+module python
+
+import "@grog/package.pkl"
+
+class Library {
+  local self = this
+
+  /// Filegroup target name that other packages depend on (e.g. "format").
+  name: String
+
+  /// Import package directory holding the sources. Defaults to `name`.
+  package_dir: String = name
+
+  sources: Listing<String> = new Listing<String> {
+    "\(self.package_dir)/**/*.py"
+    "pyproject.toml"
+  }
+
+  test_sources: Listing<String> = new Listing<String> {
+    "tests/**/*.py"
+  }
+
+  /// Workspace members this package imports, as filegroup labels.
+  dependencies: Listing<String> = new Listing<String> {}
+
+  /// Extra dependencies only the tests need.
+  test_dependencies: Listing<String> = new Listing<String> {}
+
+  pytest_args: String = ""
+
+  fixed targets: Listing<package.Target> = new Listing<package.Target> {
+    new {
+      name = self.name
+      inputs = self.sources
+      dependencies {
+        "//tools/grog:python"
+        ...self.dependencies
+      }
+    }
+
+    new {
+      name = "test"
+      command =
+        "uv run pytest \(self.pytest_args) --cov=\(self.package_dir) --cov-report=xml:coverage.xml"
+      inputs {
+        ...self.sources
+        ...self.test_sources
+      }
+      dependencies {
+        ":\(self.name)"
+        ...self.test_dependencies
+      }
+      outputs {
+        "coverage.xml"
+      }
+    }
+
+    new {
+      name = "lint"
+      command = "uv run ruff check . && uv run ruff format --check ."
+      inputs {
+        ...self.sources
+        ...self.test_sources
+      }
+      dependencies {
+        "//:ruff.toml"
+      }
+    }
+  }
+}
+
+class Image {
+  local self = this
+
+  /// Local image tag; also the name of the `oci::` output.
+  name: String
+
+  /// Filegroup of the service package (its Library target, e.g. ":server").
+  /// Its inputs and dependencies decide when the image is re-staged.
+  library: String
+
+  deploy_arch: String = "amd64"
+
+  dockerfile: String = "Dockerfile"
+
+  /// Fully qualified `repo:tag` destinations for `grog build --push`.
+  /// Not part of the cache key, so retagging reuses the cached image.
+  push_destinations: Listing<String> = new Listing<String> {}
+
+  fixed targets: Listing<package.Target> = new Listing<package.Target> {
+    new {
+      name = "pylock"
+      command =
+        "mkdir -p build && uv export --locked --format pylock.toml --no-dev --no-emit-project --no-header > build/uv-pylock.toml"
+      inputs {
+        "pyproject.toml"
+      }
+      dependencies {
+        "//:uv.lock"
+      }
+      outputs {
+        "build/uv-pylock.toml"
+      }
+    }
+
+    new {
+      name = "stage"
+      command = "uv run --script \"$GROG_WORKSPACE_ROOT/tools/grog/uv_image_stage.py\""
+      dependencies {
+        ":pylock"
+        "//tools/grog:python"
+        self.library
+      }
+      outputs {
+        "dir::build/uv"
+      }
+    }
+
+    new {
+      name = "image"
+      command =
+        "docker build --platform=linux/\(self.deploy_arch) -f \(self.dockerfile) -t \(self.name) ."
+      inputs {
+        self.dockerfile
+      }
+      dependencies {
+        ":stage"
+      }
+      outputs {
+        "oci::\(self.name)"
+      }
+      oci_push =
+        if (self.push_destinations.isEmpty)
+          null
+        else
+          new Mapping { [self.name] = self.push_destinations }
+      platforms {
+        "linux/\(self.deploy_arch)"
+      }
+    }
+  }
+}

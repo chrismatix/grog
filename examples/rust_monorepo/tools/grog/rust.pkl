@@ -1,0 +1,90 @@
+/// Grog targets for a cargo workspace. Pkl twin of rust.star.
+module rust
+
+import "@grog/package.pkl"
+
+class Crate {
+  local self = this
+
+  /// Cargo package name; also the filegroup target name.
+  name: String
+
+  /// Filegroups of the workspace crates this crate depends on.
+  dependencies: Listing<String> = new Listing<String> {}
+
+  /// Copy the release binary to bin/<name> and expose it as bin_output,
+  /// so `grog run //crates/<name>:build` works.
+  bin: Boolean = false
+
+  local cargo_dependencies: Listing<String> = new Listing<String> {
+    ":\(self.name)"
+    ":deps-lock"
+  }
+
+  fixed targets: Listing<package.Target> = new Listing<package.Target> {
+    new {
+      name = self.name
+      inputs {
+        "src/**/*"
+        "Cargo.toml"
+      }
+      dependencies {
+        "//tools/grog:rust"
+        ...self.dependencies
+      }
+    }
+
+    // This crate's slice of the shared Cargo.lock. Cargo targets depend on it
+    // instead of //:workspace, so unrelated lockfile churn keeps them cached.
+    new {
+      name = "deps-lock"
+      command =
+        "cargo tree -p \(self.name) -e normal,build,dev --prefix none --locked | sed -E 's/ \\([^)]*\\)$//' | sort -u > deps.lock"
+      inputs {
+        "Cargo.toml"
+      }
+      dependencies {
+        "//:workspace"
+      }
+      outputs {
+        "deps.lock"
+      }
+    }
+
+    new {
+      name = "build"
+      command =
+        if (self.bin)
+          """
+          cargo build -p \(self.name) --release --locked
+          mkdir -p bin && cp "$GROG_WORKSPACE_ROOT/target/release/\(self.name)" bin/\(self.name)
+          """
+        else
+          "cargo build -p \(self.name) --release --locked"
+      dependencies = cargo_dependencies
+      bin_output = if (self.bin) "bin/\(self.name)" else null
+      concurrency_group = "cargo"
+    }
+
+    new {
+      name = "test"
+      command = "cargo test -p \(self.name) --locked"
+      inputs {
+        "tests/**/*"
+      }
+      dependencies = cargo_dependencies
+      concurrency_group = "cargo"
+    }
+
+    new {
+      name = "lint"
+      command =
+        "cargo fmt -p \(self.name) --check && cargo clippy -p \(self.name) --all-targets --locked -- -D warnings"
+      inputs {
+        "tests/**/*"
+      }
+      dependencies = cargo_dependencies
+      concurrency_group = "cargo"
+    }
+  }
+}
