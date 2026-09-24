@@ -152,3 +152,26 @@ func TestRustExampleSynthesizesCrateFilegroups(t *testing.T) {
 		})
 	}
 }
+
+func TestCustomResolverExample(t *testing.T) {
+	originalConfig := config.Global
+	t.Cleanup(func() { config.Global = originalConfig })
+	workspaceDirectory, operationError := filepath.Abs("../../examples/custom_resolver")
+	require.NoError(t, operationError)
+	config.Global.WorkspaceRoot = workspaceDirectory
+	packages, operationError := LoadAllPackages(t.Context())
+	require.NoError(t, operationError)
+	nodes, operationError := model.BuildNodeMapFromPackages(packages)
+	require.NoError(t, operationError)
+	for packagePath, dependency := range map[string]string{"proto/base": "", "proto/user": "proto/base", "proto/order": "proto/user"} {
+		filegroup, isTarget := nodes[label.TL(packagePath, "_protos")].(*model.Target)
+		require.True(t, isTarget, packagePath)
+		require.Equal(t, []string{packagePath[len("proto/"):] + ".proto"}, filegroup.Inputs)
+		if dependency == "" {
+			require.Empty(t, filegroup.Dependencies)
+			continue
+		}
+		require.Equal(t, []label.TargetLabel{label.TL(dependency, "_protos")}, filegroup.Dependencies)
+	}
+	require.Nil(t, nodes[label.TL("proto/base", "generate")])
+}

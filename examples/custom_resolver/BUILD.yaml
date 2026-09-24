@@ -1,0 +1,8 @@
+# The resolver runs in the package that declares it, so its inputs and the
+# paths it prints are both relative to the workspace root.
+dependency_resolvers:
+  - name: protos
+    command: python3 tools/resolve_proto_imports.py
+    inputs:
+      - tools/resolve_proto_imports.py
+      - proto/*/*.proto
