@@ -26,4 +26,3 @@ for proto_file in sorted(Path("proto").rglob("*.proto")):
     }
 
 json.dump({"version": 1, "packages": packages}, sys.stdout, indent=2)
-
