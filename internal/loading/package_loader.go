@@ -2,6 +2,7 @@ package loading
 
 import (
 	"context"
+	"path/filepath"
 
 	"grog/internal/console"
 )
@@ -16,38 +17,124 @@ type Loader interface {
 	Load(ctx context.Context, filePath string) (PackageDTO, bool, error)
 }
 
+type registeredLoader interface {
+	Loader
+	loadSource(ctx context.Context, filePath string, source []byte) (PackageDTO, bool, error)
+}
+
 // PackageLoader facade that delegates to the correct loader based on the pattern.
 type PackageLoader struct {
-	loaders   []Loader
-	fileNames []string
-	logger    *console.Logger
+	registrations []loaderRegistration
+	logger        *console.Logger
+}
+
+type loaderRegistration struct {
+	format   packageFileFormat
+	loader   registeredLoader
+	patterns []string
+}
+
+type packageFileFormat string
+
+const (
+	jsonPackageFile     packageFileFormat = "json"
+	yamlPackageFile     packageFileFormat = "yaml"
+	makePackageFile     packageFileFormat = "makefile"
+	pklPackageFile      packageFileFormat = "pkl"
+	starlarkPackageFile packageFileFormat = "starlark"
+	scriptPackageFile   packageFileFormat = "script"
+)
+
+func loaderRegistrations() []loaderRegistration {
+	return []loaderRegistration{
+		{format: jsonPackageFile, loader: JsonLoader{}, patterns: []string{"BUILD.json"}},
+		{format: yamlPackageFile, loader: YamlLoader{}, patterns: []string{"BUILD.yaml", "BUILD.yml"}},
+		{format: makePackageFile, loader: MakefileLoader{}, patterns: []string{"Makefile"}},
+		{format: pklPackageFile, loader: &PklLoader{}, patterns: []string{"BUILD.pkl"}},
+		{format: starlarkPackageFile, loader: StarlarkLoader{}, patterns: []string{"BUILD.star", "BUILD.bzl"}},
+		{format: scriptPackageFile, loader: ScriptLoader{}, patterns: []string{"*.grog.sh", "*.grog.py"}},
+	}
+}
+
+func (registration loaderRegistration) matches(fileName string) bool {
+	for _, pattern := range registration.patterns {
+		if matched, _ := filepath.Match(pattern, fileName); matched {
+			return true
+		}
+	}
+	return false
 }
 
 func NewPackageLoader(logger *console.Logger) *PackageLoader {
 	return &PackageLoader{
-		logger: logger,
-		// register loaders here
-		loaders: []Loader{
-			JsonLoader{},
-			YamlLoader{},
-			MakefileLoader{},
-			&PklLoader{},
-			StarlarkLoader{},
-			ScriptLoader{},
-		},
+		logger:        logger,
+		registrations: loaderRegistrations(),
 	}
+}
+
+// PackageFilePatterns returns the file patterns handled by production loaders.
+func PackageFilePatterns() []string {
+	patterns := []string{}
+	for _, registration := range loaderRegistrations() {
+		patterns = append(patterns, registration.patterns...)
+	}
+	return patterns
+}
+
+// IsPackageFile reports whether a production loader accepts a file name.
+func IsPackageFile(fileName string) bool {
+	for _, registration := range loaderRegistrations() {
+		if registration.matches(fileName) {
+			return true
+		}
+	}
+	return false
+}
+
+func isPackageFileFormat(fileName string, format packageFileFormat) bool {
+	for _, registration := range loaderRegistrations() {
+		if registration.format == format && registration.matches(fileName) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsYAMLPackageFile reports whether the YAML loader accepts a file name.
+func IsYAMLPackageFile(fileName string) bool {
+	return isPackageFileFormat(fileName, yamlPackageFile)
+}
+
+// IsStarlarkPackageFile reports whether the Starlark loader accepts a file name.
+func IsStarlarkPackageFile(fileName string) bool {
+	return isPackageFileFormat(fileName, starlarkPackageFile)
 }
 
 // LoadIfMatched loads the package from the specified file name if it matches any of the supported file names.
 func (p *PackageLoader) LoadIfMatched(ctx context.Context, filePath string, fileName string) (PackageDTO, bool, error) {
-	for _, loader := range p.loaders {
-		if loader.Matches(fileName) {
-			p.logger.Debugf("Loading package from %s using loader %s", filePath, loader)
-			packageDTO, matched, err := loader.Load(ctx, filePath)
+	for _, registration := range p.registrations {
+		if registration.matches(fileName) {
+			if p.logger != nil {
+				p.logger.Debugf("Loading package from %s using loader %s", filePath, registration.loader)
+			}
+			packageDTO, matched, err := registration.loader.Load(ctx, filePath)
 			packageDTO.SourceFilePath = filePath
 			return packageDTO, matched, err
 		}
 	}
 
+	return PackageDTO{}, false, nil
+}
+
+// LoadSourceIfMatched loads in-memory source through the registered production loader.
+func (p *PackageLoader) LoadSourceIfMatched(ctx context.Context, filePath string, fileName string, source []byte) (PackageDTO, bool, error) {
+	for _, registration := range p.registrations {
+		if !registration.matches(fileName) {
+			continue
+		}
+		packageDTO, matched, operationError := registration.loader.loadSource(ctx, filePath, source)
+		packageDTO.SourceFilePath = filePath
+		return packageDTO, matched, operationError
+	}
 	return PackageDTO{}, false, nil
 }
