@@ -222,6 +222,9 @@ func TestCliScenarios(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	if runtime.GOOS == "windows" {
+		binaryName += ".exe"
+	}
 	err := os.Chdir("..")
 	if err != nil {
 		fmt.Printf("could not change dir: %v", err)

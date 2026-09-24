@@ -275,6 +275,7 @@ func TestPathTriesToEscapePackage(t *testing.T) {
 }
 
 func TestIsWithinWorkspace(t *testing.T) {
+	workspaceRoot := t.TempDir()
 	tests := []struct {
 		name          string
 		workspaceRoot string
@@ -285,7 +286,7 @@ func TestIsWithinWorkspace(t *testing.T) {
 	}{
 		{
 			name:          "within workspace",
-			workspaceRoot: "/path/to/workspace",
+			workspaceRoot: workspaceRoot,
 			packagePath:   "pkg",
 			relPath:       "file.go",
 			expectWithin:  true,
@@ -293,7 +294,7 @@ func TestIsWithinWorkspace(t *testing.T) {
 		},
 		{
 			name:          "escaping workspace",
-			workspaceRoot: "/path/to/workspace",
+			workspaceRoot: workspaceRoot,
 			packagePath:   "pkg",
 			relPath:       "../file.go",
 			expectWithin:  true,

@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/fatih/color"
@@ -44,6 +43,9 @@ func (wl *WorkspaceLocker) Lock(ctx context.Context) error {
 	}
 
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		logger.Debugf("Attempting to acquire workspace lock at %s", wl.lockFilePath)
 		file, err := os.OpenFile(wl.lockFilePath, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0644)
 		if err == nil {
@@ -168,18 +170,6 @@ func FindActiveLocks(grogRoot string) ([]ActiveLock, error) {
 		return strings.Compare(a.LockFilePath, b.LockFilePath)
 	})
 	return activeLocks, nil
-}
-
-func processRunning(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	p, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	err = p.Signal(syscall.Signal(0))
-	return err == nil || errors.Is(err, syscall.EPERM)
 }
 
 func buildLockFileContents(processID int, commandArguments []string) string {

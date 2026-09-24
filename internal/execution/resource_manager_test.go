@@ -44,7 +44,7 @@ func newResourceTestGraph(t *testing.T, nodes ...model.BuildNode) *dag.DirectedT
 
 func TestEnsureResourcesStartedStartsOnceAndInjectsExports(t *testing.T) {
 	tmpDir := setupResourceTestWorkspace(t)
-	countFile := filepath.Join(tmpDir, "starts.log")
+	countFile := filepath.ToSlash(filepath.Join(tmpDir, "starts.log"))
 
 	resource := &model.Resource{
 		Label: label.TargetLabel{Package: "pkg", Name: "db"},
@@ -103,7 +103,7 @@ func TestEnsureResourcesStartedStartsOnceAndInjectsExports(t *testing.T) {
 
 func TestEnsureResourcesStartedWaitsForReady(t *testing.T) {
 	tmpDir := setupResourceTestWorkspace(t)
-	readyFile := filepath.Join(tmpDir, "ready.marker")
+	readyFile := filepath.ToSlash(filepath.Join(tmpDir, "ready.marker"))
 
 	resource := &model.Resource{
 		Label: label.TargetLabel{Package: "pkg", Name: "db"},
@@ -159,7 +159,7 @@ func TestEnsureResourcesStartedFailsWhenReadyTimesOut(t *testing.T) {
 
 func TestTeardownAllRunsDownInReverseStartOrder(t *testing.T) {
 	tmpDir := setupResourceTestWorkspace(t)
-	orderFile := filepath.Join(tmpDir, "order.log")
+	orderFile := filepath.ToSlash(filepath.Join(tmpDir, "order.log"))
 
 	first := &model.Resource{
 		Label: label.TargetLabel{Package: "pkg", Name: "first"},
@@ -209,7 +209,7 @@ func TestTeardownAllRunsDownInReverseStartOrder(t *testing.T) {
 
 func TestTeardownAllRunsForPartiallyFailedStart(t *testing.T) {
 	tmpDir := setupResourceTestWorkspace(t)
-	downFile := filepath.Join(tmpDir, "down.marker")
+	downFile := filepath.ToSlash(filepath.Join(tmpDir, "down.marker"))
 
 	resource := &model.Resource{
 		Label: label.TargetLabel{Package: "pkg", Name: "db"},
@@ -238,7 +238,7 @@ func TestTeardownAllRunsForPartiallyFailedStart(t *testing.T) {
 
 func TestTeardownAfterFailedUpHasExports(t *testing.T) {
 	tmpDir := setupResourceTestWorkspace(t)
-	downFile := filepath.Join(tmpDir, "down.log")
+	downFile := filepath.ToSlash(filepath.Join(tmpDir, "down.log"))
 
 	resource := &model.Resource{
 		Label:   label.TargetLabel{Package: "pkg", Name: "db"},
@@ -272,8 +272,8 @@ func TestTeardownAfterFailedUpHasExports(t *testing.T) {
 
 func TestTeardownAllWaitsForActiveStart(t *testing.T) {
 	tmpDir := setupResourceTestWorkspace(t)
-	launchedFile := filepath.Join(tmpDir, "launched.marker")
-	runningFile := filepath.Join(tmpDir, "running.marker")
+	launchedFile := filepath.ToSlash(filepath.Join(tmpDir, "launched.marker"))
+	runningFile := filepath.ToSlash(filepath.Join(tmpDir, "running.marker"))
 
 	resource := &model.Resource{
 		Label: label.TargetLabel{Package: "pkg", Name: "db"},
@@ -318,7 +318,7 @@ func TestTeardownAllWaitsForActiveStart(t *testing.T) {
 
 func TestEnsureResourcesStartedResolvesResourceAlias(t *testing.T) {
 	tmpDir := setupResourceTestWorkspace(t)
-	startedFile := filepath.Join(tmpDir, "started.marker")
+	startedFile := filepath.ToSlash(filepath.Join(tmpDir, "started.marker"))
 
 	resource := &model.Resource{
 		Label:   label.TargetLabel{Package: "pkg", Name: "db"},
@@ -360,7 +360,7 @@ func TestEnsureResourcesStartedResolvesResourceAlias(t *testing.T) {
 // still not re-run up.
 func TestEnsureResourcesStartedIsAtMostOnceAcrossSequentialConsumers(t *testing.T) {
 	tmpDir := setupResourceTestWorkspace(t)
-	countFile := filepath.Join(tmpDir, "starts.log")
+	countFile := filepath.ToSlash(filepath.Join(tmpDir, "starts.log"))
 
 	resource := &model.Resource{
 		Label: label.TargetLabel{Package: "pkg", Name: "db"},
@@ -402,7 +402,7 @@ func TestEnsureResourcesStartedIsAtMostOnceAcrossSequentialConsumers(t *testing.
 // read its exports, and is torn down before it.
 func TestEnsureResourcesStartedStartsResourceDependencies(t *testing.T) {
 	tmpDir := setupResourceTestWorkspace(t)
-	orderFile := filepath.Join(tmpDir, "order.log")
+	orderFile := filepath.ToSlash(filepath.Join(tmpDir, "order.log"))
 
 	database := &model.Resource{
 		Label:   label.TargetLabel{Package: "pkg", Name: "database"},
@@ -467,7 +467,7 @@ func TestEnsureResourcesStartedStartsResourceDependencies(t *testing.T) {
 // exports available, so cleanup can address the started instance.
 func TestTeardownAfterReadyTimeoutHasExports(t *testing.T) {
 	tmpDir := setupResourceTestWorkspace(t)
-	downFile := filepath.Join(tmpDir, "down.log")
+	downFile := filepath.ToSlash(filepath.Join(tmpDir, "down.log"))
 
 	resource := &model.Resource{
 		Label:   label.TargetLabel{Package: "pkg", Name: "db"},
