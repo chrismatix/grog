@@ -1,0 +1,8 @@
+# No inputs and no dependencies are listed: both come from //:protos.
+targets:
+  - name: generate
+    command: grep -h '^message' *.proto > messages.txt
+    dependencies:
+      - :_protos
+    outputs:
+      - messages.txt
