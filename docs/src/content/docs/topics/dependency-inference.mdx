@@ -157,7 +157,7 @@ Each reported package ends up with exactly one target standing in for it, chosen
    package's edges as additional `dependencies`, other packages' edges point at it, and the resolver's `inputs`
    for the package are ignored in favour of its own. At most one target per package may register a resolver.
 2. Otherwise, if the resolver declared `inputs` for the package, Grog synthesizes a filegroup from them, named
-   by the declaration's `synthesized_target` — `_<resolver name>_package` unless set, so `//crates/format:_cargo_package`. Its defining file, for `grog changes` and error
+   by the declaration's `generated_target_name` — `_<resolver name>_package` unless set, so `//crates/format:_cargo_package`. Its defining file, for `grog changes` and error
    messages, is the BUILD file that declared the resolver. A directory with no BUILD file at all gets a package
    this way.
 3. Otherwise the package is outside the resolver's graph. That is fine until something depends on it, which is a
@@ -301,13 +301,13 @@ dependency_resolvers {
   </TabItem>
 </Tabs>
 
-| Field                | Type       | Description                                                                                                        |
-| -------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------ |
-| `name`               | `string`   | Unique within the package. Shares the namespace with targets, aliases and resources.                               |
-| `command`            | `string`   | Shell command printing the [mapping](#the-resolver-protocol) to stdout, or `builtin:<name>` for a shipped one.     |
-| `inputs`             | `string[]` | Globs relative to the declaring package whose contents form the [cache key](#caching). Defaults to the built-in's. |
-| `timeout`            | `string`   | Bounds the command. Defaults to `60s` — a resolver runs on read-path commands, so it may not hang them.            |
-| `synthesized_target` | `string`   | Name of the filegroup synthesized for a package that registers no target. Defaults to `_<name>_package`.           |
+| Field                   | Type       | Description                                                                                                        |
+| ----------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------ |
+| `name`                  | `string`   | Unique within the package. Shares the namespace with targets, aliases and resources.                               |
+| `command`               | `string`   | Shell command printing the [mapping](#the-resolver-protocol) to stdout, or `builtin:<name>` for a shipped one.     |
+| `inputs`                | `string[]` | Globs relative to the declaring package whose contents form the [cache key](#caching). Defaults to the built-in's. |
+| `timeout`               | `string`   | Bounds the command. Defaults to `60s` — a resolver runs on read-path commands, so it may not hang them.            |
+| `generated_target_name` | `string`   | Name of the filegroup synthesized for a package that registers no target. Defaults to `_<name>_package`.           |
 
 <Aside type="note" title="A resolver is not a build target">
   Declarations are loaded, never scheduled. A resolver has no `dependencies` and no `outputs`, `grog

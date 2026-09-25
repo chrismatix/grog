@@ -344,13 +344,13 @@ dependency_resolvers {
 
 </details>
 
-| Field                | Default                 | Meaning                                                                                                                                           |
-| -------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`               | required                | Unique within the package. The resolver is addressed by its label.                                                                                |
-| `command`            | required                | Shell command producing the mapping on stdout, or `builtin:<name>` to select a shipped resolver.                                                  |
-| `inputs`             | the built-in's defaults | Globs relative to the declaring package, resolved and hashed exactly like a target's `inputs`.                                                    |
-| `timeout`            | `60s`                   | Bounds the command, parsed like `target.timeout`. A resolver runs on read-path commands and on tab-completion, so an unbounded one hangs the CLI. |
-| `synthesized_target` | `_<name>_package`       | Name of the filegroup synthesized for a package that registers no target (§5.8). Validated like a target name.                                    |
+| Field                   | Default                 | Meaning                                                                                                                                           |
+| ----------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                  | required                | Unique within the package. The resolver is addressed by its label.                                                                                |
+| `command`               | required                | Shell command producing the mapping on stdout, or `builtin:<name>` to select a shipped resolver.                                                  |
+| `inputs`                | the built-in's defaults | Globs relative to the declaring package, resolved and hashed exactly like a target's `inputs`.                                                    |
+| `timeout`               | `60s`                   | Bounds the command, parsed like `target.timeout`. A resolver runs on read-path commands and on tab-completion, so an unbounded one hangs the CLI. |
+| `generated_target_name` | `_<name>_package`       | Name of the filegroup synthesized for a package that registers no target (§5.8). Validated like a target name.                                    |
 
 **The declaring package is the resolver's working directory and its path root.** This replaces the
 `working_directory` config key, makes `inputs` behave like every other `inputs` in grog, and gives the paths the
@@ -576,7 +576,7 @@ With no BUILD file anywhere under `crates/`, this yields `//crates/greet:_cargo_
 `//crates/format:_cargo_package`. A target that registers the resolver takes precedence and the entry's `inputs` are
 ignored, so there is one rule and no mode flag. Four decisions go with it:
 
-- **Synthetic labels are named by the declaration**, `synthesized_target`, defaulting to `_<resolver>_package`
+- **Synthetic labels are named by the declaration**, `generated_target_name`, defaulting to `_<resolver>_package`
   — `//crates/format:_cargo_package` rather than `:_format`. Two
   resolvers may synthesize for the same directory — a crate that is also a uv member — where `_format` collides
   and `_cargo_package` / `_uv_package` do not, and the name says where a label you cannot grep came from. `_` is already legal in
