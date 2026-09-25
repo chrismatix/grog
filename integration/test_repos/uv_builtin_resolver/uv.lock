@@ -1,0 +1,44 @@
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[manifest]
+members = [
+    "cli",
+    "demo-proto",
+    "format",
+    "server",
+]
+
+[[package]]
+name = "format"
+version = "0.1.0"
+source = { editable = "lib/format" }
+
+[[package]]
+name = "demo-proto"
+version = "0.1.0"
+source = { editable = "lib/proto" }
+
+[[package]]
+name = "server"
+version = "0.1.0"
+source = { editable = "server" }
+dependencies = [
+    { name = "demo-proto" },
+    { name = "format" },
+]
+
+[[package]]
+name = "pytest"
+version = "8.3.5"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "cli"
+version = "0.1.0"
+source = { editable = "cli" }
+dependencies = [
+    { name = "format" },
+    { name = "pytest" },
+]

@@ -204,9 +204,13 @@ func runDependencyResolver(loadContext context.Context, resolver *model.Dependen
 	logger := console.GetLogger(loadContext)
 	logger.Debugf("resolver %s: %s", resolver.Label, resolver.Command)
 	var document resolverDocument
-	if resolver.Command == "builtin:cargo" {
+	builtins := map[string]func(context.Context, string) (resolverDocument, error){
+		"builtin:cargo": cargoDependencies,
+		"builtin:uv":    uvDependencies,
+	}
+	if builtin, isBuiltin := builtins[resolver.Command]; isBuiltin {
 		var operationError error
-		document, operationError = cargoDependencies(resolverContext, config.GetPathAbsoluteToWorkspaceRoot(resolver.Label.Package))
+		document, operationError = builtin(resolverContext, config.GetPathAbsoluteToWorkspaceRoot(resolver.Label.Package))
 		if operationError != nil {
 			return document, fmt.Errorf("resolver %s failed: %w", resolver.Label, operationError)
 		}

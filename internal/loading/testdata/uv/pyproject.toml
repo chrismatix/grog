@@ -1,0 +1,7 @@
+[project]
+name = "root"
+version = "0.1.0"
+dependencies = ["format"]
+
+[tool.uv.workspace]
+members = ["lib/format", "lib/proto", "server", "cli", "tools/deploy", "lib/multi"]

@@ -1,0 +1,6 @@
+[project]
+name = "multi"
+version = "0.1.0"
+
+[tool.uv.build-backend]
+module-name = ["one", "two.inner"]
