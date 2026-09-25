@@ -29,16 +29,16 @@ func TestDependencyResolverLoaders(t *testing.T) {
     command: builtin:cargo
     inputs: ["manifests/*.toml"]
     timeout: 2s
-    synthesized_target: python
+    generated_target_name: python
 targets:
   - name: sources
     dependency_resolvers: [":cargo"]
 `},
-		{"json", JsonLoader{}, `{"dependency_resolvers":[{"name":"cargo","command":"builtin:cargo","inputs":["manifests/*.toml"],"timeout":"2s","synthesized_target":"python"}],"targets":[{"name":"sources","dependency_resolvers":[":cargo"]}]}`},
-		{"star", StarlarkLoader{}, `dependency_resolver(name="cargo", command="builtin:cargo", inputs=["manifests/*.toml"], timeout="2s", synthesized_target="python")
+		{"json", JsonLoader{}, `{"dependency_resolvers":[{"name":"cargo","command":"builtin:cargo","inputs":["manifests/*.toml"],"timeout":"2s","generated_target_name":"python"}],"targets":[{"name":"sources","dependency_resolvers":[":cargo"]}]}`},
+		{"star", StarlarkLoader{}, `dependency_resolver(name="cargo", command="builtin:cargo", inputs=["manifests/*.toml"], timeout="2s", generated_target_name="python")
 target(name="sources", dependency_resolvers=[":cargo"])`},
 		{"pkl", &PklLoader{}, fmt.Sprintf(`amends %q
-dependency_resolvers { new { name = "cargo"; command = "builtin:cargo"; inputs { "manifests/*.toml" }; timeout = "2s"; synthesized_target = "python" } }
+dependency_resolvers { new { name = "cargo"; command = "builtin:cargo"; inputs { "manifests/*.toml" }; timeout = "2s"; generated_target_name = "python" } }
 targets { new { name = "sources"; dependency_resolvers { ":cargo" } } }
 `, packageModule)},
 	}
@@ -56,13 +56,13 @@ targets { new { name = "sources"; dependency_resolvers { ":cargo" } } }
 			require.NoError(t, operationError)
 			require.True(t, matched)
 			require.Len(t, packageDTO.DependencyResolvers, 1)
-			require.Equal(t, &DependencyResolverDTO{Name: "cargo", Command: "builtin:cargo", Inputs: []string{"manifests/*.toml"}, Timeout: "2s", SynthesizedTarget: "python"}, packageDTO.DependencyResolvers[0])
+			require.Equal(t, &DependencyResolverDTO{Name: "cargo", Command: "builtin:cargo", Inputs: []string{"manifests/*.toml"}, Timeout: "2s", GeneratedTargetName: "python"}, packageDTO.DependencyResolvers[0])
 			require.Equal(t, []string{":cargo"}, packageDTO.Targets[0].DependencyResolvers)
 			enrichedPackage, operationError := getEnrichedPackage(console.GetLogger(t.Context()), ".", packageDTO)
 			require.NoError(t, operationError)
 			require.Equal(t, []string{"manifests/member.toml"}, enrichedPackage.DependencyResolvers[label.TL("", "cargo")].Inputs)
 			require.Equal(t, 2*time.Second, enrichedPackage.DependencyResolvers[label.TL("", "cargo")].Timeout)
-			require.Equal(t, "python", enrichedPackage.DependencyResolvers[label.TL("", "cargo")].SynthesizedTarget)
+			require.Equal(t, "python", enrichedPackage.DependencyResolvers[label.TL("", "cargo")].GeneratedTargetName)
 			require.Equal(t, []label.TargetLabel{label.TL("", "cargo")}, enrichedPackage.Targets[label.TL("", "sources")].DependencyResolvers)
 			for _, format := range []string{"json", "yaml"} {
 				t.Run(format+" round trip", func(t *testing.T) {
@@ -96,7 +96,7 @@ func TestDependencyResolverEnrichment(t *testing.T) {
 		{"missing name", DependencyResolverDTO{Command: "true"}, "target name is empty"},
 		{"missing command", DependencyResolverDTO{Name: "cargo"}, "must define a command"},
 		{"invalid timeout", DependencyResolverDTO{Name: "cargo", Command: "true", Timeout: "later"}, "failed to parse timeout for dependency resolver //:cargo"},
-		{"invalid synthesized target", DependencyResolverDTO{Name: "cargo", Command: "true", SynthesizedTarget: "no spaces"}, "invalid synthesized_target for dependency resolver //:cargo"},
+		{"invalid synthesized target", DependencyResolverDTO{Name: "cargo", Command: "true", GeneratedTargetName: "no spaces"}, "invalid generated_target_name for dependency resolver //:cargo"},
 		{"invalid glob", DependencyResolverDTO{Name: "cargo", Command: "true", Inputs: []string{"["}}, "failed to resolve inputs"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {

@@ -593,7 +593,7 @@ func (collector *starlarkPackageCollector) dependencyResolverBuiltin(thread *sta
 	var inputs *starlark.List
 	if parseError := starlark.UnpackArgs("dependency_resolver", arguments, keywordArguments,
 		"name", &resolver.Name, "command", &resolver.Command, "inputs?", &inputs, "timeout?", &resolver.Timeout,
-		"synthesized_target?", &resolver.SynthesizedTarget,
+		"generated_target_name?", &resolver.GeneratedTargetName,
 	); parseError != nil {
 		return nil, parseError
 	}

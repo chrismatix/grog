@@ -161,7 +161,7 @@ func inferDependencies(loadContext context.Context, packages []*model.Package) (
 // have one to point at. The second result is the package it had to create
 // because no BUILD file exists there, or nil.
 func synthesizeFilegroup(loadContext context.Context, resolver *model.DependencyResolver, packagePath string, inputs []string, packagesByPath map[string]*model.Package) (*model.Target, *model.Package, error) {
-	targetLabel := label.TargetLabel{Package: packagePath, Name: resolver.SynthesizedTarget}
+	targetLabel := label.TargetLabel{Package: packagePath, Name: resolver.GeneratedTargetName}
 	var createdPackage *model.Package
 	owningPackage, exists := packagesByPath[packagePath]
 	if !exists {
