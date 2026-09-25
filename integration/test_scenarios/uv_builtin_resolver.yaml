@@ -1,0 +1,20 @@
+name: builtin uv resolver
+repo: uv_builtin_resolver
+cases:
+  - name: uv_builtin_initial
+    grog_args: [build, "//..."]
+  - name: uv_builtin_cached
+    grog_args: [build, "//..."]
+  - name: uv_builtin_add_optional_dependency
+    setup_command: |
+      cp uv.lock uv.lock.backup
+      cp lib/proto/demo_proto/__init__.py proto_init.backup
+      printf '\n[package.optional-dependencies]\nproto = [\n    { name = "demo-proto" },\n]\n' >> uv.lock
+  - name: uv_builtin_lockfile_edit_invalidates_one_package
+    grog_args: [build, "//..."]
+  - name: uv_builtin_edit_proto_sources
+    setup_command: "printf 'MESSAGE = \"hello again\"\n' > lib/proto/demo_proto/__init__.py"
+  - name: uv_builtin_new_edge_reaches_cli
+    grog_args: [build, "//..."]
+  - name: uv_builtin_restore
+    setup_command: "mv uv.lock.backup uv.lock; mv proto_init.backup lib/proto/demo_proto/__init__.py"

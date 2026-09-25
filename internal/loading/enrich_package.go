@@ -219,8 +219,13 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 			}
 		}
 		inputs := resolver.Inputs
-		if len(inputs) == 0 && resolver.Command == "builtin:cargo" {
-			inputs = cargoDefaultInputs(absolutePackagePath)
+		if len(inputs) == 0 {
+			switch resolver.Command {
+			case "builtin:cargo":
+				inputs = cargoDefaultInputs(absolutePackagePath)
+			case "builtin:uv":
+				inputs = uvDefaultInputs(absolutePackagePath)
+			}
 		}
 		resolvedInputs, enrichmentError := resolveInputs(logger, absolutePackagePath, inputs, nil)
 		if enrichmentError != nil {

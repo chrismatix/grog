@@ -1,0 +1,5 @@
+# builtin:uv reads uv.lock for the edges and each member's pyproject.toml for
+# its module layout; lib/proto has no BUILD file and is synthesized.
+dependency_resolvers:
+  - name: uv
+    command: builtin:uv

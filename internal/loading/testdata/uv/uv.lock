@@ -1,0 +1,68 @@
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[manifest]
+members = ["cli", "demo-proto", "deploy", "format", "multi", "root", "server"]
+
+[[package]]
+name = "root"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "format" },
+]
+
+[[package]]
+name = "format"
+version = "0.1.0"
+source = { editable = "lib/format" }
+
+[[package]]
+name = "demo-proto"
+version = "0.1.0"
+source = { virtual = "lib/proto" }
+
+[[package]]
+name = "server"
+version = "0.1.0"
+source = { editable = "server" }
+dependencies = [
+    { name = "demo-proto" },
+    { name = "format" },
+    { name = "pytest", marker = "python_full_version < '4'" },
+]
+
+[package.optional-dependencies]
+deploy = [
+    { name = "deploy" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "cli" },
+]
+
+[[package]]
+name = "cli"
+version = "0.1.0"
+source = { editable = "cli" }
+dependencies = [
+    { name = "format" },
+    { name = "server" },
+]
+
+[[package]]
+name = "deploy"
+version = "0.1.0"
+source = { directory = "tools/deploy" }
+
+[[package]]
+name = "multi"
+version = "0.1.0"
+source = { editable = "lib/multi" }
+
+[[package]]
+name = "pytest"
+version = "8.3.5"
+source = { registry = "https://pypi.org/simple" }
