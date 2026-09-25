@@ -35,10 +35,38 @@ chmod +x /usr/local/bin/grog
 </TabItem>
 <TabItem label="Linux">
 ```shell
-# Download the binary
+# Debian / Ubuntu (swap amd64 for arm64 on ARM)
+curl -LO https://grog.build/latest/grog-linux-amd64.deb
+sudo apt install ./grog-linux-amd64.deb
+
+# Fedora / RHEL
+sudo dnf install https://grog.build/latest/grog-linux-amd64.rpm
+
+# Or download the binary
 curl -L https://grog.build/latest/grog-linux-amd64 -o /usr/local/bin/grog
 chmod +x /usr/local/bin/grog
-````
+```
+
+  </TabItem>
+  <TabItem label="Nix">
+```shell
+# Run without installing
+nix run github:chrismatix/grog
+
+# Install grog together with the Pkl CLI
+nix profile install github:chrismatix/grog#grog-with-pkl
+```
+
+The flake also exposes `overlays.default` for use in NixOS or home-manager configurations.
+
+  </TabItem>
+  <TabItem label="GitHub Actions">
+```yaml
+- uses: chrismatix/setup-grog@v1
+  with:
+    version: latest # grog release to install
+    pkl-version: 0.31.1 # optional, installs the Pkl CLI ("latest" works too)
+```
 
   </TabItem>
 </Tabs>
@@ -482,3 +510,4 @@ Now that you've set up Grog and created your first build targets, you might want
 - [Docker (OCI) Outputs](/topics/docker-outputs) - Learn more about caching Docker / OCI container images
 - [Troubleshooting](/reference/troubleshooting) - Solve common issues
 - [Shell Completions](/topics/shell-completions) - Enable target auto completion
+````

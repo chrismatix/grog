@@ -1,36 +1,31 @@
 {
   lib,
-  buildGoModule,
-  fetchFromGitHub,
+  buildGo127Module,
+  version ? "dev",
+  commit ? "unknown",
 }:
 
-buildGoModule rec {
+buildGo127Module {
   pname = "grog";
-  version = "0.16.3";
-  buildTestBinaries = false;
+  inherit version;
+  src = lib.cleanSource ./.;
+
+  vendorHash = "sha256-LQ0qZlAzmQCjqEmpE7+fG3DqCP9EcpTqgi1BYcxJQvo=";
+  subPackages = [ "." ];
   doCheck = false;
 
-  src = fetchFromGitHub {
-    owner = "chrismatix";
-    repo = "grog";
-    rev = "v${version}";
-    hash = "sha256-oXumxDtxcu1ZYga/3Z3FtyIb74BtG+9EXNjey0KzUFk=";
-  };
-
-  vendorHash = "sha256-6JHqGVV+TDBg8V4Q2Cy11+y5XCSWHG36EqwDAwaCXH8=";
-
   ldflags = [
-    "-s" "-w"
-    "-X" "main.version=${version}"
-    "-X" "main.commit=${src.rev}"
-    "-X" "main.buildDate=unknown"
+    "-s"
+    "-w"
+    "-X main.version=${version}"
+    "-X main.commit=${commit}"
+    "-X main.buildDate=unknown"
   ];
 
   meta = {
-    description = "Grog is a mono-repo build tool that is agnostic on how you run your build commands, but instead focuses on caching and parallel execution";
-    homepage = "https://github.com/chrismatix/grog";
+    description = "Mono-repo build tool that caches and parallelizes your existing build commands";
+    homepage = "https://grog.build";
     license = lib.licenses.mit;
-    maintainers = with lib.maintainers; [ ];
     mainProgram = "grog";
   };
 }
