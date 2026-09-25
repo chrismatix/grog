@@ -426,7 +426,7 @@ the `GROG_*` loader variables from `loader_env.go`, plus `GROG_RESOLVER_LABEL`.
 | Output path is absolute, or escapes the declaring package                     | Load fails naming the offending entry.                                                                         |
 | Unparseable stdout                                                            | Load fails, quoting the first 2 KiB of stdout.                                                                 |
 | `version` newer than supported                                                | Load fails asking for a grog upgrade.                                                                          |
-| Key names a package with no registered target, and the entry carries `inputs` | A filegroup `//<package>:_<resolver name>` is **synthesized** from them (§5.8).                                |
+| Key names a package with no registered target, and the entry carries `inputs` | A filegroup `//<package>:_<resolver name>_package` is **synthesized** from them (§5.8).                                |
 | Key names a package with no registered target and no `inputs`                 | **Ignored**, logged at debug. A workspace legitimately contains members grog does not build.                   |
 | A dependency names a package that is neither registered nor synthesized       | **Load error.** This is the drift case the feature exists to catch; dropping it silently reintroduces the bug. |
 | A synthesized label collides with a target, alias or resource                 | **Load error** naming the resolver and the file that defines the existing node.                                |
@@ -473,12 +473,12 @@ v1.
 ### 5.5 What a helper library looks like
 
 Neither `deps` nor `inputs` survive in the public signature: the crate's files and its cross-crate edges both
-come from `//:cargo`, which synthesizes `:_cargo` for every crate. The helper only hangs the cargo invocations
+come from `//:cargo`, which synthesizes `:_cargo_package` for every crate. The helper only hangs the cargo invocations
 off that label. Starlark:
 
 ```starlark
 def cargo_crate(name, bin = False):
-    cargo_dependencies = [":_cargo", "//:workspace"]
+    cargo_dependencies = [":_cargo_package", "//:workspace"]
     target(
         name = "build",
         command = "cargo build -p %s --release --locked" % name,
@@ -506,7 +506,7 @@ class Crate {
   bin: Boolean = false
 
   local cargo_dependencies: Listing<String> = new Listing<String> {
-    ":_cargo"
+    ":_cargo_package"
     "//:workspace"
   }
 
@@ -571,13 +571,13 @@ the gap by synthesizing a filegroup:
 }
 ```
 
-With no BUILD file anywhere under `crates/`, this yields `//crates/greet:_cargo` depending on
-`//crates/format:_cargo`. A target that registers the resolver takes precedence and the entry's `inputs` are
+With no BUILD file anywhere under `crates/`, this yields `//crates/greet:_cargo_package` depending on
+`//crates/format:_cargo_package`. A target that registers the resolver takes precedence and the entry's `inputs` are
 ignored, so there is one rule and no mode flag. Four decisions go with it:
 
-- **Synthetic labels are named after the resolver**, `//crates/format:_cargo` rather than `:_format`. Two
+- **Synthetic labels are named after the resolver**, `//crates/format:_cargo_package` rather than `:_format`. Two
   resolvers may synthesize for the same directory — a crate that is also a uv member — where `_format` collides
-  and `_cargo` / `_uv` do not, and the name says where a label you cannot grep came from. `_` is already legal in
+  and `_cargo_package` / `_uv_package` do not, and the name says where a label you cannot grep came from. `_` is already legal in
   `validateName`.
 - **The synthetic target's `SourceFilePath` is the BUILD file that declared the resolver.** Every target in grog
   carries a defining file and it is load-bearing: `changes.go:91` and `explain_changes.go:110` treat a changed
@@ -636,7 +636,7 @@ it. There is no plugin chain, and adding one would be the first place this desig
 ### 7.1 Migration of the existing examples
 
 Subtractive. `examples/rust_monorepo`: add a four-line `dependency_resolver(name = "cargo")` to the root BUILD
-file, delete every crate's hand-written filegroup, and point `build`, `test` and `clippy` at `:_cargo`. No
+file, delete every crate's hand-written filegroup, and point `build`, `test` and `clippy` at `:_cargo_package`. No
 BUILD file in the workspace lists a source file or another crate afterwards. The helper libraries on
 `language-guides` lose both `deps` and their `inputs` (§5.5). Same shape for `python_uv_monorepo`; its helper's `deps` and
 `test_deps` parameters are already unused by the example itself once the uv resolver covers `dependencies` and

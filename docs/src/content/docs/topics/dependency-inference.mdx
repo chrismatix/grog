@@ -75,13 +75,13 @@ dependency_resolvers {
   </TabItem>
 </Tabs>
 
-Every crate in the workspace now has a filegroup, `//crates/<name>:_cargo`. Its inputs come from the crate's
+Every crate in the workspace now has a filegroup, `//crates/<name>:_cargo_package`. Its inputs come from the crate's
 layout and its dependencies from the crate's `path` entries, and it exists whether or not the crate has a BUILD
 file:
 
 ```bash
-$ grog deps //crates/cli:_cargo
-//crates/greet:_cargo
+$ grog deps //crates/cli:_cargo_package
+//crates/greet:_cargo_package
 ```
 
 Targets that build or test a crate depend on that label and list nothing else:
@@ -95,7 +95,7 @@ targets:
   - name: test
     command: cargo test -p greet
     dependencies:
-      - :_cargo
+      - :_cargo_package
 ```
 
   </TabItem>
@@ -106,7 +106,7 @@ targets:
 target(
     name = "test",
     command = "cargo test -p greet",
-    dependencies = [":_cargo"],
+    dependencies = [":_cargo_package"],
 )
 ```
 
@@ -122,7 +122,7 @@ targets {
     name = "test"
     command = "cargo test -p greet"
     dependencies {
-      ":_cargo"
+      ":_cargo_package"
     }
   }
 }
@@ -148,7 +148,7 @@ why there is no working-directory setting.
 flowchart LR
   M["crates/greet/Cargo.toml<br/>format = { path = &quot;../format&quot; }"] --> P["cargo resolver"]
   P --> E["crates/greet → crates/format<br/>inputs: src/**/*, Cargo.toml"]
-  E --> G["//crates/greet:_cargo<br/>depends on<br/>//crates/format:_cargo"]
+  E --> G["//crates/greet:_cargo_package<br/>depends on<br/>//crates/format:_cargo_package"]
 ```
 
 Each reported package ends up with exactly one target standing in for it, chosen by three rules:
@@ -157,7 +157,7 @@ Each reported package ends up with exactly one target standing in for it, chosen
    package's edges as additional `dependencies`, other packages' edges point at it, and the resolver's `inputs`
    for the package are ignored in favour of its own. At most one target per package may register a resolver.
 2. Otherwise, if the resolver declared `inputs` for the package, Grog synthesizes a filegroup named
-   `_<resolver name>` from them — `//crates/format:_cargo`. Its defining file, for `grog changes` and error
+   `_<resolver name>_package` from them — `//crates/format:_cargo_package`. Its defining file, for `grog changes` and error
    messages, is the BUILD file that declared the resolver. A directory with no BUILD file at all gets a package
    this way.
 3. Otherwise the package is outside the resolver's graph. That is fine until something depends on it, which is a
@@ -203,7 +203,7 @@ normal dependency, add that label by hand to the `:test` target.
 Default `inputs`, relative to the declaring package: `Cargo.toml`, `Cargo.lock`, and `<pattern>/Cargo.toml` for
 every `[workspace] members` pattern, so a member at any depth is covered.
 
-Each crate's synthesized `:_cargo` is a deliberate superset of its layout: `Cargo.toml`, `build.rs`, `src/**/*`,
+Each crate's synthesized `:_cargo_package` is a deliberate superset of its layout: `Cargo.toml`, `build.rs`, `src/**/*`,
 `tests/**/*`, `benches/**/*`, `examples/**/*`, plus `[lib] path`, `[[bin]] path` and `[package] include`. A
 listed file the crate does not have is skipped when hashing; one left out would under-invalidate silently.
 
@@ -509,7 +509,7 @@ dependency_resolvers {
   </TabItem>
 </Tabs>
 
-Every package now has a `:_protos` filegroup, and a target that consumes the protos depends on that and nothing
+Every package now has a `:_protos_package` filegroup, and a target that consumes the protos depends on that and nothing
 else:
 
 ```yaml
@@ -518,13 +518,13 @@ targets:
   - name: generate
     command: grep -h '^message' *.proto > messages.txt
     dependencies:
-      - :_protos
+      - :_protos_package
     outputs:
       - messages.txt
 ```
 
 `proto/base` has no BUILD file, and `grog build //...` still reports the critical path
-`//proto/base:_protos -> //proto/user:_protos -> //proto/order:_protos -> //proto/order:generate`.
+`//proto/base:_protos_package -> //proto/user:_protos_package -> //proto/order:_protos_package -> //proto/order:generate`.
 
 <Aside type="tip" title="Cross-language often needs no custom resolver">
   If the generated package is also a workspace member, as `lib/proto` is in the [uv
@@ -613,7 +613,7 @@ Run with `--log-level debug` to see each resolver's command, cache key and full 
 | `no dependency resolver at //:cargo2 (referenced by //crates/cli:cli); declared: //:cargo, //:proto`                                                | A typo, or a declaration you have not written yet.                                                                                                                                                  |
 | `resolver //:cargo registered twice in package crates/cli: //crates/cli:cli and //crates/cli:build`                                                 | Only one target per package may register a resolver. Register the filegroup and let the rest depend on it.                                                                                          |
 | `resolver //:cargo reports crates/greet depends on crates/format, which has no target registered for //:cargo and no inputs to synthesize one from` | The resolver declared no `inputs` for `crates/format`, so Grog has nothing to stand in for it. Register a target there, have the resolver declare inputs, or remove the package from the workspace. |
-| `resolver //:cargo cannot synthesize //crates/format:_cargo: a target with that name is defined in crates/format/BUILD.yaml`                        | A hand-written target already uses the synthesized name. Rename it, or register it with the resolver so it becomes the endpoint instead.                                                            |
+| `resolver //:cargo cannot synthesize //crates/format:_cargo_package: a target with that name is defined in crates/format/BUILD.yaml`                        | A hand-written target already uses the synthesized name. Rename it, or register it with the resolver so it becomes the endpoint instead.                                                            |
 | `resolver //:cargo failed: exec: "cargo": executable file not found in $PATH`                                                                       | The resolver's tool is missing. Install it, warm the remote cache, or switch to a [committed mapping](#using-a-committed-mapping).                                                                  |
 | `cycle detected: //crates/a:a -> //crates/b:b -> //crates/a:a`                                                                                      | The inferred graph is cyclic. Usually a dev-dependency edge from a custom resolver — see [limitations](#limitations).                                                                               |
 
