@@ -226,8 +226,16 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 		if enrichmentError != nil {
 			return nil, fmt.Errorf("failed to resolve inputs for dependency resolver %s: %w", resolverLabel, enrichmentError)
 		}
+		synthesizedTarget := resolver.SynthesizedTarget
+		if synthesizedTarget == "" {
+			synthesizedTarget = "_" + resolver.Name + "_package"
+		}
+		if _, enrichmentError := label.ParseTargetLabel(packagePath, ":"+synthesizedTarget); enrichmentError != nil {
+			return nil, fmt.Errorf("invalid synthesized_target for dependency resolver %s: %w", resolverLabel, enrichmentError)
+		}
 		dependencyResolvers[resolverLabel] = &model.DependencyResolver{
 			SourceFilePath: pkg.SourceFilePath, Label: resolverLabel, Command: resolver.Command, Inputs: resolvedInputs, Timeout: timeout,
+			SynthesizedTarget: synthesizedTarget,
 		}
 	}
 
