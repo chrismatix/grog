@@ -17,10 +17,11 @@ func TestUvDependencies(t *testing.T) {
 		"lib/format":   {Dependencies: []string{}, Inputs: []string{"format/**/*", "pyproject.toml"}},
 		"lib/proto":    {Dependencies: []string{}, Inputs: []string{"**/*.py", "**/*.pyi", "pyproject.toml"}},
 		"server":       {Dependencies: []string{"lib/format", "lib/proto", "tools/deploy"}, Inputs: []string{"pyproject.toml", "src/server/**/*"}},
-		"cli":          {Dependencies: []string{"lib/format", "server"}, Inputs: []string{"cli/**/*", "pyproject.toml"}},
+		"cli":          {Dependencies: []string{"lib/format", "server"}, Inputs: []string{"**/*.py", "**/*.pyi", "cli/**/*", "pyproject.toml"}},
 		"tools/deploy": {Dependencies: []string{}, Inputs: []string{"**/*.py", "**/*.pyi", "pyproject.toml"}},
 		"lib/multi":    {Dependencies: []string{}, Inputs: []string{"pyproject.toml", "src/one/**/*", "src/two/inner/**/*"}},
 	}, document.Packages)
+	require.NotContains(t, document.Packages, "../external")
 }
 
 func TestUvDefaultInputs(t *testing.T) {

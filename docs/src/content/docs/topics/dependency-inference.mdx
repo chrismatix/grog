@@ -209,16 +209,16 @@ listed file the crate does not have is skipped when hashing; one left out would 
 
 ### uv
 
-Workspace members are the `uv.lock` packages whose source is `editable`, `directory` or `virtual`; edges are their
+Workspace members are the `uv.lock` packages listed in `[manifest] members`; edges are their
 `dependencies` and `optional-dependencies` that name other members. Dev groups are excluded for the same reason
 as Cargo's `[dev-dependencies]`: uv does not forbid cycles between members, and a test-only edge back to a
 dependant is the common way to get one. The root project is not a member: it has no directory of its own.
 
-Each member's synthesized `:_uv` covers `pyproject.toml` and its module tree. The module comes from
-`[tool.uv.build-backend]` (`module-root`, default `src`, and `module-name`, which may be a list), else from a
-`src/<name>` or `<name>` directory matching the normalised project name; a member with neither gets every
-`.py` and `.pyi` file. Package data outside the module tree is not covered — register a filegroup with your own
-`inputs` for those packages.
+Each member's synthesized `:_uv` covers `pyproject.toml` and its module tree. With `[tool.uv.build-backend]`
+the modules are known exactly (`module-root`, default `src`, and `module-name`, which may be a list). Any other
+build backend may package more than one directory, so the inputs are every `.py` and `.pyi` file in the package
+plus the full tree of a `src/<name>` or `<name>` directory matching the normalised project name. Package data
+outside that tree is not covered — register a filegroup with your own `inputs` for those packages.
 
 Default `inputs`: `uv.lock`, `pyproject.toml`, and every member's `pyproject.toml`, which decides its layout.
 

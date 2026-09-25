@@ -6,6 +6,11 @@ requires-python = ">=3.11"
 members = ["cli", "demo-proto", "deploy", "format", "multi", "root", "server"]
 
 [[package]]
+name = "external"
+version = "0.1.0"
+source = { directory = "../external" }
+
+[[package]]
 name = "root"
 version = "0.1.0"
 source = { editable = "." }
@@ -48,6 +53,7 @@ name = "cli"
 version = "0.1.0"
 source = { editable = "cli" }
 dependencies = [
+    { name = "external" },
     { name = "format" },
     { name = "server" },
 ]
