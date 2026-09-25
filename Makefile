@@ -64,7 +64,7 @@ VERSION   ?= $(shell git describe --tags --always 2>/dev/null)
 COMMIT    ?= $(shell git rev-parse --short HEAD 2>/dev/null)
 DATE      ?= $(shell date +%FT%T%z)
 
-LD_FLAGS = -ldflags "\
+LD_FLAGS = -ldflags "$(STRIP_FLAGS) \
 	-X 'main.version=$(VERSION)' \
 	-X 'main.commit=$(COMMIT)' \
 	-X 'main.buildDate=$(DATE)'"
@@ -82,6 +82,7 @@ release-pkl:
 
 # Build a release binary for the current GOOS/GOARCH.
 # Called by CI matrix; locally: make release-build GOOS=darwin GOARCH=arm64
+release-build: STRIP_FLAGS = -s -w
 release-build: gen-proto
 	@echo "Building for $(GOOS)/$(GOARCH)"
 	@mkdir -p dist
