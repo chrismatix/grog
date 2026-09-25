@@ -12,7 +12,7 @@ type DependencyResolver struct {
 	Command        string
 	Inputs         []string
 	Timeout        time.Duration
-	// SynthesizedTarget is the name of the filegroup created for a package
+	// GeneratedTargetName is the name of the filegroup created for a package
 	// the resolver reports but no target registers for.
-	SynthesizedTarget string
+	GeneratedTargetName string
 }

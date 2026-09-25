@@ -42,7 +42,7 @@ class DependencyResolver {
   timeout: String?
   // Name of the filegroup synthesized for a package that registers no target.
   // Defaults to "_<name>_package".
-  synthesized_target: String?
+  generated_target_name: String?
 }
 
 class Resource {
