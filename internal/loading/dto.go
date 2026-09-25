@@ -99,6 +99,9 @@ type DependencyResolverDTO struct {
 	Command string   `json:"command" yaml:"command" pkl:"command" starlark:"command"`
 	Inputs  []string `json:"inputs,omitempty" yaml:"inputs,omitempty" pkl:"inputs" starlark:"inputs"`
 	Timeout string   `json:"timeout,omitempty" yaml:"timeout,omitempty" pkl:"timeout" starlark:"timeout"`
+	// SynthesizedTarget names the filegroup grog creates for a package that
+	// registers no target. Defaults to _<name>_package.
+	SynthesizedTarget string `json:"synthesized_target,omitempty" yaml:"synthesized_target,omitempty" pkl:"synthesized_target" starlark:"synthesized_target"`
 }
 
 type EnvironmentDTO struct {

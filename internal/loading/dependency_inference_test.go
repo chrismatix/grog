@@ -24,7 +24,7 @@ func inferenceTestPackages(t *testing.T, command string) []*model.Package {
 	config.Global.WorkspaceRoot = t.TempDir()
 	resolverLabel := label.TL("", "custom")
 	packages := []*model.Package{{DependencyResolvers: map[label.TargetLabel]*model.DependencyResolver{
-		resolverLabel: {Label: resolverLabel, Command: command, Timeout: 2 * time.Second},
+		resolverLabel: {Label: resolverLabel, Command: command, Timeout: 2 * time.Second, SynthesizedTarget: "_custom_package"},
 	}}}
 	for _, packagePath := range []string{"app", "lib"} {
 		targetLabel := label.TL(packagePath, "sources")
@@ -316,6 +316,16 @@ func TestDependencyInferenceSynthesis(t *testing.T) {
 				require.Equal(t, []string{"gen.txt"}, synthesized.Inputs)
 				require.Equal(t, []label.TargetLabel{label.TL("lib", "sources")}, synthesized.Dependencies)
 				require.Equal(t, []label.TargetLabel{synthesizedLabel}, packages[1].Targets[label.TL("app", "sources")].Dependencies)
+			},
+		},
+		{
+			name:   "synthesized target name comes from the declaration",
+			output: `{"version":1,"packages":{"gen":{"dependencies":[],"inputs":["gen.txt"]}}}`,
+			prepare: func(packages []*model.Package) {
+				packages[0].DependencyResolvers[resolverLabel].SynthesizedTarget = "python"
+			},
+			check: func(t *testing.T, packages []*model.Package) {
+				require.NotNil(t, packages[len(packages)-1].Targets[label.TL("gen", "python")])
 			},
 		},
 		{
