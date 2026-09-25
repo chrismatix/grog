@@ -35,7 +35,7 @@ func TestResolverInputChanged(t *testing.T) {
 func TestResolverTargets(t *testing.T) {
 	resolverLabel := label.TL("", "cargo")
 	registered := &model.Target{Label: label.TL("crates/a", "sources"), DependencyResolvers: []label.TargetLabel{resolverLabel}}
-	synthesized := &model.Target{Label: label.TL("crates/b", "_cargo"), DependencyResolvers: []label.TargetLabel{resolverLabel}}
+	synthesized := &model.Target{Label: label.TL("crates/b", "_cargo_package"), DependencyResolvers: []label.TargetLabel{resolverLabel}}
 	other := &model.Target{Label: label.TL("crates/c", "build")}
 	nodes := model.BuildNodeMapFromNodes(registered, synthesized, other)
 	require.ElementsMatch(t, []*model.Target{registered, synthesized}, resolverTargets(nodes, resolverLabel))

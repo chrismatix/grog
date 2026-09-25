@@ -132,7 +132,7 @@ func TestRustExampleSynthesizesCrateFilegroups(t *testing.T) {
 	} {
 		t.Run(testCase.crate, func(t *testing.T) {
 			packagePath := "crates/" + testCase.crate
-			filegroup, isTarget := nodes[label.TL(packagePath, "_cargo")].(*model.Target)
+			filegroup, isTarget := nodes[label.TL(packagePath, "_cargo_package")].(*model.Target)
 			require.True(t, isTarget)
 			require.Empty(t, filegroup.Command)
 			require.Equal(t, filepath.Join(workspaceDirectory, "BUILD.yaml"), filegroup.SourceFilePath)
@@ -140,7 +140,7 @@ func TestRustExampleSynthesizesCrateFilegroups(t *testing.T) {
 			require.Contains(t, filegroup.UnresolvedInputs, "src/**/*")
 			var expectedDependencies []label.TargetLabel
 			if testCase.dependency != "" {
-				expectedDependencies = []label.TargetLabel{label.TL("crates/"+testCase.dependency, "_cargo")}
+				expectedDependencies = []label.TargetLabel{label.TL("crates/"+testCase.dependency, "_cargo_package")}
 			}
 			require.Equal(t, expectedDependencies, filegroup.Dependencies)
 			for _, target := range nodes.GetTargets() {
@@ -164,14 +164,14 @@ func TestCustomResolverExample(t *testing.T) {
 	nodes, operationError := model.BuildNodeMapFromPackages(packages)
 	require.NoError(t, operationError)
 	for packagePath, dependency := range map[string]string{"proto/base": "", "proto/user": "proto/base", "proto/order": "proto/user"} {
-		filegroup, isTarget := nodes[label.TL(packagePath, "_protos")].(*model.Target)
+		filegroup, isTarget := nodes[label.TL(packagePath, "_protos_package")].(*model.Target)
 		require.True(t, isTarget, packagePath)
 		require.Equal(t, []string{packagePath[len("proto/"):] + ".proto"}, filegroup.Inputs)
 		if dependency == "" {
 			require.Empty(t, filegroup.Dependencies)
 			continue
 		}
-		require.Equal(t, []label.TargetLabel{label.TL(dependency, "_protos")}, filegroup.Dependencies)
+		require.Equal(t, []label.TargetLabel{label.TL(dependency, "_protos_package")}, filegroup.Dependencies)
 	}
 	require.Nil(t, nodes[label.TL("proto/base", "generate")])
 }

@@ -293,7 +293,7 @@ declare_resolver()
 
 func TestDependencyInferenceSynthesis(t *testing.T) {
 	resolverLabel := label.TL("", "custom")
-	synthesizedLabel := label.TL("gen", "_custom")
+	synthesizedLabel := label.TL("gen", "_custom_package")
 	for _, testCase := range []struct {
 		name          string
 		output        string
@@ -323,7 +323,7 @@ func TestDependencyInferenceSynthesis(t *testing.T) {
 			output: `{"version":1,"packages":{"app":{"dependencies":[],"inputs":["ignored.txt"]}}}`,
 			check: func(t *testing.T, packages []*model.Package) {
 				require.Len(t, packages, 3)
-				require.Nil(t, packages[1].Targets[label.TL("app", "_custom")])
+				require.Nil(t, packages[1].Targets[label.TL("app", "_custom_package")])
 			},
 		},
 		{
@@ -338,7 +338,7 @@ func TestDependencyInferenceSynthesis(t *testing.T) {
 				packages[1].Path = "gen"
 				packages[1].Targets[synthesizedLabel] = &model.Target{Label: synthesizedLabel, SourceFilePath: "gen/BUILD.yaml"}
 			},
-			expectedError: "resolver //:custom cannot synthesize //gen:_custom: a target with that name is defined in gen/BUILD.yaml",
+			expectedError: "resolver //:custom cannot synthesize //gen:_custom_package: a target with that name is defined in gen/BUILD.yaml",
 		},
 		{
 			name:          "inputs must be package-relative",

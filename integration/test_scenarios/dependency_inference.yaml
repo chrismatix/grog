@@ -19,7 +19,7 @@ cases:
   - name: dependency_inference_new_edge_invalidates_transitively
     grog_args: [build, "//..."]
   # crates/util has no BUILD file and a non-default [lib] path; the resolver's
-  # inputs give it //crates/util:_cargo, which shared depends on.
+  # inputs give it //crates/util:_cargo_package, which shared depends on.
   - name: dependency_inference_edit_unbuilt_crate
     setup_command: "cp crates/util/util.rs util.rs.backup; printf 'util version two\n' > crates/util/util.rs"
   - name: dependency_inference_synthesized_filegroup_invalidates_dependents

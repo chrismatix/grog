@@ -3,6 +3,6 @@ targets:
   - name: generate
     command: grep -h '^message' *.proto > messages.txt
     dependencies:
-      - :_protos
+      - :_protos_package
     outputs:
       - messages.txt

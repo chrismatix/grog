@@ -1,6 +1,6 @@
 INFO: 4 packages loaded, 3 targets configured.
 INFO: Selected 3 targets.
-INFO: //proto/base:_protos   DONE
-INFO: //proto/order:generate DONE
-INFO: //proto/user:generate  DONE
+INFO: //proto/base:_protos_package DONE
+INFO: //proto/order:generate       DONE
+INFO: //proto/user:generate        DONE
 INFO: Build completed successfully. 3 targets completed (0 cache hits).

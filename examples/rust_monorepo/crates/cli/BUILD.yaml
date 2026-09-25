@@ -1,10 +1,10 @@
 # The crate's sources and cross-crate edges come from //:cargo, which
-# synthesizes :_cargo from Cargo.toml; nothing here lists a file or a crate.
+# synthesizes :_cargo_package from Cargo.toml; nothing here lists a file or a crate.
 targets:
   - name: build
     dependencies:
       - //:workspace
-      - :_cargo
+      - :_cargo_package
     # cargo writes to the shared workspace target/. We copy the artifact
     # into the crate's own bin/ so grog can hash it as a declared output
     # and downstream targets (e.g. a docker image) can consume it.
@@ -17,11 +17,11 @@ targets:
   - name: test
     dependencies:
       - //:workspace
-      - :_cargo
+      - :_cargo_package
     command: cargo test -p cli
 
   - name: clippy
     dependencies:
       - //:workspace
-      - :_cargo
+      - :_cargo_package
     command: cargo clippy -p cli --all-targets -- -D warnings

@@ -45,7 +45,7 @@ dependency_resolvers:
       - proto/*/*.proto
 ```
 
-For every package the resolver reports, Grog synthesizes a filegroup `:_protos` from the declared `inputs`,
+For every package the resolver reports, Grog synthesizes a filegroup `:_protos_package` from the declared `inputs`,
 carrying the declared dependencies. `proto/user/BUILD.yaml` only has to hang a target off it:
 
 ```yaml
@@ -53,22 +53,22 @@ targets:
   - name: generate
     command: grep -h '^message' *.proto > messages.txt
     dependencies:
-      - :_protos
+      - :_protos_package
     outputs:
       - messages.txt
 ```
 
-`proto/base` needs no BUILD file: `//proto/base:_protos` exists because the resolver described the package.
+`proto/base` needs no BUILD file: `//proto/base:_protos_package` exists because the resolver described the package.
 
 ## Try it
 
 ```bash
-grog deps //proto/order:generate      # //proto/order:_protos
-grog deps //proto/order:_protos       # //proto/user:_protos
+grog deps //proto/order:generate      # //proto/order:_protos_package
+grog deps //proto/order:_protos_package       # //proto/user:_protos_package
 grog build //...
 ```
 
-The critical path Grog prints is `//proto/base:_protos -> //proto/user:_protos -> //proto/order:_protos ->
+The critical path Grog prints is `//proto/base:_protos_package -> //proto/user:_protos_package -> //proto/order:_protos_package ->
 //proto/order:generate`, derived from the imports alone. Edit `proto/base/base.proto` and build again: both
 `generate` targets re-run. Add a comment to the resolver script and build again: the resolver re-runs, prints
 the same document, and everything stays cached, because targets are keyed on what a resolver prints rather than
