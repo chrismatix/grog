@@ -21,7 +21,8 @@ const (
 // Target defines a build step that depends on Dependencies (other targets)
 // and Inputs (files) and produces Outputs.
 type Target struct {
-	Label label.TargetLabel `json:"label"`
+	DependencyResolvers []label.TargetLabel `json:"dependency_resolvers,omitempty"`
+	Label               label.TargetLabel   `json:"label"`
 	// The file in which this target was defined
 	SourceFilePath string `json:"-"`
 

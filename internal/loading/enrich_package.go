@@ -25,6 +25,10 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 	aliases := make(map[label.TargetLabel]*model.Alias)
 	absolutePackagePath := config.GetPathAbsoluteToWorkspaceRoot(packagePath)
 
+	if packagePath == "." {
+		packagePath = ""
+	}
+
 	for _, target := range pkg.Targets {
 		var deps []label.TargetLabel
 		// parse labels
@@ -98,7 +102,17 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 			}
 		}
 
+		var dependencyResolvers []label.TargetLabel
+		for _, resolver := range target.DependencyResolvers {
+			resolverLabel, parseError := label.ParseTargetLabel(packagePath, resolver)
+			if parseError != nil {
+				return nil, fmt.Errorf("failed to parse dependency resolver for target %s: %w", targetLabel, parseError)
+			}
+			dependencyResolvers = append(dependencyResolvers, resolverLabel)
+		}
+
 		targets[targetLabel] = &model.Target{
+			DependencyResolvers:  dependencyResolvers,
 			SourceFilePath:       pkg.SourceFilePath,
 			Label:                targetLabel,
 			Command:              target.Command,
@@ -185,11 +199,52 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 		}
 	}
 
+	dependencyResolvers := make(map[label.TargetLabel]*model.DependencyResolver)
+	for _, resolver := range pkg.DependencyResolvers {
+		resolverLabel, enrichmentError := label.ParseTargetLabel(packagePath, ":"+resolver.Name)
+		if enrichmentError != nil {
+			return nil, fmt.Errorf("invalid dependency resolver name: %w", enrichmentError)
+		}
+		if targets[resolverLabel] != nil || aliases[resolverLabel] != nil || resources[resolverLabel] != nil || dependencyResolvers[resolverLabel] != nil {
+			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", resolver.Name, pkg.SourceFilePath)
+		}
+		if resolver.Command == "" {
+			return nil, fmt.Errorf("dependency resolver %s must define a command (package file %s)", resolverLabel, pkg.SourceFilePath)
+		}
+		timeout := 60 * time.Second
+		if resolver.Timeout != "" {
+			timeout, enrichmentError = time.ParseDuration(resolver.Timeout)
+			if enrichmentError != nil {
+				return nil, fmt.Errorf("failed to parse timeout for dependency resolver %s: %w", resolverLabel, enrichmentError)
+			}
+		}
+		inputs := resolver.Inputs
+		if len(inputs) == 0 && resolver.Command == "builtin:cargo" {
+			inputs = cargoDefaultInputs(absolutePackagePath)
+		}
+		resolvedInputs, enrichmentError := resolveInputs(logger, absolutePackagePath, inputs, nil)
+		if enrichmentError != nil {
+			return nil, fmt.Errorf("failed to resolve inputs for dependency resolver %s: %w", resolverLabel, enrichmentError)
+		}
+		synthesizedTarget := resolver.GeneratedTargetName
+		if synthesizedTarget == "" {
+			synthesizedTarget = "_" + resolver.Name + "_package"
+		}
+		if _, enrichmentError := label.ParseTargetLabel(packagePath, ":"+synthesizedTarget); enrichmentError != nil {
+			return nil, fmt.Errorf("invalid generated_target_name for dependency resolver %s: %w", resolverLabel, enrichmentError)
+		}
+		dependencyResolvers[resolverLabel] = &model.DependencyResolver{
+			SourceFilePath: pkg.SourceFilePath, Label: resolverLabel, Command: resolver.Command, Inputs: resolvedInputs, Timeout: timeout,
+			GeneratedTargetName: synthesizedTarget,
+		}
+	}
+
 	return &model.Package{
-		Path:      packagePath,
-		Targets:   targets,
-		Aliases:   aliases,
-		Resources: resources,
+		DependencyResolvers: dependencyResolvers,
+		Path:                packagePath,
+		Targets:             targets,
+		Aliases:             aliases,
+		Resources:           resources,
 	}, nil
 }
 

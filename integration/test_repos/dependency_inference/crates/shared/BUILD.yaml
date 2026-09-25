@@ -1,0 +1,5 @@
+targets:
+  - name: sources
+    inputs: ["Cargo.toml", "source.txt"]
+    command: echo building shared
+    dependency_resolvers: ["//:cargo"]

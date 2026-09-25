@@ -14,7 +14,11 @@ import (
 )
 
 func LoadAllPackages(ctx context.Context) ([]*model.Package, error) {
-	return LoadPackages(ctx, config.Global.WorkspaceRoot)
+	packages, loadError := LoadPackages(ctx, config.Global.WorkspaceRoot)
+	if loadError != nil {
+		return nil, loadError
+	}
+	return inferDependencies(ctx, packages)
 }
 
 // LoadPackages loads all packages in the given directory and its subdirectories.
@@ -135,7 +139,29 @@ func mergePackages(from *model.Package, into *model.Package) error {
 		into.Resources = make(map[label.TargetLabel]*model.Resource)
 	}
 
+	if into.DependencyResolvers == nil {
+		into.DependencyResolvers = make(map[label.TargetLabel]*model.DependencyResolver)
+	}
+	for resolverLabel, resolver := range from.DependencyResolvers {
+		if existing := into.DependencyResolvers[resolverLabel]; existing != nil {
+			return fmt.Errorf("duplicate dependency resolver label: %s (defined in %s and %s)", resolverLabel, existing.SourceFilePath, resolver.SourceFilePath)
+		}
+		if existing := into.Targets[resolverLabel]; existing != nil {
+			return fmt.Errorf("duplicate dependency resolver label: %s (defined in %s and as target in %s)", resolverLabel, resolver.SourceFilePath, existing.SourceFilePath)
+		}
+		if existing := into.Aliases[resolverLabel]; existing != nil {
+			return fmt.Errorf("duplicate dependency resolver label: %s (defined in %s and as alias in %s)", resolverLabel, resolver.SourceFilePath, existing.SourceFilePath)
+		}
+		if existing := into.Resources[resolverLabel]; existing != nil {
+			return fmt.Errorf("duplicate dependency resolver label: %s (defined in %s and as resource in %s)", resolverLabel, resolver.SourceFilePath, existing.SourceFilePath)
+		}
+		into.DependencyResolvers[resolverLabel] = resolver
+	}
+
 	for fromTargetLabel, fromTarget := range from.Targets {
+		if existing := into.DependencyResolvers[fromTargetLabel]; existing != nil {
+			return fmt.Errorf("duplicate target label: %s (defined in %s and as dependency resolver in %s)", fromTargetLabel, fromTarget.SourceFilePath, existing.SourceFilePath)
+		}
 		if intoTarget, exists := into.Targets[fromTargetLabel]; exists {
 			return fmt.Errorf("duplicate target label: %s (defined in %s and %s)", fromTargetLabel, intoTarget.SourceFilePath, fromTarget.SourceFilePath)
 		}
@@ -149,6 +175,9 @@ func mergePackages(from *model.Package, into *model.Package) error {
 	}
 
 	for fromAliasLabel, fromAlias := range from.Aliases {
+		if existing := into.DependencyResolvers[fromAliasLabel]; existing != nil {
+			return fmt.Errorf("duplicate alias label: %s (defined in %s and as dependency resolver in %s)", fromAliasLabel, fromAlias.SourceFilePath, existing.SourceFilePath)
+		}
 		if intoAlias, exists := into.Aliases[fromAliasLabel]; exists {
 			return fmt.Errorf("duplicate target label: %s (defined in %s and %s)", fromAliasLabel, intoAlias.SourceFilePath, fromAlias.SourceFilePath)
 		}
@@ -162,6 +191,9 @@ func mergePackages(from *model.Package, into *model.Package) error {
 	}
 
 	for fromResourceLabel, fromResource := range from.Resources {
+		if existing := into.DependencyResolvers[fromResourceLabel]; existing != nil {
+			return fmt.Errorf("duplicate resource label: %s (defined in %s and as dependency resolver in %s)", fromResourceLabel, fromResource.SourceFilePath, existing.SourceFilePath)
+		}
 		if intoResource, exists := into.Resources[fromResourceLabel]; exists {
 			return fmt.Errorf("duplicate resource label: %s (defined in %s and %s)", fromResourceLabel, intoResource.SourceFilePath, fromResource.SourceFilePath)
 		}

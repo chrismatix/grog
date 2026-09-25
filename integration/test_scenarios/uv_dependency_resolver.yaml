@@ -1,0 +1,22 @@
+name: uv dependency resolver
+repo: uv_dependency_resolver
+cases:
+  - name: uv_resolver_initial
+    grog_args: [build, "//..."]
+  - name: uv_resolver_cached
+    grog_args: [build, "//..."]
+  # uv.lock is the resolver's input, not any target's. Giving cli a dev-group
+  # dependency on demo-proto therefore invalidates cli alone.
+  - name: uv_resolver_add_dev_dependency
+    setup_command: |
+      cp uv.lock uv.lock.backup
+      cp lib/proto/demo_proto/__init__.py proto_init.backup
+      printf '\n[package.dev-dependencies]\ndev = [\n    { name = "demo-proto" },\n]\n' >> uv.lock
+  - name: uv_resolver_lockfile_edit_invalidates_one_package
+    grog_args: [build, "//..."]
+  - name: uv_resolver_edit_proto_sources
+    setup_command: "printf 'MESSAGE = \"hello again\"\n' > lib/proto/demo_proto/__init__.py"
+  - name: uv_resolver_new_edge_reaches_cli
+    grog_args: [build, "//..."]
+  - name: uv_resolver_restore
+    setup_command: "mv uv.lock.backup uv.lock; mv proto_init.backup lib/proto/demo_proto/__init__.py"

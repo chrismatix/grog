@@ -1,3 +1,7 @@
+dependency_resolvers:
+  - name: cargo
+    command: builtin:cargo
+
 targets:
   # Tracks the workspace manifest + lockfile. Crates depend on this so that
   # a Cargo.lock bump invalidates every crate's cached build/test/clippy.

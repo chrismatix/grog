@@ -1,27 +1,19 @@
+# The crate's sources and cross-crate edges come from //:cargo, which
+# synthesizes :_cargo_package from Cargo.toml; nothing here lists a file or a crate.
 targets:
   - name: build
-    inputs:
-      - "src/**/*.rs"
-      - "Cargo.toml"
     dependencies:
       - //:workspace
-      - //crates/format:build
+      - :_cargo_package
     command: cargo build -p greet --release
-
   - name: test
-    inputs:
-      - "src/**/*.rs"
-      - "Cargo.toml"
     dependencies:
       - //:workspace
-      - //crates/format:build
+      - :_cargo_package
     command: cargo test -p greet
 
   - name: clippy
-    inputs:
-      - "src/**/*.rs"
-      - "Cargo.toml"
     dependencies:
       - //:workspace
-      - //crates/format:build
+      - :_cargo_package
     command: cargo clippy -p greet --all-targets -- -D warnings

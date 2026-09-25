@@ -51,12 +51,13 @@ func (o *ociPushDestinations) UnmarshalJSON(data []byte) error {
 // TargetDTO is used for deserializing a target in a loader.
 // The target is used internally is in model.Target.
 type TargetDTO struct {
-	Name          string   `json:"name" yaml:"name" pkl:"name" starlark:"name"`
-	Command       string   `json:"command" yaml:"command" pkl:"command" starlark:"command"`
-	Dependencies  []string `json:"dependencies,omitempty" yaml:"dependencies,omitempty" pkl:"dependencies" starlark:"dependencies"`
-	Inputs        []string `json:"inputs,omitempty" yaml:"inputs,omitempty" pkl:"inputs" starlark:"inputs"`
-	ExcludeInputs []string `json:"exclude_inputs,omitempty" yaml:"exclude_inputs,omitempty" pkl:"exclude_inputs" starlark:"exclude_inputs"`
-	Outputs       []string `json:"outputs,omitempty" yaml:"outputs,omitempty" pkl:"outputs" starlark:"outputs"`
+	DependencyResolvers []string `json:"dependency_resolvers,omitempty" yaml:"dependency_resolvers,omitempty" pkl:"dependency_resolvers" starlark:"dependency_resolvers"`
+	Name                string   `json:"name" yaml:"name" pkl:"name" starlark:"name"`
+	Command             string   `json:"command" yaml:"command" pkl:"command" starlark:"command"`
+	Dependencies        []string `json:"dependencies,omitempty" yaml:"dependencies,omitempty" pkl:"dependencies" starlark:"dependencies"`
+	Inputs              []string `json:"inputs,omitempty" yaml:"inputs,omitempty" pkl:"inputs" starlark:"inputs"`
+	ExcludeInputs       []string `json:"exclude_inputs,omitempty" yaml:"exclude_inputs,omitempty" pkl:"exclude_inputs" starlark:"exclude_inputs"`
+	Outputs             []string `json:"outputs,omitempty" yaml:"outputs,omitempty" pkl:"outputs" starlark:"outputs"`
 	// OciPush is a map from an oci:: output's local name to its remote
 	// destination(s). A scalar value is normalised to a single-entry slice
 	// at parse time so YAML and pkl can both write `name: "repo:tag"`.
@@ -92,6 +93,17 @@ type ResourceDTO struct {
 	Dependencies []string          `json:"dependencies,omitempty" yaml:"dependencies,omitempty" pkl:"dependencies" starlark:"dependencies"`
 }
 
+// DependencyResolverDTO is a load-time dependency resolver declaration.
+type DependencyResolverDTO struct {
+	Name    string   `json:"name" yaml:"name" pkl:"name" starlark:"name"`
+	Command string   `json:"command" yaml:"command" pkl:"command" starlark:"command"`
+	Inputs  []string `json:"inputs,omitempty" yaml:"inputs,omitempty" pkl:"inputs" starlark:"inputs"`
+	Timeout string   `json:"timeout,omitempty" yaml:"timeout,omitempty" pkl:"timeout" starlark:"timeout"`
+	// GeneratedTargetName names the filegroup grog creates for a package that
+	// registers no target. Defaults to _<name>_package.
+	GeneratedTargetName string `json:"generated_target_name,omitempty" yaml:"generated_target_name,omitempty" pkl:"generated_target_name" starlark:"generated_target_name"`
+}
+
 type EnvironmentDTO struct {
 	Name         string   `json:"name" yaml:"name" pkl:"name" starlark:"name"`
 	Type         string   `json:"type" yaml:"type" pkl:"type" starlark:"type"`
@@ -102,6 +114,7 @@ type EnvironmentDTO struct {
 // PackageDTO is used for deserializing a package in a loader.
 // The package that we use internally is in model.Package.
 type PackageDTO struct {
+	DependencyResolvers []*DependencyResolverDTO `json:"dependency_resolvers" yaml:"dependency_resolvers" pkl:"dependency_resolvers" starlark:"dependency_resolvers"`
 	// Record the path to the source file that defines this package.
 	// Note that in the final model package this is stored on the target level not the package
 	SourceFilePath string
