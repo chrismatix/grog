@@ -156,8 +156,8 @@ Each reported package ends up with exactly one target standing in for it, chosen
 1. A target that names the resolver in `dependency_resolvers` is the package's endpoint. It receives the
    package's edges as additional `dependencies`, other packages' edges point at it, and the resolver's `inputs`
    for the package are ignored in favour of its own. At most one target per package may register a resolver.
-2. Otherwise, if the resolver declared `inputs` for the package, Grog synthesizes a filegroup named
-   `_<resolver name>_package` from them — `//crates/format:_cargo_package`. Its defining file, for `grog changes` and error
+2. Otherwise, if the resolver declared `inputs` for the package, Grog synthesizes a filegroup from them, named
+   by the declaration's `synthesized_target` — `_<resolver name>_package` unless set, so `//crates/format:_cargo_package`. Its defining file, for `grog changes` and error
    messages, is the BUILD file that declared the resolver. A directory with no BUILD file at all gets a package
    this way.
 3. Otherwise the package is outside the resolver's graph. That is fine until something depends on it, which is a
@@ -301,12 +301,13 @@ dependency_resolvers {
   </TabItem>
 </Tabs>
 
-| Field     | Type       | Description                                                                                                        |
-| --------- | ---------- | ------------------------------------------------------------------------------------------------------------------ |
-| `name`    | `string`   | Unique within the package. Shares the namespace with targets, aliases and resources.                               |
-| `command` | `string`   | Shell command printing the [mapping](#the-resolver-protocol) to stdout, or `builtin:<name>` for a shipped one.     |
-| `inputs`  | `string[]` | Globs relative to the declaring package whose contents form the [cache key](#caching). Defaults to the built-in's. |
-| `timeout` | `string`   | Bounds the command. Defaults to `60s` — a resolver runs on read-path commands, so it may not hang them.            |
+| Field                | Type       | Description                                                                                                        |
+| -------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------ |
+| `name`               | `string`   | Unique within the package. Shares the namespace with targets, aliases and resources.                               |
+| `command`            | `string`   | Shell command printing the [mapping](#the-resolver-protocol) to stdout, or `builtin:<name>` for a shipped one.     |
+| `inputs`             | `string[]` | Globs relative to the declaring package whose contents form the [cache key](#caching). Defaults to the built-in's. |
+| `timeout`            | `string`   | Bounds the command. Defaults to `60s` — a resolver runs on read-path commands, so it may not hang them.            |
+| `synthesized_target` | `string`   | Name of the filegroup synthesized for a package that registers no target. Defaults to `_<name>_package`.           |
 
 <Aside type="note" title="A resolver is not a build target">
   Declarations are loaded, never scheduled. A resolver has no `dependencies` and no `outputs`, `grog
@@ -613,7 +614,7 @@ Run with `--log-level debug` to see each resolver's command, cache key and full 
 | `no dependency resolver at //:cargo2 (referenced by //crates/cli:cli); declared: //:cargo, //:proto`                                                | A typo, or a declaration you have not written yet.                                                                                                                                                  |
 | `resolver //:cargo registered twice in package crates/cli: //crates/cli:cli and //crates/cli:build`                                                 | Only one target per package may register a resolver. Register the filegroup and let the rest depend on it.                                                                                          |
 | `resolver //:cargo reports crates/greet depends on crates/format, which has no target registered for //:cargo and no inputs to synthesize one from` | The resolver declared no `inputs` for `crates/format`, so Grog has nothing to stand in for it. Register a target there, have the resolver declare inputs, or remove the package from the workspace. |
-| `resolver //:cargo cannot synthesize //crates/format:_cargo_package: a target with that name is defined in crates/format/BUILD.yaml`                        | A hand-written target already uses the synthesized name. Rename it, or register it with the resolver so it becomes the endpoint instead.                                                            |
+| `resolver //:cargo cannot synthesize //crates/format:_cargo_package: a target with that name is defined in crates/format/BUILD.yaml`                | A hand-written target already uses the synthesized name. Rename it, or register it with the resolver so it becomes the endpoint instead.                                                            |
 | `resolver //:cargo failed: exec: "cargo": executable file not found in $PATH`                                                                       | The resolver's tool is missing. Install it, warm the remote cache, or switch to a [committed mapping](#using-a-committed-mapping).                                                                  |
 | `cycle detected: //crates/a:a -> //crates/b:b -> //crates/a:a`                                                                                      | The inferred graph is cyclic. Usually a dev-dependency edge from a custom resolver — see [limitations](#limitations).                                                                               |
 
