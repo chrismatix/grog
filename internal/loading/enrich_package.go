@@ -10,7 +10,6 @@ import (
 	"grog/internal/console"
 	"grog/internal/label"
 	"grog/internal/model"
-	"grog/internal/output"
 
 	"github.com/bmatcuk/doublestar/v4"
 )
@@ -21,6 +20,9 @@ import (
 // - applies any defaults
 // - parses the deps into target labels.
 func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageDTO) (*model.Package, error) {
+	if operationError := ValidatePackageRequiredFields(pkg); operationError != nil {
+		return nil, operationError
+	}
 	targets := make(map[label.TargetLabel]*model.Target)
 	aliases := make(map[label.TargetLabel]*model.Alias)
 	absolutePackagePath := config.GetPathAbsoluteToWorkspaceRoot(packagePath)
@@ -50,21 +52,9 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 			return nil, fmt.Errorf("failed to resolve inputs for target %s: %w", targetLabel, err)
 		}
 
-		parsedOutputs, err := output.ParseOutputs(target.Outputs)
+		parsedOutputs, parsedBinOutput, err := parseTargetOutputs(target, targetLabel.String())
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse outputs for target %s: %w", targetLabel, err)
-		}
-
-		parsedBinOutput := model.Output{}
-		if target.BinOutput != "" {
-			parsedBinOutput, err = output.ParseOutput(target.BinOutput)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse bin output for target %s: %w", targetLabel, err)
-			}
-			if !parsedBinOutput.IsFile() {
-				return nil, fmt.Errorf("bin output %s for target %s must be of type file",
-					target.BinOutput, targetLabel)
-			}
+			return nil, err
 		}
 
 		if _, ok := targets[targetLabel]; ok {
@@ -73,10 +63,11 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 
 		var timeout time.Duration
 		if target.Timeout != "" {
-			timeout, err = time.ParseDuration(target.Timeout)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse timeout for target %s: %w", targetLabel, err)
+			parsedTimeout, operationError := parseBuildTimeout(targetDeclarationKind, targetLabel.String(), target.Timeout)
+			if operationError != nil {
+				return nil, operationError
 			}
+			timeout = parsedTimeout
 		}
 
 		// Determine the platforms to use
@@ -145,11 +136,11 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 
 		var resourceTimeout time.Duration
 		if resource.Timeout != "" {
-			var err error
-			resourceTimeout, err = time.ParseDuration(resource.Timeout)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse timeout for resource %s: %w", resourceLabel, err)
+			parsedTimeout, operationError := parseBuildTimeout(resourceDeclarationKind, resourceLabel.String(), resource.Timeout)
+			if operationError != nil {
+				return nil, operationError
 			}
+			resourceTimeout = parsedTimeout
 		}
 
 		resources[resourceLabel] = &model.Resource{
