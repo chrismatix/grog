@@ -221,9 +221,9 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 		inputs := resolver.Inputs
 		if len(inputs) == 0 {
 			switch resolver.Command {
-			case "builtin:cargo":
+			case "builtin::cargo":
 				inputs = cargoDefaultInputs(absolutePackagePath)
-			case "builtin:uv":
+			case "builtin::uv":
 				inputs = uvDefaultInputs(absolutePackagePath)
 			}
 		}
