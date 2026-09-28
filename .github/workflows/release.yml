@@ -53,6 +53,16 @@ jobs:
       - name: Build release binary
         run: make release-build GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }}
 
+      - name: Build deb and rpm packages
+        if: matrix.goos == 'linux'
+        env:
+          GOARCH: ${{ matrix.goarch }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          for packager in deb rpm; do
+            go run github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0 pkg --packager "$packager" --target "dist/grog-linux-$GOARCH.$packager"
+          done
+
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:

@@ -1,0 +1,19 @@
+name: grog
+arch: ${GOARCH}
+platform: linux
+version: ${VERSION}
+maintainer: Christoph Proeschel <proeschel.christoph@gmail.com>
+description: Lightweight mono-repo build orchestrator that caches and parallelizes your existing build commands
+homepage: https://grog.build
+license: MIT
+contents:
+  - src: dist/grog-linux-${GOARCH}
+    dst: /usr/bin/grog
+    expand: true
+    file_info:
+      mode: 0755
+overrides:
+  deb:
+    depends: [libstdc++6]
+  rpm:
+    depends: [libstdc++]
