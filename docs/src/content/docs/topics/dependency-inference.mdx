@@ -125,15 +125,15 @@ Only one target per package may register a given resolver, but a target may regi
 ## Built-in resolvers
 
 Grog ships four resolvers.
-Use one with `command = "builtin:<name>"` and omit `inputs` to get the defaults listed below.
+Use one with `command = "builtin::<name>"` and omit `inputs` to get the defaults listed below.
 Every built-in declares inputs for the packages it reports, so workspace members don't need a BUILD file.
 
-| Name    | Reads                                                                                              | Needs a toolchain |
-| ------- | -------------------------------------------------------------------------------------------------- | ----------------- |
-| `cargo` | The workspace `Cargo.toml` members and each member's `[dependencies]` / `[build-dependencies]`     | no                |
-| `uv`    | `uv.lock` — packages with an `editable` or `directory` source are workspace members                | no                |
-| `node`  | `pnpm-workspace.yaml`, or `workspaces` in the root `package.json`, plus each member's dependencies | no                |
-| `go`    | `go list -deps -e -json ./...`, keeping imports under the module path                              | yes (`go`)        |
+| Name    | Reads                                                                                                                         | Needs a toolchain |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `cargo` | The workspace `Cargo.toml` members and each member's `[dependencies]` / `[build-dependencies]`                                | no                |
+| `uv`    | `uv.lock` — packages with an `editable` or `directory` source are workspace members                                           | no                |
+| `node`  | `pnpm-workspace.yaml` or `aube-workspace.yaml`, else `workspaces` in the root `package.json`, plus each member's dependencies | no                |
+| `go`    | `go list -deps -e -json ./...`, keeping imports under the module path                                                         | yes (`go`)        |
 
 `cargo`, `uv` and `node` parse manifests and lockfiles directly, so `grog changes` works on a CI image without Cargo, uv or Node.
 
@@ -168,7 +168,7 @@ Default `inputs`: `uv.lock`, `pyproject.toml`.
 ### node
 
 Covers npm, yarn and pnpm workspaces.
-Members come from `pnpm-workspace.yaml`, falling back to `workspaces` in the root `package.json`.
+Members come from `pnpm-workspace.yaml` or `aube-workspace.yaml` (same format), falling back to `workspaces` in the root `package.json`.
 Edges are `dependencies`, `devDependencies` and `peerDependencies` entries that name another member; pnpm's `workspace:*` is treated like any other version spec.
 None of the package managers forbid cycles between members, and one through any of these fields fails the load.
 
@@ -247,7 +247,7 @@ dependency_resolvers {
 | Field                   | Type       | Description                                                                                              |
 | ----------------------- | ---------- | -------------------------------------------------------------------------------------------------------- |
 | `name`                  | `string`   | Unique within the package, shared namespace with targets, aliases and resources.                         |
-| `command`               | `string`   | Shell command that prints the [mapping](#the-resolver-protocol) to stdout, or `builtin:<name>`.          |
+| `command`               | `string`   | Shell command that prints the [mapping](#the-resolver-protocol) to stdout, or `builtin::<name>`.         |
 | `inputs`                | `string[]` | Globs relative to the declaring package that form the [cache key](#caching). Defaults to the built-in's. |
 | `timeout`               | `string`   | Defaults to `60s`. Resolvers run on read-only commands like `grog deps`, so they must not hang.          |
 | `generated_target_name` | `string`   | Name of the filegroup synthesized for a package that registers no target. Defaults to `_<name>_package`. |
