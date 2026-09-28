@@ -39,7 +39,34 @@ brew tap chrismatix/grog
 brew install grog
 ```
 
-Linux:
+Debian / Ubuntu (swap `amd64` for `arm64` on ARM):
+
+```shell
+curl -LO https://grog.build/latest/grog-linux-amd64.deb
+sudo apt install ./grog-linux-amd64.deb
+```
+
+Fedora / RHEL:
+
+```shell
+sudo dnf install https://grog.build/latest/grog-linux-amd64.rpm
+```
+
+Nix:
+
+```shell
+nix profile install github:chrismatix/grog            # or #grog-with-pkl to include the Pkl CLI
+```
+
+GitHub Actions:
+
+```yaml
+- uses: chrismatix/setup-grog@v1
+  with:
+    pkl-version: 0.31.1 # optional
+```
+
+Any other Linux:
 
 ```shell
 curl -L https://grog.build/latest/grog-linux-amd64 -o /usr/local/bin/grog
