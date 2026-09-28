@@ -92,15 +92,15 @@ flowchart TD
   M["crates/greet/Cargo.toml<br/>format = { path = &quot;../format&quot; }"] --> R["//:cargo resolver"]
   R -->|"crates/greet → crates/format"| G
   subgraph buildGraph["Build graph"]
-    T["//crates/greet:test<br/>written by you"] -->|depends on| G["//crates/greet:_cargo_package<br/>synthesized"]
-    G -->|depends on| F["//crates/format:_cargo_package<br/>synthesized"]
+    T["//crates/greet:test<br/>written by you"] -->|depends on| G["//crates/greet:_cargo_package<br/>resolved"]
+    G -->|depends on| F["//crates/format:_cargo_package<br/>resolved"]
   end
 ```
 
 Your own targets only depend on their package's filegroup, e.g. `//crates/greet:test` on `:_cargo_package`.
 The edge to `crates/format` comes from the resolver, so a change there still invalidates the test.
 
-For each package the resolver reports `inputs` for, Grog synthesizes a filegroup, e.g. `//crates/format:_cargo_package`, and wires the edges between them.
+For each package the resolver reports `inputs` for, Grog generates a filegroup, e.g. `//crates/format:_cargo_package`, and wires the edges between them.
 Its name is the resolver's `generated_target_name`, which defaults to `_<resolver name>_package`.
 This works in directories without a BUILD file.
 A package reported without `inputs` gets no filegroup, which is only an error once something depends on it.
