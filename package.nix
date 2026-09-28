@@ -3,15 +3,17 @@
   buildGo127Module,
   version ? "dev",
   commit ? "unknown",
+  withDuckdb ? false,
 }:
 
 buildGo127Module {
-  pname = "grog";
+  pname = if withDuckdb then "grog-full" else "grog";
   inherit version;
   src = lib.cleanSource ./.;
 
   vendorHash = "sha256-LQ0qZlAzmQCjqEmpE7+fG3DqCP9EcpTqgi1BYcxJQvo=";
   subPackages = [ "." ];
+  tags = lib.optional withDuckdb "duckdb";
   doCheck = false;
 
   ldflags = [

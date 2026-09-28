@@ -13,7 +13,7 @@ UPDATE_ALL_FLAG :=
 endif
 
 unit-test:
-	@gotestsum ./internal/...
+	@gotestsum -- -tags duckdb ./internal/...
 
 full-test:
 	@echo "Clearing test infrastructure:"
@@ -26,7 +26,7 @@ full-test:
 test: build-with-coverage
 	@rm -fr coverdata
 	@mkdir -p coverdata/unit coverdata/integration
-	@gotestsum -- -timeout 360s -cover ./internal/... -test.gocoverdir="$$(pwd)/coverdata/unit"
+	@gotestsum -- -tags duckdb -timeout 360s -cover ./internal/... -test.gocoverdir="$$(pwd)/coverdata/unit"
 
 	@echo ""
 	@echo "Running integration tests."
@@ -73,24 +73,25 @@ LD_FLAGS = -ldflags "$(STRIP_FLAGS) \
 	-X 'main.buildDate=$(DATE)'"
 
 build: gen-proto
-	@go build -o dist/grog $(LD_FLAGS)
+	@go build -tags duckdb -o dist/grog $(LD_FLAGS)
 
 build-with-coverage:
-	@go build -cover -o dist/grog $(LD_FLAGS)
+	@go build -tags duckdb -cover -o dist/grog $(LD_FLAGS)
 
 release-pkl:
 	echo $(VERSION)
 	@cd pkl && VERSION=$(VERSION) pkl project package
 
 
-# Build a release binary for the current GOOS/GOARCH.
+# Build the slim (no DuckDB, static) and full release binaries for the current GOOS/GOARCH.
 # Called by CI matrix; locally: make release-build GOOS=darwin GOARCH=arm64
 release-build: STRIP_FLAGS = -s -w
 release-build: gen-proto
 	@echo "Building for $(GOOS)/$(GOARCH)"
 	@mkdir -p dist
-	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(LD_FLAGS) -o dist/grog-$(GOOS)-$(GOARCH)
-	@cd dist && shasum -a 256 grog-$(GOOS)-$(GOARCH) > grog-$(GOOS)-$(GOARCH).sha256
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(LD_FLAGS) -o dist/grog-$(GOOS)-$(GOARCH)
+	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -tags duckdb $(LD_FLAGS) -o dist/grog-full-$(GOOS)-$(GOARCH)
+	@cd dist && for binary in grog-$(GOOS)-$(GOARCH) grog-full-$(GOOS)-$(GOARCH); do shasum -a 256 $$binary > $$binary.sha256; done
 
 gen-proto:
 	@protoc \

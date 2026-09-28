@@ -11,7 +11,6 @@ import (
 
 	"grog/internal/caching/backends"
 
-	_ "github.com/duckdb/duckdb-go/v2"
 	"github.com/parquet-go/parquet-go"
 )
 
@@ -89,7 +88,7 @@ type TraceStore struct {
 func NewTraceStore(backend backends.CacheBackend, resolver *PathResolver) (*TraceStore, error) {
 	db, err := sql.Open("duckdb", "")
 	if err != nil {
-		return nil, fmt.Errorf("open duckdb: %w", err)
+		return nil, fmt.Errorf("querying traces requires the full grog build with DuckDB (see https://grog.build/get-started): %w", err)
 	}
 
 	return &TraceStore{

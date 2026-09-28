@@ -71,6 +71,13 @@ The flake also exposes `overlays.default` for use in NixOS or home-manager confi
   </TabItem>
 </Tabs>
 
+<Aside>
+  Querying [execution traces](/tracing/) (`grog traces`) needs the embedded DuckDB engine, which
+  doubles the binary size. It ships separately as `grog-full`: swap `grog` for `grog-full` in the
+  formula, package, binary, or flake name (`brew install grog-full`, `grog-full-linux-amd64.deb`,
+  `grog-full-darwin-arm64`, `github:chrismatix/grog#grog-full`).
+</Aside>
+
 ## 2. Initialize The Repository
 
 To start using Grog in your project, you need to initialize it by creating a `grog.toml` file at the root of your repository:
