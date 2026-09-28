@@ -43,7 +43,7 @@ is the repo root. `cargo` is [built in](#built-in-resolvers), so the declaration
 # BUILD.yaml at the workspace root
 dependency_resolvers:
   - name: cargo
-    command: builtin:cargo
+    command: builtin::cargo
 ```
 
   </TabItem>
@@ -53,7 +53,7 @@ dependency_resolvers:
 # BUILD.star at the workspace root
 dependency_resolver(
     name = "cargo",
-    command = "builtin:cargo",
+    command = "builtin::cargo",
 )
 ```
 
@@ -67,7 +67,7 @@ amends "@grog/package.pkl"
 dependency_resolvers {
   new {
     name = "cargo"
-    command = "builtin:cargo"
+    command = "builtin::cargo"
   }
 }
 ```
@@ -177,7 +177,7 @@ target(
 
 ## Built-in resolvers
 
-Four resolvers ship with Grog. Write `command = "builtin:<name>"` and leave `inputs` off to take the defaults
+Four resolvers ship with Grog. Write `command = "builtin::<name>"` and leave `inputs` off to take the defaults
 below. Every built-in declares inputs for each package it reports, so a workspace member needs no BUILD file to
 be depended on.
 
@@ -223,12 +223,14 @@ Default `inputs`: `uv.lock`, `pyproject.toml`.
 
 ### node
 
-One resolver covers npm, yarn and pnpm workspaces. Only the file listing the member globs differs
-(`pnpm-workspace.yaml`, else `workspaces` in the root `package.json`). The edge rule is identical in all three:
-a `dependencies`, `devDependencies` or `peerDependencies` entry whose name matches another member. pnpm's
-`workspace:*` protocol is a version spec, not a different graph.
+One resolver covers npm, yarn, pnpm and aube workspaces. Only the file listing the member globs differs
+(`pnpm-workspace.yaml` or `aube-workspace.yaml`, which share a format, else `workspaces` in the root
+`package.json`). The edge rule is identical in all of them: a `dependencies`, `devDependencies` or
+`peerDependencies` entry whose name matches another member. The `workspace:*` protocol is a version spec, not a
+different graph.
 
-Default `inputs`: `pnpm-workspace.yaml`, `package.json`, `*/package.json`, `*/*/package.json`.
+Default `inputs`: `pnpm-workspace.yaml`, `aube-workspace.yaml`, `package.json`, `*/package.json`,
+`*/*/package.json`.
 
 ### go
 
@@ -263,7 +265,7 @@ A resolver is declared in a BUILD file, alongside `targets`, `aliases` and `reso
 ```yaml
 dependency_resolvers:
   - name: cargo
-    command: builtin:cargo
+    command: builtin::cargo
     inputs:
       - Cargo.toml
       - Cargo.lock
@@ -276,7 +278,7 @@ dependency_resolvers:
 ```starlark
 dependency_resolver(
     name = "cargo",
-    command = "builtin:cargo",
+    command = "builtin::cargo",
     inputs = ["Cargo.toml", "Cargo.lock", "crates/*/Cargo.toml"],
 )
 ```
@@ -288,7 +290,7 @@ dependency_resolver(
 dependency_resolvers {
   new {
     name = "cargo"
-    command = "builtin:cargo"
+    command = "builtin::cargo"
     inputs {
       "Cargo.toml"
       "Cargo.lock"
@@ -304,7 +306,7 @@ dependency_resolvers {
 | Field                   | Type       | Description                                                                                                        |
 | ----------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------ |
 | `name`                  | `string`   | Unique within the package. Shares the namespace with targets, aliases and resources.                               |
-| `command`               | `string`   | Shell command printing the [mapping](#the-resolver-protocol) to stdout, or `builtin:<name>` for a shipped one.     |
+| `command`               | `string`   | Shell command printing the [mapping](#the-resolver-protocol) to stdout, or `builtin::<name>` for a shipped one.    |
 | `inputs`                | `string[]` | Globs relative to the declaring package whose contents form the [cache key](#caching). Defaults to the built-in's. |
 | `timeout`               | `string`   | Bounds the command. Defaults to `60s` — a resolver runs on read-path commands, so it may not hang them.            |
 | `generated_target_name` | `string`   | Name of the filegroup synthesized for a package that registers no target. Defaults to `_<name>_package`.           |
@@ -326,7 +328,7 @@ large repo costs a second tree walk.
 ```starlark
 dependency_resolver(
     name = "cargo",
-    command = "builtin:cargo",
+    command = "builtin::cargo",
     inputs = ["Cargo.toml", "Cargo.lock", "crates/*/Cargo.toml"],
 )
 ```
@@ -338,7 +340,7 @@ targets under `tools/rust/crates/*` resolve correctly with nothing else to confi
 
 ```starlark
 # tools/rust/BUILD.star
-dependency_resolver(name = "cargo", command = "builtin:cargo")
+dependency_resolver(name = "cargo", command = "builtin::cargo")
 ```
 
 ```starlark
@@ -601,7 +603,7 @@ grog graph -o mermaid               # the whole graph
 
 ```bash
 $ grog check
-resolver //:cargo: builtin:cargo, cache hit, 4 packages, 3 edges
+resolver //:cargo: builtin::cargo, cache hit, 4 packages, 3 edges
 Build graph is valid.
 ```
 

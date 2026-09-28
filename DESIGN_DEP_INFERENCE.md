@@ -305,7 +305,7 @@ A resolver is declared in a BUILD file as a new top-level node kind, alongside `
 ```yaml
 dependency_resolvers:
   - name: cargo
-    command: builtin:cargo
+    command: builtin::cargo
     inputs:
       - Cargo.toml
       - Cargo.lock
@@ -319,7 +319,7 @@ dependency_resolvers:
 ```starlark
 dependency_resolver(
     name = "cargo",
-    command = "builtin:cargo",
+    command = "builtin::cargo",
     inputs = ["Cargo.toml", "Cargo.lock", "crates/*/Cargo.toml"],
 )
 ```
@@ -332,7 +332,7 @@ dependency_resolver(
 dependency_resolvers {
   new {
     name = "cargo"
-    command = "builtin:cargo"
+    command = "builtin::cargo"
     inputs {
       "Cargo.toml"
       "Cargo.lock"
@@ -347,7 +347,7 @@ dependency_resolvers {
 | Field                   | Default                 | Meaning                                                                                                                                           |
 | ----------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`                  | required                | Unique within the package. The resolver is addressed by its label.                                                                                |
-| `command`               | required                | Shell command producing the mapping on stdout, or `builtin:<name>` to select a shipped resolver.                                                  |
+| `command`               | required                | Shell command producing the mapping on stdout, or `builtin::<name>` to select a shipped resolver.                                                 |
 | `inputs`                | the built-in's defaults | Globs relative to the declaring package, resolved and hashed exactly like a target's `inputs`.                                                    |
 | `timeout`               | `60s`                   | Bounds the command, parsed like `target.timeout`. A resolver runs on read-path commands and on tab-completion, so an unbounded one hangs the CLI. |
 | `generated_target_name` | `_<name>_package`       | Name of the filegroup synthesized for a package that registers no target (§5.8). Validated like a target name.                                    |
@@ -603,30 +603,30 @@ inputs.
 
 ## 6. Batteries included
 
-Four built-ins ship as Go code inside grog, selected by writing `command = "builtin:<name>"` on a declaration.
+Four built-ins ship as Go code inside grog, selected by writing `command = "builtin::<name>"` on a declaration.
 They implement the same protocol internally and produce the same document, skipping only the subprocess and
 JSON round-trip. Each emits `inputs` for every member it reports, so a member with no BUILD file still gets a
 filegroup (§5.8). Omitting `inputs` on such a declaration takes the built-in's defaults, so the declaration is a
 name and a command. Go rather than shipped scripts because it avoids a `jq`/Python dependency, works identically
 on every platform grog targets, and keeps the manifest-path-to-directory arithmetic in tested code.
 
-| Name    | Implementation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Default `inputs`                                                            | Needs a toolchain |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- | ----------------- |
-| `cargo` | Members are `[workspace] members` minus `exclude`, plus the root package when the root manifest has `[package]`. Edges come from `path` entries in each member's `[dependencies]`, `[build-dependencies]` and `[target.*]` tables, with `workspace = true` resolved through `[workspace.dependencies]`. Inputs are the superset `Cargo.toml`, `build.rs`, `src/**/*`, `tests/**/*`, `benches/**/*`, `examples/**/*`, plus `[lib] path`, `[[bin]] path` and `[package] include`. Never shells out to `cargo`. | `Cargo.toml`, `Cargo.lock`, and `<pattern>/Cargo.toml` per member pattern   | no                |
-| `uv`    | Parse `uv.lock`: packages with `source = { editable = <dir> }` or `{ directory = <dir> }` are workspace members; their `dependencies` name other members. Dev groups are excluded, as for cargo: uv does not forbid member cycles.                                                                                                                                                                                                                                                                           | `uv.lock`, `pyproject.toml`                                                 | no                |
-| `node`  | Member globs from `pnpm-workspace.yaml` if present, else `workspaces` in the root `package.json`; then each member's `dependencies` / `devDependencies` / `peerDependencies` whose _name_ matches another member.                                                                                                                                                                                                                                                                                            | `pnpm-workspace.yaml`, `package.json`, `*/package.json`, `*/*/package.json` | no                |
-| `go`    | `go list -e -json ./...`, then imports from every `.go` file the package lists, including `IgnoredGoFiles` excluded by build constraints, so the mapping is the union over platforms and independent of `GOOS`/`GOARCH`/tags. Keep imports under the module path, map each to its directory.                                                                                                                                                                                                                 | `go.mod`, `go.sum`, `go.work`, `**/*.go`                                    | yes (`go`)        |
+| Name    | Implementation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Default `inputs`                                                                                   | Needs a toolchain |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- | ----------------- |
+| `cargo` | Members are `[workspace] members` minus `exclude`, plus the root package when the root manifest has `[package]`. Edges come from `path` entries in each member's `[dependencies]`, `[build-dependencies]` and `[target.*]` tables, with `workspace = true` resolved through `[workspace.dependencies]`. Inputs are the superset `Cargo.toml`, `build.rs`, `src/**/*`, `tests/**/*`, `benches/**/*`, `examples/**/*`, plus `[lib] path`, `[[bin]] path` and `[package] include`. Never shells out to `cargo`. | `Cargo.toml`, `Cargo.lock`, and `<pattern>/Cargo.toml` per member pattern                          | no                |
+| `uv`    | Parse `uv.lock`: packages with `source = { editable = <dir> }` or `{ directory = <dir> }` are workspace members; their `dependencies` name other members. Dev groups are excluded, as for cargo: uv does not forbid member cycles.                                                                                                                                                                                                                                                                           | `uv.lock`, `pyproject.toml`                                                                        | no                |
+| `node`  | Member globs from `pnpm-workspace.yaml` or `aube-workspace.yaml` (same format) if present, else `workspaces` in the root `package.json`; then each member's `dependencies` / `devDependencies` / `peerDependencies` whose _name_ matches another member.                                                                                                                                                                                                                                                     | `pnpm-workspace.yaml`, `aube-workspace.yaml`, `package.json`, `*/package.json`, `*/*/package.json` | no                |
+| `go`    | `go list -e -json ./...`, then imports from every `.go` file the package lists, including `IgnoredGoFiles` excluded by build constraints, so the mapping is the union over platforms and independent of `GOOS`/`GOARCH`/tags. Keep imports under the module path, map each to its directory.                                                                                                                                                                                                                 | `go.mod`, `go.sum`, `go.work`, `**/*.go`                                                           | yes (`go`)        |
 
 Three of the four need no toolchain, which preserves most of architecture (A)'s fresh-clone property. Only `go`
 requires its tool, and it is also the one that most needs the cache.
 
-One `node` resolver rather than three (`pnpm`, `npm`, `yarn`): only the member-glob file differs. The edge rule
+One `node` resolver rather than one per package manager (`pnpm`, `npm`, `yarn`, `aube`): only the member-glob file differs, and aube's is pnpm's format. The edge rule
 is identical across all three (a dependency whose name matches a workspace member), and pnpm's `workspace:`
 protocol is a spec format rather than a different graph. Three names for one algorithm would be three things to
 document and keep in sync.
 
 **Writing a custom resolver.** Any executable that prints the document. The bar is a dozen lines (§9). It is
-declared the same way a built-in is, with `command` pointing at the executable instead of `builtin:<name>`, and
+declared the same way a built-in is, with `command` pointing at the executable instead of `builtin::<name>`, and
 referenced by label alongside built-ins.
 
 **Overriding a built-in.** Change `command` on the declaration. There is nothing else to replace: the built-in
@@ -661,7 +661,7 @@ surface.
   Its `inputs` go through the existing `resolveInputs`, and its label through the existing duplicate-label check.
 - `internal/loading/dependency_inference.go`: declaration and registration collection, resolver execution in the
   declaring package, JSON parse, synthesis (§5.8), path→label resolution, merge. Errors per the §5.3 table.
-- `builtin:cargo`, emitting the input superset.
+- `builtin::cargo`, emitting the input superset.
 - Migrate `examples/rust_monorepo` (four BUILD files, no filegroups left).
 - Integration coverage: a cargo-shaped repo where adding a `path` dependency invalidates the dependent with no
   BUILD file edit, and where a crate with no BUILD file and a non-default `[lib] path` is depended on through its
@@ -674,14 +674,14 @@ and shipping the protocol and the cache together makes both harder to review.
 **PR 2 — resolver output caching.** Cache key per §5.3 over the already-resolved `inputs`, CAS storage, debug
 logging of hit/miss, `grog check` reporting per-resolver timing. Smaller than it would have been under a
 `grog.toml` declaration, since `resolveInputs` and `HashFiles` are reused rather than reimplemented. This is
-what makes `builtin:go` viable.
+what makes `builtin::go` viable.
 
-**PR 3 — `builtin:uv` and `builtin:node`.** Both are pure file parsing. Migrate `examples/python_uv_monorepo`
+**PR 3 — `builtin::uv` and `builtin::node`.** Both are pure file parsing. Migrate `examples/python_uv_monorepo`
 and update the Python guide. `examples/js` needs a real cross-package edge before it can demonstrate anything —
 make `@monorepo/ui-components` depend on `@monorepo/theme`, which the example arguably should have had anyway,
 then declare `//:node` and reference it from the package build targets.
 
-**PR 4 — `builtin:go`, plus the `grog changes` rule** from §5.7.
+**PR 4 — `builtin::go`, plus the `grog changes` rule** from §5.7.
 
 **PR 5 — docs and the cross-language example.** `topics/dependency-inference.mdx` covering the protocol, writing
 a custom resolver, and the committed-mapping recipe that replaces architecture (A), plus a custom proto resolver
@@ -719,7 +719,7 @@ environment markers, optional cargo features. v1 takes the union across all cond
 Risk: a Windows-only crate with no BUILD file trips Q1's hard error on Linux, which is the strongest single
 argument for shipping Q1's knob in v1 after all.
 
-**Q5 — Toolchain availability.** `builtin:go` fails the load, not just the build, on a runner without `go`,
+**Q5 — Toolchain availability.** `builtin::go` fails the load, not just the build, on a runner without `go`,
 which breaks `grog changes` on minimal CI images. Three mitigations exist and none is chosen: warm the remote
 cache so the runner never executes the resolver; use the committed-mapping recipe; or add a "load only, tolerate
 resolver failure" mode, which conflicts with Q1's reasoning. Documenting the remote-cache path is probably
