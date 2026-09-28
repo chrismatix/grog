@@ -88,11 +88,17 @@ Paths are relative to the package the resolver is declared in.
 `//:cargo` at the repo root reports workspace-relative paths, while `crates/format` from `//tools/rust:cargo` means `tools/rust/crates/format`.
 
 ```mermaid
-flowchart LR
-  M["crates/greet/Cargo.toml<br/>format = { path = &quot;../format&quot; }"] --> P["cargo resolver"]
-  P --> E["crates/greet → crates/format<br/>inputs: src/**/*, Cargo.toml"]
-  E --> G["//crates/greet:_cargo_package<br/>depends on<br/>//crates/format:_cargo_package"]
+flowchart TD
+  M["crates/greet/Cargo.toml<br/>format = { path = &quot;../format&quot; }"] --> R["//:cargo resolver"]
+  R -->|"crates/greet → crates/format"| G
+  subgraph buildGraph["Build graph"]
+    T["//crates/greet:test<br/>written by you"] -->|depends on| G["//crates/greet:_cargo_package<br/>synthesized"]
+    G -->|depends on| F["//crates/format:_cargo_package<br/>synthesized"]
+  end
 ```
+
+Your own targets only depend on their package's filegroup, e.g. `//crates/greet:test` on `:_cargo_package`.
+The edge to `crates/format` comes from the resolver, so a change there still invalidates the test.
 
 For each package the resolver reports `inputs` for, Grog synthesizes a filegroup, e.g. `//crates/format:_cargo_package`, and wires the edges between them.
 Its name is the resolver's `generated_target_name`, which defaults to `_<resolver name>_package`.
