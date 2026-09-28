@@ -26,7 +26,7 @@ func TestDependencyResolverLoaders(t *testing.T) {
 	}{
 		{"yaml", YamlLoader{}, `dependency_resolvers:
   - name: cargo
-    command: builtin:cargo
+    command: builtin::cargo
     inputs: ["manifests/*.toml"]
     timeout: 2s
     generated_target_name: python
@@ -34,11 +34,11 @@ targets:
   - name: sources
     dependency_resolvers: [":cargo"]
 `},
-		{"json", JsonLoader{}, `{"dependency_resolvers":[{"name":"cargo","command":"builtin:cargo","inputs":["manifests/*.toml"],"timeout":"2s","generated_target_name":"python"}],"targets":[{"name":"sources","dependency_resolvers":[":cargo"]}]}`},
-		{"star", StarlarkLoader{}, `dependency_resolver(name="cargo", command="builtin:cargo", inputs=["manifests/*.toml"], timeout="2s", generated_target_name="python")
+		{"json", JsonLoader{}, `{"dependency_resolvers":[{"name":"cargo","command":"builtin::cargo","inputs":["manifests/*.toml"],"timeout":"2s","generated_target_name":"python"}],"targets":[{"name":"sources","dependency_resolvers":[":cargo"]}]}`},
+		{"star", StarlarkLoader{}, `dependency_resolver(name="cargo", command="builtin::cargo", inputs=["manifests/*.toml"], timeout="2s", generated_target_name="python")
 target(name="sources", dependency_resolvers=[":cargo"])`},
 		{"pkl", &PklLoader{}, fmt.Sprintf(`amends %q
-dependency_resolvers { new { name = "cargo"; command = "builtin:cargo"; inputs { "manifests/*.toml" }; timeout = "2s"; generated_target_name = "python" } }
+dependency_resolvers { new { name = "cargo"; command = "builtin::cargo"; inputs { "manifests/*.toml" }; timeout = "2s"; generated_target_name = "python" } }
 targets { new { name = "sources"; dependency_resolvers { ":cargo" } } }
 `, packageModule)},
 	}
@@ -56,7 +56,7 @@ targets { new { name = "sources"; dependency_resolvers { ":cargo" } } }
 			require.NoError(t, operationError)
 			require.True(t, matched)
 			require.Len(t, packageDTO.DependencyResolvers, 1)
-			require.Equal(t, &DependencyResolverDTO{Name: "cargo", Command: "builtin:cargo", Inputs: []string{"manifests/*.toml"}, Timeout: "2s", GeneratedTargetName: "python"}, packageDTO.DependencyResolvers[0])
+			require.Equal(t, &DependencyResolverDTO{Name: "cargo", Command: "builtin::cargo", Inputs: []string{"manifests/*.toml"}, Timeout: "2s", GeneratedTargetName: "python"}, packageDTO.DependencyResolvers[0])
 			require.Equal(t, []string{":cargo"}, packageDTO.Targets[0].DependencyResolvers)
 			enrichedPackage, operationError := getEnrichedPackage(console.GetLogger(t.Context()), ".", packageDTO)
 			require.NoError(t, operationError)
@@ -92,7 +92,7 @@ func TestDependencyResolverEnrichment(t *testing.T) {
 		resolver      DependencyResolverDTO
 		expectedError string
 	}{
-		{"default timeout", DependencyResolverDTO{Name: "cargo", Command: "builtin:cargo"}, ""},
+		{"default timeout", DependencyResolverDTO{Name: "cargo", Command: "builtin::cargo"}, ""},
 		{"missing name", DependencyResolverDTO{Command: "true"}, "target name is empty"},
 		{"missing command", DependencyResolverDTO{Name: "cargo"}, "must define a command"},
 		{"invalid timeout", DependencyResolverDTO{Name: "cargo", Command: "true", Timeout: "later"}, "failed to parse timeout for dependency resolver //:cargo"},

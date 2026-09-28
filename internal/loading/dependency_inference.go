@@ -204,7 +204,7 @@ func runDependencyResolver(loadContext context.Context, resolver *model.Dependen
 	logger := console.GetLogger(loadContext)
 	logger.Debugf("resolver %s: %s", resolver.Label, resolver.Command)
 	var document resolverDocument
-	if resolver.Command == "builtin:cargo" {
+	if resolver.Command == "builtin::cargo" {
 		var operationError error
 		document, operationError = cargoDependencies(resolverContext, config.GetPathAbsoluteToWorkspaceRoot(resolver.Label.Package))
 		if operationError != nil {

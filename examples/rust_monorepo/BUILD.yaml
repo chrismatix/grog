@@ -1,6 +1,6 @@
 dependency_resolvers:
   - name: cargo
-    command: builtin:cargo
+    command: builtin::cargo
 
 targets:
   # Tracks the workspace manifest + lockfile. Crates depend on this so that
