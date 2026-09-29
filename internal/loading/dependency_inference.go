@@ -42,9 +42,15 @@ func (reportedPackage *resolverPackage) UnmarshalJSON(contents []byte) error {
 	return json.Unmarshal(contents, (*packageFields)(reportedPackage))
 }
 
+var builtinResolvers = map[string]func(context.Context, string) (resolverDocument, error){
+	"builtin::cargo": cargoDependencies,
+}
+
+// inferDependencies runs every declared dependency resolver and appends the
+// edges it reports to the target each package registered for it. A reported
+// package that registers nothing gets a filegroup synthesized from its inputs.
 func inferDependencies(loadContext context.Context, packages []*model.Package) ([]*model.Package, error) {
 	declarations := make(map[label.TargetLabel]*model.DependencyResolver)
-	registrations := make(map[label.TargetLabel]map[string]*model.Target)
 	packagesByPath := make(map[string]*model.Package, len(packages))
 	var targets []*model.Target
 	for _, loadedPackage := range packages {
@@ -52,77 +58,52 @@ func inferDependencies(loadContext context.Context, packages []*model.Package) (
 		packagesByPath[loadedPackage.Path] = loadedPackage
 		targets = append(targets, loadedPackage.GetTargets()...)
 	}
-	declaredLabels := make([]string, 0, len(declarations))
-	for resolverLabel := range declarations {
-		declaredLabels = append(declaredLabels, resolverLabel.String())
-	}
-	slices.Sort(declaredLabels)
-	slices.SortFunc(targets, func(first, second *model.Target) int {
-		return strings.Compare(first.Label.String(), second.Label.String())
-	})
-	for _, target := range targets {
-		targetLabel := target.Label
-		for _, resolverLabel := range target.DependencyResolvers {
-			if declarations[resolverLabel] == nil {
-				return nil, fmt.Errorf("no dependency resolver at %s (referenced by %s); declared: %s", resolverLabel, targetLabel, strings.Join(declaredLabels, ", "))
-			}
-			if registrations[resolverLabel] == nil {
-				registrations[resolverLabel] = make(map[string]*model.Target)
-			}
-			if previous := registrations[resolverLabel][path.Join(targetLabel.Package)]; previous != nil && previous.Label != targetLabel {
-				return nil, fmt.Errorf("resolver %s registered twice in package %s: %s and %s", resolverLabel, targetLabel.Package, previous.Label, targetLabel)
-			}
-			registrations[resolverLabel][path.Join(targetLabel.Package)] = target
-		}
-	}
-	// Every declared resolver runs: a package it synthesizes for may register nothing.
 	resolvers := slices.SortedFunc(maps.Values(declarations), func(first, second *model.DependencyResolver) int {
 		return strings.Compare(first.Label.String(), second.Label.String())
 	})
+	registrations, operationError := registerTargets(resolvers, targets)
+	if operationError != nil {
+		return nil, operationError
+	}
+
 	documents := make([]resolverDocument, len(resolvers))
 	resolverGroup, resolverContext := errgroup.WithContext(loadContext)
 	for index, resolver := range resolvers {
 		resolverGroup.Go(func() error {
-			document, operationError := runDependencyResolver(resolverContext, resolver)
-			if operationError != nil {
-				return operationError
-			}
-			documents[index] = document
-			return nil
+			var operationError error
+			documents[index], operationError = runDependencyResolver(resolverContext, resolver)
+			return operationError
 		})
 	}
 	if operationError := resolverGroup.Wait(); operationError != nil {
 		return nil, operationError
 	}
-	// Endpoints first, edges second: a dependency may itself be synthesized.
+
+	// Synthesize before linking: a reported dependency may itself be synthesized.
 	for index, resolver := range resolvers {
-		resolverLabel := resolver.Label
 		document := documents[index]
 		for _, packagePath := range slices.Sorted(maps.Keys(document.Packages)) {
-			fullPath := path.Join(resolverLabel.Package, packagePath)
-			if registrations[resolverLabel][fullPath] != nil || len(document.Packages[packagePath].Inputs) == 0 {
+			key := registration{resolver.Label, path.Join(resolver.Label.Package, packagePath)}
+			inputs := document.Packages[packagePath].Inputs
+			if registrations[key] != nil || len(inputs) == 0 {
 				continue
 			}
-			synthesized, createdPackage, operationError := synthesizeFilegroup(loadContext, resolver, fullPath, document.Packages[packagePath].Inputs, packagesByPath)
+			synthesized, createdPackage, operationError := synthesizeFilegroup(loadContext, resolver, key.packagePath, inputs, packagesByPath)
 			if operationError != nil {
 				return nil, operationError
 			}
 			if createdPackage != nil {
 				packages = append(packages, createdPackage)
 			}
-			if registrations[resolverLabel] == nil {
-				registrations[resolverLabel] = make(map[string]*model.Target)
-			}
-			registrations[resolverLabel][fullPath] = synthesized
+			registrations[key] = synthesized
 		}
 	}
 	for index, resolver := range resolvers {
-		resolverLabel := resolver.Label
 		document := documents[index]
 		for _, packagePath := range slices.Sorted(maps.Keys(document.Packages)) {
-			target := registrations[resolverLabel][path.Join(resolverLabel.Package, packagePath)]
+			target := registrations[registration{resolver.Label, path.Join(resolver.Label.Package, packagePath)}]
 			if target == nil {
-				console.GetLogger(loadContext).Debugf("resolver %s reports unregistered package %s; ignoring", resolverLabel, packagePath)
+				console.GetLogger(loadContext).Debugf("resolver %s reports unregistered package %s; ignoring", resolver.Label, packagePath)
 				continue
 			}
 			for _, dependency := range document.Packages[packagePath].Dependencies {
@@ -130,13 +111,13 @@ func inferDependencies(loadContext context.Context, packages []*model.Package) (
 				if strings.HasPrefix(dependency, "//") {
 					parsedLabel, operationError := label.ParseTargetLabel("", dependency)
 					if operationError != nil {
-						return nil, fmt.Errorf("resolver %s reports invalid dependency %q: %w", resolverLabel, dependency, operationError)
+						return nil, fmt.Errorf("resolver %s reports invalid dependency %q: %w", resolver.Label, dependency, operationError)
 					}
 					dependencyLabel = parsedLabel
 				} else {
-					dependencyTarget := registrations[resolverLabel][path.Join(resolverLabel.Package, dependency)]
+					dependencyTarget := registrations[registration{resolver.Label, path.Join(resolver.Label.Package, dependency)}]
 					if dependencyTarget == nil {
-						return nil, fmt.Errorf("resolver %s reports %s depends on %s, which has no target registered for %s and no inputs to synthesize one from", resolverLabel, packagePath, dependency, resolverLabel)
+						return nil, fmt.Errorf("resolver %s reports %s depends on %s, which has no target registered for %s and no inputs to synthesize one from", resolver.Label, packagePath, dependency, resolver.Label)
 					}
 					dependencyLabel = dependencyTarget.Label
 				}
@@ -144,15 +125,44 @@ func inferDependencies(loadContext context.Context, packages []*model.Package) (
 					target.Dependencies = append(target.Dependencies, dependencyLabel)
 				}
 			}
-		}
-	}
-	for _, resolverTargets := range registrations {
-		for _, target := range resolverTargets {
 			slices.SortFunc(target.Dependencies, func(first, second label.TargetLabel) int { return strings.Compare(first.String(), second.String()) })
 			target.Dependencies = slices.Compact(target.Dependencies)
 		}
 	}
-	return packages, loadContext.Err()
+	return packages, nil
+}
+
+type registration struct {
+	resolver    label.TargetLabel
+	packagePath string
+}
+
+// registerTargets finds the one target per package that lists each resolver
+// in dependency_resolvers.
+func registerTargets(resolvers []*model.DependencyResolver, targets []*model.Target) (map[registration]*model.Target, error) {
+	declared := make(map[label.TargetLabel]bool, len(resolvers))
+	declaredLabels := make([]string, 0, len(resolvers))
+	for _, resolver := range resolvers {
+		declared[resolver.Label] = true
+		declaredLabels = append(declaredLabels, resolver.Label.String())
+	}
+	registrations := make(map[registration]*model.Target)
+	slices.SortFunc(targets, func(first, second *model.Target) int {
+		return strings.Compare(first.Label.String(), second.Label.String())
+	})
+	for _, target := range targets {
+		for _, resolverLabel := range target.DependencyResolvers {
+			if !declared[resolverLabel] {
+				return nil, fmt.Errorf("no dependency resolver at %s (referenced by %s); declared: %s", resolverLabel, target.Label, strings.Join(declaredLabels, ", "))
+			}
+			key := registration{resolverLabel, target.Label.Package}
+			if previous := registrations[key]; previous != nil && previous != target {
+				return nil, fmt.Errorf("resolver %s registered twice in package %s: %s and %s", resolverLabel, target.Label.Package, previous.Label, target.Label)
+			}
+			registrations[key] = target
+		}
+	}
+	return registrations, nil
 }
 
 // synthesizeFilegroup gives a package that registers no target a filegroup
@@ -198,49 +208,23 @@ func synthesizeFilegroup(loadContext context.Context, resolver *model.Dependency
 	return target, createdPackage, nil
 }
 
+// runDependencyResolver produces one resolver's document, from Go for a
+// builtin:: command and otherwise from the JSON its shell command prints, and
+// checks it against version 1 of the protocol.
 func runDependencyResolver(loadContext context.Context, resolver *model.DependencyResolver) (resolverDocument, error) {
 	resolverContext, cancel := context.WithTimeout(loadContext, resolver.Timeout)
 	defer cancel()
 	logger := console.GetLogger(loadContext)
 	logger.Debugf("resolver %s: %s", resolver.Label, resolver.Command)
 	var document resolverDocument
-	if resolver.Command == "builtin::cargo" {
-		var operationError error
-		document, operationError = cargoDependencies(resolverContext, config.GetPathAbsoluteToWorkspaceRoot(resolver.Label.Package))
-		if operationError != nil {
-			return document, fmt.Errorf("resolver %s failed: %w", resolver.Label, operationError)
-		}
+	var operationError error
+	if builtin, isBuiltin := builtinResolvers[resolver.Command]; isBuiltin {
+		document, operationError = builtin(resolverContext, config.GetPathAbsoluteToWorkspaceRoot(resolver.Label.Package))
 	} else {
-		command, cleanup, operationError := shell.NewCommand(resolverContext, shell.WithDefaultFlags(resolver.Command))
-		if operationError != nil {
-			return document, fmt.Errorf("resolver %s failed: %w", resolver.Label, operationError)
-		}
-		defer cleanup()
-		command.Dir = config.GetPathAbsoluteToWorkspaceRoot(resolver.Label.Package)
-		command.Env = os.Environ()
-		for name, value := range config.Global.EnvironmentVariables {
-			command.Env = append(command.Env, name+"="+value)
-		}
-		for name, value := range LoaderEnv() {
-			command.Env = append(command.Env, name+"="+value)
-		}
-		command.Env = append(command.Env, "GROG_RESOLVER_LABEL="+resolver.Label.String(), "GROG_TARGET="+resolver.Label.String(), "GROG_PACKAGE="+resolver.Label.Package)
-		var standardOutput, standardError bytes.Buffer
-		command.Stdout = &standardOutput
-		command.Stderr = &standardError
-		if operationError := command.Run(); operationError != nil {
-			if errors.Is(resolverContext.Err(), context.DeadlineExceeded) {
-				return document, fmt.Errorf("resolver %s timed out after %s: %w\n%s", resolver.Label, resolver.Timeout, resolverContext.Err(), standardError.String())
-			}
-			if resolverContext.Err() != nil {
-				return document, fmt.Errorf("resolver %s failed: %w\n%s", resolver.Label, resolverContext.Err(), standardError.String())
-			}
-			return document, fmt.Errorf("resolver %s failed: %w\n%s", resolver.Label, operationError, standardError.String())
-		}
-		logger.Debugf("resolver %s stderr: %s", resolver.Label, standardError.String())
-		if operationError := json.Unmarshal(standardOutput.Bytes(), &document); operationError != nil {
-			return document, fmt.Errorf("resolver %s returned invalid JSON: %w; stdout: %q", resolver.Label, operationError, standardOutput.Bytes()[:min(standardOutput.Len(), 2048)])
-		}
+		document, operationError = runResolverCommand(resolverContext, resolver)
+	}
+	if operationError != nil {
+		return document, fmt.Errorf("resolver %s failed: %w", resolver.Label, operationError)
 	}
 	if document.Version > 1 {
 		return document, fmt.Errorf("resolver %s returned unsupported version %d; upgrade grog", resolver.Label, document.Version)
@@ -272,11 +256,42 @@ func runDependencyResolver(loadContext context.Context, resolver *model.Dependen
 		}
 	}
 	if logger.DebugEnabled() {
-		mapping, operationError := json.Marshal(document)
-		if operationError != nil {
-			return document, fmt.Errorf("encode resolver %s mapping: %w", resolver.Label, operationError)
-		}
+		mapping, _ := json.Marshal(document)
 		logger.Debugf("resolver %s mapping: %s", resolver.Label, mapping)
+	}
+	return document, nil
+}
+
+// runResolverCommand runs the resolver's shell command in its package with a
+// target's environment and parses the JSON it prints to stdout.
+func runResolverCommand(resolverContext context.Context, resolver *model.DependencyResolver) (resolverDocument, error) {
+	var document resolverDocument
+	command, cleanup, operationError := shell.NewCommand(resolverContext, shell.WithDefaultFlags(resolver.Command))
+	if operationError != nil {
+		return document, operationError
+	}
+	defer cleanup()
+	command.Dir = config.GetPathAbsoluteToWorkspaceRoot(resolver.Label.Package)
+	command.Env = os.Environ()
+	for name, value := range config.Global.EnvironmentVariables {
+		command.Env = append(command.Env, name+"="+value)
+	}
+	for name, value := range LoaderEnv() {
+		command.Env = append(command.Env, name+"="+value)
+	}
+	command.Env = append(command.Env, "GROG_RESOLVER_LABEL="+resolver.Label.String(), "GROG_TARGET="+resolver.Label.String(), "GROG_PACKAGE="+resolver.Label.Package)
+	var standardOutput, standardError bytes.Buffer
+	command.Stdout = &standardOutput
+	command.Stderr = &standardError
+	if operationError := command.Run(); operationError != nil {
+		if errors.Is(resolverContext.Err(), context.DeadlineExceeded) {
+			return document, fmt.Errorf("timed out after %s\n%s", resolver.Timeout, standardError.String())
+		}
+		return document, fmt.Errorf("%w\n%s", operationError, standardError.String())
+	}
+	console.GetLogger(resolverContext).Debugf("resolver %s stderr: %s", resolver.Label, standardError.String())
+	if operationError := json.Unmarshal(standardOutput.Bytes(), &document); operationError != nil {
+		return document, fmt.Errorf("returned invalid JSON: %w; stdout: %q", operationError, standardOutput.Bytes()[:min(standardOutput.Len(), 2048)])
 	}
 	return document, nil
 }
