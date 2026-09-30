@@ -107,7 +107,7 @@ jobs:
         run: |
           mkdir -p dist
           cp artifacts/grog-*/* dist/
-          cd dist && shasum -a 256 * > SHASUMS256.txt
+          cd dist && shasum -a 256 -- * > SHASUMS256.txt
 
       - name: Draft Release Notes
         uses: release-drafter/release-drafter@v6
