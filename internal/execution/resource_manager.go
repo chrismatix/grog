@@ -321,7 +321,7 @@ func (m *ResourceManager) runHookCommand(
 	resource *model.Resource,
 	command string,
 	environment []string,
-) ([]byte, error) {
+) (output []byte, err error) {
 	shellCommand, cleanup, err := shell.NewCommand(ctx, shell.WithDefaultFlags(command))
 	if err != nil {
 		return nil, err
@@ -334,7 +334,7 @@ func (m *ResourceManager) runHookCommand(
 	resourceLogs := logs.NewTargetLogFile(model.Target{Label: resource.Label})
 	var buffer bytes.Buffer
 	if logWriter, logErr := resourceLogs.Open(); logErr == nil {
-		defer logWriter.Close()
+		defer func() { err = errors.Join(err, logWriter.Close()) }()
 		multiOut := io.MultiWriter(&buffer, logWriter)
 		shellCommand.Stdout = multiOut
 		shellCommand.Stderr = multiOut

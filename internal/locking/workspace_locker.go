@@ -48,7 +48,7 @@ func (wl *WorkspaceLocker) Lock(ctx context.Context) error {
 		file, err := os.OpenFile(wl.lockFilePath, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0644)
 		if err == nil {
 			_, writeErr := file.Write(lockData)
-			file.Close()
+			writeErr = errors.Join(writeErr, file.Close())
 			if writeErr != nil {
 				_ = os.Remove(wl.lockFilePath)
 				return writeErr

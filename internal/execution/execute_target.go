@@ -136,7 +136,6 @@ func runTargetCommand(
 	if err != nil {
 		return nil, err
 	}
-	defer logWriter.Close()
 
 	var buffer bytes.Buffer
 	var teaWriter *console.TeaWriter
@@ -170,10 +169,7 @@ func runTargetCommand(
 	if teaWriter != nil {
 		teaWriter.Flush()
 	}
-	if cmdErr != nil {
-		return buffer.Bytes(), cmdErr
-	}
-	return buffer.Bytes(), nil
+	return buffer.Bytes(), errors.Join(cmdErr, logWriter.Close())
 }
 
 func GetExtendedTargetEnv(ctx context.Context, target *model.Target) []string {

@@ -43,7 +43,7 @@ func TestTopicCLIUsageMatchesCobra(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open %s: %v", path, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	scanner := bufio.NewScanner(file)
 	lineNumber := 0

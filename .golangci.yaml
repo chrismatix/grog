@@ -25,7 +25,6 @@ linters:
         - fmt.Fprintln
         - (*text/tabwriter.Writer).Flush
         - (io.Closer).Close
-        - (*os.File).Close
         - (*database/sql.Rows).Close
         - (*grog/internal/tracing.TraceStore).Close
     gocyclo:
