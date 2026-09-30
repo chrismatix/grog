@@ -24,7 +24,7 @@ type outputRecord struct {
 // - two targets are not in each other's dependency ancestors
 // This is an error, because there is no guarantee which target will execute first
 // and overwrite the other's outputs.
-func detectOutputConflicts(graph *dag.DirectedTargetGraph) error {
+func detectOutputConflicts(graph *dag.DirectedTargetGraph) error { //nolint:gocyclo
 	var fileOutputs []outputRecord
 	var dirOutputs []outputRecord
 	dockerOutputs := make(map[string][]outputRecord)

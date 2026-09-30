@@ -123,7 +123,7 @@ func (p *makefileParser) handleTarget(
 		return fmt.Errorf("expected a make target definition in L%d ending with ':', got: %s", targetLineNumber, trimmedTarget)
 	}
 	// Extract the target name (remove the trailing colon).
-	targetName := strings.Split(trimmedTarget, ":")[0]
+	targetName, _, _ := strings.Cut(trimmedTarget, ":")
 
 	// Create the TargetDTO.
 	target := &TargetDTO{

@@ -442,29 +442,25 @@ func TestLoadDependencyOutputsDedupsConcurrentReruns(t *testing.T) {
 	releaseFirst := make(chan struct{})
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		_, _, _ = executor.rerunGroup.Do(depLabel.String(), func() (any, error) {
 			rerunCount.Add(1)
 			close(firstInFlight)
 			<-releaseFirst
 			return nil, nil
 		})
-	}()
+	})
 
 	<-firstInFlight
 
 	const followers = 4
-	for i := 0; i < followers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range followers {
+		wg.Go(func() {
 			_, _, _ = executor.rerunGroup.Do(depLabel.String(), func() (any, error) {
 				rerunCount.Add(1)
 				return nil, nil
 			})
-		}()
+		})
 	}
 
 	// Give followers time to register as waiters on the in-flight call before

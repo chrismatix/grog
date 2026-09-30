@@ -448,7 +448,7 @@ const (
 	maxBottlenecksPerCategory  = 10
 )
 
-func (s *TraceStore) Bottlenecks(ctx context.Context, opts StatsOptions) (*BottleneckReport, error) {
+func (s *TraceStore) Bottlenecks(ctx context.Context, opts StatsOptions) (*BottleneckReport, error) { //nolint:gocyclo
 	limit := opts.Limit
 	if limit <= 0 {
 		limit = 20

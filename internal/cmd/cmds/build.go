@@ -93,7 +93,7 @@ func RunBuild(
 // RunBuildAndAfter runs the build, then — on build success — invokes
 // afterBuildSuccess in parallel with any in-flight async cache writes.
 // afterBuildSuccess=nil is equivalent to RunBuild.
-func RunBuildAndAfter(
+func RunBuildAndAfter( //nolint:gocyclo
 	ctx context.Context,
 	logger *console.Logger,
 	targetPatterns []label.TargetPattern,
@@ -358,11 +358,10 @@ func RunBuildAndAfter(
 				continue
 			}
 
-			var executionError *execution.CommandError
 			color.Red("---------------------------------")
 			if completion.Err == nil {
 				logger.Errorf("Target %s failed with no error", target.Label)
-			} else if errors.As(completion.Err, &executionError) {
+			} else if executionError, ok := errors.AsType[*execution.CommandError](completion.Err); ok {
 				logger.Errorf("Target %s failed with exit code %d:\ncommand: \"%s\"\n%s",
 					target.Label,
 					executionError.ExitCode,

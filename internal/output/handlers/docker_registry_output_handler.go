@@ -352,7 +352,7 @@ type dockerLayerProgress struct {
 //
 // The returned digest is the one the registry confirmed for a push; it is
 // empty for pulls and for pushes the daemon never got a digest for.
-func consumeDockerProgress(
+func consumeDockerProgress( //nolint:gocyclo
 	reader io.Reader,
 	parent *worker.ProgressTracker,
 	status string,

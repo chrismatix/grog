@@ -171,7 +171,7 @@ func (sl StarlarkLoader) loadModule(thread *starlark.Thread, module string, curr
 }
 
 // targetBuiltin implements the target() function in Starlark.
-func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) { //nolint:gocyclo
 	var name string
 	var command string
 	var dependencies *starlark.List

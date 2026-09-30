@@ -76,8 +76,8 @@ func validateDocumentedUsage(t *testing.T, path string, lineNumber int, usage st
 	for _, token := range fields[2:] {
 		optional := strings.HasPrefix(token, "[")
 		token = strings.Trim(token, "[]")
-		if strings.HasPrefix(token, "--") {
-			nameAndValue := strings.SplitN(strings.TrimPrefix(token, "--"), "=", 2)
+		if after, ok := strings.CutPrefix(token, "--"); ok {
+			nameAndValue := strings.SplitN(after, "=", 2)
 			flag := command.Flags().Lookup(nameAndValue[0])
 			if flag == nil {
 				flag = command.InheritedFlags().Lookup(nameAndValue[0])

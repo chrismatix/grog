@@ -15,7 +15,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func TargetPatternCompletion(command *cobra.Command, _ []string, toComplete string, targetType selection.TargetTypeSelection) ([]string, cobra.ShellCompDirective) {
+func TargetPatternCompletion(command *cobra.Command, _ []string, toComplete string, targetType selection.TargetTypeSelection) ([]string, cobra.ShellCompDirective) { //nolint:gocyclo
 	context, _ := console.SetupCommand()
 	currentPackage, err := config.Global.GetCurrentPackage()
 	debugToFile(fmt.Sprintf("err: %s\n", err))
@@ -281,7 +281,7 @@ func collectSiblingDirectories(packages []*model.Package, searchDirectory string
 			continue
 		}
 		if searchDirectory == "" {
-			segment := strings.Split(packagePath, "/")[0]
+			segment, _, _ := strings.Cut(packagePath, "/")
 			if segment == "" {
 				continue
 			}
@@ -295,7 +295,7 @@ func collectSiblingDirectories(packages []*model.Package, searchDirectory string
 		}
 		if after, ok := strings.CutPrefix(packagePath, searchDirectory+"/"); ok {
 			rest := after
-			segment := strings.Split(rest, "/")[0]
+			segment, _, _ := strings.Cut(rest, "/")
 			if directoryPrefix == "" || strings.HasPrefix(segment, directoryPrefix) {
 				if skipExactPrefixDirectory && segment == directoryPrefix {
 					continue
@@ -316,7 +316,7 @@ func collectChildDirectories(packages []*model.Package, prefix string) map[strin
 			continue
 		}
 		rest := strings.TrimPrefix(packagePath, prefix+"/")
-		segment := strings.Split(rest, "/")[0]
+		segment, _, _ := strings.Cut(rest, "/")
 		fullPath := prefix + "/" + segment
 		addDirectorySuggestion(directorySuggestions, fullPath, strings.Contains(rest, "/"))
 	}

@@ -132,7 +132,7 @@ Can optionally include transitive dependents of changed targets to find all affe
 	},
 }
 
-// getChangedFiles returns a list of files that have changed since the given revision
+// getChangedFiles returns a list of files that have changed since the given revision.
 func getChangedFiles(revision string) ([]string, error) {
 	gitRoot, err := getGitRoot()
 	if err != nil {
@@ -254,7 +254,7 @@ func vcsIsJJ(gitRoot string) bool {
 	return fileInfo.IsDir()
 }
 
-// containsFile checks if the list of files contains the given file
+// containsFile checks if the list of files contains the given file.
 func containsFile(files []string, file string) bool {
 	return slices.Contains(files, file)
 }
