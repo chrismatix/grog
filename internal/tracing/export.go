@@ -123,10 +123,6 @@ func forEachChunk(ctx context.Context, loader SpanLoader, builds []BuildRow, emi
 
 // OTLP JSON structures
 
-type otlpExport struct {
-	ResourceSpans []otlpResourceSpans `json:"resourceSpans"`
-}
-
 type otlpResourceSpans struct {
 	Resource   otlpResource     `json:"resource"`
 	ScopeSpans []otlpScopeSpans `json:"scopeSpans"`

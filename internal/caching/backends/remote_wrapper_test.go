@@ -20,7 +20,6 @@ type mockCacheBackend struct {
 	deleteFunc func(ctx context.Context, path string, key string) error
 	existsFunc func(ctx context.Context, path string, key string) (bool, error)
 	sizeFunc   func(ctx context.Context, path string, key string) (int64, error)
-	clearFunc  func(ctx context.Context, expunge bool) error
 	typeName   string
 }
 

@@ -80,7 +80,7 @@ func Stamp(version string, commit string, buildDate string) {
 	))
 }
 
-var rootConfigured = configureRoot()
+var _ = configureRoot()
 
 func configureRoot() bool {
 	cobra.OnInitialize()

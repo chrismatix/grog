@@ -5,8 +5,6 @@ import (
 	"errors"
 	"testing"
 
-	"grog/internal/label"
-	"grog/internal/model"
 	"grog/internal/proto/gen"
 	"grog/internal/worker"
 )
@@ -44,10 +42,6 @@ func newTestProgress(t *testing.T) *worker.ProgressTracker {
 
 func newTestPlan(pusher ImagePusher, reporter *PushReporter, dest string) *OciPushPlan {
 	return NewOciPushPlan(pusher, &gen.OCIImageOutput{ImageId: "sha256:abc"}, dest, "//pkg:tgt", reporter)
-}
-
-func _newTarget(_ *testing.T) model.Target {
-	return model.Target{Label: label.TL("pkg", "tgt")}
 }
 
 func TestOciPushPlan_Pushed(t *testing.T) {

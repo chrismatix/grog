@@ -11,7 +11,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -24,7 +23,6 @@ const lockFileFieldSeparator = "\t"
 // managing a lock file in the workspace root directory.
 type WorkspaceLocker struct {
 	lockFilePath string
-	printOnce    sync.Once
 }
 
 // NewWorkspaceLocker creates a locker using the global configuration.
