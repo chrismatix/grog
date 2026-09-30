@@ -208,10 +208,8 @@ func TestResolveInputs(t *testing.T) {
 						t.Errorf("Error message is not as expected. \nExpected to contain: %s\nGot: %s", expectedErrorMessage, err.Error())
 					}
 				}
-			} else {
-				if err != nil {
-					t.Fatalf("Unexpected error: %v", err)
-				}
+			} else if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
 			}
 
 			// Sort the results for reliable comparison

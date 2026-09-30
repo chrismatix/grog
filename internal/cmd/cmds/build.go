@@ -139,7 +139,6 @@ func RunBuildAndAfter(
 	}
 
 	releaseWorkspaceLock := acquireWorkspaceLock(ctx, logger)
-	defer releaseWorkspaceLock()
 
 	executor := execution.NewExecutor(
 		targetCache,
@@ -211,6 +210,8 @@ func RunBuildAndAfter(
 	// and we need to ensure the write completes before the process exits)
 	writeTrace(ctx, logger, traceCollector, completionMap, graph, executor, cache)
 
+	releaseWorkspaceLock()
+
 	logElapsedTime(logger, graph, executor, startTime)
 
 	exitOnBuildFailure(logger, graph, goal, completionMap, executionErr, afterBuildErr, pushHadFailures)
@@ -218,15 +219,15 @@ func RunBuildAndAfter(
 
 // buildCommandName returns the command name recorded in the build trace.
 func buildCommandName(testFilter selection.TargetTypeSelection, commandOverride []string) string {
-	commandName := "build"
-	if len(commandOverride) > 0 && commandOverride[0] != "" {
-		commandName = commandOverride[0]
-	} else if testFilter == selection.TestOnly {
-		commandName = "test"
-	} else if testFilter == selection.AllTargets {
-		commandName = "build_and_test"
+	switch {
+	case len(commandOverride) > 0 && commandOverride[0] != "":
+		return commandOverride[0]
+	case testFilter == selection.TestOnly:
+		return "test"
+	case testFilter == selection.AllTargets:
+		return "build_and_test"
 	}
-	return commandName
+	return "build"
 }
 
 // selectTargetsForBuild validates target constraints and selects the targets to build, exiting on failure.

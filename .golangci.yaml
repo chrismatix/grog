@@ -10,6 +10,7 @@ linters:
   default: fast
   enable:
     - errorlint
+    - gocritic
     - gocyclo
     - govet
     - modernize

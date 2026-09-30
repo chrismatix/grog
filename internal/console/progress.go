@@ -75,21 +75,22 @@ func formatProgressBar(p Progress, width int) string {
 
 	var b strings.Builder
 	for i := range width {
-		if i < filled {
+		switch {
+		case i < filled:
 			ratio := 0.0
 			if width > 1 {
 				ratio = float64(i) / float64(width-1)
 			}
 			c := startColor.BlendLuv(endColor, ratio).Hex()
 			b.WriteString(termenv.String("=").Foreground(cp.Color(c)).String())
-		} else if i == filled {
+		case i == filled:
 			ratio := 0.0
 			if width > 1 {
 				ratio = float64(i) / float64(width-1)
 			}
 			c := startColor.BlendLuv(endColor, ratio).Hex()
 			b.WriteString(termenv.String(">").Foreground(cp.Color(c)).String())
-		} else {
+		default:
 			b.WriteString(" ")
 		}
 	}

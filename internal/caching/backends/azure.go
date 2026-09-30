@@ -196,14 +196,15 @@ func NewAzureCache(
 
 	var client *azblob.Client
 
-	if cacheConfig.ConnectionString != "" {
+	switch {
+	case cacheConfig.ConnectionString != "":
 		// Authenticate using a connection string (account key based).
 		var err error
 		client, err = azblob.NewClientFromConnectionString(cacheConfig.ConnectionString, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create Azure client from connection string: %w", err)
 		}
-	} else if cacheConfig.AccountURL != "" {
+	case cacheConfig.AccountURL != "":
 		// Authenticate using DefaultAzureCredential (Azure AD / managed identity / CLI).
 		credential, err := azidentity.NewDefaultAzureCredential(nil)
 		if err != nil {
@@ -213,7 +214,7 @@ func NewAzureCache(
 		if err != nil {
 			return nil, fmt.Errorf("failed to create Azure Blob Storage client: %w", err)
 		}
-	} else {
+	default:
 		return nil, fmt.Errorf("azure cache requires either account_url or connection_string to be set")
 	}
 
