@@ -8,6 +8,7 @@ import (
 	"grog/internal/cmd/flagtypes"
 	"grog/internal/config"
 	"grog/internal/console"
+	"grog/internal/loading"
 	"maps"
 	"os"
 	"path/filepath"
@@ -71,6 +72,7 @@ func Stamp(version string, commit string, buildDate string) {
 	RootCmd.Version = version
 	Version = version
 	cmds.GrogVersion = version
+	loading.GrogVersion = version
 
 	RootCmd.SetVersionTemplate(fmt.Sprintf(
 		"%s (%s) built on %s",

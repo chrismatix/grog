@@ -372,3 +372,62 @@ func TestDependencyInferenceSynthesis(t *testing.T) {
 		})
 	}
 }
+
+func TestDependencyInferenceCaching(t *testing.T) {
+	packages := inferenceTestPackages(t, `echo run >> runs; printf '%s' '{"version":1,"packages":{"app":{"dependencies":["lib"]}}}'`)
+	config.Global.Root = t.TempDir()
+	config.Global.EnableCache = true
+	resolver := packages[0].DependencyResolvers[label.TL("", "custom")]
+	resolver.Inputs = []string{"manifest.txt", "missing.txt"}
+	manifestPath := filepath.Join(config.Global.WorkspaceRoot, "manifest.txt")
+	require.NoError(t, os.WriteFile(manifestPath, []byte("one"), 0644))
+	appTarget := packages[1].Targets[label.TL("app", "sources")]
+	runCount := func() int {
+		runs, _ := os.ReadFile(filepath.Join(config.Global.WorkspaceRoot, "runs"))
+		return strings.Count(string(runs), "run")
+	}
+	infer := func() {
+		t.Helper()
+		appTarget.Dependencies = nil
+		require.NoError(t, inferDependenciesError(t.Context(), packages))
+		require.Equal(t, []label.TargetLabel{label.TL("lib", "sources")}, appTarget.Dependencies)
+	}
+	infer()
+	infer()
+	require.Equal(t, 1, runCount(), "unchanged inputs are served from the cache")
+	require.NoError(t, os.WriteFile(manifestPath, []byte("two"), 0644))
+	infer()
+	require.Equal(t, 2, runCount(), "a changed input re-runs the resolver")
+	config.Global.EnableCache = false
+	infer()
+	infer()
+	require.Equal(t, 4, runCount(), "--enable-cache=false runs the resolver every time")
+	config.Global.EnableCache = true
+	resolver.Command = `echo run >> runs; exit 1`
+	require.Error(t, inferDependenciesError(t.Context(), packages))
+	require.Error(t, inferDependenciesError(t.Context(), packages))
+	require.Equal(t, 6, runCount(), "failed runs are never cached")
+}
+
+func TestResolverCacheKey(t *testing.T) {
+	packages := inferenceTestPackages(t, "builtin::cargo")
+	resolver := packages[0].DependencyResolvers[label.TL("", "custom")]
+	resolver.Inputs = []string{"Cargo.toml"}
+	require.NoError(t, os.WriteFile(filepath.Join(config.Global.WorkspaceRoot, "Cargo.toml"), []byte("[workspace]"), 0644))
+	keyOf := func() string {
+		t.Helper()
+		cacheKey, operationError := resolverCacheKey(resolver)
+		require.NoError(t, operationError)
+		return cacheKey
+	}
+	initial := keyOf()
+	GrogVersion = "0.99.0"
+	t.Cleanup(func() { GrogVersion = "" })
+	require.NotEqual(t, initial, keyOf(), "a built-in is keyed on the grog version")
+	resolver.Command = "cargo metadata"
+	shellKey := keyOf()
+	GrogVersion = "1.0.0"
+	require.Equal(t, shellKey, keyOf(), "a shell command is not keyed on the grog version")
+	require.NoError(t, os.WriteFile(filepath.Join(config.Global.WorkspaceRoot, "Cargo.toml"), []byte("[workspace]\nmembers = []"), 0644))
+	require.NotEqual(t, shellKey, keyOf(), "input contents are part of the key")
+}

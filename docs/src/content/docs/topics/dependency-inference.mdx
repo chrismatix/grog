@@ -472,7 +472,7 @@ targets:
 Resolvers run at load time, so they cost something on every `grog build`, `grog test`, `grog changes` and shell completion.
 Grog caches their output like target output.
 
-The cache key covers the protocol version, the resolver's label and `command`, the Grog version for `builtin:` commands, and the contents of every file matching `inputs`.
+The cache key covers the protocol version, the resolver's label and `command`, the Grog version for `builtin::` commands, and the contents of every file matching `inputs`.
 A custom resolver's own script is not hashed automatically: list it in `inputs`, or edits to it keep serving the cached mapping.
 
 The cached value is the resolver's stdout, stored in the [content-addressable store](/topics/remote-caching).
@@ -527,15 +527,11 @@ grog rdeps //crates/format:format   # who depends on this crate
 grog graph -o mermaid               # the whole graph
 ```
 
-`grog check` runs every referenced resolver and summarizes the result:
+`--log-level debug` prints each resolver's command, cache key, a hit-or-miss summary and the full mapping:
 
-```bash
-$ grog check
+```text
 resolver //:cargo: builtin::cargo, cache hit, 4 packages, 3 edges
-Build graph is valid.
 ```
-
-`--log-level debug` prints each resolver's command, cache key and full mapping.
 
 ### Errors
 
