@@ -91,7 +91,7 @@ func executeTarget(
 			return ctx.Err()
 		}
 
-		if exitError, ok := errors.AsType[*exec.ExitError](err); ok {
+		if exitError, isExitError := errors.AsType[*exec.ExitError](err); isExitError {
 			return &CommandError{
 				TargetLabel: target.Label,
 				ExitCode:    exitError.ExitCode(),

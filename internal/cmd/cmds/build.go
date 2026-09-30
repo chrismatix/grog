@@ -361,7 +361,7 @@ func RunBuildAndAfter( //nolint:gocyclo
 			color.Red("---------------------------------")
 			if completion.Err == nil {
 				logger.Errorf("Target %s failed with no error", target.Label)
-			} else if executionError, ok := errors.AsType[*execution.CommandError](completion.Err); ok {
+			} else if executionError, isCommandError := errors.AsType[*execution.CommandError](completion.Err); isCommandError {
 				logger.Errorf("Target %s failed with exit code %d:\ncommand: \"%s\"\n%s",
 					target.Label,
 					executionError.ExitCode,

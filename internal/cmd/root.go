@@ -239,7 +239,7 @@ func initConfig(cmd *cobra.Command) error {
 	for _, name := range names {
 		viper.SetConfigName(name)
 		if err := viper.ReadInConfig(); err != nil {
-			if _, ok := errors.AsType[viper.ConfigFileNotFoundError](err); ok {
+			if _, isConfigFileNotFound := errors.AsType[viper.ConfigFileNotFoundError](err); isConfigFileNotFound {
 				continue
 			}
 			return err
