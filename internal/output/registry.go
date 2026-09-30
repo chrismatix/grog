@@ -188,7 +188,7 @@ func (r *Registry) PrepareOutputs(
 	progress *worker.ProgressTracker,
 ) (*PreparedTargetResult, error) {
 	r.targetMutexMap.Lock(target.Label.String())
-	defer r.targetMutexMap.Unlock(target.Label.String())
+	defer func() { _ = r.targetMutexMap.Unlock(target.Label.String()) }()
 
 	logger := console.GetLogger(ctx)
 	outputs := target.AllOutputs()
@@ -302,7 +302,7 @@ func (r *Registry) LoadOutputs(
 	progress *worker.ProgressTracker,
 ) error {
 	r.targetMutexMap.Lock(target.Label.String())
-	defer r.targetMutexMap.Unlock(target.Label.String())
+	defer func() { _ = r.targetMutexMap.Unlock(target.Label.String()) }()
 	if target.OutputsLoaded {
 		// Outputs are already loaded, nothing to do
 		return nil

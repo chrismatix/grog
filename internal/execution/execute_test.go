@@ -21,6 +21,8 @@ import (
 	"grog/internal/output/handlers"
 	"grog/internal/proto/gen"
 	"grog/internal/worker"
+
+	"github.com/stretchr/testify/require"
 )
 
 // ---------------------------------------------------------------------------
@@ -74,11 +76,11 @@ func TestGetTransitiveOutputsByTagReturnsOutputsFromTaggedAncestors(t *testing.T
 	graph := dag.NewDirectedGraphFromTargets(root, a, b, c, d)
 	// Edges point from dependency → dependant.
 	// AddEdge(dep, dependant) means dependant depends on dep.
-	graph.AddEdge(a, root)
-	graph.AddEdge(b, a)
-	graph.AddEdge(c, a)
-	graph.AddEdge(d, b)
-	graph.AddEdge(d, c)
+	require.NoError(t, graph.AddEdge(a, root))
+	require.NoError(t, graph.AddEdge(b, a))
+	require.NoError(t, graph.AddEdge(c, a))
+	require.NoError(t, graph.AddEdge(d, b))
+	require.NoError(t, graph.AddEdge(d, c))
 
 	executor := &Executor{graph: graph}
 	result := executor.getTransitiveOutputsByTag(root)
@@ -140,10 +142,10 @@ func TestGetTransitiveOutputsByTagDeduplicatesDiamondOutputs(t *testing.T) {
 	}
 
 	graph := dag.NewDirectedGraphFromTargets(top, left, right, shared)
-	graph.AddEdge(left, top)
-	graph.AddEdge(right, top)
-	graph.AddEdge(shared, left)
-	graph.AddEdge(shared, right)
+	require.NoError(t, graph.AddEdge(left, top))
+	require.NoError(t, graph.AddEdge(right, top))
+	require.NoError(t, graph.AddEdge(shared, left))
+	require.NoError(t, graph.AddEdge(shared, right))
 
 	executor := &Executor{graph: graph}
 	result := executor.getTransitiveOutputsByTag(top)
@@ -180,8 +182,8 @@ func TestGetTransitiveOutputsByTagMultipleTags(t *testing.T) {
 	}
 
 	graph := dag.NewDirectedGraphFromTargets(root, depA, depB)
-	graph.AddEdge(depA, root)
-	graph.AddEdge(depB, root)
+	require.NoError(t, graph.AddEdge(depA, root))
+	require.NoError(t, graph.AddEdge(depB, root))
 
 	executor := &Executor{graph: graph}
 	result := executor.getTransitiveOutputsByTag(root)
@@ -211,7 +213,7 @@ func TestGetTransitiveOutputsByTagNoTaggedAncestors(t *testing.T) {
 	}
 
 	graph := dag.NewDirectedGraphFromTargets(root, dep)
-	graph.AddEdge(dep, root)
+	require.NoError(t, graph.AddEdge(dep, root))
 
 	executor := &Executor{graph: graph}
 	result := executor.getTransitiveOutputsByTag(root)
@@ -236,7 +238,7 @@ func TestGetTransitiveOutputsByTagSkipsAncestorsWithNoOutputs(t *testing.T) {
 	}
 
 	graph := dag.NewDirectedGraphFromTargets(root, aggregator)
-	graph.AddEdge(aggregator, root)
+	require.NoError(t, graph.AddEdge(aggregator, root))
 
 	executor := &Executor{graph: graph}
 	result := executor.getTransitiveOutputsByTag(root)
@@ -273,8 +275,8 @@ func TestGetTransitiveOutputsReturnsAllAncestorOutputs(t *testing.T) {
 	}
 
 	graph := dag.NewDirectedGraphFromTargets(root, tagged, untagged)
-	graph.AddEdge(tagged, root)
-	graph.AddEdge(untagged, root)
+	require.NoError(t, graph.AddEdge(tagged, root))
+	require.NoError(t, graph.AddEdge(untagged, root))
 
 	executor := &Executor{graph: graph}
 	result := executor.getTransitiveOutputs(root)
@@ -323,10 +325,10 @@ func TestGetTransitiveOutputsDeduplicatesDiamond(t *testing.T) {
 	}
 
 	graph := dag.NewDirectedGraphFromTargets(top, left, right, shared)
-	graph.AddEdge(left, top)
-	graph.AddEdge(right, top)
-	graph.AddEdge(shared, left)
-	graph.AddEdge(shared, right)
+	require.NoError(t, graph.AddEdge(left, top))
+	require.NoError(t, graph.AddEdge(right, top))
+	require.NoError(t, graph.AddEdge(shared, left))
+	require.NoError(t, graph.AddEdge(shared, right))
 
 	executor := &Executor{graph: graph}
 	result := executor.getTransitiveOutputs(top)
@@ -408,7 +410,7 @@ func TestLoadDependencyOutputsSkipsAlreadyLoadedDeps(t *testing.T) {
 	}
 
 	graph := dag.NewDirectedGraphFromTargets(root, dep)
-	graph.AddEdge(dep, root)
+	require.NoError(t, graph.AddEdge(dep, root))
 
 	backend := &countingTargetBackend{}
 	executor := &Executor{

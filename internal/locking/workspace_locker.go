@@ -50,7 +50,7 @@ func (wl *WorkspaceLocker) Lock(ctx context.Context) error {
 			_, writeErr := file.Write(lockData)
 			file.Close()
 			if writeErr != nil {
-				os.Remove(wl.lockFilePath)
+				_ = os.Remove(wl.lockFilePath)
 				return writeErr
 			}
 			return nil

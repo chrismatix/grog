@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestDirectedTargetGraph_AddNode(t *testing.T) {
@@ -77,8 +79,8 @@ func TestDirectedTargetGraph_GetInEdges(t *testing.T) {
 	graph.AddNode(target2)
 	graph.AddNode(target3)
 
-	graph.AddEdge(target1, target2)
-	graph.AddEdge(target3, target2)
+	require.NoError(t, graph.AddEdge(target1, target2))
+	require.NoError(t, graph.AddEdge(target3, target2))
 
 	inEdges := graph.GetDependencies(target2)
 
@@ -98,8 +100,8 @@ func TestDirectedTargetGraph_GetOutEdges(t *testing.T) {
 	graph.AddNode(target2)
 	graph.AddNode(target3)
 
-	graph.AddEdge(target2, target1)
-	graph.AddEdge(target2, target3)
+	require.NoError(t, graph.AddEdge(target2, target1))
+	require.NoError(t, graph.AddEdge(target2, target3))
 
 	outEdges := graph.GetDependants(target2)
 
@@ -141,9 +143,9 @@ func TestDirectedTargetGraph_HasCycle(t *testing.T) {
 	}
 
 	// Add edges to create a cycle: target1 -> target2 -> target3 -> target1
-	graph.AddEdge(target1, target2)
-	graph.AddEdge(target2, target3)
-	graph.AddEdge(target3, target1)
+	require.NoError(t, graph.AddEdge(target1, target2))
+	require.NoError(t, graph.AddEdge(target2, target3))
+	require.NoError(t, graph.AddEdge(target3, target1))
 
 	if !graph.HasCycle() {
 		t.Errorf("HasCycle should have returned true for a graph with a cycle")
@@ -162,8 +164,8 @@ func TestDirectedTargetGraph_HasCycle(t *testing.T) {
 	graph.AddNode(target2)
 	graph.AddNode(target3)
 
-	graph.AddEdge(target1, target2)
-	graph.AddEdge(target2, target3)
+	require.NoError(t, graph.AddEdge(target1, target2))
+	require.NoError(t, graph.AddEdge(target2, target3))
 
 	if graph.HasCycle() {
 		t.Errorf("HasCycle should have returned false for a graph without a cycle")
@@ -180,9 +182,9 @@ func TestDirectedTargetGraph_FindCycle(t *testing.T) {
 	graph.AddNode(target2)
 	graph.AddNode(target3)
 
-	graph.AddEdge(target1, target2)
-	graph.AddEdge(target2, target3)
-	graph.AddEdge(target3, target1)
+	require.NoError(t, graph.AddEdge(target1, target2))
+	require.NoError(t, graph.AddEdge(target2, target3))
+	require.NoError(t, graph.AddEdge(target3, target1))
 
 	cycle, found := graph.FindCycle()
 	if !found {
@@ -269,10 +271,10 @@ func TestDirectedTargetGraph_GetDescendants(t *testing.T) {
 	// Create a graph structure:
 	// target1 -> target2 -> target4
 	//       \-> target3 -> target5
-	graph.AddEdge(target1, target2)
-	graph.AddEdge(target1, target3)
-	graph.AddEdge(target2, target4)
-	graph.AddEdge(target3, target5)
+	require.NoError(t, graph.AddEdge(target1, target2))
+	require.NoError(t, graph.AddEdge(target1, target3))
+	require.NoError(t, graph.AddEdge(target2, target4))
+	require.NoError(t, graph.AddEdge(target3, target5))
 
 	// Test case 1: target1 should have all other targets as descendants
 	descendants1 := graph.GetDescendants(target1)

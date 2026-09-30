@@ -223,7 +223,7 @@ func (m *ResourceManager) start(ctx context.Context, resource *model.Resource, d
 	}
 	exportsFilePath := exportsFile.Name()
 	_ = exportsFile.Close()
-	defer os.Remove(exportsFilePath)
+	defer func() { _ = os.Remove(exportsFilePath) }()
 
 	baseEnvironment := append(m.resourceEnv(resource), dependencyExports...)
 	upEnvironment := append(append([]string{}, baseEnvironment...), "GROG_RESOURCE_EXPORTS_FILE="+exportsFilePath)

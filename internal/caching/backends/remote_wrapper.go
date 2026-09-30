@@ -85,7 +85,7 @@ func (rw *RemoteWrapper) Set(ctx context.Context, path, key string, content io.R
 	// Goroutine for writing to the filesystem cache
 	go func() {
 		defer wg.Done()
-		defer fsRead.Close()
+		defer func() { _ = fsRead.Close() }()
 
 		if err := rw.fs.Set(ctx, path, key, fsRead); err != nil {
 			select {
@@ -98,7 +98,7 @@ func (rw *RemoteWrapper) Set(ctx context.Context, path, key string, content io.R
 	// Goroutine for writing to the remote cache
 	go func() {
 		defer wg.Done()
-		defer remoteRead.Close()
+		defer func() { _ = remoteRead.Close() }()
 
 		if err := rw.remote.Set(ctx, path, key, remoteRead); err != nil {
 			select {
@@ -111,19 +111,12 @@ func (rw *RemoteWrapper) Set(ctx context.Context, path, key string, content io.R
 	// Goroutine for copying content to both destinations
 	go func() {
 		defer wg.Done()
-		defer fsWrite.Close() // Always close write ends to signal EOF
-		defer remoteWrite.Close()
 
 		mw := io.MultiWriter(fsWrite, remoteWrite)
 
 		_, err := io.Copy(mw, content)
-		if err != nil {
-			fsWrite.CloseWithError(err)
-			remoteWrite.CloseWithError(err)
-		} else {
-			fsWrite.Close()
-			remoteWrite.Close()
-		}
+		_ = fsWrite.CloseWithError(err)
+		_ = remoteWrite.CloseWithError(err)
 	}()
 
 	wg.Wait()

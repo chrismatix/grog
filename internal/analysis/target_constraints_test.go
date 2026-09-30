@@ -32,7 +32,7 @@ func setupWorkspaceRoot(t *testing.T) (string, func()) {
 	config.Global.WorkspaceRoot = workspaceRoot
 
 	cleanup := func() {
-		os.RemoveAll(workspaceRoot)
+		_ = os.RemoveAll(workspaceRoot)
 		viper.Reset()
 	}
 

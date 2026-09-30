@@ -9,11 +9,7 @@ import (
 // TestHashFile tests the HashFile function with various scenarios.
 func TestHashFile(t *testing.T) {
 	// Create a temporary directory for test files
-	tempDir, err := os.MkdirTemp("", "hashfile_test")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	// Create a test file with known content
 	testFile := filepath.Join(tempDir, "test.txt")
@@ -47,11 +43,7 @@ func TestHashFile(t *testing.T) {
 
 // TestHashFiles tests the HashFiles function.
 func TestHashFiles(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "hashfiles_test")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	// Create multiple test files with known content
 	testFiles := []struct {

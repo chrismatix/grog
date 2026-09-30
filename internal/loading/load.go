@@ -29,7 +29,7 @@ func LoadPackages(ctx context.Context, startDir string) ([]*model.Package, error
 
 	fileWalker := gocodewalker.NewParallelFileWalker([]string{startDir}, fileListQueue)
 	fileWalker.IncludeHidden = config.Global.IncludeHidden
-	go fileWalker.Start()
+	go func() { _ = fileWalker.Start() }()
 
 	packageLoader := NewPackageLoader(logger)
 
