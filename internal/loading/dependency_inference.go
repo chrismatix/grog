@@ -115,6 +115,16 @@ func inferDependencies(loadContext context.Context, packages []*model.Package) (
 			registrations[key] = synthesized
 		}
 	}
+	if operationError := linkDependencies(loadContext, resolvers, documents, registrations); operationError != nil {
+		return nil, operationError
+	}
+	return packages, nil
+}
+
+// linkDependencies appends every reported edge to the target registered for
+// the reported package. Path entries resolve through the registrations, label
+// entries are parsed as they are.
+func linkDependencies(loadContext context.Context, resolvers []*model.DependencyResolver, documents []resolverDocument, registrations map[registration]*model.Target) error {
 	for index, resolver := range resolvers {
 		document := documents[index]
 		for _, packagePath := range slices.Sorted(maps.Keys(document.Packages)) {
@@ -123,18 +133,19 @@ func inferDependencies(loadContext context.Context, packages []*model.Package) (
 				console.GetLogger(loadContext).Debugf("resolver %s reports unregistered package %s; ignoring", resolver.Label, packagePath)
 				continue
 			}
+
 			for _, dependency := range document.Packages[packagePath].Dependencies {
 				var dependencyLabel label.TargetLabel
 				if strings.HasPrefix(dependency, "//") {
 					parsedLabel, operationError := label.ParseTargetLabel("", dependency)
 					if operationError != nil {
-						return nil, fmt.Errorf("resolver %s reports invalid dependency %q: %w", resolver.Label, dependency, operationError)
+						return fmt.Errorf("resolver %s reports invalid dependency %q: %w", resolver.Label, dependency, operationError)
 					}
 					dependencyLabel = parsedLabel
 				} else {
 					dependencyTarget := registrations[registration{resolver.Label, path.Join(resolver.Label.Package, dependency)}]
 					if dependencyTarget == nil {
-						return nil, fmt.Errorf("resolver %s reports %s depends on %s, which has no target registered for %s and no inputs to synthesize one from", resolver.Label, packagePath, dependency, resolver.Label)
+						return fmt.Errorf("resolver %s reports %s depends on %s, which has no target registered for %s and no inputs to synthesize one from", resolver.Label, packagePath, dependency, resolver.Label)
 					}
 					dependencyLabel = dependencyTarget.Label
 				}
@@ -142,11 +153,12 @@ func inferDependencies(loadContext context.Context, packages []*model.Package) (
 					target.Dependencies = append(target.Dependencies, dependencyLabel)
 				}
 			}
+
 			slices.SortFunc(target.Dependencies, func(first, second label.TargetLabel) int { return strings.Compare(first.String(), second.String()) })
 			target.Dependencies = slices.Compact(target.Dependencies)
 		}
 	}
-	return packages, nil
+	return nil
 }
 
 type registration struct {
@@ -261,36 +273,9 @@ func runDependencyResolver(loadContext context.Context, resolver *model.Dependen
 	if operationError := json.Unmarshal(output, &document); operationError != nil {
 		return document, fmt.Errorf("resolver %s returned invalid JSON: %w; stdout: %q", resolver.Label, operationError, output[:min(len(output), 2048)])
 	}
-	if document.Version > 1 {
-		return document, fmt.Errorf("resolver %s returned unsupported version %d; upgrade grog", resolver.Label, document.Version)
-	}
-	if document.Version != 1 {
-		return document, fmt.Errorf("resolver %s must return version 1", resolver.Label)
-	}
-	if document.Packages == nil {
-		return document, fmt.Errorf("resolver %s must return a packages object", resolver.Label)
-	}
-	edgeCount := 0
-	for _, packagePath := range slices.Sorted(maps.Keys(document.Packages)) {
-		if operationError := validateResolverPath(packagePath); operationError != nil {
-			return document, fmt.Errorf("resolver %s: %w", resolver.Label, operationError)
-		}
-		reportedPackage := document.Packages[packagePath]
-		slices.Sort(reportedPackage.Dependencies)
-		edgeCount += len(reportedPackage.Dependencies)
-		for _, dependency := range reportedPackage.Dependencies {
-			if strings.HasPrefix(dependency, "//") {
-				continue
-			}
-			if operationError := validateResolverPath(dependency); operationError != nil {
-				return document, fmt.Errorf("resolver %s: %w", resolver.Label, operationError)
-			}
-		}
-		for _, input := range reportedPackage.Inputs {
-			if operationError := validateResolverPath(input); operationError != nil {
-				return document, fmt.Errorf("resolver %s: inputs of %s: %w", resolver.Label, packagePath, operationError)
-			}
-		}
+	edgeCount, operationError := validateResolverDocument(resolver.Label, document)
+	if operationError != nil {
+		return document, operationError
 	}
 	if cas != nil && !cacheHit {
 		if operationError := cas.WriteBytes(resolverContext, cacheKey, output); operationError != nil {
@@ -308,13 +293,58 @@ func runDependencyResolver(loadContext context.Context, resolver *model.Dependen
 	return document, nil
 }
 
+// validateResolverDocument checks a document against version 1 of the
+// protocol and returns how many edges it reports. Dependencies that are
+// labels are parsed when they are linked, so only path entries are checked.
+func validateResolverDocument(resolverLabel label.TargetLabel, document resolverDocument) (int, error) {
+	if document.Version > 1 {
+		return 0, fmt.Errorf("resolver %s returned unsupported version %d; upgrade grog", resolverLabel, document.Version)
+	}
+	if document.Version != 1 {
+		return 0, fmt.Errorf("resolver %s must return version 1", resolverLabel)
+	}
+	if document.Packages == nil {
+		return 0, fmt.Errorf("resolver %s must return a packages object", resolverLabel)
+	}
+
+	edgeCount := 0
+	for _, packagePath := range slices.Sorted(maps.Keys(document.Packages)) {
+		if operationError := validateResolverPath(packagePath); operationError != nil {
+			return 0, fmt.Errorf("resolver %s: %w", resolverLabel, operationError)
+		}
+
+		reportedPackage := document.Packages[packagePath]
+		slices.Sort(reportedPackage.Dependencies)
+		edgeCount += len(reportedPackage.Dependencies)
+		for _, dependency := range reportedPackage.Dependencies {
+			if strings.HasPrefix(dependency, "//") {
+				continue
+			}
+			if operationError := validateResolverPath(dependency); operationError != nil {
+				return 0, fmt.Errorf("resolver %s: %w", resolverLabel, operationError)
+			}
+		}
+
+		for _, input := range reportedPackage.Inputs {
+			if operationError := validateResolverPath(input); operationError != nil {
+				return 0, fmt.Errorf("resolver %s: inputs of %s: %w", resolverLabel, packagePath, operationError)
+			}
+		}
+	}
+	return edgeCount, nil
+}
+
 // resolverCacheKey hashes everything the output depends on: the protocol
 // version, the label and command, grog's version for a built-in or the command
 // environment for a shell resolver, and the path, size and contents of every
 // resolved input. Inputs that do not exist are skipped.
 func resolverCacheKey(resolver *model.DependencyResolver) (string, error) {
+	// Every field ends in NUL and every file carries its size, so two keys
+	// only collide when their fields are identical: "ab"+"c" and "a"+"bc"
+	// hash differently, and so do a file "b" and a deleted file next to it.
 	hasher := hashing.GetHasher()
 	_, _ = fmt.Fprintf(hasher, "1\x00%s\x00%s\x00", resolver.Label, resolver.Command)
+
 	if strings.HasPrefix(resolver.Command, "builtin::") {
 		_, _ = fmt.Fprintf(hasher, "%s\x00", GrogVersion)
 	} else {
@@ -329,6 +359,7 @@ func resolverCacheKey(resolver *model.DependencyResolver) (string, error) {
 		}
 		_, _ = fmt.Fprintf(hasher, "%t\x00", config.Global.DisableDefaultShellFlags)
 	}
+
 	packageDirectory := config.GetPathAbsoluteToWorkspaceRoot(resolver.Label.Package)
 	for _, input := range slices.Sorted(slices.Values(resolver.Inputs)) {
 		file, operationError := os.Open(filepath.Join(packageDirectory, input))
@@ -338,6 +369,7 @@ func resolverCacheKey(resolver *model.DependencyResolver) (string, error) {
 		if operationError != nil {
 			return "", operationError
 		}
+
 		fileInfo, operationError := file.Stat()
 		if operationError == nil {
 			_, _ = fmt.Fprintf(hasher, "%s\x00%d\x00", input, fileInfo.Size())
@@ -348,6 +380,7 @@ func resolverCacheKey(resolver *model.DependencyResolver) (string, error) {
 			return "", operationError
 		}
 	}
+
 	return hasher.SumString(), nil
 }
 
