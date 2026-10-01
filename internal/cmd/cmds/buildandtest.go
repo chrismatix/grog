@@ -34,7 +34,7 @@ var BuildAndTestCmd = &cobra.Command{
 			logger.Fatalf("could not parse target pattern: %v", err)
 		}
 
-		graph := loading.MustLoadGraphForBuild(ctx, logger)
+		graph := loading.MustLoadGraphForBuild(ctx, logger, dependencyInferrer())
 
 		RunBuild(
 			ctx,

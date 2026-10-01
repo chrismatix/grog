@@ -120,7 +120,7 @@ func TestRustExampleSynthesizesCrateFilegroups(t *testing.T) {
 	workspaceDirectory, operationError := filepath.Abs("../../examples/rust_monorepo")
 	require.NoError(t, operationError)
 	config.Global.WorkspaceRoot = workspaceDirectory
-	packages, operationError := LoadAllPackages(t.Context())
+	packages, operationError := LoadAllPackages(t.Context(), &DependencyInferrer{})
 	require.NoError(t, operationError)
 	nodes, operationError := model.BuildNodeMapFromPackages(packages)
 	require.NoError(t, operationError)
@@ -159,7 +159,7 @@ func TestCustomResolverExample(t *testing.T) {
 	workspaceDirectory, operationError := filepath.Abs("../../examples/custom_resolver")
 	require.NoError(t, operationError)
 	config.Global.WorkspaceRoot = workspaceDirectory
-	packages, operationError := LoadAllPackages(t.Context())
+	packages, operationError := LoadAllPackages(t.Context(), &DependencyInferrer{})
 	require.NoError(t, operationError)
 	nodes, operationError := model.BuildNodeMapFromPackages(packages)
 	require.NoError(t, operationError)

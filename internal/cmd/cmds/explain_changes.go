@@ -63,7 +63,7 @@ through the directly-affected targets to their transitive dependents.`,
 		}
 		logger.Debugf("Changed files: %v", changedFiles)
 
-		packages, err := loading.LoadAllPackages(ctx)
+		packages, err := loading.LoadAllPackages(ctx, dependencyInferrer())
 		if err != nil {
 			logger.Fatalf("could not load packages: %v", err)
 		}

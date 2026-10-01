@@ -15,7 +15,6 @@ import (
 	"strings"
 
 	"grog/internal/caching"
-	"grog/internal/caching/backends"
 	"grog/internal/config"
 	"grog/internal/console"
 	"grog/internal/hashing"
@@ -52,13 +51,22 @@ var builtinResolvers = map[string]func(context.Context, string) (resolverDocumen
 	"builtin::uv":    uvDependencies,
 }
 
-// GrogVersion keys the cached output of built-in resolvers; cmd.Stamp sets it.
-var GrogVersion string
+// CasProvider is only called when the workspace declares resolvers, so a
+// broken cache setup cannot fail loads that never run one.
+type CasProvider func(context.Context) (*caching.Cas, error)
+
+// DependencyInferrer runs the dependency resolvers a load declares. A nil
+// CasProvider disables caching their output.
+type DependencyInferrer struct {
+	CasProvider CasProvider
+	// GrogVersion keys the cached output of built-in resolvers.
+	GrogVersion string
+}
 
 // inferDependencies runs every declared dependency resolver and appends the
 // edges it reports to the target each package registered for it. A reported
 // package that registers nothing gets a filegroup synthesized from its inputs.
-func inferDependencies(loadContext context.Context, packages []*model.Package) ([]*model.Package, error) {
+func (inferrer *DependencyInferrer) inferDependencies(loadContext context.Context, packages []*model.Package) ([]*model.Package, error) {
 	declarations := make(map[label.TargetLabel]*model.DependencyResolver)
 	packagesByPath := make(map[string]*model.Package, len(packages))
 	var targets []*model.Target
@@ -76,19 +84,18 @@ func inferDependencies(loadContext context.Context, packages []*model.Package) (
 	}
 
 	var cas *caching.Cas
-	if len(resolvers) > 0 && config.Global.EnableCache {
-		backend, operationError := backends.GetCacheBackend(loadContext, config.Global.Cache)
+	if len(resolvers) > 0 && inferrer.CasProvider != nil {
+		cas, operationError = inferrer.CasProvider(loadContext)
 		if operationError != nil {
 			return nil, fmt.Errorf("could not instantiate cache for dependency resolvers: %w", operationError)
 		}
-		cas = caching.NewCas(backend)
 	}
 	documents := make([]resolverDocument, len(resolvers))
 	resolverGroup, resolverContext := errgroup.WithContext(loadContext)
 	for index, resolver := range resolvers {
 		resolverGroup.Go(func() error {
 			var operationError error
-			documents[index], operationError = runDependencyResolver(resolverContext, resolver, cas)
+			documents[index], operationError = inferrer.runDependencyResolver(resolverContext, resolver, cas)
 			return operationError
 		})
 	}
@@ -241,12 +248,12 @@ func synthesizeFilegroup(loadContext context.Context, resolver *model.Dependency
 // against version 1 of the protocol. The document comes from the cache when
 // the resolver's inputs are unchanged, from Go for a builtin:: command and
 // otherwise from the JSON its shell command prints. Only valid output is cached.
-func runDependencyResolver(loadContext context.Context, resolver *model.DependencyResolver, cas *caching.Cas) (resolverDocument, error) {
+func (inferrer *DependencyInferrer) runDependencyResolver(loadContext context.Context, resolver *model.DependencyResolver, cas *caching.Cas) (resolverDocument, error) {
 	resolverContext, cancel := context.WithTimeout(loadContext, resolver.Timeout)
 	defer cancel()
 	logger := console.GetLogger(loadContext)
 	var document resolverDocument
-	cacheKey, operationError := resolverCacheKey(resolver)
+	cacheKey, operationError := resolverCacheKey(resolver, inferrer.GrogVersion)
 	if operationError != nil {
 		return document, fmt.Errorf("resolver %s failed: %w", resolver.Label, operationError)
 	}
@@ -338,15 +345,13 @@ func validateResolverDocument(resolverLabel label.TargetLabel, document resolver
 // version, the label and command, grog's version for a built-in or the command
 // environment for a shell resolver, and the path, size and contents of every
 // resolved input. Inputs that do not exist are skipped.
-func resolverCacheKey(resolver *model.DependencyResolver) (string, error) {
-	// Every field ends in NUL and every file carries its size, so two keys
-	// only collide when their fields are identical: "ab"+"c" and "a"+"bc"
-	// hash differently, and so do a file "b" and a deleted file next to it.
+func resolverCacheKey(resolver *model.DependencyResolver, grogVersion string) (string, error) {
+	// Strings are NUL-terminated and file contents length-prefixed, so distinct inputs never encode to the same bytes.
 	hasher := hashing.GetHasher()
 	_, _ = fmt.Fprintf(hasher, "1\x00%s\x00%s\x00", resolver.Label, resolver.Command)
 
 	if strings.HasPrefix(resolver.Command, "builtin::") {
-		_, _ = fmt.Fprintf(hasher, "%s\x00", GrogVersion)
+		_, _ = fmt.Fprintf(hasher, "%s\x00", grogVersion)
 	} else {
 		// Checkout-specific values would defeat the cache, and the protocol
 		// forbids output that depends on them.

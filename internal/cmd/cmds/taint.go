@@ -37,7 +37,7 @@ This is useful when you want to force a rebuild of specific targets.`,
 			logger.Fatalf("could not parse target pattern: %v", err)
 		}
 
-		graph := loading.MustLoadGraphForQuery(ctx, logger)
+		graph := loading.MustLoadGraphForQuery(ctx, logger, dependencyInferrer())
 
 		selector := selection.New(targetPatterns, config.Global.Tags, config.Global.ExcludeTags, selection.AllTargets)
 		selector.SelectTargets(graph)

@@ -52,7 +52,7 @@ Can optionally include transitive dependents of changed targets to find all affe
 		}
 		logger.Debugf("Changed files: %v", changedFiles)
 
-		packages, err := loading.LoadAllPackages(ctx)
+		packages, err := loading.LoadAllPackages(ctx, dependencyInferrer())
 		if err != nil {
 			logger.Fatalf(
 				"could not load packages: %v",
