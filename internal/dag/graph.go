@@ -89,7 +89,7 @@ func (g *DirectedTargetGraph) GetSelectedSubgraph() *DirectedTargetGraph {
 		}
 		for _, to := range toList {
 			if to.GetIsSelected() {
-				subgraph.AddEdge(from, to)
+				_ = subgraph.AddEdge(from, to)
 			}
 		}
 	}

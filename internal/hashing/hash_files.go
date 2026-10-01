@@ -14,7 +14,7 @@ func HashFile(filePath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	hasher := GetHasher()
 	if _, err := io.Copy(hasher, f); err != nil {
@@ -46,10 +46,10 @@ func HashFiles(absolutePackagePath string, fileList []string) (string, error) {
 
 		// Copy file content into the combined hasher.
 		if _, err := io.Copy(combinedHasher, f); err != nil {
-			f.Close()
+			_ = f.Close()
 			return "", err
 		}
-		f.Close()
+		_ = f.Close()
 	}
 
 	// Return the combined hash as a hexadecimal string.

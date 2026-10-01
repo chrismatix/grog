@@ -50,13 +50,14 @@ var exportCmd = &cobra.Command{
 		}
 
 		var w io.Writer = os.Stdout
+		var outputFile *os.File
 		if exportOutput != "" {
-			f, openErr := os.Create(exportOutput)
+			var openErr error
+			outputFile, openErr = os.Create(exportOutput)
 			if openErr != nil {
 				logger.Fatalf("failed to create output file: %v", openErr)
 			}
-			defer f.Close()
-			w = f
+			w = outputFile
 		}
 
 		switch exportFormat.Value {
@@ -67,6 +68,12 @@ var exportCmd = &cobra.Command{
 		case "otel":
 			if err := tracing.ExportOTLP(ctx, store, entries, w); err != nil {
 				logger.Fatalf("export failed: %v", err)
+			}
+		}
+
+		if outputFile != nil {
+			if err := outputFile.Close(); err != nil {
+				logger.Fatalf("failed to close output file: %v", err)
 			}
 		}
 	},

@@ -43,7 +43,7 @@ func TestTopicCLIUsageMatchesCobra(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open %s: %v", path, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	scanner := bufio.NewScanner(file)
 	lineNumber := 0
@@ -76,8 +76,8 @@ func validateDocumentedUsage(t *testing.T, path string, lineNumber int, usage st
 	for _, token := range fields[2:] {
 		optional := strings.HasPrefix(token, "[")
 		token = strings.Trim(token, "[]")
-		if strings.HasPrefix(token, "--") {
-			nameAndValue := strings.SplitN(strings.TrimPrefix(token, "--"), "=", 2)
+		if flagToken, hasFlagPrefix := strings.CutPrefix(token, "--"); hasFlagPrefix {
+			nameAndValue := strings.SplitN(flagToken, "=", 2)
 			flag := command.Flags().Lookup(nameAndValue[0])
 			if flag == nil {
 				flag = command.InheritedFlags().Lookup(nameAndValue[0])

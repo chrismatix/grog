@@ -9,6 +9,8 @@ import (
 	"grog/internal/config"
 	"grog/internal/label"
 	"grog/internal/model"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetCommandAddsDefaultShellFlags(t *testing.T) {
@@ -222,8 +224,8 @@ func TestRunTargetCommandForwardsExtraArgs(t *testing.T) {
 	t.Cleanup(func() { config.Global = prev })
 
 	// Create required directories for the target's package and log output
-	os.MkdirAll(tmpDir+"/pkg", 0755)
-	os.MkdirAll(tmpDir+"/logs/pkg", 0755)
+	require.NoError(t, os.MkdirAll(tmpDir+"/pkg", 0755))
+	require.NoError(t, os.MkdirAll(tmpDir+"/logs/pkg", 0755))
 
 	target := &model.Target{
 		Label: label.TargetLabel{Package: "pkg", Name: "test"},
@@ -259,8 +261,8 @@ func TestRunTargetCommandHandlesLargeScript(t *testing.T) {
 	}
 	t.Cleanup(func() { config.Global = prev })
 
-	os.MkdirAll(tmpDir+"/pkg", 0755)
-	os.MkdirAll(tmpDir+"/logs/pkg", 0755)
+	require.NoError(t, os.MkdirAll(tmpDir+"/pkg", 0755))
+	require.NoError(t, os.MkdirAll(tmpDir+"/logs/pkg", 0755))
 
 	target := &model.Target{
 		Label: label.TargetLabel{Package: "pkg", Name: "test"},
@@ -292,8 +294,8 @@ func TestRunTargetCommandWithoutExtraArgs(t *testing.T) {
 	}
 	t.Cleanup(func() { config.Global = prev })
 
-	os.MkdirAll(tmpDir+"/pkg", 0755)
-	os.MkdirAll(tmpDir+"/logs/pkg", 0755)
+	require.NoError(t, os.MkdirAll(tmpDir+"/pkg", 0755))
+	require.NoError(t, os.MkdirAll(tmpDir+"/logs/pkg", 0755))
 
 	target := &model.Target{
 		Label: label.TargetLabel{Package: "pkg", Name: "test"},

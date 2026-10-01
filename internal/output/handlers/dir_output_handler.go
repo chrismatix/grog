@@ -230,7 +230,7 @@ func uploadFilesToCas(ctx context.Context, cas *caching.Cas, fileUploads []fileU
 			if err != nil {
 				return err
 			}
-			defer file.Close()
+			defer func() { _ = file.Close() }()
 
 			reader := io.Reader(file)
 			if progress != nil {
@@ -385,7 +385,7 @@ func computeFileDigest(path string) (*gen.Digest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file %s: %w", path, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	hasher := hashing.GetHasher()
 	size, err := io.Copy(hasher, file)
@@ -409,7 +409,7 @@ func stageFileSnapshot(sourcePath string, stagingRoot string, relativePath strin
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to open file %s: %w", sourcePath, err)
 	}
-	defer sourceFile.Close()
+	defer func() { _ = sourceFile.Close() }()
 
 	stagedFile, err := os.Create(stagedPath)
 	if err != nil {

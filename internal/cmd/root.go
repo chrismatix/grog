@@ -241,8 +241,7 @@ func initConfig(cmd *cobra.Command) error {
 	for _, name := range names {
 		viper.SetConfigName(name)
 		if err := viper.ReadInConfig(); err != nil {
-			var configFileNotFoundError viper.ConfigFileNotFoundError
-			if errors.As(err, &configFileNotFoundError) {
+			if _, isConfigFileNotFound := errors.AsType[viper.ConfigFileNotFoundError](err); isConfigFileNotFound {
 				continue
 			}
 			return err
@@ -328,7 +327,7 @@ func readInEnvironmentVariablesConfig() error {
 		if err != nil {
 			return fmt.Errorf("failed to open environment_variables_file %q: %w", envFilePath, err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 
 		fileEnv := gotenv.Parse(f)
 		maps.Copy(merged, fileEnv)

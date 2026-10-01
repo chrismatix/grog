@@ -56,7 +56,7 @@ func (tl *TargetLogFile) Print() error {
 		return err
 	}
 
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	_, err = io.Copy(os.Stdout, file)
 	return err
 }

@@ -23,7 +23,9 @@ func TestResolveInputs(t *testing.T) {
 		fullPath := filepath.Join(tmpDir, path)
 		dir := filepath.Dir(fullPath)
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
-			os.MkdirAll(dir, 0755)
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				panic(fmt.Sprintf("Failed to create dir %s: %v", dir, err))
+			}
 		}
 		if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
 			panic(fmt.Sprintf("Failed to create file %s: %v", path, err)) // Panic to stop the test immediately
@@ -185,11 +187,7 @@ func TestResolveInputs(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create a temporary directory for the test case.
-			tmpDir, err := os.MkdirTemp("", "test-resolve-inputs-"+tc.name)
-			if err != nil {
-				t.Fatalf("Failed to create temp dir: %v", err)
-			}
-			defer os.RemoveAll(tmpDir)
+			tmpDir := t.TempDir()
 
 			// Setup test files.
 			tc.createTestFiles(tmpDir)

@@ -156,12 +156,10 @@ func (a *AWSS3Adapter) ObjectExists(ctx context.Context, bucket, key string) (bo
 
 	_, err := a.client.HeadObject(ctx, input)
 	if err != nil {
-		var nsk *types.NoSuchKey
-		if errors.As(err, &nsk) {
+		if _, isNoSuchKey := errors.AsType[*types.NoSuchKey](err); isNoSuchKey {
 			return false, nil
 		}
-		var nsb *types.NotFound
-		if errors.As(err, &nsb) {
+		if _, isNotFound := errors.AsType[*types.NotFound](err); isNotFound {
 			return false, nil
 		}
 		return false, err

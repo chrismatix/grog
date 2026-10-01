@@ -148,7 +148,7 @@ func TestDoubleInterruptForceExitWithTTY(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not create console: %v", err)
 	}
-	defer console.Close()
+	defer func() { _ = console.Close() }()
 
 	repoPath := filepath.Join("./test_repos", "sleep")
 	_, filename, _, ok := runtime.Caller(0)
@@ -217,7 +217,7 @@ func TestInterruptHandlingWithTTY(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not create console: %v", err)
 	}
-	defer console.Close()
+	defer func() { _ = console.Close() }()
 
 	// Reuse the same repo path logic as in TestInterruptHandling
 	repoPath := filepath.Join("./test_repos", "sleep")

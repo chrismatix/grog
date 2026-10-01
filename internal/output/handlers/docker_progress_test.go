@@ -2,9 +2,14 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/docker/docker/pkg/jsonmessage"
+
+	"grog/internal/worker"
 )
 
 func TestFormatPhaseSummary_NoLayers(t *testing.T) {
@@ -119,4 +124,50 @@ func TestRegistryConfirmedDigest(t *testing.T) {
 func rawMessage(s string) *json.RawMessage {
 	raw := json.RawMessage(s)
 	return &raw
+}
+
+func TestConsumeDockerProgress(t *testing.T) {
+	const digest = "sha256:fa647fc1e5d5df7d8d923fb6332aab8e78783f8fca1a1394efb4011f68f5a793"
+	stream := `{"status":"Preparing","id":"l1"}
+{"status":"Preparing","id":"l2"}
+{"status":"Pushing","id":"l1","progressDetail":{"current":100,"total":200}}
+{"status":"Pushing","id":"l1","progressDetail":{"current":200,"total":200}}
+{"status":"Pushed","id":"l1"}
+{"status":"Layer already exists","id":"l2"}
+{"status":"1.0.0: digest: ` + digest + ` size: 1917"}
+`
+	var updates []string
+	tracker := worker.NewProgressTracker("initial", 0, func(update worker.StatusUpdate) {
+		updates = append(updates, fmt.Sprintf("%s | %s | %d/%d", update.Status, update.SubStatus, update.Progress.Current, update.Progress.Total))
+	})
+
+	pushedDigest, err := consumeDockerProgress(strings.NewReader(stream), tracker, "pushing")
+	if err != nil {
+		t.Fatalf("consumeDockerProgress: %v", err)
+	}
+	if pushedDigest != digest {
+		t.Errorf("digest = %q, want %q", pushedDigest, digest)
+	}
+	want := []string{
+		"pushing |  | 0/0",
+		"pushing | 1 preparing | 0/0",
+		"pushing | 2 preparing | 0/0",
+		"pushing | 1 pushing, 1 preparing | 0/0",
+		"pushing | 1 pushing, 1 preparing | 200/200",
+		"pushing | 1 preparing, 1 pushed | 200/200",
+		"pushing | 1 pushed, 1 cached | 200/200",
+	}
+	if !slices.Equal(updates, want) {
+		t.Errorf("updates:\n%s\nwant:\n%s", strings.Join(updates, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+func TestConsumeDockerProgress_Error(t *testing.T) {
+	stream := `{"status":"Preparing","id":"l1"}
+{"errorDetail":{"message":"denied"},"error":"denied"}
+`
+	_, err := consumeDockerProgress(strings.NewReader(stream), nil, "pushing")
+	if err == nil || err.Error() != "denied" {
+		t.Fatalf("err = %v, want denied", err)
+	}
 }

@@ -51,7 +51,7 @@ func TestCancellation(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		p.Run(func(update StatusFunc) (any, error) {
+		_, _ = p.Run(func(update StatusFunc) (any, error) {
 			time.Sleep(200 * time.Millisecond)
 			return nil, nil
 		})

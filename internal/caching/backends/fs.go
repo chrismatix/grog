@@ -96,12 +96,11 @@ func (fsc *FileSystemCache) Set(ctx context.Context, path, key string, content i
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmpFile.Name()) // Cleanup temp file if rename fails
+	defer func() { _ = os.Remove(tmpFile.Name()) }() // Cleanup temp file if rename fails
 
 	// Copy the content from the reader to the file
 	if _, err = io.Copy(tmpFile, content); err != nil {
-		tmpFile.Close()
-		return err
+		return errors.Join(err, tmpFile.Close())
 	}
 
 	// Close explicitly before rename
