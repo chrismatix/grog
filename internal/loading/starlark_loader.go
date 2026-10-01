@@ -25,11 +25,12 @@ func (sl StarlarkLoader) Matches(fileName string) bool {
 
 // starlarkPackageCollector holds the collected targets, aliases, resources, and environments.
 type starlarkPackageCollector struct {
-	targets          []*TargetDTO
-	aliases          []*AliasDTO
-	resources        []*ResourceDTO
-	environments     []*EnvironmentDTO
-	defaultPlatforms []string
+	dependencyResolvers []*DependencyResolverDTO
+	targets             []*TargetDTO
+	aliases             []*AliasDTO
+	resources           []*ResourceDTO
+	environments        []*EnvironmentDTO
+	defaultPlatforms    []string
 }
 
 // moduleLoadContext tracks loaded modules and in-progress loads for cycle detection.
@@ -57,13 +58,14 @@ func (sl StarlarkLoader) Load(ctx context.Context, filePath string) (PackageDTO,
 
 	// Create predeclared functions and values
 	predeclared := starlark.StringDict{
-		"target":      starlark.NewBuiltin("target", collector.targetBuiltin),
-		"alias":       starlark.NewBuiltin("alias", collector.aliasBuiltin),
-		"resource":    starlark.NewBuiltin("resource", collector.resourceBuiltin),
-		"environment": starlark.NewBuiltin("environment", collector.environmentBuiltin),
-		"json":        json.Module,
-		"math":        math.Module,
-		"time":        time.Module,
+		"target":              starlark.NewBuiltin("target", collector.targetBuiltin),
+		"alias":               starlark.NewBuiltin("alias", collector.aliasBuiltin),
+		"resource":            starlark.NewBuiltin("resource", collector.resourceBuiltin),
+		"dependency_resolver": starlark.NewBuiltin("dependency_resolver", collector.dependencyResolverBuiltin),
+		"environment":         starlark.NewBuiltin("environment", collector.environmentBuiltin),
+		"json":                json.Module,
+		"math":                math.Module,
+		"time":                time.Module,
 	}
 	addLoaderEnvToStarlark(predeclared)
 	for key, value := range config.Global.EnvironmentVariables {
@@ -84,11 +86,12 @@ func (sl StarlarkLoader) Load(ctx context.Context, filePath string) (PackageDTO,
 	}
 
 	packageDTO := PackageDTO{
-		Targets:          collector.targets,
-		Aliases:          collector.aliases,
-		Resources:        collector.resources,
-		Environments:     collector.environments,
-		DefaultPlatforms: collector.defaultPlatforms,
+		Targets:             collector.targets,
+		Aliases:             collector.aliases,
+		Resources:           collector.resources,
+		DependencyResolvers: collector.dependencyResolvers,
+		Environments:        collector.environments,
+		DefaultPlatforms:    collector.defaultPlatforms,
 	}
 
 	return packageDTO, true, nil
@@ -137,13 +140,14 @@ func (sl StarlarkLoader) loadModule(thread *starlark.Thread, module string, curr
 
 	// Create predeclared functions for the loaded module
 	predeclared := starlark.StringDict{
-		"target":      starlark.NewBuiltin("target", collector.targetBuiltin),
-		"alias":       starlark.NewBuiltin("alias", collector.aliasBuiltin),
-		"resource":    starlark.NewBuiltin("resource", collector.resourceBuiltin),
-		"environment": starlark.NewBuiltin("environment", collector.environmentBuiltin),
-		"json":        json.Module,
-		"math":        math.Module,
-		"time":        time.Module,
+		"target":              starlark.NewBuiltin("target", collector.targetBuiltin),
+		"alias":               starlark.NewBuiltin("alias", collector.aliasBuiltin),
+		"resource":            starlark.NewBuiltin("resource", collector.resourceBuiltin),
+		"dependency_resolver": starlark.NewBuiltin("dependency_resolver", collector.dependencyResolverBuiltin),
+		"environment":         starlark.NewBuiltin("environment", collector.environmentBuiltin),
+		"json":                json.Module,
+		"math":                math.Module,
+		"time":                time.Module,
 	}
 	addLoaderEnvToStarlark(predeclared)
 	for key, value := range config.Global.EnvironmentVariables {
@@ -174,6 +178,7 @@ func (sl StarlarkLoader) loadModule(thread *starlark.Thread, module string, curr
 func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var name string
 	var command string
+	var dependencyResolvers *starlark.List
 	var dependencies *starlark.List
 	var inputs *starlark.List
 	var excludeInputs *starlark.List
@@ -193,6 +198,7 @@ func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *st
 	if err := starlark.UnpackArgs("target", args, kwargs,
 		"name", &name,
 		"command?", &command,
+		"dependency_resolvers?", &dependencyResolvers,
 		"dependencies?", &dependencies,
 		"inputs?", &inputs,
 		"exclude_inputs?", &excludeInputs,
@@ -214,6 +220,14 @@ func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *st
 	target := &TargetDTO{
 		Name:    name,
 		Command: command,
+	}
+
+	if dependencyResolvers != nil {
+		resolverLabels, parseError := starlarkListToStringSlice(dependencyResolvers)
+		if parseError != nil {
+			return nil, fmt.Errorf("dependency_resolvers: %w", parseError)
+		}
+		target.DependencyResolvers = resolverLabels
 	}
 
 	// Convert dependencies
@@ -572,4 +586,24 @@ func resolvedEnvironmentVariablesFilePath() string {
 		environmentVariablesFilePath = filepath.Join(config.Global.WorkspaceRoot, environmentVariablesFilePath)
 	}
 	return filepath.Clean(environmentVariablesFilePath)
+}
+
+func (collector *starlarkPackageCollector) dependencyResolverBuiltin(thread *starlark.Thread, function *starlark.Builtin, arguments starlark.Tuple, keywordArguments []starlark.Tuple) (starlark.Value, error) {
+	resolver := &DependencyResolverDTO{}
+	var inputs *starlark.List
+	if parseError := starlark.UnpackArgs("dependency_resolver", arguments, keywordArguments,
+		"name", &resolver.Name, "command", &resolver.Command, "inputs?", &inputs, "timeout?", &resolver.Timeout,
+		"generated_target_name?", &resolver.GeneratedTargetName,
+	); parseError != nil {
+		return nil, parseError
+	}
+	if inputs != nil {
+		resolvedInputs, parseError := starlarkListToStringSlice(inputs)
+		if parseError != nil {
+			return nil, fmt.Errorf("inputs: %w", parseError)
+		}
+		resolver.Inputs = resolvedInputs
+	}
+	collector.dependencyResolvers = append(collector.dependencyResolvers, resolver)
+	return starlark.None, nil
 }

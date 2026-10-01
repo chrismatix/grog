@@ -1,0 +1,6 @@
+[workspace]
+members = ["crates/*"]
+exclude = ["crates/excluded"]
+
+[workspace.dependencies]
+shared = { path = "crates/shared" }

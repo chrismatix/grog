@@ -112,6 +112,19 @@ through the directly-affected targets to their transitive dependents.`,
 				}
 			}
 		}
+		for _, pkg := range packages {
+			for _, resolver := range pkg.DependencyResolvers {
+				for _, inputFile := range resolver.Inputs {
+					absInputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(resolver.Label.Package, inputFile))
+					if !containsFile(changedFiles, absInputPath) {
+						continue
+					}
+					for _, target := range resolverTargets(nodes, resolver.Label) {
+						add(absInputPath, target)
+					}
+				}
+			}
+		}
 
 		if len(fileToTargets) == 0 {
 			logger.Debug("No targets affected by the changed files")

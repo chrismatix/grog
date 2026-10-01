@@ -1,0 +1,24 @@
+name: custom dependency resolver
+repo: custom_dependency_resolver
+cases:
+  - name: custom_resolver_initial
+    grog_args: [build, "//..."]
+  - name: custom_resolver_cached
+    grog_args: [build, "//..."]
+  # Editing the resolver re-runs it, but the document it prints is unchanged,
+  # so the targets keep their cache hits: their hashes follow the resolver's
+  # output, not its inputs.
+  - name: custom_resolver_edit_resolver
+    setup_command: |
+      cp tools/resolve_proto_imports.sh resolver.backup
+      printf '\n# An edit that does not change the emitted document.\n' >> tools/resolve_proto_imports.sh
+  - name: custom_resolver_unchanged_document_stays_cached
+    grog_args: [build, "//..."]
+  - name: custom_resolver_edit_base_proto
+    setup_command: |
+      cp proto/base/base.proto base.proto.backup
+      printf '\nmessage Duration {\n  int64 seconds = 1;\n}\n' >> proto/base/base.proto
+  - name: custom_resolver_invalidates_importers
+    grog_args: [build, "//..."]
+  - name: custom_resolver_restore
+    setup_command: "mv resolver.backup tools/resolve_proto_imports.sh; mv base.proto.backup proto/base/base.proto"

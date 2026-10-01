@@ -96,6 +96,16 @@ Can optionally include transitive dependents of changed targets to find all affe
 			}
 		}
 
+		// A changed resolver input can change the inferred graph, so every
+		// target the resolver stands behind counts as changed.
+		for _, pkg := range packages {
+			for _, resolver := range pkg.DependencyResolvers {
+				if resolverInputChanged(resolver, changedFiles) {
+					matchingTargets = append(matchingTargets, resolverTargets(nodes, resolver.Label)...)
+				}
+			}
+		}
+
 		// Get dependents if requested
 		var resultTargets []*model.Target
 		if changesOptions.dependents.Value == "transitive" {
@@ -257,6 +267,26 @@ func vcsIsJJ(gitRoot string) bool {
 // containsFile checks if the list of files contains the given file
 func containsFile(files []string, file string) bool {
 	return slices.Contains(files, file)
+}
+
+func resolverInputChanged(resolver *model.DependencyResolver, changedFiles []string) bool {
+	for _, inputFile := range resolver.Inputs {
+		if containsFile(changedFiles, config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(resolver.Label.Package, inputFile))) {
+			return true
+		}
+	}
+	return false
+}
+
+// resolverTargets lists the targets registered with, or synthesized by, a resolver.
+func resolverTargets(nodes model.BuildNodeMap, resolverLabel label.TargetLabel) []*model.Target {
+	var targets []*model.Target
+	for _, target := range nodes.GetTargets() {
+		if slices.Contains(target.DependencyResolvers, resolverLabel) {
+			targets = append(targets, target)
+		}
+	}
+	return targets
 }
 
 func AddChangesCmd(rootCmd *cobra.Command) {

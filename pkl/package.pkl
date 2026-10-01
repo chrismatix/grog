@@ -5,6 +5,7 @@ import "alias.pkl"
 import "output_check.pkl"
 
 class Target {
+  dependency_resolvers: Listing<String>(isDistinct)
   name: String
   command: String?
   dependencies: Listing<String>(isDistinct)
@@ -34,6 +35,16 @@ class Target {
   concurrency_group: String?
 }
 
+class DependencyResolver {
+  name: String
+  command: String
+  inputs: Listing<String>(isDistinct)
+  timeout: String?
+  // Name of the filegroup synthesized for a package that registers no target.
+  // Defaults to "_<name>_package".
+  generated_target_name: String?
+}
+
 class Resource {
   name: String
   // up starts the resource and must return once it is running (daemonized).
@@ -54,5 +65,7 @@ targets: Listing<Target>(isDistinctBy((it) -> it.name))
 aliases: Listing<alias>(isDistinctBy((it) -> it.name))?
 
 resources: Listing<Resource>(isDistinctBy((it) -> it.name))?
+
+dependency_resolvers: Listing<DependencyResolver>(isDistinctBy((it) -> it.name))?
 
 environments: Listing<alias>(isDistinctBy((it) -> it.name))?

@@ -1,0 +1,16 @@
+[package]
+name = "app"
+version = "0.1.0"
+
+[dependencies]
+shared = { path = "../shared" }
+registry = "1.0"
+
+[dev-dependencies]
+dev = { path = "../dev" }
+
+[build-dependencies]
+generator = { path = "../generator" }
+
+[target.'cfg(windows)'.dependencies]
+platform = { path = "../platform" }
