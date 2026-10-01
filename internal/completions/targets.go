@@ -1,6 +1,7 @@
 package completions
 
 import (
+	"context"
 	"fmt"
 	"grog/internal/config"
 	"grog/internal/console"
@@ -15,7 +16,21 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func TargetPatternCompletion(command *cobra.Command, _ []string, toComplete string, targetType selection.TargetTypeSelection) ([]string, cobra.ShellCompDirective) { //nolint:gocyclo
+// completionScope holds the parsed pattern and the packages loaded to complete it.
+type completionScope struct {
+	isAbsolute                bool
+	isRelativeTarget          bool
+	isPrefixPartial           bool
+	originalPrefixExists      bool
+	originalPrefix            string
+	searchDirectory           string
+	targetPrefix              string
+	directoryPrefix           string
+	packages                  []*model.Package
+	packagesForOriginalPrefix []*model.Package
+}
+
+func TargetPatternCompletion(command *cobra.Command, _ []string, toComplete string, targetType selection.TargetTypeSelection) ([]string, cobra.ShellCompDirective) {
 	context, _ := console.SetupCommand()
 	currentPackage, err := config.Global.GetCurrentPackage()
 	debugToFile(fmt.Sprintf("err: %s\n", err))
@@ -24,6 +39,30 @@ func TargetPatternCompletion(command *cobra.Command, _ []string, toComplete stri
 		return nil, cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveError
 	}
 
+	scope := newCompletionScope(currentPackage, toComplete)
+	if err := scope.loadPackages(context); err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveError
+	}
+
+	selector := selection.New(nil, config.Global.Tags, config.Global.ExcludeTags, targetType)
+	targets := scope.matchingTargets(selector)
+	completions, hasDirectorySuggestions := scope.directoryCompletions()
+	completions = append(completions, scope.targetWildcardCompletions(toComplete, hasDirectorySuggestions, len(targets) > 0, selector)...)
+
+	// If there is only a single target and no directory completions just offer that
+	if len(completions) == 0 && len(targets) == 1 {
+		return []string{targets[0]}, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	completions = append(completions, targets...)
+	sort.Strings(completions)
+	debugToFile(fmt.Sprintf("completions: %s", completions))
+
+	return completions, cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveNoSpace
+}
+
+// newCompletionScope parses the input and decides which directory to search.
+func newCompletionScope(currentPackage string, toComplete string) *completionScope {
 	// Completion input states.
 	// Absolute: starts with "//", intended to resolve from workspace root.
 	// Relative target: starts with ":", intended to resolve within current package only.
@@ -59,62 +98,83 @@ func TargetPatternCompletion(command *cobra.Command, _ []string, toComplete stri
 	debugToFile(fmt.Sprintf("searchDir: %s\n", searchDirectory))
 	debugToFile(fmt.Sprintf("target: %s\n", pattern.Target()))
 
+	return &completionScope{
+		isAbsolute:       isAbsolute,
+		isRelativeTarget: isRelativeTarget,
+		isPrefixPartial:  isPrefixPartial,
+		originalPrefix:   originalPrefix,
+		searchDirectory:  searchDirectory,
+		targetPrefix:     targetPrefix,
+		directoryPrefix:  directoryPrefix,
+	}
+}
+
+// loadPackages loads the search directory and, for partial prefixes, the original prefix.
+func (scope *completionScope) loadPackages(context context.Context) error {
 	// Load packages from the search directory, which is either the current package,
 	// the workspace root, or the parent directory for partial prefixes.
-	absoluteSearchDirectory := config.GetPathAbsoluteToWorkspaceRoot(searchDirectory)
+	absoluteSearchDirectory := config.GetPathAbsoluteToWorkspaceRoot(scope.searchDirectory)
 	packages, err := loading.LoadPackages(context, absoluteSearchDirectory)
 	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveError
+		return err
 	}
+	scope.packages = packages
 
 	// For partial prefixes we also need packages for the original prefix so that we can
 	// discover targets and child directories beneath the fully qualified package.
-	packagesForOriginalPrefix := packages
-	if isPrefixPartial && originalPrefix != "" && originalPrefix != searchDirectory {
-		absoluteOriginalDir := config.GetPathAbsoluteToWorkspaceRoot(originalPrefix)
-		packagesForOriginalPrefix, err = loading.LoadPackages(context, absoluteOriginalDir)
+	scope.packagesForOriginalPrefix = packages
+	if scope.isPrefixPartial && scope.originalPrefix != "" && scope.originalPrefix != scope.searchDirectory {
+		absoluteOriginalDir := config.GetPathAbsoluteToWorkspaceRoot(scope.originalPrefix)
+		scope.packagesForOriginalPrefix, err = loading.LoadPackages(context, absoluteOriginalDir)
 		if err != nil {
-			packagesForOriginalPrefix = nil
+			scope.packagesForOriginalPrefix = nil
 		}
 	}
 
 	// Track whether the partial prefix resolves to a real package.
-	originalPrefixExists := false
-	if isPrefixPartial && originalPrefix != "" {
-		for _, packageEntry := range packagesForOriginalPrefix {
-			if packageEntry.Path == originalPrefix {
-				originalPrefixExists = true
+	if scope.isPrefixPartial && scope.originalPrefix != "" {
+		for _, packageEntry := range scope.packagesForOriginalPrefix {
+			if packageEntry.Path == scope.originalPrefix {
+				scope.originalPrefixExists = true
 				break
 			}
 		}
 	}
+	return nil
+}
 
-	selector := selection.New(nil, config.Global.Tags, config.Global.ExcludeTags, targetType)
+// matchingTargets returns target completions from the package the user is referring to.
+func (scope *completionScope) matchingTargets(selector *selection.Selector) []string {
 	// Targets come from the exact package that the user is (implicitly) referring to.
 	// For partial prefixes we only surface targets once the prefix resolves to a real package.
 	var targets []string
-	if isPrefixPartial && originalPrefixExists {
-		targets = append(targets, collectTargets(packagesForOriginalPrefix, originalPrefix, targetPrefix, selector, isRelativeTarget)...)
-	} else if !isPrefixPartial {
-		targets = append(targets, collectTargets(packages, searchDirectory, targetPrefix, selector, isRelativeTarget)...)
+	if scope.isPrefixPartial && scope.originalPrefixExists {
+		targets = append(targets, collectTargets(scope.packagesForOriginalPrefix, scope.originalPrefix, scope.targetPrefix, selector, scope.isRelativeTarget)...)
+	} else if !scope.isPrefixPartial {
+		targets = append(targets, collectTargets(scope.packages, scope.searchDirectory, scope.targetPrefix, selector, scope.isRelativeTarget)...)
 	}
+	return targets
+}
 
-	wildcardPackagePath := searchDirectory
-	packagesForWildcardChecks := packages
-	if isPrefixPartial {
-		wildcardPackagePath = originalPrefix
-		packagesForWildcardChecks = packagesForOriginalPrefix
+// wildcardPackage returns the package path and packages that wildcard completions refer to.
+func (scope *completionScope) wildcardPackage() (string, []*model.Package) {
+	if scope.isPrefixPartial {
+		return scope.originalPrefix, scope.packagesForOriginalPrefix
 	}
+	return scope.searchDirectory, scope.packages
+}
 
+// directoryCompletions returns directory and "/..." completions, and whether any directory was suggested.
+func (scope *completionScope) directoryCompletions() ([]string, bool) {
 	// Directory suggestions are computed from two sources:
 	// 1) Siblings under the search directory (root or parent).
 	// 2) Child directories under the original prefix if it resolves to a package.
 	directorySuggestions := make(map[string]bool)
-	if !isRelativeTarget {
-		skipExactPrefixDirectory := isPrefixPartial && originalPrefixExists && directoryPrefix != ""
-		directorySuggestions = collectSiblingDirectories(packages, searchDirectory, directoryPrefix, skipExactPrefixDirectory)
-		if isPrefixPartial && originalPrefixExists && originalPrefix != "" {
-			mergeDirectorySuggestions(directorySuggestions, collectChildDirectories(packagesForOriginalPrefix, originalPrefix))
+	if !scope.isRelativeTarget {
+		skipExactPrefixDirectory := scope.isPrefixPartial && scope.originalPrefixExists && scope.directoryPrefix != ""
+		directorySuggestions = collectSiblingDirectories(scope.packages, scope.searchDirectory, scope.directoryPrefix, skipExactPrefixDirectory)
+		if scope.isPrefixPartial && scope.originalPrefixExists && scope.originalPrefix != "" {
+			mergeDirectorySuggestions(directorySuggestions, collectChildDirectories(scope.packagesForOriginalPrefix, scope.originalPrefix))
 		}
 	}
 
@@ -122,7 +182,7 @@ func TargetPatternCompletion(command *cobra.Command, _ []string, toComplete stri
 	wildcardDirectorySuggestions := make(map[string]bool)
 	for fullPath, hasChildren := range directorySuggestions {
 		completion := "//" + fullPath
-		if isPrefixPartial && hasChildren {
+		if scope.isPrefixPartial && hasChildren {
 			completion += "/"
 		}
 		completions = append(completions, completion)
@@ -131,7 +191,8 @@ func TargetPatternCompletion(command *cobra.Command, _ []string, toComplete stri
 		}
 	}
 
-	if !isRelativeTarget && (!isPrefixPartial || originalPrefixExists) {
+	wildcardPackagePath, packagesForWildcardChecks := scope.wildcardPackage()
+	if !scope.isRelativeTarget && (!scope.isPrefixPartial || scope.originalPrefixExists) {
 		if packageHasChildDirectories(packagesForWildcardChecks, wildcardPackagePath) {
 			if wildcardPackagePath == "" {
 				wildcardDirectorySuggestions["//..."] = true
@@ -144,29 +205,32 @@ func TargetPatternCompletion(command *cobra.Command, _ []string, toComplete stri
 	for wildcardCompletion := range wildcardDirectorySuggestions {
 		completions = append(completions, wildcardCompletion)
 	}
+	return completions, len(directorySuggestions) > 0
+}
+
+// targetWildcardCompletions returns the trailing ":" hint and the ":..." completion.
+func (scope *completionScope) targetWildcardCompletions(toComplete string, hasDirectorySuggestions bool, hasTargets bool, selector *selection.Selector) []string {
+	var completions []string
+	wildcardPackagePath, packagesForWildcardChecks := scope.wildcardPackage()
 
 	// If only targets remain (no directories), add a trailing ":" to make it clear that
 	// the next completion step is a target name rather than a package segment.
-	shouldAddColonPrefix := isAbsolute &&
-		!isRelativeTarget &&
+	shouldAddColonPrefix := scope.isAbsolute &&
+		!scope.isRelativeTarget &&
 		!strings.Contains(toComplete, ":") &&
-		len(directorySuggestions) == 0 &&
-		len(targets) > 0
+		!hasDirectorySuggestions &&
+		hasTargets
 	if shouldAddColonPrefix {
-		targetPackagePrefix := searchDirectory
-		if isPrefixPartial {
-			targetPackagePrefix = originalPrefix
-		}
-		colonPrefix := "//" + targetPackagePrefix + ":"
-		if targetPackagePrefix == "" {
+		colonPrefix := "//" + wildcardPackagePath + ":"
+		if wildcardPackagePath == "" {
 			colonPrefix = "//:"
 		}
 		completions = append(completions, colonPrefix)
 	}
 
-	if !isPrefixPartial || originalPrefixExists {
+	if !scope.isPrefixPartial || scope.originalPrefixExists {
 		if packageHasMatchingTargets(packagesForWildcardChecks, wildcardPackagePath, selector) {
-			if isRelativeTarget {
+			if scope.isRelativeTarget {
 				completions = append(completions, ":...")
 			} else {
 				targetPackagePrefix := wildcardPackagePath
@@ -178,17 +242,7 @@ func TargetPatternCompletion(command *cobra.Command, _ []string, toComplete stri
 			}
 		}
 	}
-
-	// If there is only a single target and no directory completions just offer that
-	if len(completions) == 0 && len(targets) == 1 {
-		return []string{targets[0]}, cobra.ShellCompDirectiveNoFileComp
-	}
-
-	completions = append(completions, targets...)
-	sort.Strings(completions)
-	debugToFile(fmt.Sprintf("completions: %s", completions))
-
-	return completions, cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveNoSpace
+	return completions
 }
 
 func TestTargetPatternCompletion(command *cobra.Command, arguments []string, toComplete string) ([]string, cobra.ShellCompDirective) {
