@@ -175,7 +175,7 @@ func (sl StarlarkLoader) loadModule(thread *starlark.Thread, module string, curr
 }
 
 // targetBuiltin implements the target() function in Starlark.
-func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) { //nolint:gocyclo
+func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var name string
 	var command string
 	var dependencyResolvers *starlark.List
@@ -218,62 +218,38 @@ func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *st
 	}
 
 	target := &TargetDTO{
-		Name:    name,
-		Command: command,
+		Name:               name,
+		Command:            command,
+		BinOutput:          binOutput,
+		BinaryRequiresPush: binaryRequiresPush,
+		Timeout:            timeout,
+		ConcurrencyGroup:   concurrencyGroup,
 	}
 
-	if dependencyResolvers != nil {
-		resolverLabels, parseError := starlarkListToStringSlice(dependencyResolvers)
-		if parseError != nil {
-			return nil, fmt.Errorf("dependency_resolvers: %w", parseError)
+	stringListArguments := []struct {
+		argumentName string
+		list         *starlark.List
+		destination  *[]string
+	}{
+		{"dependency_resolvers", dependencyResolvers, &target.DependencyResolvers},
+		{"dependencies", dependencies, &target.Dependencies},
+		{"inputs", inputs, &target.Inputs},
+		{"exclude_inputs", excludeInputs, &target.ExcludeInputs},
+		{"outputs", outputs, &target.Outputs},
+		{"tags", tags, &target.Tags},
+		{"platforms", platforms, &target.Platforms},
+	}
+	for _, argument := range stringListArguments {
+		if argument.list == nil {
+			continue
 		}
-		target.DependencyResolvers = resolverLabels
-	}
-
-	// Convert dependencies
-	if dependencies != nil {
-		deps, err := starlarkListToStringSlice(dependencies)
+		values, err := starlarkListToStringSlice(argument.list)
 		if err != nil {
-			return nil, fmt.Errorf("dependencies: %w", err)
+			return nil, fmt.Errorf("%s: %w", argument.argumentName, err)
 		}
-		target.Dependencies = deps
+		*argument.destination = values
 	}
 
-	// Convert inputs
-	if inputs != nil {
-		inp, err := starlarkListToStringSlice(inputs)
-		if err != nil {
-			return nil, fmt.Errorf("inputs: %w", err)
-		}
-		target.Inputs = inp
-	}
-
-	// Convert exclude_inputs
-	if excludeInputs != nil {
-		excl, err := starlarkListToStringSlice(excludeInputs)
-		if err != nil {
-			return nil, fmt.Errorf("exclude_inputs: %w", err)
-		}
-		target.ExcludeInputs = excl
-	}
-
-	// Convert outputs
-	if outputs != nil {
-		out, err := starlarkListToStringSlice(outputs)
-		if err != nil {
-			return nil, fmt.Errorf("outputs: %w", err)
-		}
-		target.Outputs = out
-	}
-
-	// Set bin_output
-	if binOutput != "" {
-		target.BinOutput = binOutput
-	}
-
-	target.BinaryRequiresPush = binaryRequiresPush
-
-	// Convert output_checks
 	if outputChecks != nil {
 		checks, err := starlarkListToOutputChecks(outputChecks)
 		if err != nil {
@@ -282,16 +258,6 @@ func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *st
 		target.OutputChecks = checks
 	}
 
-	// Convert tags
-	if tags != nil {
-		t, err := starlarkListToStringSlice(tags)
-		if err != nil {
-			return nil, fmt.Errorf("tags: %w", err)
-		}
-		target.Tags = t
-	}
-
-	// Convert fingerprint
 	if fingerprint != nil {
 		fp, err := starlarkDictToStringMap(fingerprint)
 		if err != nil {
@@ -300,31 +266,12 @@ func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *st
 		target.Fingerprint = fp
 	}
 
-	// Convert platforms
-	if platforms != nil {
-		plat, err := starlarkListToStringSlice(platforms)
-		if err != nil {
-			return nil, fmt.Errorf("platforms: %w", err)
-		}
-		target.Platforms = plat
-	}
-
-	// Convert environment_variables
 	if envVars != nil {
 		ev, err := starlarkDictToStringMap(envVars)
 		if err != nil {
 			return nil, fmt.Errorf("environment_variables: %w", err)
 		}
 		target.EnvironmentVariables = ev
-	}
-
-	// Set timeout
-	if timeout != "" {
-		target.Timeout = timeout
-	}
-
-	if concurrencyGroup != "" {
-		target.ConcurrencyGroup = concurrencyGroup
 	}
 
 	if ociPush != nil {
