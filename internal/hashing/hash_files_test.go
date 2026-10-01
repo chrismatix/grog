@@ -3,6 +3,7 @@ package hashing
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -89,7 +90,7 @@ func TestHashFiles(t *testing.T) {
 
 	// Test with a non-existent file in the list
 	t.Run("NonExistentFileInList", func(t *testing.T) {
-		invalidList := append(fileList, "nonexistent.txt")
+		invalidList := slices.Concat(fileList, []string{"nonexistent.txt"})
 		_, err := HashFiles(tempDir, invalidList)
 		if err != nil {
 			t.Errorf("non-existent file in list should not error, got %s", err)

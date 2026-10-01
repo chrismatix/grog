@@ -86,11 +86,12 @@ func printStatsSummary(stats *tracing.TraceStats) {
 		title := statsTitleStyle.Render(fmt.Sprintf("Stats over last %d traces:", stats.TraceCount))
 
 		var hitRateStyled string
-		if stats.CacheHitRate >= 70 {
+		switch {
+		case stats.CacheHitRate >= 70:
 			hitRateStyled = statsGoodStyle.Render(hitRate)
-		} else if stats.CacheHitRate >= 40 {
+		case stats.CacheHitRate >= 40:
 			hitRateStyled = statsWarnStyle.Render(hitRate)
-		} else {
+		default:
 			hitRateStyled = statsBadStyle.Render(hitRate)
 		}
 

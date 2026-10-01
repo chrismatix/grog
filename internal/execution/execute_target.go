@@ -143,18 +143,19 @@ func runTargetCommand(
 
 	if program := console.GetTeaProgram(ctx); program != nil {
 		toggle := console.GetStreamLogsToggle(ctx)
-		if toggle != nil {
+		switch {
+		case toggle != nil:
 			teaWriter = console.NewTeaWriter(program)
 			toggleWriter := console.NewStreamToggleWriter(teaWriter, toggle)
 			multiOut := io.MultiWriter(logWriter, toggleWriter, &buffer)
 			shellCommand.Stdout = multiOut
 			shellCommand.Stderr = multiOut
-		} else if streamLogs {
+		case streamLogs:
 			teaWriter = console.NewTeaWriter(program)
 			multiOut := io.MultiWriter(logWriter, teaWriter, &buffer)
 			shellCommand.Stdout = multiOut
 			shellCommand.Stderr = multiOut
-		} else {
+		default:
 			multiOut := io.MultiWriter(logWriter, &buffer)
 			shellCommand.Stdout = multiOut
 			shellCommand.Stderr = multiOut

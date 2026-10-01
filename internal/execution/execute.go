@@ -607,7 +607,8 @@ func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, u
 	var preparedTarget *output.PreparedTargetResult
 	var err error
 
-	if target.SkipsCache() || !e.enableCache {
+	switch {
+	case target.SkipsCache() || !e.enableCache:
 		logger.Debugf("%s: skipping cache write", target.Label)
 		targetResult, err = e.registry.GetNoCacheOutputHash(ctx, target)
 		if err == nil {
@@ -621,7 +622,7 @@ func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, u
 		// TODO should we even store this in the cache given that the target
 		// is no-cache? Probably fine from a user perspective
 		// since it's the target cache and not the output cache
-	} else if len(target.AllOutputs()) == 0 {
+	case len(target.AllOutputs()) == 0:
 		// NOTE: This is a special and intentional design
 		// Targets that do not have any outputs expose their own change behavior as an output
 		// analogous to file_groups
@@ -633,7 +634,7 @@ func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, u
 				ExecutionDurationMillis: target.ExecutionTime.Milliseconds(),
 			},
 		}
-	} else {
+	default:
 		logger.Debugf("%s: writing %d outputs", target.Label, len(target.AllOutputs()))
 		progress := worker.NewProgressTracker(
 			fmt.Sprintf("%s: writing %s", target.Label, console.FCountOutputs(len(target.AllOutputs()))),

@@ -186,11 +186,12 @@ func (m *model) View() string {
 
 	// Render header
 	if m.header != "" || label != "" {
-		if label == "" {
+		switch {
+		case label == "":
 			s.WriteString(m.header + "\n")
-		} else if m.header == "" {
+		case m.header == "":
 			s.WriteString(label + "\n")
-		} else {
+		default:
 			s.WriteString(m.header + ": " + label + "\n")
 		}
 	}

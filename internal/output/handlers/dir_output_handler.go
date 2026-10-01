@@ -451,12 +451,13 @@ func (d *DirectoryOutputHandler) Load(
 	// Check the current directory hash against the cached tree
 	// so that we can avoid downloading the directory if it hasn't changed
 	localDirectoryDigest, err := d.getDirectoryHash(ctx, target, dirPath)
-	if err == nil && treeDigest == localDirectoryDigest {
+	switch {
+	case err == nil && treeDigest == localDirectoryDigest:
 		logger.Debugf("directory %s already exists locally so skipping load", dirPath)
 		return nil
-	} else if err != nil {
+	case err != nil:
 		logger.Debugf("failed to check directory hash: %v", err)
-	} else {
+	default:
 		logger.Debugf("directory %s does not exist locally or has changed so reloading", dirPath)
 	}
 

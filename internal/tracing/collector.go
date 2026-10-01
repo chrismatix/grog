@@ -137,11 +137,12 @@ func (c *TraceCollector) buildSpan(target *model.Target, completion *dag.Complet
 	}
 
 	// Status
-	if completion.IsSuccess {
+	switch {
+	case completion.IsSuccess:
 		span.Status = "SUCCESS"
-	} else if completion.Err != nil {
+	case completion.Err != nil:
 		span.Status = "FAILURE"
-	} else {
+	default:
 		span.Status = "CANCELLED"
 	}
 

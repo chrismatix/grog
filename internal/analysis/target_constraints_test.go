@@ -28,7 +28,6 @@ func setupWorkspaceRoot(t *testing.T) (string, func()) {
 	}
 
 	// Set the workspace_root config value
-	//viper.Set("workspace_root", workspaceRoot)
 	config.Global.WorkspaceRoot = workspaceRoot
 
 	cleanup := func() {
