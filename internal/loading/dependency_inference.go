@@ -309,13 +309,25 @@ func runDependencyResolver(loadContext context.Context, resolver *model.Dependen
 }
 
 // resolverCacheKey hashes everything the output depends on: the protocol
-// version, the label and command, grog's version for a built-in, and the path
-// and contents of every resolved input. Inputs that do not exist are skipped.
+// version, the label and command, grog's version for a built-in or the command
+// environment for a shell resolver, and the path, size and contents of every
+// resolved input. Inputs that do not exist are skipped.
 func resolverCacheKey(resolver *model.DependencyResolver) (string, error) {
 	hasher := hashing.GetHasher()
-	_, _ = hasher.WriteString("1\n" + resolver.Label.String() + "\n" + resolver.Command + "\n")
+	_, _ = fmt.Fprintf(hasher, "1\x00%s\x00%s\x00", resolver.Label, resolver.Command)
 	if strings.HasPrefix(resolver.Command, "builtin::") {
-		_, _ = hasher.WriteString(GrogVersion + "\n")
+		_, _ = fmt.Fprintf(hasher, "%s\x00", GrogVersion)
+	} else {
+		// Checkout-specific values would defeat the cache, and the protocol
+		// forbids output that depends on them.
+		environment := LoaderEnv()
+		delete(environment, "GROG_GIT_HASH")
+		delete(environment, "GROG_WORKSPACE_ROOT")
+		maps.Copy(environment, config.Global.EnvironmentVariables)
+		for _, name := range slices.Sorted(maps.Keys(environment)) {
+			_, _ = fmt.Fprintf(hasher, "%s=%s\x00", name, environment[name])
+		}
+		_, _ = fmt.Fprintf(hasher, "%t\x00", config.Global.DisableDefaultShellFlags)
 	}
 	packageDirectory := config.GetPathAbsoluteToWorkspaceRoot(resolver.Label.Package)
 	for _, input := range slices.Sorted(slices.Values(resolver.Inputs)) {
@@ -326,8 +338,11 @@ func resolverCacheKey(resolver *model.DependencyResolver) (string, error) {
 		if operationError != nil {
 			return "", operationError
 		}
-		_, _ = hasher.WriteString(input + "\n")
-		_, operationError = io.Copy(hasher, file)
+		fileInfo, operationError := file.Stat()
+		if operationError == nil {
+			_, _ = fmt.Fprintf(hasher, "%s\x00%d\x00", input, fileInfo.Size())
+			_, operationError = io.Copy(hasher, file)
+		}
 		_ = file.Close()
 		if operationError != nil {
 			return "", operationError
