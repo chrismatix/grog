@@ -352,7 +352,7 @@ type dockerLayerProgress struct {
 //
 // The returned digest is the one the registry confirmed for a push; it is
 // empty for pulls and for pushes the daemon never got a digest for.
-func consumeDockerProgress( //nolint:gocyclo
+func consumeDockerProgress(
 	reader io.Reader,
 	parent *worker.ProgressTracker,
 	status string,
@@ -412,33 +412,7 @@ func consumeDockerProgress( //nolint:gocyclo
 			continue
 		}
 
-		current := jsonMessage.Progress.Current
-		total := jsonMessage.Progress.Total
-
-		state, ok := layers[jsonMessage.ID]
-		if !ok && total > 0 && parent != nil {
-			child := parent.SubTracker(status, total)
-			if child != nil {
-				state = &dockerLayerProgress{tracker: child, total: total}
-				layers[jsonMessage.ID] = state
-			}
-		}
-
-		if state != nil {
-			// Guard against out-of-order or resetting currents
-			delta := current - state.lastCurrent
-			if delta < 0 {
-				// treat as absolute if we observe a reset
-				delta = current
-			}
-			if delta > 0 {
-				state.tracker.Add(delta)
-				state.lastCurrent = current
-			}
-			if total > 0 && current >= total {
-				state.tracker.Complete()
-			}
-		}
+		trackLayerProgress(layers, parent, status, jsonMessage.ID, jsonMessage.Progress)
 	}
 
 	// Ensure all trackers are completed at end of stream
@@ -446,6 +420,44 @@ func consumeDockerProgress( //nolint:gocyclo
 		st.tracker.Complete()
 	}
 	return pushedDigest, nil
+}
+
+// trackLayerProgress feeds one layer's byte progress into its sub-tracker, creating it on first sight.
+func trackLayerProgress(
+	layers map[string]*dockerLayerProgress,
+	parent *worker.ProgressTracker,
+	status string,
+	layerID string,
+	progress *jsonmessage.JSONProgress,
+) {
+	current := progress.Current
+	total := progress.Total
+
+	state, ok := layers[layerID]
+	if !ok && total > 0 && parent != nil {
+		child := parent.SubTracker(status, total)
+		if child != nil {
+			state = &dockerLayerProgress{tracker: child, total: total}
+			layers[layerID] = state
+		}
+	}
+
+	if state == nil {
+		return
+	}
+	// Guard against out-of-order or resetting currents
+	delta := current - state.lastCurrent
+	if delta < 0 {
+		// treat as absolute if we observe a reset
+		delta = current
+	}
+	if delta > 0 {
+		state.tracker.Add(delta)
+		state.lastCurrent = current
+	}
+	if total > 0 && current >= total {
+		state.tracker.Complete()
+	}
 }
 
 // layerPhaseLabels maps the verbose docker daemon status strings to short,
