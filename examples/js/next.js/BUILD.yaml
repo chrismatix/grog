@@ -4,10 +4,8 @@ targets:
       - "app/**/*.tsx"
       - "package.json"
     command: npm run build
+    dependency_resolvers: ["//:node"]
     dependencies:
       - //:install
-      - //packages/ui-components:build
-      - //packages/utils:build
-      - //packages/theme:build
     outputs:
       - dir::.next/

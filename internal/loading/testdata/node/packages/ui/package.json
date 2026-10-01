@@ -1,0 +1,15 @@
+{
+  "name": "@demo/ui",
+  "version": "1.0.0",
+  "dependencies": {
+    "@demo/theme": "workspace:*",
+    "@demo/ui": "workspace:*",
+    "react": "^19"
+  },
+  "devDependencies": {
+    "@demo/utils": "workspace:^"
+  },
+  "peerDependencies": {
+    "react": "^19"
+  }
+}

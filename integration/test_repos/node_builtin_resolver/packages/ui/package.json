@@ -1,0 +1,8 @@
+{
+  "name": "@demo/ui",
+  "version": "1.0.0",
+  "dependencies": {
+    "@demo/icons": "workspace:*",
+    "@demo/theme": "workspace:*"
+  }
+}

@@ -1,0 +1,5 @@
+# builtin::node reads the member globs and each member's package.json;
+# packages/icons has no BUILD file and is synthesized as :_node_package.
+dependency_resolvers:
+  - name: node
+    command: builtin::node
