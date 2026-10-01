@@ -190,6 +190,7 @@ func TestDirectoryOutputHandler_Write_FailsOnCacheWrite(t *testing.T) {
 // every other Get, simulating file downloads erroring out during a restore.
 type treeOnlyBackend struct {
 	backends.CacheBackend
+
 	treeHash string
 }
 
@@ -223,7 +224,7 @@ func TestDirectoryOutputHandler_Load_FileDownloadError_NoDeadlock(t *testing.T) 
 	if err := os.MkdirAll(dirPath, 0755); err != nil {
 		t.Fatalf("failed to create directory: %v", err)
 	}
-	for i := 0; i < 64; i++ {
+	for i := range 64 {
 		name := filepath.Join(dirPath, "file"+string(rune('a'+i%26))+string(rune('0'+i/26)))
 		if err := os.WriteFile(name, []byte("content"+string(rune('0'+i%10))), 0644); err != nil {
 			t.Fatalf("failed to write file: %v", err)

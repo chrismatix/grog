@@ -183,7 +183,6 @@ func TestCliScenarios(t *testing.T) {
 				testCaseNames[tc.Name] = true
 
 				t.Run(tc.Name, func(t *testing.T) {
-
 					output, err := runBinary(tc.GrogArgs, repoPath, tc.EnvVars, coverDir)
 
 					if err != nil && !tc.ExpectFail {
@@ -301,7 +300,7 @@ func registerCleanupFile(t *testing.T, cleanupFilePath string) {
 	}
 
 	var directoriesToRemove []string
-	for _, line := range strings.Split(string(cleanupFileContents), "\n") {
+	for line := range strings.SplitSeq(string(cleanupFileContents), "\n") {
 		directoryToRemove := strings.TrimSpace(line)
 		if directoryToRemove == "" {
 			continue

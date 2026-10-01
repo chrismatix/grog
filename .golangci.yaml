@@ -9,11 +9,17 @@ linters:
   # Default: standard
   default: fast
   enable:
+    - errorlint
+    - gocyclo
+    - govet
     - modernize
     - nolintlint
     - revive
     - staticcheck
   settings:
+    gocyclo:
+      # Functions already above the ceiling carry `//nolint:gocyclo`; ratchet down as they shrink.
+      min-complexity: 20
     revive:
       rules:
         - name: exported
@@ -27,7 +33,6 @@ linters:
     - mnd
     - gocognit
     - nestif
-    - gocyclo
     - cyclop
     - funlen
     - maintidx
@@ -40,6 +45,7 @@ linters:
       - path: _test\.go
         linters:
           - testpackage
+          - gocyclo
 
 issues:
   # Maximum issues count per one linter.

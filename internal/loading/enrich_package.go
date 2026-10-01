@@ -25,115 +25,167 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 	aliases := make(map[label.TargetLabel]*model.Alias)
 	absolutePackagePath := config.GetPathAbsoluteToWorkspaceRoot(packagePath)
 
+	// root package is always encoded as ""
 	if packagePath == "." {
 		packagePath = ""
 	}
 
 	for _, target := range pkg.Targets {
-		var deps []label.TargetLabel
-		// parse labels
-		for _, dep := range target.Dependencies {
-			depLabel, err := label.ParseTargetLabel(packagePath, dep)
-			if err != nil {
-				return nil, err
-			}
-			deps = append(deps, depLabel)
-		}
-
-		// root package is always encoded as ""
-		if packagePath == "." {
-			packagePath = ""
-		}
-		targetLabel := label.TargetLabel{Package: packagePath, Name: target.Name}
-		if _, ok := targets[targetLabel]; ok {
-			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", target.Name, pkg.SourceFilePath)
-		}
-
-		resolvedInputs, err := resolveInputs(logger, absolutePackagePath, target.Inputs, target.ExcludeInputs)
+		enrichedTarget, err := enrichTarget(logger, packagePath, absolutePackagePath, pkg, target, targets)
 		if err != nil {
-			return nil, fmt.Errorf("failed to resolve inputs for target %s: %w", targetLabel, err)
+			return nil, err
 		}
+		targets[enrichedTarget.Label] = enrichedTarget
+	}
 
-		parsedOutputs, err := output.ParseOutputs(target.Outputs)
+	resources, err := enrichResources(packagePath, pkg, targets)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, alias := range pkg.Aliases {
+		actualLabel, err := label.ParseTargetLabel(packagePath, alias.Actual)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse outputs for target %s: %w", targetLabel, err)
+			return nil, err
 		}
 
-		parsedBinOutput := model.Output{}
-		if target.BinOutput != "" {
-			parsedBinOutput, err = output.ParseOutput(target.BinOutput)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse bin output for target %s: %w", targetLabel, err)
-			}
-			if !parsedBinOutput.IsFile() {
-				return nil, fmt.Errorf("bin output %s for target %s must be of type file",
-					target.BinOutput, targetLabel)
-			}
+		aliasLabel := label.TargetLabel{Package: packagePath, Name: alias.Name}
+		if _, ok := targets[aliasLabel]; ok || aliases[aliasLabel] != nil || resources[aliasLabel] != nil {
+			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", alias.Name, pkg.SourceFilePath)
 		}
 
-		if _, ok := targets[targetLabel]; ok {
-			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", target.Name, pkg.SourceFilePath)
-		}
-
-		var timeout time.Duration
-		if target.Timeout != "" {
-			timeout, err = time.ParseDuration(target.Timeout)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse timeout for target %s: %w", targetLabel, err)
-			}
-		}
-
-		// Determine the platforms to use
-		// If target has its own platforms, use those
-		// Otherwise, use the package default platforms if available
-		var targetPlatforms []string
-		switch {
-		case target.Platforms != nil:
-			targetPlatforms = append([]string{}, target.Platforms...)
-		case pkg.DefaultPlatforms != nil:
-			targetPlatforms = append([]string{}, pkg.DefaultPlatforms...)
-		}
-
-		var ociPush map[string][]string
-		if len(target.OciPush) > 0 {
-			ociPush = make(map[string][]string, len(target.OciPush))
-			for local, dst := range target.OciPush {
-				ociPush[local] = []string(dst)
-			}
-		}
-
-		var dependencyResolvers []label.TargetLabel
-		for _, resolver := range target.DependencyResolvers {
-			resolverLabel, parseError := label.ParseTargetLabel(packagePath, resolver)
-			if parseError != nil {
-				return nil, fmt.Errorf("failed to parse dependency resolver for target %s: %w", targetLabel, parseError)
-			}
-			dependencyResolvers = append(dependencyResolvers, resolverLabel)
-		}
-
-		targets[targetLabel] = &model.Target{
-			DependencyResolvers:  dependencyResolvers,
-			SourceFilePath:       pkg.SourceFilePath,
-			Label:                targetLabel,
-			Command:              target.Command,
-			Dependencies:         deps,
-			Inputs:               resolvedInputs,
-			UnresolvedInputs:     target.Inputs,
-			ExcludeInputs:        target.ExcludeInputs,
-			Outputs:              parsedOutputs,
-			OciPush:              ociPush,
-			BinOutput:            parsedBinOutput,
-			BinaryRequiresPush:   target.BinaryRequiresPush,
-			Platforms:            targetPlatforms,
-			OutputChecks:         target.OutputChecks,
-			Tags:                 target.Tags,
-			Fingerprint:          target.Fingerprint,
-			EnvironmentVariables: target.EnvironmentVariables,
-			Timeout:              timeout,
-			ConcurrencyGroup:     target.ConcurrencyGroup,
+		aliases[aliasLabel] = &model.Alias{
+			SourceFilePath: pkg.SourceFilePath,
+			Label:          aliasLabel,
+			Actual:         actualLabel,
 		}
 	}
 
+	dependencyResolvers, err := enrichDependencyResolvers(logger, packagePath, absolutePackagePath, pkg, targets, aliases, resources)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.Package{
+		DependencyResolvers: dependencyResolvers,
+		Path:                packagePath,
+		Targets:             targets,
+		Aliases:             aliases,
+		Resources:           resources,
+	}, nil
+}
+
+// enrichTarget converts a target dto into a model target, rejecting labels already present in targets.
+func enrichTarget(
+	logger *console.Logger,
+	packagePath string,
+	absolutePackagePath string,
+	pkg PackageDTO,
+	target *TargetDTO,
+	targets map[label.TargetLabel]*model.Target,
+) (*model.Target, error) {
+	var deps []label.TargetLabel
+	// parse labels
+	for _, dep := range target.Dependencies {
+		depLabel, err := label.ParseTargetLabel(packagePath, dep)
+		if err != nil {
+			return nil, err
+		}
+		deps = append(deps, depLabel)
+	}
+
+	targetLabel := label.TargetLabel{Package: packagePath, Name: target.Name}
+	if _, ok := targets[targetLabel]; ok {
+		return nil, fmt.Errorf("duplicate target label: %s (package file %s)", target.Name, pkg.SourceFilePath)
+	}
+
+	resolvedInputs, err := resolveInputs(logger, absolutePackagePath, target.Inputs, target.ExcludeInputs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve inputs for target %s: %w", targetLabel, err)
+	}
+
+	parsedOutputs, err := output.ParseOutputs(target.Outputs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse outputs for target %s: %w", targetLabel, err)
+	}
+
+	parsedBinOutput := model.Output{}
+	if target.BinOutput != "" {
+		parsedBinOutput, err = output.ParseOutput(target.BinOutput)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse bin output for target %s: %w", targetLabel, err)
+		}
+		if !parsedBinOutput.IsFile() {
+			return nil, fmt.Errorf("bin output %s for target %s must be of type file",
+				target.BinOutput, targetLabel)
+		}
+	}
+
+	var timeout time.Duration
+	if target.Timeout != "" {
+		timeout, err = time.ParseDuration(target.Timeout)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse timeout for target %s: %w", targetLabel, err)
+		}
+	}
+
+	// Determine the platforms to use
+	// If target has its own platforms, use those
+	// Otherwise, use the package default platforms if available
+	var targetPlatforms []string
+	switch {
+	case target.Platforms != nil:
+		targetPlatforms = append([]string{}, target.Platforms...)
+	case pkg.DefaultPlatforms != nil:
+		targetPlatforms = append([]string{}, pkg.DefaultPlatforms...)
+	}
+
+	var ociPush map[string][]string
+	if len(target.OciPush) > 0 {
+		ociPush = make(map[string][]string, len(target.OciPush))
+		for local, dst := range target.OciPush {
+			ociPush[local] = []string(dst)
+		}
+	}
+
+	var dependencyResolvers []label.TargetLabel
+	for _, resolver := range target.DependencyResolvers {
+		resolverLabel, parseError := label.ParseTargetLabel(packagePath, resolver)
+		if parseError != nil {
+			return nil, fmt.Errorf("failed to parse dependency resolver for target %s: %w", targetLabel, parseError)
+		}
+		dependencyResolvers = append(dependencyResolvers, resolverLabel)
+	}
+
+	return &model.Target{
+		DependencyResolvers:  dependencyResolvers,
+		SourceFilePath:       pkg.SourceFilePath,
+		Label:                targetLabel,
+		Command:              target.Command,
+		Dependencies:         deps,
+		Inputs:               resolvedInputs,
+		UnresolvedInputs:     target.Inputs,
+		ExcludeInputs:        target.ExcludeInputs,
+		Outputs:              parsedOutputs,
+		OciPush:              ociPush,
+		BinOutput:            parsedBinOutput,
+		BinaryRequiresPush:   target.BinaryRequiresPush,
+		Platforms:            targetPlatforms,
+		OutputChecks:         target.OutputChecks,
+		Tags:                 target.Tags,
+		Fingerprint:          target.Fingerprint,
+		EnvironmentVariables: target.EnvironmentVariables,
+		Timeout:              timeout,
+		ConcurrencyGroup:     target.ConcurrencyGroup,
+	}, nil
+}
+
+// enrichResources converts the package's resource dtos into model resources.
+func enrichResources(
+	packagePath string,
+	pkg PackageDTO,
+	targets map[label.TargetLabel]*model.Target,
+) (map[label.TargetLabel]*model.Resource, error) {
 	resources := make(map[label.TargetLabel]*model.Resource)
 	for _, resource := range pkg.Resources {
 		var resourceDeps []label.TargetLabel
@@ -145,9 +197,6 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 			resourceDeps = append(resourceDeps, depLabel)
 		}
 
-		if packagePath == "." {
-			packagePath = ""
-		}
 		resourceLabel := label.TargetLabel{Package: packagePath, Name: resource.Name}
 		if _, ok := targets[resourceLabel]; ok || resources[resourceLabel] != nil {
 			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", resource.Name, pkg.SourceFilePath)
@@ -177,28 +226,19 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 			Dependencies:   resourceDeps,
 		}
 	}
+	return resources, nil
+}
 
-	for _, alias := range pkg.Aliases {
-		actualLabel, err := label.ParseTargetLabel(packagePath, alias.Actual)
-		if err != nil {
-			return nil, err
-		}
-
-		if packagePath == "." {
-			packagePath = ""
-		}
-		aliasLabel := label.TargetLabel{Package: packagePath, Name: alias.Name}
-		if _, ok := targets[aliasLabel]; ok || aliases[aliasLabel] != nil || resources[aliasLabel] != nil {
-			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", alias.Name, pkg.SourceFilePath)
-		}
-
-		aliases[aliasLabel] = &model.Alias{
-			SourceFilePath: pkg.SourceFilePath,
-			Label:          aliasLabel,
-			Actual:         actualLabel,
-		}
-	}
-
+// enrichDependencyResolvers converts the package's dependency resolver dtos into model dependency resolvers.
+func enrichDependencyResolvers(
+	logger *console.Logger,
+	packagePath string,
+	absolutePackagePath string,
+	pkg PackageDTO,
+	targets map[label.TargetLabel]*model.Target,
+	aliases map[label.TargetLabel]*model.Alias,
+	resources map[label.TargetLabel]*model.Resource,
+) (map[label.TargetLabel]*model.DependencyResolver, error) {
 	dependencyResolvers := make(map[label.TargetLabel]*model.DependencyResolver)
 	for _, resolver := range pkg.DependencyResolvers {
 		resolverLabel, enrichmentError := label.ParseTargetLabel(packagePath, ":"+resolver.Name)
@@ -243,14 +283,7 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 			GeneratedTargetName: synthesizedTarget,
 		}
 	}
-
-	return &model.Package{
-		DependencyResolvers: dependencyResolvers,
-		Path:                packagePath,
-		Targets:             targets,
-		Aliases:             aliases,
-		Resources:           resources,
-	}, nil
+	return dependencyResolvers, nil
 }
 
 // resolveInputs resolves the glob patterns in the inputs and excludeInputs.

@@ -47,10 +47,13 @@ check-coverage: test
 
 ## LINT
 # Runs every check that CI gates on. Set TREEFMT_CI=true to bypass the formatter cache.
-lint: prek nilaway
+lint: prek golangci-lint nilaway
 
 prek:
 	@prek run --all-files
+
+golangci-lint:
+	@golangci-lint run ./...
 
 # Nil-panic analysis (https://github.com/uber-go/nilaway).
 # Suppress a false positive with a `//nolint:nilaway` comment on the offending line.

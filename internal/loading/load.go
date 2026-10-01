@@ -143,68 +143,49 @@ func mergePackages(from *model.Package, into *model.Package) error {
 		into.DependencyResolvers = make(map[label.TargetLabel]*model.DependencyResolver)
 	}
 	for resolverLabel, resolver := range from.DependencyResolvers {
-		if existing := into.DependencyResolvers[resolverLabel]; existing != nil {
-			return fmt.Errorf("duplicate dependency resolver label: %s (defined in %s and %s)", resolverLabel, existing.SourceFilePath, resolver.SourceFilePath)
-		}
-		if existing := into.Targets[resolverLabel]; existing != nil {
-			return fmt.Errorf("duplicate dependency resolver label: %s (defined in %s and as target in %s)", resolverLabel, resolver.SourceFilePath, existing.SourceFilePath)
-		}
-		if existing := into.Aliases[resolverLabel]; existing != nil {
-			return fmt.Errorf("duplicate dependency resolver label: %s (defined in %s and as alias in %s)", resolverLabel, resolver.SourceFilePath, existing.SourceFilePath)
-		}
-		if existing := into.Resources[resolverLabel]; existing != nil {
-			return fmt.Errorf("duplicate dependency resolver label: %s (defined in %s and as resource in %s)", resolverLabel, resolver.SourceFilePath, existing.SourceFilePath)
+		if kind, sourceFilePath, exists := existingDefinition(into, resolverLabel); exists {
+			return fmt.Errorf("duplicate dependency resolver label: %s (defined in %s and as %s in %s)", resolverLabel, resolver.SourceFilePath, kind, sourceFilePath)
 		}
 		into.DependencyResolvers[resolverLabel] = resolver
 	}
 
-	for fromTargetLabel, fromTarget := range from.Targets {
-		if existing := into.DependencyResolvers[fromTargetLabel]; existing != nil {
-			return fmt.Errorf("duplicate target label: %s (defined in %s and as dependency resolver in %s)", fromTargetLabel, fromTarget.SourceFilePath, existing.SourceFilePath)
+	for targetLabel, target := range from.Targets {
+		if kind, sourceFilePath, exists := existingDefinition(into, targetLabel); exists {
+			return fmt.Errorf("duplicate target label: %s (defined in %s and as %s in %s)", targetLabel, target.SourceFilePath, kind, sourceFilePath)
 		}
-		if intoTarget, exists := into.Targets[fromTargetLabel]; exists {
-			return fmt.Errorf("duplicate target label: %s (defined in %s and %s)", fromTargetLabel, intoTarget.SourceFilePath, fromTarget.SourceFilePath)
-		}
-		if intoAlias, exists := into.Aliases[fromTargetLabel]; exists {
-			return fmt.Errorf("duplicate target label: %s (defined in %s and as alias in %s)", fromTargetLabel, fromTarget.SourceFilePath, intoAlias.SourceFilePath)
-		}
-		if intoResource, exists := into.Resources[fromTargetLabel]; exists {
-			return fmt.Errorf("duplicate target label: %s (defined in %s and as resource in %s)", fromTargetLabel, fromTarget.SourceFilePath, intoResource.SourceFilePath)
-		}
-		into.Targets[fromTargetLabel] = fromTarget
+		into.Targets[targetLabel] = target
 	}
 
-	for fromAliasLabel, fromAlias := range from.Aliases {
-		if existing := into.DependencyResolvers[fromAliasLabel]; existing != nil {
-			return fmt.Errorf("duplicate alias label: %s (defined in %s and as dependency resolver in %s)", fromAliasLabel, fromAlias.SourceFilePath, existing.SourceFilePath)
+	for aliasLabel, alias := range from.Aliases {
+		if kind, sourceFilePath, exists := existingDefinition(into, aliasLabel); exists {
+			return fmt.Errorf("duplicate alias label: %s (defined in %s and as %s in %s)", aliasLabel, alias.SourceFilePath, kind, sourceFilePath)
 		}
-		if intoAlias, exists := into.Aliases[fromAliasLabel]; exists {
-			return fmt.Errorf("duplicate target label: %s (defined in %s and %s)", fromAliasLabel, intoAlias.SourceFilePath, fromAlias.SourceFilePath)
-		}
-		if intoTarget, exists := into.Targets[fromAliasLabel]; exists {
-			return fmt.Errorf("duplicate alias label: %s (defined in %s and as target in %s)", fromAliasLabel, fromAlias.SourceFilePath, intoTarget.SourceFilePath)
-		}
-		if intoResource, exists := into.Resources[fromAliasLabel]; exists {
-			return fmt.Errorf("duplicate alias label: %s (defined in %s and as resource in %s)", fromAliasLabel, fromAlias.SourceFilePath, intoResource.SourceFilePath)
-		}
-		into.Aliases[fromAliasLabel] = fromAlias
+		into.Aliases[aliasLabel] = alias
 	}
 
-	for fromResourceLabel, fromResource := range from.Resources {
-		if existing := into.DependencyResolvers[fromResourceLabel]; existing != nil {
-			return fmt.Errorf("duplicate resource label: %s (defined in %s and as dependency resolver in %s)", fromResourceLabel, fromResource.SourceFilePath, existing.SourceFilePath)
+	for resourceLabel, resource := range from.Resources {
+		if kind, sourceFilePath, exists := existingDefinition(into, resourceLabel); exists {
+			return fmt.Errorf("duplicate resource label: %s (defined in %s and as %s in %s)", resourceLabel, resource.SourceFilePath, kind, sourceFilePath)
 		}
-		if intoResource, exists := into.Resources[fromResourceLabel]; exists {
-			return fmt.Errorf("duplicate resource label: %s (defined in %s and %s)", fromResourceLabel, intoResource.SourceFilePath, fromResource.SourceFilePath)
-		}
-		if intoTarget, exists := into.Targets[fromResourceLabel]; exists {
-			return fmt.Errorf("duplicate resource label: %s (defined in %s and as target in %s)", fromResourceLabel, fromResource.SourceFilePath, intoTarget.SourceFilePath)
-		}
-		if intoAlias, exists := into.Aliases[fromResourceLabel]; exists {
-			return fmt.Errorf("duplicate resource label: %s (defined in %s and as alias in %s)", fromResourceLabel, fromResource.SourceFilePath, intoAlias.SourceFilePath)
-		}
-		into.Resources[fromResourceLabel] = fromResource
+		into.Resources[resourceLabel] = resource
 	}
 
 	return nil
+}
+
+// existingDefinition reports which kind of definition in pkg already uses the label and where it is defined.
+func existingDefinition(pkg *model.Package, targetLabel label.TargetLabel) (kind string, sourceFilePath string, exists bool) {
+	if target, exists := pkg.Targets[targetLabel]; exists {
+		return "target", target.SourceFilePath, true
+	}
+	if alias, exists := pkg.Aliases[targetLabel]; exists {
+		return "alias", alias.SourceFilePath, true
+	}
+	if resource, exists := pkg.Resources[targetLabel]; exists {
+		return "resource", resource.SourceFilePath, true
+	}
+	if resolver, exists := pkg.DependencyResolvers[targetLabel]; exists {
+		return "dependency resolver", resolver.SourceFilePath, true
+	}
+	return "", "", false
 }

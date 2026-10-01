@@ -106,55 +106,13 @@ func RunBuildAndAfter(
 ) {
 	startTime := time.Now()
 
-	// Determine command name for tracing
-	commandName := "build"
-	if len(commandOverride) > 0 && commandOverride[0] != "" {
-		commandName = commandOverride[0]
-	} else if testFilter == selection.TestOnly {
-		commandName = "test"
-	} else if testFilter == selection.AllTargets {
-		commandName = "build_and_test"
-	}
+	commandName := buildCommandName(testFilter, commandOverride)
 
 	var traceCollector *tracing.TraceCollector
 	if config.Global.Traces.Enabled {
 		traceCollector = tracing.NewTraceCollector(commandName, targetPatterns, GrogVersion)
 	}
-	errs := analysis.CheckTargetConstraints(logger, graph.GetNodes())
-	if len(errs) > 0 {
-		for _, err := range errs {
-			logger.Errorf(err.Error())
-		}
-		os.Exit(1)
-	}
-
-	selector := selection.New(targetPatterns, config.Global.Tags, config.Global.ExcludeTags, testFilter)
-	// Select targets based on the target pattern.
-	selectedCount, skippedCount, err := selector.SelectTargetsForBuild(graph)
-	if err != nil {
-		logger.Fatalf("target selection failed: %v", err)
-	}
-
-	if selectedCount == 0 {
-		// Fail if no targets were selected
-		errString := fmt.Sprintf("could not find any targets matching %s", label.PatternSetToString(targetPatterns))
-		if skippedCount > 0 {
-			errString += fmt.Sprintf(" (%s not matching %s host)",
-				console.FCountTargets(skippedCount), config.Global.GetPlatform())
-		}
-		logger.Fatalf(errString)
-	}
-
-	infoStr := fmt.Sprintf("Selected %s.",
-		console.FCountTargets(selectedCount))
-	if skippedCount > 0 {
-		infoStr = fmt.Sprintf("Selected %s (%s not matching %s host).",
-			console.FCountTargets(selectedCount),
-			console.FCountTargets(skippedCount),
-			config.Global.GetPlatform())
-	}
-
-	logger.Infof(infoStr)
+	selectTargetsForBuild(logger, targetPatterns, graph, testFilter)
 
 	failFast := config.Global.FailFast
 
@@ -180,27 +138,8 @@ func RunBuildAndAfter(
 		logger.Fatalf("could not instantiate image pusher: %v", err)
 	}
 
-	// Only lock the workspace once necessary, i.e., before we start building.
-	// releaseWorkspaceLock is invoked explicitly before afterBuildSuccess so a
-	// user binary that itself shells out to grog doesn't deadlock on the lock.
-	releaseWorkspaceLock := func() {}
-	if config.Global.SkipWorkspaceLock {
-		logger.Warn("Skipping workspace lock. Concurrent grog executions may corrupt the cache or workspace state.")
-	} else {
-		locker := locking.NewWorkspaceLocker()
-		if err := locker.Lock(ctx); err != nil {
-			logger.Fatalf("could not acquire workspace lock: %v", err)
-		}
-		var unlockOnce sync.Once
-		releaseWorkspaceLock = func() {
-			unlockOnce.Do(func() {
-				if err := locker.Unlock(); err != nil {
-					logger.Errorf("failed to release workspace lock: %v", err)
-				}
-			})
-		}
-		defer releaseWorkspaceLock()
-	}
+	releaseWorkspaceLock := acquireWorkspaceLock(ctx, logger)
+	defer releaseWorkspaceLock()
 
 	executor := execution.NewExecutor(
 		targetCache,
@@ -270,6 +209,105 @@ func RunBuildAndAfter(
 
 	// Write trace (synchronous — Parquet writes are fast for local FS,
 	// and we need to ensure the write completes before the process exits)
+	writeTrace(ctx, logger, traceCollector, completionMap, graph, executor, cache)
+
+	logElapsedTime(logger, graph, executor, startTime)
+
+	exitOnBuildFailure(logger, graph, goal, completionMap, executionErr, afterBuildErr, pushHadFailures)
+}
+
+// buildCommandName returns the command name recorded in the build trace.
+func buildCommandName(testFilter selection.TargetTypeSelection, commandOverride []string) string {
+	commandName := "build"
+	if len(commandOverride) > 0 && commandOverride[0] != "" {
+		commandName = commandOverride[0]
+	} else if testFilter == selection.TestOnly {
+		commandName = "test"
+	} else if testFilter == selection.AllTargets {
+		commandName = "build_and_test"
+	}
+	return commandName
+}
+
+// selectTargetsForBuild validates target constraints and selects the targets to build, exiting on failure.
+func selectTargetsForBuild(
+	logger *console.Logger,
+	targetPatterns []label.TargetPattern,
+	graph *dag.DirectedTargetGraph,
+	testFilter selection.TargetTypeSelection,
+) {
+	errs := analysis.CheckTargetConstraints(logger, graph.GetNodes())
+	if len(errs) > 0 {
+		for _, err := range errs {
+			logger.Errorf(err.Error())
+		}
+		os.Exit(1)
+	}
+
+	selector := selection.New(targetPatterns, config.Global.Tags, config.Global.ExcludeTags, testFilter)
+	// Select targets based on the target pattern.
+	selectedCount, skippedCount, err := selector.SelectTargetsForBuild(graph)
+	if err != nil {
+		logger.Fatalf("target selection failed: %v", err)
+	}
+
+	if selectedCount == 0 {
+		// Fail if no targets were selected
+		errString := fmt.Sprintf("could not find any targets matching %s", label.PatternSetToString(targetPatterns))
+		if skippedCount > 0 {
+			errString += fmt.Sprintf(" (%s not matching %s host)",
+				console.FCountTargets(skippedCount), config.Global.GetPlatform())
+		}
+		logger.Fatalf(errString)
+	}
+
+	infoStr := fmt.Sprintf("Selected %s.",
+		console.FCountTargets(selectedCount))
+	if skippedCount > 0 {
+		infoStr = fmt.Sprintf("Selected %s (%s not matching %s host).",
+			console.FCountTargets(selectedCount),
+			console.FCountTargets(skippedCount),
+			config.Global.GetPlatform())
+	}
+
+	logger.Infof(infoStr)
+}
+
+// acquireWorkspaceLock locks the workspace unless disabled and returns an idempotent release function.
+func acquireWorkspaceLock(ctx context.Context, logger *console.Logger) func() {
+	// Only lock the workspace once necessary, i.e., before we start building.
+	// releaseWorkspaceLock is invoked explicitly before afterBuildSuccess so a
+	// user binary that itself shells out to grog doesn't deadlock on the lock.
+	releaseWorkspaceLock := func() {}
+	if config.Global.SkipWorkspaceLock {
+		logger.Warn("Skipping workspace lock. Concurrent grog executions may corrupt the cache or workspace state.")
+	} else {
+		locker := locking.NewWorkspaceLocker()
+		if err := locker.Lock(ctx); err != nil {
+			logger.Fatalf("could not acquire workspace lock: %v", err)
+		}
+		var unlockOnce sync.Once
+		releaseWorkspaceLock = func() {
+			unlockOnce.Do(func() {
+				if err := locker.Unlock(); err != nil {
+					logger.Errorf("failed to release workspace lock: %v", err)
+				}
+			})
+		}
+	}
+	return releaseWorkspaceLock
+}
+
+// writeTrace finalizes the build trace and writes it to the traces backend, falling back to the cache.
+func writeTrace(
+	ctx context.Context,
+	logger *console.Logger,
+	traceCollector *tracing.TraceCollector,
+	completionMap dag.CompletionMap,
+	graph *dag.DirectedTargetGraph,
+	executor *execution.Executor,
+	cache backends.CacheBackend,
+) {
 	if traceCollector != nil && completionMap != nil {
 		buildTrace := traceCollector.Finalize(completionMap, graph, executor.AsyncWaitTime())
 
@@ -293,7 +331,10 @@ func RunBuildAndAfter(
 			logger.Warnf("failed to write trace: %v", err)
 		}
 	}
+}
 
+// logElapsedTime logs the total build time and the critical path.
+func logElapsedTime(logger *console.Logger, graph *dag.DirectedTargetGraph, executor *execution.Executor, startTime time.Time) {
 	elapsedTime := time.Since(startTime).Seconds()
 	// Mostly used to keep our test fixtures deterministic
 	if !config.Global.DisableNonDeterministicLogging {
@@ -328,7 +369,18 @@ func RunBuildAndAfter(
 			)
 		}
 	}
+}
 
+// exitOnBuildFailure reports failed targets and exits non-zero if the build, callback or pushes failed.
+func exitOnBuildFailure(
+	logger *console.Logger,
+	graph *dag.DirectedTargetGraph,
+	goal string,
+	completionMap dag.CompletionMap,
+	executionErr error,
+	afterBuildErr error,
+	pushHadFailures bool,
+) {
 	if executionErr != nil {
 		// If this is a cancellation error continue printing out any collected errors
 		if !errors.Is(executionErr, context.Canceled) || completionMap == nil {
@@ -358,11 +410,10 @@ func RunBuildAndAfter(
 				continue
 			}
 
-			var executionError *execution.CommandError
 			color.Red("---------------------------------")
 			if completion.Err == nil {
 				logger.Errorf("Target %s failed with no error", target.Label)
-			} else if errors.As(completion.Err, &executionError) {
+			} else if executionError, isCommandError := errors.AsType[*execution.CommandError](completion.Err); isCommandError {
 				logger.Errorf("Target %s failed with exit code %d:\ncommand: \"%s\"\n%s",
 					target.Label,
 					executionError.ExitCode,

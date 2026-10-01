@@ -520,6 +520,11 @@ func (s *TraceStore) Bottlenecks(ctx context.Context, opts StatsOptions) (*Bottl
 		return nil, err
 	}
 
+	return categorizeBottlenecks(all, totalMissRate), nil
+}
+
+// categorizeBottlenecks sorts impact-ordered targets into the report's bottleneck categories.
+func categorizeBottlenecks(all []TargetBottleneck, totalMissRate float64) *BottleneckReport {
 	report := &BottleneckReport{}
 	if len(all) > 0 {
 		report.OverallCacheMissRate = totalMissRate / float64(len(all))
@@ -571,7 +576,7 @@ func (s *TraceStore) Bottlenecks(ctx context.Context, opts StatsOptions) (*Bottl
 	sortByMissRate(report.FrequentMisses)
 	sortByFailures(report.FlakyTargets)
 
-	return report, nil
+	return report
 }
 
 // Prune deletes traces older than the given time.
