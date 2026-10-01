@@ -263,6 +263,8 @@ func enrichDependencyResolvers(
 			switch resolver.Command {
 			case "builtin::cargo":
 				inputs = cargoDefaultInputs(absolutePackagePath)
+			case "builtin::node":
+				inputs = nodeDefaultInputs(absolutePackagePath)
 			case "builtin::uv":
 				inputs = uvDefaultInputs(absolutePackagePath)
 			}

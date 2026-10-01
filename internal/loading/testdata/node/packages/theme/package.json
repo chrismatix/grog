@@ -1,0 +1,7 @@
+{
+  "name": "@demo/theme",
+  "version": "1.0.0",
+  "dependencies": {
+    "tailwindcss": "^4"
+  }
+}
