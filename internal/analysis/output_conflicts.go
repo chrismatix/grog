@@ -24,7 +24,7 @@ type outputRecord struct {
 // - two targets are not in each other's dependency ancestors
 // This is an error, because there is no guarantee which target will execute first
 // and overwrite the other's outputs.
-func detectOutputConflicts(graph *dag.DirectedTargetGraph) error { //nolint:gocyclo
+func detectOutputConflicts(graph *dag.DirectedTargetGraph) error {
 	var fileOutputs []outputRecord
 	var dirOutputs []outputRecord
 	dockerOutputs := make(map[string][]outputRecord)
@@ -65,32 +65,13 @@ func detectOutputConflicts(graph *dag.DirectedTargetGraph) error { //nolint:gocy
 		conflicts = append(conflicts, "- "+message)
 	}
 
-	for tag, records := range dockerOutputs {
-		for i := range records {
-			for j := i + 1; j < len(records); j++ {
-				if targetsAreOrdered(graph, records[i].target, records[j].target, ancestorCache) {
-					continue
-				}
-				addConflict(fmt.Sprintf("%s and %s both declare docker image %q", records[i].target.Label, records[j].target.Label, tag))
-			}
-		}
-	}
-
-	fileMap := make(map[string][]outputRecord)
+	fileOutputsByPath := make(map[string][]outputRecord)
 	for _, record := range fileOutputs {
-		fileMap[record.path] = append(fileMap[record.path], record)
+		fileOutputsByPath[record.path] = append(fileOutputsByPath[record.path], record)
 	}
 
-	for path, records := range fileMap {
-		for i := range records {
-			for j := i + 1; j < len(records); j++ {
-				if targetsAreOrdered(graph, records[i].target, records[j].target, ancestorCache) {
-					continue
-				}
-				addConflict(fmt.Sprintf("%s and %s both write file output %q", records[i].target.Label, records[j].target.Label, path))
-			}
-		}
-	}
+	conflicts = append(conflicts, sharedKeyConflicts(graph, dockerOutputs, "declare docker image", ancestorCache)...)
+	conflicts = append(conflicts, sharedKeyConflicts(graph, fileOutputsByPath, "write file output", ancestorCache)...)
 
 	for i := 0; i < len(dirOutputs); i++ {
 		for j := i + 1; j < len(dirOutputs); j++ {
@@ -121,6 +102,22 @@ func detectOutputConflicts(graph *dag.DirectedTargetGraph) error { //nolint:gocy
 	sort.Strings(conflicts)
 
 	return fmt.Errorf("conflicting outputs detected between independent targets:\n%s\nnote: these overlapping outputs create a race condition that can lead to unexpected or inconsistent build results", strings.Join(conflicts, "\n"))
+}
+
+// sharedKeyConflicts reports every pair of unordered targets that declare the same output key.
+func sharedKeyConflicts(graph *dag.DirectedTargetGraph, recordsByKey map[string][]outputRecord, action string, ancestorCache map[label.TargetLabel]map[label.TargetLabel]struct{}) []string {
+	var conflicts []string
+	for key, records := range recordsByKey {
+		for i := range records {
+			for j := i + 1; j < len(records); j++ {
+				if targetsAreOrdered(graph, records[i].target, records[j].target, ancestorCache) {
+					continue
+				}
+				conflicts = append(conflicts, fmt.Sprintf("- %s and %s both %s %q", records[i].target.Label, records[j].target.Label, action, key))
+			}
+		}
+	}
+	return conflicts
 }
 
 func cleanOutputPath(target *model.Target, output string) string {
