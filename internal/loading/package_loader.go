@@ -18,9 +18,8 @@ type Loader interface {
 
 // PackageLoader facade that delegates to the correct loader based on the pattern.
 type PackageLoader struct {
-	loaders   []Loader
-	fileNames []string
-	logger    *console.Logger
+	loaders []Loader
+	logger  *console.Logger
 }
 
 func NewPackageLoader(logger *console.Logger) *PackageLoader {

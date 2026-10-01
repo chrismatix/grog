@@ -34,18 +34,12 @@ type PreparedTargetResult struct {
 // Registry manages the available output handlers.
 type Registry struct {
 	handlers     map[string]handlers.Handler
-	cas          *caching.Cas
 	pool         pond.Pool
 	handlerMutex sync.RWMutex
 
 	// Features like load_outputs=minimal may load outputs concurrently
 	// In this case we want to make sure that only happens once per target
 	targetMutexMap *maps.MutexMap
-
-	hashMutex       sync.RWMutex
-	hashCache       map[string]string
-	outputHashMutex sync.RWMutex
-	outputHashCache map[string]map[model.Output]string
 }
 
 // NewRegistry creates a new registry with default handlers.
@@ -54,10 +48,8 @@ func NewRegistry(
 	cas *caching.Cas,
 ) *Registry {
 	r := &Registry{
-		handlers:        make(map[string]handlers.Handler),
-		targetMutexMap:  maps.NewMutexMap(),
-		hashCache:       make(map[string]string),
-		outputHashCache: make(map[string]map[model.Output]string),
+		handlers:       make(map[string]handlers.Handler),
+		targetMutexMap: maps.NewMutexMap(),
 		pool: pond.NewPool(
 			runtime.NumCPU() * 2,
 		),

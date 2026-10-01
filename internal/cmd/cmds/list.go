@@ -66,7 +66,7 @@ var ListCmd = &cobra.Command{
 	},
 }
 
-var listCmdConfigured = configureListCmd()
+var _ = configureListCmd()
 
 func configureListCmd() bool {
 	ListCmd.Flags().Var(

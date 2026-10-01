@@ -16,6 +16,7 @@ linters:
     - nolintlint
     - revive
     - staticcheck
+    - unused
   settings:
     gocyclo:
       # Functions already above the ceiling carry `//nolint:gocyclo`; ratchet down as they shrink.
