@@ -325,7 +325,7 @@ func readInEnvironmentVariablesConfig() error {
 		if err != nil {
 			return fmt.Errorf("failed to open environment_variables_file %q: %w", envFilePath, err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 
 		fileEnv := gotenv.Parse(f)
 		maps.Copy(merged, fileEnv)

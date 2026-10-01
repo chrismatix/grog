@@ -24,7 +24,7 @@ func (j YamlLoader) Load(_ context.Context, filePath string) (PackageDTO, bool, 
 	if err != nil {
 		return pkg, false, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Decode JSON content.
 	decoder := yaml.NewDecoder(file)

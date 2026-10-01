@@ -27,7 +27,7 @@ func (ScriptLoader) Load(_ context.Context, filePath string) (PackageDTO, bool, 
 	if err != nil {
 		return PackageDTO{}, false, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	scanner := bufio.NewScanner(file)
 	parser := newScriptParser(scanner, filePath)

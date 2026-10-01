@@ -9,6 +9,7 @@ linters:
   # Default: standard
   default: fast
   enable:
+    - errcheck
     - errorlint
     - gocyclo
     - govet
@@ -17,6 +18,15 @@ linters:
     - revive
     - staticcheck
   settings:
+    errcheck:
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - (*text/tabwriter.Writer).Flush
+        - (io.Closer).Close
+        - (*database/sql.Rows).Close
+        - (*grog/internal/tracing.TraceStore).Close
     gocyclo:
       # Functions already above the ceiling carry `//nolint:gocyclo`; ratchet down as they shrink.
       min-complexity: 20

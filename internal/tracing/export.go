@@ -48,15 +48,18 @@ func buildJSONLObj(b BuildRow, spans []SpanRow) map[string]any {
 // chunks so memory stays bounded regardless of how many builds are exported.
 func ExportJSONL(ctx context.Context, loader SpanLoader, builds []BuildRow, w io.Writer) error {
 	bw := bufio.NewWriter(w)
-	defer bw.Flush()
 	encoder := json.NewEncoder(bw)
 
-	return forEachChunk(ctx, loader, builds, func(b BuildRow, spans []SpanRow) error {
+	err := forEachChunk(ctx, loader, builds, func(b BuildRow, spans []SpanRow) error {
 		if err := encoder.Encode(buildJSONLObj(b, spans)); err != nil {
 			return fmt.Errorf("encode trace %s: %w", b.TraceID, err)
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	return bw.Flush()
 }
 
 // ExportOTLP streams traces as an OTLP JSON document. The top-level object
@@ -65,7 +68,6 @@ func ExportJSONL(ctx context.Context, loader SpanLoader, builds []BuildRow, w io
 // produced to avoid holding every OTLP span in memory.
 func ExportOTLP(ctx context.Context, loader SpanLoader, builds []BuildRow, w io.Writer) error {
 	bw := bufio.NewWriter(w)
-	defer bw.Flush()
 
 	if _, err := bw.WriteString("{\n  \"resourceSpans\": ["); err != nil {
 		return err
@@ -95,8 +97,10 @@ func ExportOTLP(ctx context.Context, loader SpanLoader, builds []BuildRow, w io.
 		return err
 	}
 
-	_, err = bw.WriteString("\n  ]\n}\n")
-	return err
+	if _, err = bw.WriteString("\n  ]\n}\n"); err != nil {
+		return err
+	}
+	return bw.Flush()
 }
 
 func forEachChunk(ctx context.Context, loader SpanLoader, builds []BuildRow, emit func(BuildRow, []SpanRow) error) error {

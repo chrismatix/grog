@@ -33,7 +33,7 @@ func (t *TargetHasher) SetExtraArgs(args []string) {
 // SetTargetChangeHash computes and sets the target change hash.
 func (t *TargetHasher) SetTargetChangeHash(target *model.Target) error {
 	t.targetMutexMap.Lock(target.Label.String())
-	defer t.targetMutexMap.Unlock(target.Label.String())
+	defer func() { _ = t.targetMutexMap.Unlock(target.Label.String()) }()
 
 	if target.ChangeHash != "" {
 		// ChangeHash already set

@@ -33,7 +33,7 @@ func (f *fileWritePlan) Execute(ctx context.Context, tracker *worker.ProgressTra
 	if err != nil {
 		return fmt.Errorf("failed to open staged file %s for cache write: %w", f.stagedPath, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	progress := tracker
 	if progress != nil {
@@ -98,7 +98,7 @@ func (f *FileOutputHandler) Write(
 	if err != nil {
 		return nil, fmt.Errorf("declared output %s for target %s was not created", output, target.Label)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	stagedFile, err := os.CreateTemp("", "grog-cache-file-*")
 	if err != nil {

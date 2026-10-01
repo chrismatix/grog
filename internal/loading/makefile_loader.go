@@ -23,7 +23,7 @@ func (m MakefileLoader) Load(_ context.Context, filePath string) (PackageDTO, bo
 	if err != nil {
 		return PackageDTO{}, false, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	scanner := bufio.NewScanner(file)
 	parser := newMakefileParser(scanner)
