@@ -26,9 +26,9 @@ jobs:
         id: tag
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ inputs.tag_name }}" >> $GITHUB_OUTPUT
+            echo "tag=${{ inputs.tag_name }}" >> "$GITHUB_OUTPUT"
           else
-            echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Fetch release information
@@ -56,10 +56,12 @@ jobs:
           fi
 
           # Output URLs
-          echo "darwin_amd64_url=$darwin_amd64_url" >> $GITHUB_OUTPUT
-          echo "darwin_arm64_url=$darwin_arm64_url" >> $GITHUB_OUTPUT
-          echo "linux_amd64_url=$linux_amd64_url" >> $GITHUB_OUTPUT
-          echo "linux_arm64_url=$linux_arm64_url" >> $GITHUB_OUTPUT
+          {
+            echo "darwin_amd64_url=$darwin_amd64_url"
+            echo "darwin_arm64_url=$darwin_arm64_url"
+            echo "linux_amd64_url=$linux_amd64_url"
+            echo "linux_arm64_url=$linux_arm64_url"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Download and hash assets
         id: assets
@@ -82,10 +84,12 @@ jobs:
           linux_arm64_sha=$(sha256sum grog-linux-arm64 | cut -d' ' -f1)
 
           # Output hashes
-          echo "darwin_amd64_sha=$darwin_amd64_sha" >> $GITHUB_OUTPUT
-          echo "darwin_arm64_sha=$darwin_arm64_sha" >> $GITHUB_OUTPUT
-          echo "linux_amd64_sha=$linux_amd64_sha" >> $GITHUB_OUTPUT
-          echo "linux_arm64_sha=$linux_arm64_sha" >> $GITHUB_OUTPUT
+          {
+            echo "darwin_amd64_sha=$darwin_amd64_sha"
+            echo "darwin_arm64_sha=$darwin_arm64_sha"
+            echo "linux_amd64_sha=$linux_amd64_sha"
+            echo "linux_arm64_sha=$linux_arm64_sha"
+          } >> "$GITHUB_OUTPUT"
 
           echo "Asset hashes calculated successfully"
 
@@ -202,11 +206,13 @@ jobs:
 
       - name: Summary
         run: |
-          echo "## Homebrew Formula Update Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Formula:** ${{ env.FORMULA_NAME }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version:** ${{ steps.tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Repository:** ${{ env.HOMEBREW_TAP_REPO }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Assets processed:** 4 (Darwin AMD64/ARM64, Linux AMD64/ARM64)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Pull request created successfully!" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Homebrew Formula Update Summary"
+            echo ""
+            echo "- **Formula:** ${{ env.FORMULA_NAME }}"
+            echo "- **Version:** ${{ steps.tag.outputs.tag }}"
+            echo "- **Repository:** ${{ env.HOMEBREW_TAP_REPO }}"
+            echo "- **Assets processed:** 4 (Darwin AMD64/ARM64, Linux AMD64/ARM64)"
+            echo ""
+            echo "✅ Pull request created successfully!"
+          } >> "$GITHUB_STEP_SUMMARY"
