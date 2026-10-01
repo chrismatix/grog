@@ -1,11 +1,12 @@
 ---
 title: Dependency Inference
-description: Let Cargo, uv, npm and Go tell Grog about your cross-package dependencies instead of hand-listing them in every BUILD file.
+description: Allow Grog to automatically discover your package dependencies using customizable dependency resolvers.
 ---
 
 import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
 
-Most monorepos state their internal dependency graph twice. Once for the language's package manager:
+Most monorepos state their internal dependency graph twice.
+Once for the language's package manager:
 
 ```toml
 # crates/greet/Cargo.toml
@@ -20,21 +21,15 @@ and once for Grog:
 cargo_crate(name = "greet", deps = ["//crates/format"])
 ```
 
-The second copy drifts. If the BUILD file ends up with fewer edges than Cargo has, Grog under-invalidates: a
-change to `format` leaves `greet`'s cached test result in place, and the build passes on broken code.
+Naturally, this isn't great because the Grog graph can get out of sync causing cache-misses or incorrect cache hits.
 
-Dependency inference removes the second copy. A _dependency resolver_ reads the graph your package manager
-already resolved and hands it to Grog at load time.
-
-<Aside type="note" title="Inference over-approximates, never under-approximates">
-  Conditional dependencies — a `cfg(windows)` dependency, an optional feature, an environment marker
-  — are included. An extra edge costs a rebuild; a missing edge costs correctness.
-</Aside>
+This is why Grog provides customizable **dependency resolvers** that allow syncing language dependencies into the Grog build graph.
 
 ## Quick start
 
-Declare a resolver in the BUILD file of the directory your workspace is rooted at, which for a Cargo workspace
-is the repo root. `cargo` is [built in](#built-in-resolvers), so the declaration is a name and a command:
+Declare a resolver in any BUILD file (typically the workspace root) to use it.
+
+`cargo` is [built in](#built-in-resolvers), so the declaration is a name and a command:
 
 <Tabs syncKey="build-file-format">
   <TabItem label="YAML">
@@ -75,8 +70,8 @@ dependency_resolvers {
   </TabItem>
 </Tabs>
 
-Every crate in the workspace now has a filegroup, `//crates/<name>:_cargo_package`. Its inputs come from the crate's
-layout and its dependencies from the crate's `path` entries, and it exists whether or not the crate has a BUILD
+Every crate in the workspace now has an implicit target `//crates/<name>:_cargo_package` that groups the relevant input files.
+Its inputs come from the crate's layout and its dependencies from the crate's `path` entries, and it exists whether or not the crate has a BUILD
 file:
 
 ```bash
@@ -84,162 +79,115 @@ $ grog deps //crates/cli:_cargo_package
 //crates/greet:_cargo_package
 ```
 
-Targets that build or test a crate depend on that label and list nothing else:
+## How the wiring works
 
-<Tabs syncKey="build-file-format">
-  <TabItem label="YAML">
+A resolver is a small program that reports, for each package directory, the directories it depends on and, optionally, the files that make it up.
+Grog uses this information to build pseudo targets on the fly for its dependency graph.
 
-```yaml
-# crates/greet/BUILD.yaml
-targets:
-  - name: test
-    command: cargo test -p greet
-    dependencies:
-      - :_cargo_package
+Paths are relative to the package the resolver is declared in.
+`//:cargo` at the repo root reports workspace-relative paths, while `crates/format` from `//tools/rust:cargo` means `tools/rust/crates/format`.
+
+```mermaid
+flowchart TD
+  M["crates/greet/Cargo.toml<br/>format = { path = &quot;../format&quot; }"] --> R["//:cargo resolver"]
+  R -->|"crates/greet → crates/format"| G
+  subgraph buildGraph["Build graph"]
+    T["//crates/greet:test<br/>written by you"] -->|depends on| G["//crates/greet:_cargo_package<br/>resolved"]
+    G -->|depends on| F["//crates/format:_cargo_package<br/>resolved"]
+  end
 ```
 
-  </TabItem>
-  <TabItem label="Starlark">
+Your own targets only depend on their package's filegroup, e.g. `//crates/greet:test` on `:_cargo_package`.
+The edge to `crates/format` comes from the resolver, so a change there still invalidates the test.
+
+For each package the resolver reports `inputs` for, Grog generates a filegroup, e.g. `//crates/format:_cargo_package`, and wires the edges between them.
+Its name is the resolver's `generated_target_name`, which defaults to `_<resolver name>_package`.
+This works in directories without a BUILD file.
+A package reported without `inputs` gets no filegroup, which is only an error once something depends on it.
+
+### Using your own target instead
+
+If you know a package's inputs better than the resolver, e.g. because it has a generated directory, register your own target in its place:
 
 ```starlark
 # crates/greet/BUILD.star
 target(
-    name = "test",
-    command = "cargo test -p greet",
-    dependencies = [":_cargo_package"],
+    name = "lib",
+    inputs = ["src/**/*.rs", "gen/**/*.rs", "Cargo.toml"],
+    dependency_resolvers = ["//:cargo"],
 )
 ```
 
-  </TabItem>
-  <TabItem label="Pkl">
-
-```pkl
-// crates/greet/BUILD.pkl
-amends "@grog/package.pkl"
-
-targets {
-  new {
-    name = "test"
-    command = "cargo test -p greet"
-    dependencies {
-      ":_cargo_package"
-    }
-  }
-}
-```
-
-  </TabItem>
-</Tabs>
-
-Adding a source file, a `build.rs`, or a path dependency to `Cargo.toml` needs no BUILD file edit. In a
-helper library the pattern collapses to `cargo_crate(name = "greet")`.
-
-## How the wiring works
-
-Package managers describe dependencies between directories; Grog describes them between labels. A resolver
-bridges the two: for each package directory it reports the directories that package depends on and, optionally,
-the files that make it up.
-
-Those directories are relative to the package the resolver is declared in. `//:cargo` at the repo root speaks
-workspace-relative paths; `//tools/rust:cargo` reads its `crates/format` as `tools/rust/crates/format`. That is
-why there is no working-directory setting.
-
-```mermaid
-flowchart LR
-  M["crates/greet/Cargo.toml<br/>format = { path = &quot;../format&quot; }"] --> P["cargo resolver"]
-  P --> E["crates/greet → crates/format<br/>inputs: src/**/*, Cargo.toml"]
-  E --> G["//crates/greet:_cargo_package<br/>depends on<br/>//crates/format:_cargo_package"]
-```
-
-Each reported package ends up with exactly one target standing in for it, chosen by three rules:
-
-1. A target that names the resolver in `dependency_resolvers` is the package's endpoint. It receives the
-   package's edges as additional `dependencies`, other packages' edges point at it, and the resolver's `inputs`
-   for the package are ignored in favour of its own. At most one target per package may register a resolver.
-2. Otherwise, if the resolver declared `inputs` for the package, Grog synthesizes a filegroup from them, named
-   by the declaration's `generated_target_name` — `_<resolver name>_package` unless set, so `//crates/format:_cargo_package`. Its defining file, for `grog changes` and error
-   messages, is the BUILD file that declared the resolver. A directory with no BUILD file at all gets a package
-   this way.
-3. Otherwise the package is outside the resolver's graph. That is fine until something depends on it, which is a
-   load error.
-
-Registration is for the cases where you know the inputs better than the resolver does — a package with a
-generated directory, say. Register a filegroup with your own `inputs` and `dependency_resolvers = ["//:cargo"]`,
-and the edges still arrive. A target may register with several resolvers and receives the union:
-
-```starlark
-target(
-    name = "server",
-    inputs = ["server/**/*.py", "pyproject.toml"],
-    dependency_resolvers = ["//:uv", "//:proto"],
-)
-```
+`//crates/greet:lib` now replaces `:_cargo_package`: it receives the package's edges, and other packages' edges point at it.
+The resolver's `inputs` for the package are ignored.
+Only one target per package may register a given resolver, but a target may register with several and receives the union of their edges.
 
 ## Built-in resolvers
 
-Four resolvers ship with Grog. Write `command = "builtin::<name>"` and leave `inputs` off to take the defaults
-below. Every built-in declares inputs for each package it reports, so a workspace member needs no BUILD file to
-be depended on.
+Grog ships four resolvers.
+Use one with `command = "builtin::<name>"` and omit `inputs` to get the defaults listed below.
+Every built-in declares inputs for the packages it reports, so workspace members don't need a BUILD file.
 
-| Name    | Reads                                                                                              | Needs a toolchain |
-| ------- | -------------------------------------------------------------------------------------------------- | ----------------- |
-| `cargo` | The workspace `Cargo.toml` members and each member's `[dependencies]` / `[build-dependencies]`     | no                |
-| `uv`    | `uv.lock` — packages with an `editable` or `directory` source are workspace members                | no                |
-| `node`  | `pnpm-workspace.yaml`, or `workspaces` in the root `package.json`, plus each member's dependencies | no                |
-| `go`    | `go list -deps -e -json ./...`, keeping imports under the module path                              | yes (`go`)        |
+| Name    | Reads                                                                                                                         | Needs a toolchain |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `cargo` | The workspace `Cargo.toml` members and each member's `[dependencies]` / `[build-dependencies]`                                | no                |
+| `uv`    | `uv.lock` — packages with an `editable` or `directory` source are workspace members                                           | no                |
+| `node`  | `pnpm-workspace.yaml` or `aube-workspace.yaml`, else `workspaces` in the root `package.json`, plus each member's dependencies | no                |
+| `go`    | `go list -deps -e -json ./...`, keeping imports under the module path                                                         | yes (`go`)        |
 
-Three of the four parse manifests and lockfiles directly, so they work on a fresh clone with no language
-toolchain installed. `grog changes` on a slim CI image does not need Cargo or uv.
+`cargo`, `uv` and `node` parse manifests and lockfiles directly, so `grog changes` works on a CI image without Cargo, uv or Node.
 
 ### cargo
 
-Members come from `[workspace] members` minus `exclude` in the root manifest, plus the root package itself when
-that manifest has a `[package]` table. Edges come from `path` dependencies between members, including ones
-declared as `workspace = true` and resolved through `[workspace.dependencies]`.
-`[dev-dependencies]` are excluded, because Cargo permits `A dev-depends-on B, B depends-on A` and importing
-those edges would turn a legal workspace into a Grog cycle. If a test needs a workspace crate that is not also a
-normal dependency, add that label by hand to the `:test` target.
+Members are `[workspace] members` minus `exclude`, plus the root package if the root manifest has a `[package]` table.
+Edges are `path` dependencies between members, including `workspace = true` entries resolved through `[workspace.dependencies]`.
 
-Default `inputs`, relative to the declaring package: `Cargo.toml`, `Cargo.lock`, and `<pattern>/Cargo.toml` for
-every `[workspace] members` pattern, so a member at any depth is covered.
+`[dev-dependencies]` are skipped.
+Cargo allows a dev-dependency to point back at a dependant, which would be a cycle in Grog.
+If a test needs a crate that isn't a normal dependency, add its label to the test target by hand.
 
-Each crate's synthesized `:_cargo_package` is a deliberate superset of its layout: `Cargo.toml`, `build.rs`, `src/**/*`,
-`tests/**/*`, `benches/**/*`, `examples/**/*`, plus `[lib] path`, `[[bin]] path` and `[package] include`. A
-listed file the crate does not have is skipped when hashing; one left out would under-invalidate silently.
+Default `inputs`: `Cargo.toml`, `Cargo.lock`, and `<pattern>/Cargo.toml` for every `members` pattern.
+
+Each crate's `:_cargo_package` filegroup covers `Cargo.toml`, `build.rs`, `src/**/*`, `tests/**/*`, `benches/**/*`, `examples/**/*`, `[lib] path`, `[[bin]] path` and `[package] include`.
+Files a crate doesn't have are skipped, so the list errs broad: an extra glob is free, a missing one under-invalidates.
 
 ### uv
 
-Workspace members are the `uv.lock` packages whose source is `{ editable = "<dir>" }` or `{ directory = "<dir>" }`;
-edges are their `dependencies` that name other members. Dev groups are excluded for the same reason as Cargo's
-`[dev-dependencies]`: uv does not forbid cycles between members, and a test-only edge back to a dependant is the
-common way to get one.
+Workspace members are the `uv.lock` packages listed in `[manifest] members`; edges are their
+`dependencies` and `optional-dependencies` that name other members. Dev groups are excluded for the same reason
+as Cargo's `[dev-dependencies]`: uv does not forbid cycles between members, and a test-only edge back to a
+dependant is the common way to get one. The root project is not a member: it has no directory of its own.
 
-Default `inputs`: `uv.lock`, `pyproject.toml`.
+Each member's synthesized `:_uv` covers `pyproject.toml` and its module tree. With `[tool.uv.build-backend]`
+the modules are known exactly (`module-root`, default `src`, and `module-name`, which may be a list). Any other
+build backend may package more than one directory, so the inputs are every `.py` and `.pyi` file in the package
+plus the full tree of a `src/<name>` or `<name>` directory matching the normalised project name. Package data
+outside that tree is not covered — register a filegroup with your own `inputs` for those packages.
+
+Default `inputs`: `uv.lock`, `pyproject.toml`, and every member's `pyproject.toml`, which decides its layout.
 
 <Aside type="caution">
-  The resolver reads the lockfile, not your imports. A stale `uv.lock` yields a stale graph, so keep
-  `uv sync` or `UV_LOCKED=1` in CI.
+  The resolver reads the lockfile, not your imports. A stale `uv.lock` means a stale graph, so run
+  `uv sync` or set `UV_LOCKED=1` in CI.
 </Aside>
 
 ### node
 
-One resolver covers npm, yarn, pnpm and aube workspaces. Only the file listing the member globs differs
-(`pnpm-workspace.yaml` or `aube-workspace.yaml`, which share a format, else `workspaces` in the root
-`package.json`). The edge rule is identical in all of them: a `dependencies`, `devDependencies` or
-`peerDependencies` entry whose name matches another member. The `workspace:*` protocol is a version spec, not a
-different graph.
+Covers npm, yarn and pnpm workspaces.
+Members come from `pnpm-workspace.yaml` or `aube-workspace.yaml` (same format), falling back to `workspaces` in the root `package.json`.
+Edges are `dependencies`, `devDependencies` and `peerDependencies` entries that name another member; pnpm's `workspace:*` is treated like any other version spec.
+None of the package managers forbid cycles between members, and one through any of these fields fails the load.
 
 Default `inputs`: `pnpm-workspace.yaml`, `aube-workspace.yaml`, `package.json`, `*/package.json`,
 `*/*/package.json`.
 
 ### go
 
-Import edges between directories inside your module(s), from `go list`. Imports are taken from every `.go` file
-in a package, including files that build constraints exclude on the current platform, so a `worker_windows.go`
-import is an edge on Linux too and the mapping does not depend on `GOOS`, `GOARCH` or build tags. This is the
-only built-in that shells out to its toolchain, so it is slow on a large repo and benefits most from
-[resolver caching](#caching). Test-only imports are excluded for the same cycle reason as Cargo's
-`[dev-dependencies]`.
+Edges are imports between packages inside your module(s), as reported by `go list`.
+Every `.go` file counts, including ones excluded by build constraints, so the graph is the same for every `GOOS`, `GOARCH` and tag set.
+Test-only imports are skipped for the same cycle reason as Cargo's `[dev-dependencies]`.
+
+This is the only built-in that shells out to its toolchain, so it's the slowest on a large repo and gains the most from [caching](#caching).
 
 Default `inputs`: `go.mod`, `go.sum`, `go.work`, `**/*.go`.
 
@@ -247,17 +195,16 @@ Default `inputs`: `go.mod`, `go.sum`, `go.work`, `**/*.go`.
 
 ### Target field
 
-| Field                  | Type      | Description                                                                                                    |
-| ---------------------- | --------- | -------------------------------------------------------------------------------------------------------------- |
-| `dependency_resolvers` | `label[]` | Labels of the resolver declarations this target registers with. Inferred edges are merged into `dependencies`. |
+| Field                  | Type      | Description                                                                                    |
+| ---------------------- | --------- | ---------------------------------------------------------------------------------------------- |
+| `dependency_resolvers` | `label[]` | Resolvers this target registers with. Their edges for its package are added to `dependencies`. |
 
-Ordinary label rules apply: `":cargo"` addresses a resolver declared in the same package, `"//:cargo"` one
-declared at the workspace root. Available in `BUILD.yaml`, `BUILD.json`, `BUILD.star`, `BUILD.pkl` and in
-[Grog script](/topics/grog-scripts) annotations, with identical semantics.
+Normal label rules apply: `":cargo"` is a resolver in the same package, `"//:cargo"` one at the workspace root.
+Supported in every BUILD format and in [Grog script](/topics/grog-scripts) annotations.
 
 ### Resolver declaration
 
-A resolver is declared in a BUILD file, alongside `targets`, `aliases` and `resources`:
+Resolvers are declared in a BUILD file next to `targets`, `aliases` and `resources`:
 
 <Tabs syncKey="build-file-format">
   <TabItem label="YAML">
@@ -303,27 +250,27 @@ dependency_resolvers {
   </TabItem>
 </Tabs>
 
-| Field                   | Type       | Description                                                                                                        |
-| ----------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------ |
-| `name`                  | `string`   | Unique within the package. Shares the namespace with targets, aliases and resources.                               |
-| `command`               | `string`   | Shell command printing the [mapping](#the-resolver-protocol) to stdout, or `builtin::<name>` for a shipped one.    |
-| `inputs`                | `string[]` | Globs relative to the declaring package whose contents form the [cache key](#caching). Defaults to the built-in's. |
-| `timeout`               | `string`   | Bounds the command. Defaults to `60s` — a resolver runs on read-path commands, so it may not hang them.            |
-| `generated_target_name` | `string`   | Name of the filegroup synthesized for a package that registers no target. Defaults to `_<name>_package`.           |
+| Field                   | Type       | Description                                                                                              |
+| ----------------------- | ---------- | -------------------------------------------------------------------------------------------------------- |
+| `name`                  | `string`   | Unique within the package, shared namespace with targets, aliases and resources.                         |
+| `command`               | `string`   | Shell command that prints the [mapping](#the-resolver-protocol) to stdout, or `builtin::<name>`.         |
+| `inputs`                | `string[]` | Globs relative to the declaring package that form the [cache key](#caching). Defaults to the built-in's. |
+| `timeout`               | `string`   | Defaults to `60s`. Resolvers run on read-only commands like `grog deps`, so they must not hang.          |
+| `generated_target_name` | `string`   | Name of the filegroup synthesized for a package that registers no target. Defaults to `_<name>_package`. |
 
 <Aside type="note" title="A resolver is not a build target">
-  Declarations are loaded, never scheduled. A resolver has no `dependencies` and no `outputs`, `grog
-  build //...` does not build it, and it never appears in `grog deps`. It cannot consume another
-  target's output; one that needs generated code has to generate it itself. That is what keeps `grog
-  deps`, `grog changes` and shell completion from triggering a build.
+  Resolvers are loaded, never scheduled. They have no `dependencies` or `outputs`, `grog build
+  //...` skips them, and `grog deps` doesn't list them. This keeps `grog deps`, `grog changes` and
+  shell completion from triggering a build. A resolver that needs generated code must generate it
+  itself.
 </Aside>
 
 ## Tweaking the built-ins
 
 ### Narrowing the inputs
 
-The defaults are broad. Narrow them if you can: the globs are resolved on every load, and a `**` pattern over a
-large repo costs a second tree walk.
+The default globs are broad and resolved on every load; a `**` pattern over a large repo is a second tree walk.
+Narrow them where you can:
 
 ```starlark
 dependency_resolver(
@@ -335,8 +282,8 @@ dependency_resolver(
 
 ### A second workspace of the same ecosystem
 
-Declare a second resolver in that workspace's own package. Its paths are relative to where it is declared, so
-targets under `tools/rust/crates/*` resolve correctly with nothing else to configure:
+Declare another resolver in that workspace's package.
+Its paths are relative to where it's declared, so nothing else needs configuring:
 
 ```starlark
 # tools/rust/BUILD.star
@@ -350,8 +297,7 @@ target(name = "codegen", dependency_resolvers = ["//tools/rust:cargo"], ...)
 
 ### Replacing a built-in
 
-Change `command`. There is nothing else to override: the built-in is a value of one field, not a separate
-configuration layer.
+Point `command` at your own program:
 
 ```starlark
 dependency_resolver(
@@ -363,38 +309,33 @@ dependency_resolver(
 
 ## Writing a custom resolver
 
-A resolver is any command that prints a JSON document. There is no plugin API and nothing to link against.
+A resolver is any command that prints a JSON document to stdout.
+There is no plugin API.
 
-1. Write an executable, in any language, that prints the [document](#the-resolver-protocol) to stdout.
-2. Declare it with `dependency_resolver`, giving it the `inputs` its answer depends on.
-3. Either emit `inputs` for each package so Grog synthesizes its filegroup, or reference the resolver by
-   label from a target in each package that should stand in for it.
-4. Run `grog check` for the package and edge counts, and `grog deps` on a target for the merged result.
+1. Write a program, in any language, that prints the [document](#the-resolver-protocol).
+2. Declare it with `dependency_resolver` and list the files its output depends on as `inputs`.
+3. Either emit `inputs` per package so Grog synthesizes filegroups, or register a target in each package.
+4. Check the result with `grog check` (package and edge counts) and `grog deps` (merged edges).
 
 ### The resolver protocol
 
-**Requirements on the command.** These follow from where it runs: on the load path, on every command that
-reads the graph, with its output cached.
+**Requirements.**
+Resolvers run while loading the graph, on every command that reads it, and their output is cached.
+That makes the following rules:
 
-1. **Side-effect free.** It may run concurrently with other resolvers, and on a cache hit it does not run at
-   all, so nothing may depend on it having run. It must not write into the workspace. Bare `cargo metadata`
-   violates this — it re-resolves and rewrites `Cargo.lock` — which is why the built-in passes `--locked`.
-2. **Deterministic.** Same inputs, same bytes. Absolute paths, timestamps and map iteration order in the output
-   all churn the cache key and invalidate targets for nothing.
-3. **stdout carries the document and nothing else.** Diagnostics go to stderr, reported verbatim on failure and
-   logged at debug on success. stdout is what gets cached.
-4. **Non-interactive.** stdin is the null device, so a read returns EOF. A resolver that waits for input hangs
-   every `grog` command, including shell completion.
-5. **Bounded.** It must finish within the declaration's `timeout` (default `60s`).
-6. **Complete.** Report every edge whose change should rebuild the importing package, including conditional
-   ones, and, for every package you declare `inputs` for, every file whose change should rebuild it. An omitted
-   edge or file is the silent staleness inference exists to remove, and nothing downstream can detect it. The
-   built-in resolvers over-approximate for this reason, and a resolver you write should too.
+1. **Side-effect free.** Resolvers may run concurrently and don't run at all on a cache hit, so nothing may rely on them having run.
+   Never write to the workspace; bare `cargo metadata`, for example, rewrites `Cargo.lock` unless given `--locked`.
+2. **Deterministic.** Same inputs, same bytes. Absolute paths, timestamps or unordered maps in the output churn the cache.
+3. **stdout is the document only.** Send diagnostics to stderr: Grog prints it verbatim on failure and logs it at debug level on success.
+4. **Non-interactive.** stdin is the null device. A resolver that waits for input hangs every `grog` command, including shell completion.
+5. **Bounded.** Finish within the declaration's `timeout`.
+6. **Complete.** Report every edge whose change should rebuild the importing package, conditional ones included, and every file that belongs to a package you declare `inputs` for.
+   Nothing downstream can detect an omission, so over-approximate like the built-ins do.
 
-**Invocation.** The command runs through the same shell as target commands (including the default `set -eu`,
-subject to [`disable_default_shell_flags`](/reference/configuration)), with the working directory set to the
-package the resolver is declared in. Its environment is what a target command gets: the process environment,
-`grog.toml` `environment_variables`, the `GROG_*` variables, plus `GROG_RESOLVER_LABEL`.
+**Invocation.**
+The command runs through the same shell as target commands, including the default `set -eu` (see [`disable_default_shell_flags`](/reference/configuration)).
+The working directory is the declaring package.
+The environment matches a target command's: the process environment, `grog.toml` `environment_variables`, the `GROG_*` variables and `GROG_RESOLVER_LABEL`.
 
 **Output.** One JSON document on stdout:
 
@@ -410,34 +351,26 @@ package the resolver is declared in. Its environment is what a target command ge
 }
 ```
 
-- Keys are slash-separated **directory paths** relative to the declaring package. `""` is that package itself.
-- Paths must be relative, `/`-separated, without a leading `./`, a trailing `/`, or any `..` segment. A path
-  that escapes the declaring package or arrives absolute is a load error rather than something Grog silently
-  normalises.
-- Entries in `dependencies` are the same kind of path — with one escape hatch: an entry starting with `//` is
-  taken as a literal Grog label, for when you need to point at a specific target rather than a package's
-  registered one.
-- `inputs` are globs relative to **the package being described**, not the declaring package — the one place
-  the document has two path bases. They are used only when no target in that package registers the resolver
-  (see [how the wiring works](#how-the-wiring-works)); an empty list is the same as leaving them out.
-- A package may be omitted entirely; that means the same as an empty `dependencies` list. List every workspace
-  member anyway so the counts `grog check` reports are meaningful.
-- A package listing itself is dropped, not an error.
-- Order does not matter. Grog sorts every list before merging, so a resolver that shuffles its output produces
-  byte-identical results and no cache churn.
-- Unknown fields are ignored, so newer resolvers stay loadable. `version` is required.
+- Keys are **directory paths** relative to the declaring package; `""` is the declaring package itself.
+- Paths are relative and `/`-separated, with no leading `./`, trailing `/` or `..` segment.
+  Absolute or escaping paths are a load error.
+- `dependencies` entries are paths too, except that an entry starting with `//` is a literal Grog label.
+  Use it to point at a specific target instead of a package's stand-in.
+- `inputs` are globs relative to **the described package**, not the declaring one.
+  They're only used when no target in that package registers the resolver (see [how the wiring works](#how-the-wiring-works)); an empty list equals omitting them.
+- An omitted package is the same as one with no `dependencies`. List every member anyway so `grog check` counts are meaningful.
+- Self-dependencies are dropped.
+- Order doesn't matter; Grog sorts every list, so shuffled output doesn't churn the cache.
+- Unknown fields are ignored. `version` is required.
 
-**Exit status.** Zero with a valid document, or non-zero with a message on stderr, which Grog reports verbatim.
-There is no partial success: a resolver that cannot determine the graph must fail rather than emit a subset,
-because a missing edge is the exact bug inference exists to prevent.
+**Exit status.**
+Exit zero with a valid document, or non-zero with a message on stderr.
+There is no partial success: a resolver that can't determine the whole graph must fail rather than emit a subset.
 
-### A worked example
+### Example: a protobuf resolver
 
-[`examples/custom_resolver`](https://github.com/chrismatix/grog/tree/main/examples/custom_resolver) is a
-runnable version of everything on this page: three protobuf packages whose imports form a chain, a 25-line
-Python resolver that reads those imports, and one package with no BUILD file at all. The resolver walks the
-`.proto` files, takes each `import "…"` path's directory as a dependency, and declares `*.proto` as the
-package's inputs:
+[`examples/custom_resolver`](https://github.com/chrismatix/grog/tree/main/examples/custom_resolver) has three protobuf packages whose imports form a chain, one of them without a BUILD file.
+Its resolver maps each package to the directories its `.proto` files import, and declares `*.proto` as the package's inputs:
 
 ```python
 #!/usr/bin/env python3
@@ -463,7 +396,7 @@ for proto_file in sorted(Path("proto").rglob("*.proto")):
 json.dump({"version": 1, "packages": packages}, sys.stdout)
 ```
 
-Declare it with the files its answer depends on — the protos and the script itself:
+Declare it with the files its output depends on, including the script itself:
 
 <Tabs syncKey="build-file-format">
   <TabItem label="YAML">
@@ -512,8 +445,7 @@ dependency_resolvers {
   </TabItem>
 </Tabs>
 
-Every package now has a `:_protos_package` filegroup, and a target that consumes the protos depends on that and nothing
-else:
+Every package now has a `:_protos_package` filegroup, and a consuming target depends on nothing else:
 
 ```yaml
 # proto/order/BUILD.yaml
@@ -526,41 +458,38 @@ targets:
       - messages.txt
 ```
 
-`proto/base` has no BUILD file, and `grog build //...` still reports the critical path
+`proto/base` has no BUILD file, yet `grog build //...` reports the critical path
 `//proto/base:_protos_package -> //proto/user:_protos_package -> //proto/order:_protos_package -> //proto/order:generate`.
 
 <Aside type="tip" title="Cross-language often needs no custom resolver">
-  If the generated package is also a workspace member, as `lib/proto` is in the [uv
+  If the generated code is itself a workspace member, like `lib/proto` in the [uv
   example](https://github.com/chrismatix/grog/tree/main/examples/python_uv_monorepo), the language
-  resolver already emits the edge. Write a custom resolver only when no package manager spans the
-  boundary.
+  resolver already emits the edge.
 </Aside>
 
 ## Caching
 
-Resolvers run at load time, so their cost lands on every `grog build`, `grog test`, `grog changes` and shell
-completion. Grog caches their output the way it caches target output.
+Resolvers run at load time, so they cost something on every `grog build`, `grog test`, `grog changes` and shell completion.
+Grog caches their output like target output.
 
-The cache key hashes the protocol version, the resolver's label, its resolved `command`, the Grog version for a
-`builtin:` command, and the contents of every file matching `inputs`, globbed exactly as a target's inputs are.
-A custom resolver's own executable is not hashed automatically: list it in `inputs`, as the examples on this
-page do, or an edit to the script keeps serving the cached mapping. The value is the resolver's stdout,
-stored in the [content-addressable store](/topics/remote-caching), so with a remote cache a cold CI runner
-downloads the mapping instead of running `go list`.
+The cache key covers the protocol version, the resolver's label and `command`, the Grog version for `builtin:` commands, and the contents of every file matching `inputs`.
+A custom resolver's own script is not hashed automatically: list it in `inputs`, or edits to it keep serving the cached mapping.
+
+The cached value is the resolver's stdout, stored in the [content-addressable store](/topics/remote-caching).
+With a remote cache, a cold CI runner downloads the mapping instead of running `go list`.
 
 |                      | Work                                                    |
 | -------------------- | ------------------------------------------------------- |
 | Cache hit            | Hash the `inputs` files, one cache read, one JSON parse |
 | Cache miss           | The above plus one subprocess                           |
-| No resolver declared | Nothing; a declared resolver runs on every load         |
+| No resolver declared | Nothing                                                 |
 
-Failed runs are never cached, and a content-addressed key means a stale entry cannot win. Resolver caching
-follows the global cache setting, so `--enable-cache=false` re-runs resolvers on every load.
+Failed runs are never cached.
+`--enable-cache=false` disables resolver caching along with everything else.
 
 ## Using a committed mapping
 
-To avoid running a tool at load time at all, on a locked-down CI image or for a resolver too slow even when
-cached, commit the mapping and read it back with `cat`:
+To skip running a tool at load time entirely, commit the mapping and `cat` it:
 
 ```starlark
 # BUILD.star at the workspace root
@@ -571,7 +500,7 @@ dependency_resolver(
 )
 ```
 
-Then keep the file honest with an ordinary Grog target:
+Regenerate it with an ordinary target:
 
 ```yaml
 # tools/grog/BUILD.yaml
@@ -586,8 +515,7 @@ targets:
       - inferred-deps.json
 ```
 
-This is reproducible and needs no toolchain, without a second mechanism to learn. The cost is that the file can
-drift between regenerations, which is what live resolvers exist to prevent.
+This needs no toolchain at load time, but the file can drift between regenerations.
 
 ## Inspecting and troubleshooting
 
@@ -599,7 +527,7 @@ grog rdeps //crates/format:format   # who depends on this crate
 grog graph -o mermaid               # the whole graph
 ```
 
-`grog check` runs every referenced resolver and reports what it found:
+`grog check` runs every referenced resolver and summarizes the result:
 
 ```bash
 $ grog check
@@ -607,44 +535,37 @@ resolver //:cargo: builtin::cargo, cache hit, 4 packages, 3 edges
 Build graph is valid.
 ```
 
-Run with `--log-level debug` to see each resolver's command, cache key and full mapping.
+`--log-level debug` prints each resolver's command, cache key and full mapping.
 
 ### Errors
 
-| Message                                                                                                                                             | Cause and fix                                                                                                                                                                                       |
-| --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `no dependency resolver at //:cargo2 (referenced by //crates/cli:cli); declared: //:cargo, //:proto`                                                | A typo, or a declaration you have not written yet.                                                                                                                                                  |
-| `resolver //:cargo registered twice in package crates/cli: //crates/cli:cli and //crates/cli:build`                                                 | Only one target per package may register a resolver. Register the filegroup and let the rest depend on it.                                                                                          |
-| `resolver //:cargo reports crates/greet depends on crates/format, which has no target registered for //:cargo and no inputs to synthesize one from` | The resolver declared no `inputs` for `crates/format`, so Grog has nothing to stand in for it. Register a target there, have the resolver declare inputs, or remove the package from the workspace. |
-| `resolver //:cargo cannot synthesize //crates/format:_cargo_package: a target with that name is defined in crates/format/BUILD.yaml`                | A hand-written target already uses the synthesized name. Rename it, or register it with the resolver so it becomes the endpoint instead.                                                            |
-| `resolver //:cargo failed: exec: "cargo": executable file not found in $PATH`                                                                       | The resolver's tool is missing. Install it, warm the remote cache, or switch to a [committed mapping](#using-a-committed-mapping).                                                                  |
-| `cycle detected: //crates/a:a -> //crates/b:b -> //crates/a:a`                                                                                      | The inferred graph is cyclic. Usually a dev-dependency edge from a custom resolver — see [limitations](#limitations).                                                                               |
+| Message                                                                                                                                             | Fix                                                                                                          |
+| --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `no dependency resolver at //:cargo2 (referenced by //crates/cli:cli); declared: //:cargo, //:proto`                                                | Fix the label or declare the resolver.                                                                       |
+| `resolver //:cargo registered twice in package crates/cli: //crates/cli:cli and //crates/cli:build`                                                 | Only one target per package may register. Register one and have the others depend on it.                     |
+| `resolver //:cargo reports crates/greet depends on crates/format, which has no target registered for //:cargo and no inputs to synthesize one from` | Register a target in `crates/format`, have the resolver emit inputs for it, or remove it from the workspace. |
+| `resolver //:cargo cannot synthesize //crates/format:_cargo_package: a target with that name is defined in crates/format/BUILD.yaml`                | Rename the hand-written target, or register it with the resolver so it becomes the endpoint.                 |
+| `resolver //:cargo failed: exec: "cargo": executable file not found in $PATH`                                                                       | Install the tool, warm the remote cache, or use a [committed mapping](#using-a-committed-mapping).           |
+| `cycle detected: //crates/a:a -> //crates/b:b -> //crates/a:a`                                                                                      | Usually a dev-dependency edge from a custom resolver. See [limitations](#limitations).                       |
 
-A workspace member with no registered target and no resolver-declared inputs is ignored rather than an error,
-since a repo may contain packages Grog does not build. It is an error only when something depends on it.
+A workspace member with no stand-in target is ignored, since a repo may contain packages Grog doesn't build.
+It's only an error once something depends on it.
 
 ## Interaction with `grog changes`
 
-[`grog changes`](/reference/commands) loads the graph at the current revision, so inferred edges are always up
-to date.
+[`grog changes`](/reference/commands) loads the graph at the current revision, so inferred edges are always current.
 
-Adding a dependency usually touches a manifest that is already an input of the receiving target — `Cargo.toml`,
-`pyproject.toml` and `package.json` are inputs in every guide's helper library — so the change is detected the
-ordinary way and `--dependents=transitive` propagates it. For a manifest that is not any target's input, most
-importantly a root workspace file adding or removing members, Grog falls back to a conservative rule: if any
-file matched by a resolver's `inputs` appears in the diff, every target registered with that resolver counts as
-changed.
+Adding a dependency usually edits a manifest that's already an input of the dependant target, so the change is detected normally and `--dependents=transitive` propagates it.
+For manifests that aren't any target's input, such as a root workspace file adding or removing members, Grog falls back to a conservative rule: if any file matched by a resolver's `inputs` changed, every target registered with that resolver counts as changed.
 
 ## Limitations
 
-- **Dev dependencies and test-only imports are excluded** by the `cargo`, `uv` and `go` resolvers. All three
-  ecosystems permit cycles there, and inferred edges land on the filegroup every target depends on, so importing them would
-  turn legal workspaces into Grog cycles. Add those labels by hand on the `:test` target.
-- **Conditional dependencies are included unconditionally.** A `cfg(windows)`-only crate is an edge on Linux
-  too, and if it has no BUILD file you get the "no target registered" error on every platform.
-- **One registered target per package.** A package needing different inferred graphs for different targets is
-  not expressible; split it, or add the extra labels by hand.
-- **A package can only be depended on if something stands in for it.** Either a target registers the resolver
-  or the resolver declares `inputs` for the package. A custom resolver that emits edges but no inputs leaves its
-  packages needing a BUILD file each.
-- **Resolvers cannot depend on build outputs**, since they run before the build rather than as part of it.
+- **Dev dependencies and test-only imports are skipped** by `cargo`, `uv` and `go`.
+  All three ecosystems allow cycles there, and a package's edges land on its single stand-in, so importing them would turn a legal workspace into a Grog cycle.
+  Add those labels to the test target by hand.
+- **Cycles in the package graph itself fail the load.** Cargo and Go forbid them, but uv, npm, yarn and pnpm don't.
+- **Conditional dependencies are included unconditionally.** A `cfg(windows)`-only crate is an edge on Linux too.
+- **One registered target per resolver per package.** For different inferred graphs per target, split the package or add labels by hand.
+- **A package needs a stand-in to be depended on**: a registered target, or resolver-declared `inputs`.
+  A custom resolver that emits edges but no inputs needs a BUILD file in each package.
+- **Resolvers can't depend on build outputs**, since they run before the build.
