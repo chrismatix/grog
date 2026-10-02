@@ -84,7 +84,7 @@ func TestJsExampleInfersPackageDependencies(t *testing.T) {
 	workspaceDirectory, operationError := filepath.Abs("../../examples/js")
 	require.NoError(t, operationError)
 	config.Global.WorkspaceRoot = workspaceDirectory
-	packages, operationError := LoadAllPackages(t.Context())
+	packages, operationError := LoadAllPackages(t.Context(), &DependencyInferrer{})
 	require.NoError(t, operationError)
 	nodes, operationError := model.BuildNodeMapFromPackages(packages)
 	require.NoError(t, operationError)
