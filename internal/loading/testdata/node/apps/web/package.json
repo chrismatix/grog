@@ -8,5 +8,8 @@
   },
   "peerDependencies": {
     "@demo/theme": "1.0.0"
+  },
+  "optionalDependencies": {
+    "@demo/utils": "1.0.0"
   }
 }
