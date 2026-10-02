@@ -146,8 +146,8 @@ func cargoDefaultInputs(workspaceDirectory string) (inputs []string, excludeInpu
 	return inputs, cargoExcludeInputs
 }
 
-// cargoExcludeInputs keeps every glob out of build output.
-var cargoExcludeInputs = []string{"**/target/**"}
+// cargoExcludeInputs keeps the globs out of the crate's or workspace's output directory.
+var cargoExcludeInputs = []string{"target/**"}
 
 // cargoInputs over-approximates on purpose: a listed file the crate lacks is
 // skipped when hashing, while one left out would under-invalidate silently.

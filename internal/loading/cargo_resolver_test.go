@@ -36,7 +36,7 @@ func TestCargoDependencies(t *testing.T) {
 			require.Contains(t, document.Packages, testCase.packagePath)
 			require.Equal(t, testCase.dependencies, document.Packages[testCase.packagePath].Dependencies)
 			require.Subset(t, document.Packages[testCase.packagePath].Inputs, []string{"Cargo.toml", "build.rs", "src/**/*", "tests/**/*"})
-			require.Equal(t, []string{"**/target/**"}, document.Packages[testCase.packagePath].ExcludeInputs)
+			require.Equal(t, []string{"target/**"}, document.Packages[testCase.packagePath].ExcludeInputs)
 		})
 	}
 	require.Contains(t, document.Packages["crates/platform"].Inputs, "lib.rs")
@@ -45,7 +45,7 @@ func TestCargoDependencies(t *testing.T) {
 func TestCargoDefaultInputs(t *testing.T) {
 	inputs, excludeInputs := cargoDefaultInputs("testdata/cargo")
 	require.Equal(t, []string{"Cargo.toml", "Cargo.lock", "crates/*/Cargo.toml"}, inputs)
-	require.Equal(t, []string{"**/target/**"}, excludeInputs)
+	require.Equal(t, []string{"target/**"}, excludeInputs)
 	inputs, _ = cargoDefaultInputs(t.TempDir())
 	require.Equal(t, []string{"Cargo.toml", "Cargo.lock"}, inputs)
 }

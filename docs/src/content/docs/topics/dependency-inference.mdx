@@ -146,9 +146,9 @@ Edges are `path` dependencies between members, including `workspace = true` entr
 Cargo allows a dev-dependency to point back at a dependant, which would be a cycle in Grog.
 If a test needs a crate that isn't a normal dependency, add its label to the test target by hand.
 
-Default `inputs`: `Cargo.toml`, `Cargo.lock`, and `<pattern>/Cargo.toml` for every `members` pattern, with `**/target/**` excluded.
+Default `inputs`: `Cargo.toml`, `Cargo.lock`, and `<pattern>/Cargo.toml` for every `members` pattern, with `target/**` excluded.
 
-Each crate's `:_cargo_package` filegroup covers `Cargo.toml`, `build.rs`, `src/**/*`, `tests/**/*`, `benches/**/*`, `examples/**/*`, `[lib] path`, `[[bin]] path` and `[package] include`, minus `**/target/**`.
+Each crate's `:_cargo_package` filegroup covers `Cargo.toml`, `build.rs`, `src/**/*`, `tests/**/*`, `benches/**/*`, `examples/**/*`, `[lib] path`, `[[bin]] path` and `[package] include`, minus `target/**`.
 Files a crate doesn't have are skipped, so the list errs broad: an extra glob is free, a missing one under-invalidates.
 
 ### uv
