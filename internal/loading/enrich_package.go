@@ -259,18 +259,20 @@ func enrichDependencyResolvers(
 				return nil, fmt.Errorf("failed to parse timeout for dependency resolver %s: %w", resolverLabel, enrichmentError)
 			}
 		}
-		inputs := resolver.Inputs
+		inputs, excludeInputs := resolver.Inputs, resolver.ExcludeInputs
 		if len(inputs) == 0 {
+			var defaultExcludeInputs []string
 			switch resolver.Command {
 			case "builtin::cargo":
-				inputs = cargoDefaultInputs(absolutePackagePath)
+				inputs, defaultExcludeInputs = cargoDefaultInputs(absolutePackagePath)
 			case "builtin::node":
-				inputs = nodeDefaultInputs(absolutePackagePath)
+				inputs, defaultExcludeInputs = nodeDefaultInputs(absolutePackagePath)
 			case "builtin::uv":
-				inputs = uvDefaultInputs(absolutePackagePath)
+				inputs, defaultExcludeInputs = uvDefaultInputs(absolutePackagePath)
 			}
+			excludeInputs = slices.Concat(defaultExcludeInputs, excludeInputs)
 		}
-		resolvedInputs, enrichmentError := resolveInputs(logger, absolutePackagePath, inputs, resolver.ExcludeInputs)
+		resolvedInputs, enrichmentError := resolveInputs(logger, absolutePackagePath, inputs, excludeInputs)
 		if enrichmentError != nil {
 			return nil, fmt.Errorf("failed to resolve inputs for dependency resolver %s: %w", resolverLabel, enrichmentError)
 		}

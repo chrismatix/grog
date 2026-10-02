@@ -406,7 +406,8 @@ the `GROG_*` loader variables from `loader_env.go`, plus `GROG_RESOLVER_LABEL`.
   at a specific target (`//lib/proto:codegen`) without grog inventing a naming convention.
 - A package object may carry `inputs`: globs whose files make up the package. They are consulted only when no
   target in that package registers the resolver, in which case grog synthesizes a filegroup from them (§5.8).
-  A resolver that omits the field behaves as if the package had none.
+  A resolver that omits the field behaves as if the package had none. `exclude_inputs` prunes them like a
+  target's `exclude_inputs`; the built-ins use it to stay out of `target`, `.venv` and `node_modules`.
 - One path-base asymmetry: keys and `dependencies` entries are relative to the resolver's declaring package, but
   `inputs` are relative to **the package being described**, or every entry would repeat its key as a prefix.
   Two bases in one document is unavoidable and needs saying out loud.

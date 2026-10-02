@@ -82,7 +82,7 @@ func cargoDependencies(resolverContext context.Context, workspaceDirectory strin
 		if operationError != nil {
 			return document, operationError
 		}
-		reportedPackage := resolverPackage{Dependencies: []string{}, Inputs: cargoInputs(manifest)}
+		reportedPackage := resolverPackage{Dependencies: []string{}, Inputs: cargoInputs(manifest), ExcludeInputs: cargoExcludeInputs}
 		dependencyTables := []map[string]any{manifest.Dependencies, manifest.BuildDependencies}
 		for _, conditional := range manifest.Target {
 			dependencyTables = append(dependencyTables, conditional.Dependencies, conditional.BuildDependencies)
@@ -130,21 +130,24 @@ func cargoDependencyDirectory(dependencyName string, dependency any, memberDirec
 
 // cargoDefaultInputs are the files the built-in reads: the root manifest and
 // lockfile plus a manifest under every member pattern, however deep it is.
-func cargoDefaultInputs(workspaceDirectory string) []string {
-	inputs := []string{"Cargo.toml", "Cargo.lock"}
+func cargoDefaultInputs(workspaceDirectory string) (inputs []string, excludeInputs []string) {
+	inputs = []string{"Cargo.toml", "Cargo.lock"}
 	contents, operationError := os.ReadFile(filepath.Join(workspaceDirectory, "Cargo.toml"))
 	if operationError != nil {
-		return inputs
+		return inputs, cargoExcludeInputs
 	}
 	var manifest cargoManifest
 	if operationError := toml.Unmarshal(contents, &manifest); operationError != nil {
-		return inputs
+		return inputs, cargoExcludeInputs
 	}
 	for _, pattern := range manifest.Workspace.Members {
 		inputs = append(inputs, path.Join(pattern, "Cargo.toml"))
 	}
-	return inputs
+	return inputs, cargoExcludeInputs
 }
+
+// cargoExcludeInputs keeps every glob out of build output.
+var cargoExcludeInputs = []string{"**/target/**"}
 
 // cargoInputs over-approximates on purpose: a listed file the crate lacks is
 // skipped when hashing, while one left out would under-invalidate silently.

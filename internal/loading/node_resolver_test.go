@@ -17,11 +17,14 @@ func TestNodeDependencies(t *testing.T) {
 	document, operationError := nodeDependencies(t.Context(), "testdata/node")
 	require.NoError(t, operationError)
 	require.Equal(t, 1, document.Version)
+	member := func(dependencies ...string) resolverPackage {
+		return resolverPackage{Dependencies: append([]string{}, dependencies...), Inputs: []string{"**/*"}, ExcludeInputs: []string{"**/node_modules/**"}}
+	}
 	require.Equal(t, map[string]resolverPackage{
-		"packages/theme": {Dependencies: []string{}, Inputs: []string{"package.json", "src/**/*"}},
-		"packages/utils": {Dependencies: []string{}, Inputs: []string{"index.js", "package.json"}},
-		"packages/ui":    {Dependencies: []string{"packages/theme", "packages/utils"}, Inputs: []string{"package.json", "src/**/*"}},
-		"apps/web":       {Dependencies: []string{"packages/theme", "packages/ui"}, Inputs: []string{"package.json", "src/**/*"}},
+		"packages/theme": member(),
+		"packages/utils": member(),
+		"packages/ui":    member("packages/theme", "packages/utils"),
+		"apps/web":       member("packages/theme", "packages/ui"),
 	}, document.Packages)
 }
 
@@ -58,11 +61,12 @@ func TestNodeMemberPatterns(t *testing.T) {
 }
 
 func TestNodeDefaultInputs(t *testing.T) {
-	require.Equal(t, []string{
-		"package.json", "pnpm-workspace.yaml", "aube-workspace.yaml", "pnpm-lock.yaml", "package-lock.json", "yarn.lock",
-		"apps/web/package.json", "packages/theme/package.json", "packages/ui/package.json", "packages/utils/package.json",
-	}, nodeDefaultInputs("testdata/node"))
-	require.Len(t, nodeDefaultInputs(t.TempDir()), 6)
+	inputs, excludeInputs := nodeDefaultInputs("testdata/node")
+	require.Equal(t, []string{"package.json", "pnpm-workspace.yaml", "aube-workspace.yaml", "packages/*/package.json", "apps/**/package.json"}, inputs)
+	require.Equal(t, []string{"**/node_modules/**", "**/excluded/**"}, excludeInputs)
+	inputs, excludeInputs = nodeDefaultInputs(t.TempDir())
+	require.Equal(t, []string{"package.json", "pnpm-workspace.yaml", "aube-workspace.yaml"}, inputs)
+	require.Equal(t, []string{"**/node_modules/**"}, excludeInputs)
 }
 
 func TestNodeResolverErrors(t *testing.T) {

@@ -96,7 +96,7 @@ func uvDependencies(resolverContext context.Context, workspaceDirectory string) 
 		for _, optional := range lockPackage.OptionalDependencies {
 			dependencies = append(dependencies, optional...)
 		}
-		reportedPackage := resolverPackage{Dependencies: []string{}, Inputs: uvInputs(filepath.Join(workspaceDirectory, directory))}
+		reportedPackage := resolverPackage{Dependencies: []string{}, Inputs: uvInputs(filepath.Join(workspaceDirectory, directory)), ExcludeInputs: uvExcludeInputs}
 		for _, dependency := range dependencies {
 			if dependencyDirectory, isMember := directoryByName[dependency.Name]; isMember && dependencyDirectory != directory {
 				reportedPackage.Dependencies = append(reportedPackage.Dependencies, dependencyDirectory)
@@ -167,19 +167,22 @@ func uvInputs(memberDirectory string) []string {
 	return slices.Compact(inputs)
 }
 
+// uvExcludeInputs keeps every glob out of virtual environments and bytecode.
+var uvExcludeInputs = []string{"**/.venv/**", "**/__pycache__/**"}
+
 // uvDefaultInputs are the files the built-in reads: the lock, the root
 // manifest, and every member's manifest, which decides its module layout.
-func uvDefaultInputs(workspaceDirectory string) []string {
-	inputs := []string{"uv.lock", "pyproject.toml"}
+func uvDefaultInputs(workspaceDirectory string) (inputs []string, excludeInputs []string) {
+	inputs = []string{"uv.lock", "pyproject.toml"}
 	lock, operationError := readUvLock(workspaceDirectory)
 	if operationError != nil {
-		return inputs
+		return inputs, uvExcludeInputs
 	}
 	for _, directory := range lock.memberDirectories() {
 		inputs = append(inputs, path.Join(directory, "pyproject.toml"))
 	}
 	slices.Sort(inputs)
-	return slices.Compact(inputs)
+	return slices.Compact(inputs), uvExcludeInputs
 }
 
 func readUvLock(workspaceDirectory string) (uvLock, error) {

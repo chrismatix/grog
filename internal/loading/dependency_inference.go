@@ -34,7 +34,8 @@ type resolverPackage struct {
 	Dependencies []string `json:"dependencies"`
 	// Inputs let the resolver stand in for a package that registers no target:
 	// grog synthesizes a filegroup from them. Ignored when a target registers.
-	Inputs []string `json:"inputs"`
+	Inputs        []string `json:"inputs"`
+	ExcludeInputs []string `json:"exclude_inputs"`
 }
 
 // UnmarshalJSON requires each package entry to be an object.
@@ -113,7 +114,7 @@ func (inferrer *DependencyInferrer) inferDependencies(loadContext context.Contex
 			if registrations[key] != nil || len(inputs) == 0 {
 				continue
 			}
-			synthesized, createdPackage, operationError := synthesizeFilegroup(loadContext, resolver, key.packagePath, inputs, packagesByPath)
+			synthesized, createdPackage, operationError := synthesizeFilegroup(loadContext, resolver, key.packagePath, document.Packages[packagePath], packagesByPath)
 			if operationError != nil {
 				return nil, operationError
 			}
@@ -207,7 +208,7 @@ func registerTargets(resolvers []*model.DependencyResolver, targets []*model.Tar
 // recorded as the defining file so `grog changes` and duplicate-label errors
 // have one to point at. The second result is the package it had to create
 // because no BUILD file exists there, or nil.
-func synthesizeFilegroup(loadContext context.Context, resolver *model.DependencyResolver, packagePath string, inputs []string, packagesByPath map[string]*model.Package) (*model.Target, *model.Package, error) {
+func synthesizeFilegroup(loadContext context.Context, resolver *model.DependencyResolver, packagePath string, reportedPackage resolverPackage, packagesByPath map[string]*model.Package) (*model.Target, *model.Package, error) {
 	targetLabel := label.TargetLabel{Package: packagePath, Name: resolver.GeneratedTargetName}
 	var createdPackage *model.Package
 	owningPackage, exists := packagesByPath[packagePath]
@@ -230,7 +231,7 @@ func synthesizeFilegroup(loadContext context.Context, resolver *model.Dependency
 	if existing := owningPackage.Resources[targetLabel]; existing != nil {
 		return nil, nil, fmt.Errorf("resolver %s cannot synthesize %s: a resource with that name is defined in %s", resolver.Label, targetLabel, existing.SourceFilePath)
 	}
-	resolvedInputs, operationError := resolveInputs(console.GetLogger(loadContext), config.GetPathAbsoluteToWorkspaceRoot(packagePath), inputs, nil)
+	resolvedInputs, operationError := resolveInputs(console.GetLogger(loadContext), config.GetPathAbsoluteToWorkspaceRoot(packagePath), reportedPackage.Inputs, reportedPackage.ExcludeInputs)
 	if operationError != nil {
 		return nil, nil, fmt.Errorf("resolver %s: failed to resolve inputs for %s: %w", resolver.Label, targetLabel, operationError)
 	}
@@ -238,7 +239,8 @@ func synthesizeFilegroup(loadContext context.Context, resolver *model.Dependency
 		SourceFilePath:      resolver.SourceFilePath,
 		Label:               targetLabel,
 		Inputs:              resolvedInputs,
-		UnresolvedInputs:    inputs,
+		ExcludeInputs:       reportedPackage.ExcludeInputs,
+		UnresolvedInputs:    reportedPackage.Inputs,
 		DependencyResolvers: []label.TargetLabel{resolver.Label},
 	}
 	owningPackage.Targets[targetLabel] = target
@@ -333,7 +335,7 @@ func validateResolverDocument(resolverLabel label.TargetLabel, document resolver
 			}
 		}
 
-		for _, input := range reportedPackage.Inputs {
+		for _, input := range slices.Concat(reportedPackage.Inputs, reportedPackage.ExcludeInputs) {
 			if operationError := validateResolverPath(input); operationError != nil {
 				return 0, fmt.Errorf("resolver %s: inputs of %s: %w", resolverLabel, packagePath, operationError)
 			}

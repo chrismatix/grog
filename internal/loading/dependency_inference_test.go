@@ -321,6 +321,21 @@ func TestDependencyInferenceSynthesis(t *testing.T) {
 			},
 		},
 		{
+			name:   "exclude_inputs prune the synthesized filegroup",
+			output: `{"version":1,"packages":{"gen":{"dependencies":[],"inputs":["**/*"],"exclude_inputs":["**/node_modules/**"]}}}`,
+			prepare: func(packages []*model.Package) {
+				require.NoError(t, os.MkdirAll(filepath.Join(config.Global.WorkspaceRoot, "gen/node_modules/dep"), 0755))
+				require.NoError(t, os.WriteFile(filepath.Join(config.Global.WorkspaceRoot, "gen/node_modules/dep/index.js"), nil, 0644))
+				require.NoError(t, os.WriteFile(filepath.Join(config.Global.WorkspaceRoot, "gen/gen.txt"), nil, 0644))
+			},
+			check: func(t *testing.T, packages []*model.Package) {
+				synthesized := packages[len(packages)-1].Targets[synthesizedLabel]
+				require.NotNil(t, synthesized)
+				require.Equal(t, []string{"gen.txt"}, synthesized.Inputs)
+				require.Equal(t, []string{"**/node_modules/**"}, synthesized.ExcludeInputs)
+			},
+		},
+		{
 			name:   "synthesized target name comes from the declaration",
 			output: `{"version":1,"packages":{"gen":{"dependencies":[],"inputs":["gen.txt"]}}}`,
 			prepare: func(packages []*model.Package) {

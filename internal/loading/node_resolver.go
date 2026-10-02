@@ -49,7 +49,7 @@ func nodeDependencies(resolverContext context.Context, workspaceDirectory string
 	}
 
 	for directory, manifest := range manifests {
-		reportedPackage := resolverPackage{Dependencies: []string{}, Inputs: nodeInputs(filepath.Join(workspaceDirectory, directory))}
+		reportedPackage := resolverPackage{Dependencies: []string{}, Inputs: []string{"**/*"}, ExcludeInputs: nodeExcludeInputs}
 		for _, dependencies := range []map[string]string{manifest.Dependencies, manifest.DevDependencies, manifest.PeerDependencies} {
 			for name := range dependencies {
 				if dependencyDirectory, isMember := directoryByName[name]; isMember && dependencyDirectory != directory {
@@ -150,37 +150,25 @@ func readNodeManifest(manifestPath string) (nodeManifest, error) {
 	return manifest, nil
 }
 
-// nodeInputs is every top-level file and directory of the member except
-// node_modules, which no package manager keeps small or stable.
-func nodeInputs(memberDirectory string) []string {
-	entries, operationError := os.ReadDir(memberDirectory)
+// nodeExcludeInputs keeps every glob out of installed packages.
+var nodeExcludeInputs = []string{"**/node_modules/**"}
+
+// nodeDefaultInputs are the files the built-in reads: the workspace files and
+// a package.json under every member glob, so a new member is seen without a
+// re-declaration. Negated member globs become exclusions.
+func nodeDefaultInputs(workspaceDirectory string) (inputs []string, excludeInputs []string) {
+	inputs = []string{"package.json", "pnpm-workspace.yaml", "aube-workspace.yaml"}
+	excludeInputs = nodeExcludeInputs
+	patterns, operationError := nodeMemberPatterns(workspaceDirectory)
 	if operationError != nil {
-		return []string{"package.json"}
+		return inputs, excludeInputs
 	}
-	inputs := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		switch {
-		case entry.Name() == "node_modules":
-		case entry.IsDir():
-			inputs = append(inputs, entry.Name()+"/**/*")
-		default:
-			inputs = append(inputs, entry.Name())
+	for _, pattern := range patterns {
+		if negated := strings.HasPrefix(pattern, "!"); negated {
+			excludeInputs = append(excludeInputs, strings.TrimSuffix(strings.TrimPrefix(pattern, "!"), "/**")+"/**")
+		} else {
+			inputs = append(inputs, path.Join(pattern, "package.json"))
 		}
 	}
-	slices.Sort(inputs)
-	return inputs
-}
-
-// nodeDefaultInputs are the files the built-in reads plus the lockfiles,
-// which change when a member is added under an existing glob.
-func nodeDefaultInputs(workspaceDirectory string) []string {
-	inputs := []string{"package.json", "pnpm-workspace.yaml", "aube-workspace.yaml", "pnpm-lock.yaml", "package-lock.json", "yarn.lock"}
-	directories, operationError := nodeMemberDirectories(workspaceDirectory)
-	if operationError != nil {
-		return inputs
-	}
-	for _, directory := range directories {
-		inputs = append(inputs, path.Join(directory, "package.json"))
-	}
-	return inputs
+	return inputs, excludeInputs
 }
