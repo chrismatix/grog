@@ -34,6 +34,20 @@ import (
 // GrogVersion is set by the root command during initialization.
 var GrogVersion string
 
+func dependencyInferrer() *loading.DependencyInferrer {
+	inferrer := &loading.DependencyInferrer{GrogVersion: GrogVersion}
+	if config.Global.EnableCache {
+		inferrer.CasProvider = func(ctx context.Context) (*caching.Cas, error) {
+			cache, err := backends.GetCacheBackend(ctx, config.Global.Cache)
+			if err != nil {
+				return nil, err
+			}
+			return caching.NewCas(cache), nil
+		}
+	}
+	return inferrer
+}
+
 var BuildCmd = &cobra.Command{
 	Use:   "build",
 	Short: "Loads the user configuration and executes build targets.",
@@ -56,7 +70,7 @@ var BuildCmd = &cobra.Command{
 			logger.Fatalf("could not parse target pattern: %v", err)
 		}
 
-		graph := loading.MustLoadGraphForBuild(ctx, logger)
+		graph := loading.MustLoadGraphForBuild(ctx, logger, dependencyInferrer())
 
 		RunBuild(
 			ctx,

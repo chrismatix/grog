@@ -39,7 +39,7 @@ Use the --path-only flag to only print the path to the log file instead of its c
 			logger.Fatalf("could not parse target label: %v", err)
 		}
 
-		graph := loading.MustLoadGraphForQuery(ctx, logger)
+		graph := loading.MustLoadGraphForQuery(ctx, logger, dependencyInferrer())
 		node, hasTarget := graph.GetNodes()[targetLabel]
 		if !hasTarget {
 			logger.Fatalf("could not find target %s", targetLabel)

@@ -13,12 +13,12 @@ import (
 	"github.com/boyter/gocodewalker"
 )
 
-func LoadAllPackages(ctx context.Context) ([]*model.Package, error) {
+func LoadAllPackages(ctx context.Context, inferrer *DependencyInferrer) ([]*model.Package, error) {
 	packages, loadError := LoadPackages(ctx, config.Global.WorkspaceRoot)
 	if loadError != nil {
 		return nil, loadError
 	}
-	return inferDependencies(ctx, packages)
+	return inferrer.inferDependencies(ctx, packages)
 }
 
 // LoadPackages loads all packages in the given directory and its subdirectories.

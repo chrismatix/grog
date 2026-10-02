@@ -47,7 +47,7 @@ Dependencies can be filtered by target type using the --target-type flag.`,
 		if err != nil {
 			logger.Fatalf("could not parse target label: %v", err)
 		}
-		graph := loading.MustLoadGraphForQuery(ctx, logger)
+		graph := loading.MustLoadGraphForQuery(ctx, logger, dependencyInferrer())
 
 		target, hasTarget := graph.GetNodes()[targetLabel]
 		if !hasTarget {

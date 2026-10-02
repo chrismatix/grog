@@ -56,7 +56,7 @@ Use "--" to separate the list of targets from additional arguments passed to the
 			ctx = execution.WithExtraArgs(ctx, extraArgs)
 		}
 
-		graph := loading.MustLoadGraphForBuild(ctx, logger)
+		graph := loading.MustLoadGraphForBuild(ctx, logger, dependencyInferrer())
 
 		RunBuild(
 			ctx,
