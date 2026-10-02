@@ -1,0 +1,15 @@
+{
+  "name": "@demo/web",
+  "version": "1.0.0",
+  "dependencies": {
+    "@demo/excluded": "1.0.0",
+    "@demo/ui": "1.0.0",
+    "@demo/unrelated": "1.0.0"
+  },
+  "peerDependencies": {
+    "@demo/theme": "1.0.0"
+  },
+  "optionalDependencies": {
+    "@demo/utils": "1.0.0"
+  }
+}

@@ -175,11 +175,12 @@ Default `inputs`: `uv.lock`, `pyproject.toml`, and every member's `pyproject.tom
 
 Covers npm, yarn and pnpm workspaces.
 Members come from `pnpm-workspace.yaml` or `aube-workspace.yaml` (same format), falling back to `workspaces` in the root `package.json`.
-Edges are `dependencies`, `devDependencies` and `peerDependencies` entries that name another member; pnpm's `workspace:*` is treated like any other version spec.
+Edges are `dependencies`, `devDependencies`, `peerDependencies` and `optionalDependencies` entries that name another member; pnpm's `workspace:*` is treated like any other version spec.
+The root `package.json` is a package of its own, covering just that file, so a root target registering the resolver depends on the members it names.
 None of the package managers forbid cycles between members, and one through any of these fields fails the load.
+A synthesized filegroup covers every top-level file and directory of the member except `node_modules`.
 
-Default `inputs`: `pnpm-workspace.yaml`, `aube-workspace.yaml`, `package.json`, `*/package.json`,
-`*/*/package.json`.
+Default `inputs`: `package.json`, `pnpm-workspace.yaml`, `aube-workspace.yaml`, the lockfiles, and every member's `package.json`.
 
 ### go
 

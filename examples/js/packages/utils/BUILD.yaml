@@ -5,6 +5,7 @@ targets:
       - "package.json"
       - "tsconfig.json"
     command: npm run build
+    dependency_resolvers: ["//:node"]
     outputs:
       - dir::dist/
 

@@ -1,0 +1,20 @@
+name: builtin node resolver
+repo: node_builtin_resolver
+cases:
+  - name: node_builtin_initial
+    grog_args: [build, "//..."]
+  - name: node_builtin_cached
+    grog_args: [build, "//..."]
+  - name: node_builtin_add_dev_dependency
+    setup_command: |
+      cp apps/web/package.json web.package.backup
+      cp packages/icons/icons/dot.svg dot.svg.backup
+      printf '{\n  "name": "@demo/web",\n  "version": "1.0.0",\n  "dependencies": {\n    "@demo/ui": "workspace:*"\n  },\n  "devDependencies": {\n    "@demo/theme": "workspace:*"\n  }\n}\n' > apps/web/package.json
+  - name: node_builtin_manifest_edit_invalidates_one_package
+    grog_args: [build, "//..."]
+  - name: node_builtin_edit_icon
+    setup_command: "printf '<svg><circle r=\"2\"/></svg>\n' > packages/icons/icons/dot.svg"
+  - name: node_builtin_synthesized_filegroup_reaches_web
+    grog_args: [build, "//..."]
+  - name: node_builtin_restore
+    setup_command: "mv web.package.backup apps/web/package.json; mv dot.svg.backup packages/icons/icons/dot.svg"

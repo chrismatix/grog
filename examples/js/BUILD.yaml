@@ -1,3 +1,8 @@
+# builtin::node reads the member globs from package.json and each member's
+# dependencies, so the build targets below list no package edges by hand.
+dependency_resolvers:
+  - name: node
+    command: builtin::node
 targets:
   - name: install
     command: npm install
