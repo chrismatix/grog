@@ -255,6 +255,7 @@ dependency_resolvers {
 | `name`                  | `string`   | Unique within the package, shared namespace with targets, aliases and resources.                         |
 | `command`               | `string`   | Shell command that prints the [mapping](#the-resolver-protocol) to stdout, or `builtin::<name>`.         |
 | `inputs`                | `string[]` | Globs relative to the declaring package that form the [cache key](#caching). Defaults to the built-in's. |
+| `exclude_inputs`        | `string[]` | Globs dropped from `inputs` before hashing. A pattern ending in `/**` skips the whole directory.         |
 | `timeout`               | `string`   | Defaults to `60s`. Resolvers run on read-only commands like `grog deps`, so they must not hang.          |
 | `generated_target_name` | `string`   | Name of the filegroup synthesized for a package that registers no target. Defaults to `_<name>_package`. |
 
@@ -277,6 +278,18 @@ dependency_resolver(
     name = "cargo",
     command = "builtin::cargo",
     inputs = ["Cargo.toml", "Cargo.lock", "crates/*/Cargo.toml"],
+)
+```
+
+When a `**` glob is unavoidable, exclude the directories it shouldn't walk.
+A pattern ending in `/**` stops Grog from entering the directory at all:
+
+```starlark
+dependency_resolver(
+    name = "npm",
+    command = "python3 tools/resolve_npm.py",
+    inputs = ["tools/resolve_npm.py", "**/package.json"],
+    exclude_inputs = ["**/node_modules/**"],
 )
 ```
 

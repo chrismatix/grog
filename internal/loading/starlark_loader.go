@@ -538,9 +538,10 @@ func resolvedEnvironmentVariablesFilePath() string {
 func (collector *starlarkPackageCollector) dependencyResolverBuiltin(thread *starlark.Thread, function *starlark.Builtin, arguments starlark.Tuple, keywordArguments []starlark.Tuple) (starlark.Value, error) {
 	resolver := &DependencyResolverDTO{}
 	var inputs *starlark.List
+	var excludeInputs *starlark.List
 	if parseError := starlark.UnpackArgs("dependency_resolver", arguments, keywordArguments,
-		"name", &resolver.Name, "command", &resolver.Command, "inputs?", &inputs, "timeout?", &resolver.Timeout,
-		"generated_target_name?", &resolver.GeneratedTargetName,
+		"name", &resolver.Name, "command", &resolver.Command, "inputs?", &inputs, "exclude_inputs?", &excludeInputs,
+		"timeout?", &resolver.Timeout, "generated_target_name?", &resolver.GeneratedTargetName,
 	); parseError != nil {
 		return nil, parseError
 	}
@@ -550,6 +551,13 @@ func (collector *starlarkPackageCollector) dependencyResolverBuiltin(thread *sta
 			return nil, fmt.Errorf("inputs: %w", parseError)
 		}
 		resolver.Inputs = resolvedInputs
+	}
+	if excludeInputs != nil {
+		resolvedExcludeInputs, parseError := starlarkListToStringSlice(excludeInputs)
+		if parseError != nil {
+			return nil, fmt.Errorf("exclude_inputs: %w", parseError)
+		}
+		resolver.ExcludeInputs = resolvedExcludeInputs
 	}
 	collector.dependencyResolvers = append(collector.dependencyResolvers, resolver)
 	return starlark.None, nil
