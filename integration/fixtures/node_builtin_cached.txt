@@ -1,7 +1,8 @@
-INFO: 5 packages loaded, 4 targets configured.
-INFO: Selected 4 targets.
+INFO: 5 packages loaded, 5 targets configured.
+INFO: Selected 5 targets.
+INFO: //:_node_package               DONE (cached)
 INFO: //apps/web:sources             DONE (cached)
 INFO: //packages/icons:_node_package DONE (cached)
 INFO: //packages/theme:sources       DONE (cached)
 INFO: //packages/ui:sources          DONE (cached)
-INFO: Build completed successfully. 4 targets completed (4 cache hits).
+INFO: Build completed successfully. 5 targets completed (5 cache hits).

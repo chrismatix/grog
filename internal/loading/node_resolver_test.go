@@ -21,7 +21,8 @@ func TestNodeDependencies(t *testing.T) {
 		"packages/theme": {Dependencies: []string{}, Inputs: []string{"package.json", "src/**/*"}},
 		"packages/utils": {Dependencies: []string{}, Inputs: []string{"index.js", "package.json"}},
 		"packages/ui":    {Dependencies: []string{"packages/theme", "packages/utils"}, Inputs: []string{"package.json", "src/**/*"}},
-		"apps/web":       {Dependencies: []string{"packages/theme", "packages/ui"}, Inputs: []string{"package.json", "src/**/*"}},
+		"apps/web":       {Dependencies: []string{"packages/theme", "packages/ui", "packages/utils"}, Inputs: []string{"package.json", "src/**/*"}},
+		"":               {Dependencies: []string{"packages/utils"}, Inputs: []string{"package.json"}},
 	}, document.Packages)
 }
 
