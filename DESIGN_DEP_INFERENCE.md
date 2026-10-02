@@ -349,6 +349,7 @@ dependency_resolvers {
 | `name`                  | required                | Unique within the package. The resolver is addressed by its label.                                                                                |
 | `command`               | required                | Shell command producing the mapping on stdout, or `builtin::<name>` to select a shipped resolver.                                                 |
 | `inputs`                | the built-in's defaults | Globs relative to the declaring package, resolved and hashed exactly like a target's `inputs`.                                                    |
+| `exclude_inputs`        | none                    | Globs dropped from `inputs`, exactly like a target's `exclude_inputs`.                                                                            |
 | `timeout`               | `60s`                   | Bounds the command, parsed like `target.timeout`. A resolver runs on read-path commands and on tab-completion, so an unbounded one hangs the CLI. |
 | `generated_target_name` | `_<name>_package`       | Name of the filegroup synthesized for a package that registers no target (§5.8). Validated like a target name.                                    |
 

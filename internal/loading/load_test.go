@@ -181,6 +181,39 @@ func TestResolveInputs(t *testing.T) {
 			expected:      []string{},
 			expectedError: false,
 		},
+		{
+			name:          "ExcludeDirectoryTree",
+			inputs:        []string{"**/*.js"},
+			excludeInputs: []string{"**/node_modules/**"},
+			createTestFiles: func(tmpDir string) {
+				createFile(tmpDir, "index.js", "content1")
+				createFile(tmpDir, "node_modules/left-pad/index.js", "content2")
+				createFile(tmpDir, "app/node_modules/react/index.js", "content3")
+				createFile(tmpDir, "app/main.js", "content4")
+			},
+			expected:      []string{"app/main.js", "index.js"},
+			expectedError: false,
+		},
+		{
+			name:          "ExcludeDirectoryChildrenKeepsNestedFiles",
+			inputs:        []string{"**/*.txt"},
+			excludeInputs: []string{"subdir/*"},
+			createTestFiles: func(tmpDir string) {
+				createFile(tmpDir, "subdir/file1.txt", "content1")
+				createFile(tmpDir, "subdir/nested/file2.txt", "content2")
+			},
+			expected:      []string{"subdir/nested/file2.txt"},
+			expectedError: false,
+		},
+		{
+			name:          "InvalidExcludePattern",
+			inputs:        []string{"*.txt"},
+			excludeInputs: []string{"[invalid"},
+			createTestFiles: func(tmpDir string) {
+				createFile(tmpDir, "file1.txt", "content1")
+			},
+			expectedError: true,
+		},
 	}
 
 	testLogger := console.NewFromSugared(zaptest.NewLogger(t).Sugar(), zapcore.DebugLevel)
