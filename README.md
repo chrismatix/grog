@@ -73,6 +73,8 @@ curl -L https://grog.build/latest/grog-linux-amd64 -o /usr/local/bin/grog
 chmod +x /usr/local/bin/grog
 ```
 
+To query [execution traces](https://grog.build/tracing/) with `grog traces`, install `grog-full` instead (`brew install grog-full`, `grog-full-linux-amd64.deb`, `#grog-full`), which embeds DuckDB.
+
 ## Documentation
 
 Grog's documentation is available at [grog.build](https://grog.build).

@@ -20,7 +20,7 @@ Query path (DuckDB Go driver):
 
 - **`TraceWriter`** (`store.go`) — Write-only. Serializes traces as Parquet files using `parquet-go` and persists via `CacheBackend`. Used from the async build goroutine. Does not require DuckDB.
 
-- **`TraceStore`** (`store.go`) — Full read+write. Wraps `TraceWriter` and adds query methods (`List`, `FindAndLoad`, `Stats`, `DetailedStats`, `Prune`) that run SQL via the DuckDB Go driver (`database/sql` + `go-duckdb`).
+- **`TraceStore`** (`store.go`) — Full read+write. Wraps `TraceWriter` and adds query methods (`List`, `FindAndLoad`, `Stats`, `DetailedStats`, `Prune`) that run SQL via the DuckDB Go driver (`database/sql` + `go-duckdb`). The driver is only linked in with `-tags duckdb` (the `grog-full` build); without it `NewTraceStore` fails.
 
 - **`PathResolver`** (`path_resolver.go`) — Constructs DuckDB-readable glob paths from config (local FS paths, `s3://`, or `gcs://` URLs).
 

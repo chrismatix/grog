@@ -59,8 +59,12 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           VERSION: ${{ github.ref_name }}
         run: |
-          for packager in deb rpm; do
-            go run github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0 pkg --packager "$packager" --target "dist/grog-linux-$GOARCH.$packager"
+          for variant in "grog grog-full" "grog-full grog"; do
+            read -r PACKAGE CONFLICTS <<< "$variant"
+            export PACKAGE CONFLICTS
+            for packager in deb rpm; do
+              go run github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0 pkg --packager "$packager" --target "dist/$PACKAGE-linux-$GOARCH.$packager"
+            done
           done
 
       - name: Upload binary artifact

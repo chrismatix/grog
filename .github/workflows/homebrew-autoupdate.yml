@@ -31,108 +31,56 @@ jobs:
             echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Fetch release information
-        id: release
+      - name: Generate Homebrew formulas
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          echo "Fetching release info for tag: ${{ steps.tag.outputs.tag }}"
-
-          # Get release data
-          release_data=$(gh api repos/${{ github.repository }}/releases/tags/${{ steps.tag.outputs.tag }})
-
-          # Extract download URLs for our expected assets
-          darwin_amd64_url=$(echo "$release_data" | jq -r '.assets[] | select(.name == "grog-darwin-amd64") | .browser_download_url')
-          darwin_arm64_url=$(echo "$release_data" | jq -r '.assets[] | select(.name == "grog-darwin-arm64") | .browser_download_url')
-          linux_amd64_url=$(echo "$release_data" | jq -r '.assets[] | select(.name == "grog-linux-amd64") | .browser_download_url')
-          linux_arm64_url=$(echo "$release_data" | jq -r '.assets[] | select(.name == "grog-linux-arm64") | .browser_download_url')
-
-          # Validate all required assets exist
-          if [[ -z "$darwin_amd64_url" || -z "$darwin_arm64_url" || -z "$linux_amd64_url" || -z "$linux_arm64_url" ]]; then
-            echo "Error: Missing required release assets"
-            echo "Darwin AMD64: $darwin_amd64_url"
-            echo "Darwin ARM64: $darwin_arm64_url"
-            echo "Linux AMD64: $linux_amd64_url"
-            echo "Linux ARM64: $linux_arm64_url"
-            exit 1
-          fi
-
-          # Output URLs
-          {
-            echo "darwin_amd64_url=$darwin_amd64_url"
-            echo "darwin_arm64_url=$darwin_arm64_url"
-            echo "linux_amd64_url=$linux_amd64_url"
-            echo "linux_arm64_url=$linux_arm64_url"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Download and hash assets
-        id: assets
-        run: |
-          mkdir -p artifacts
-          cd artifacts
-
-          # Download assets
-          echo "Downloading assets..."
-          curl -fsSL -o grog-darwin-amd64 "${{ steps.release.outputs.darwin_amd64_url }}"
-          curl -fsSL -o grog-darwin-arm64 "${{ steps.release.outputs.darwin_arm64_url }}"
-          curl -fsSL -o grog-linux-amd64 "${{ steps.release.outputs.linux_amd64_url }}"
-          curl -fsSL -o grog-linux-arm64 "${{ steps.release.outputs.linux_arm64_url }}"
-
-          # Calculate SHA256 hashes
-          echo "Calculating checksums..."
-          darwin_amd64_sha=$(sha256sum grog-darwin-amd64 | cut -d' ' -f1)
-          darwin_arm64_sha=$(sha256sum grog-darwin-arm64 | cut -d' ' -f1)
-          linux_amd64_sha=$(sha256sum grog-linux-amd64 | cut -d' ' -f1)
-          linux_arm64_sha=$(sha256sum grog-linux-arm64 | cut -d' ' -f1)
-
-          # Output hashes
-          {
-            echo "darwin_amd64_sha=$darwin_amd64_sha"
-            echo "darwin_arm64_sha=$darwin_arm64_sha"
-            echo "linux_amd64_sha=$linux_amd64_sha"
-            echo "linux_arm64_sha=$linux_arm64_sha"
-          } >> "$GITHUB_OUTPUT"
-
-          echo "Asset hashes calculated successfully"
-
-      - name: Generate Homebrew formula
-        run: |
+          gh release download "$TAG" --repo "${{ github.repository }}" --pattern SHASUMS256.txt
+          base_url="https://github.com/${{ github.repository }}/releases/download/$TAG"
           mkdir -p formula
-          version="${{ steps.tag.outputs.tag }}"
-          # Remove 'v' prefix if present
-          version="${version#v}"
 
-          cat > formula/grog.rb << 'EOF'
-          class Grog < Formula
+          # Usage: write_formula <formula> <class> <binary prefix> <conflicting formula>
+          write_formula() {
+            local formula=$1 class=$2 prefix=$3 conflict=$4
+            local -A sha
+            for platform in darwin-arm64 darwin-amd64 linux-arm64 linux-amd64; do
+              sha[$platform]=$(awk -v file="$prefix-$platform" '$2 == file { print $1 }' SHASUMS256.txt)
+              if [[ -z "${sha[$platform]}" ]]; then
+                echo "Error: $prefix-$platform is missing from the $TAG release"
+                exit 1
+              fi
+            done
+
+            cat > "formula/$formula.rb" << EOF
+          class $class < Formula
             desc "Grog build system CLI"
             homepage "https://github.com/${{ github.repository }}"
-            version "${{ steps.tag.outputs.tag }}"
-            license "MIT"  # Update this to match your actual license
+            version "$TAG"
+            license "MIT"
+            conflicts_with "$conflict", because: "both install a grog binary"
 
             on_macos do
               if Hardware::CPU.arm?
-                url "${{ steps.release.outputs.darwin_arm64_url }}"
-                sha256 "${{ steps.assets.outputs.darwin_arm64_sha }}"
+                url "$base_url/$prefix-darwin-arm64"
+                sha256 "${sha[darwin-arm64]}"
               else
-                url "${{ steps.release.outputs.darwin_amd64_url }}"
-                sha256 "${{ steps.assets.outputs.darwin_amd64_sha }}"
+                url "$base_url/$prefix-darwin-amd64"
+                sha256 "${sha[darwin-amd64]}"
               end
             end
 
             on_linux do
               if Hardware::CPU.arm?
-                url "${{ steps.release.outputs.linux_arm64_url }}"
-                sha256 "${{ steps.assets.outputs.linux_arm64_sha }}"
+                url "$base_url/$prefix-linux-arm64"
+                sha256 "${sha[linux-arm64]}"
               else
-                url "${{ steps.release.outputs.linux_amd64_url }}"
-                sha256 "${{ steps.assets.outputs.linux_amd64_sha }}"
+                url "$base_url/$prefix-linux-amd64"
+                sha256 "${sha[linux-amd64]}"
               end
             end
 
             def install
-              # The downloaded file will have the platform-specific name, so we rename it
-              binary_name = Dir["grog-*"].first
-              bin.install binary_name => "grog"
-
-              # Make sure it's executable
+              bin.install Dir["$prefix-*"].first => "grog"
               chmod 0755, bin/"grog"
             end
 
@@ -142,8 +90,12 @@ jobs:
           end
           EOF
 
-          echo "Generated formula:"
-          cat formula/grog.rb
+            echo "Generated formula/$formula.rb:"
+            cat "formula/$formula.rb"
+          }
+
+          write_formula grog Grog grog grog-full
+          write_formula grog-full GrogFull grog-full grog
 
       - name: Checkout Homebrew tap
         uses: actions/checkout@v4
@@ -172,18 +124,18 @@ jobs:
           # Create and switch to new branch
           git checkout -b "$branch_name"
 
-          # Copy the new formula
+          # Copy the new formulas
           mkdir -p Formula
-          cp ../formula/grog.rb Formula/grog.rb
+          cp ../formula/*.rb Formula/
+          git add Formula/
 
           # Check if there are changes
-          if git diff --quiet; then
-            echo "No changes detected in formula"
+          if git diff --cached --quiet; then
+            echo "No changes detected in formulas"
             exit 0
           fi
 
           # Commit changes
-          git add Formula/grog.rb
           git commit -m "Update ${{ env.FORMULA_NAME }} to ${{ steps.tag.outputs.tag }}"
 
           # Push branch
@@ -197,7 +149,7 @@ jobs:
 
           **Changes:**
           - Updated version to ${{ steps.tag.outputs.tag }}
-          - Updated SHA256 checksums for all platforms
+          - Updated SHA256 checksums for all platforms of grog and grog-full
           - Updated download URLs
 
           **Release:** https://github.com/${{ github.repository }}/releases/tag/${{ steps.tag.outputs.tag }}" \
@@ -212,7 +164,7 @@ jobs:
             echo "- **Formula:** ${{ env.FORMULA_NAME }}"
             echo "- **Version:** ${{ steps.tag.outputs.tag }}"
             echo "- **Repository:** ${{ env.HOMEBREW_TAP_REPO }}"
-            echo "- **Assets processed:** 4 (Darwin AMD64/ARM64, Linux AMD64/ARM64)"
+            echo "- **Formulas:** grog, grog-full (Darwin AMD64/ARM64, Linux AMD64/ARM64)"
             echo ""
             echo "✅ Pull request created successfully!"
           } >> "$GITHUB_STEP_SUMMARY"

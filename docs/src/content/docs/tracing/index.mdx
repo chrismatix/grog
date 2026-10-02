@@ -12,7 +12,8 @@ Traces are stored as [Parquet](https://parquet.apache.org/) files using the same
 <Aside>
   Trace **writing** (during builds) is pure Go and has no extra dependencies. Trace **querying**
   (`grog traces list`, `show`, `stats`, `export`, `prune`) uses the embedded
-  [DuckDB](https://duckdb.org/) engine to run SQL queries directly against the Parquet files.
+  [DuckDB](https://duckdb.org/) engine to run SQL queries directly against the Parquet files, which
+  is only included in the [`grog-full`](/get-started/#1-install-grog) build.
 </Aside>
 
 ## Enabling traces
