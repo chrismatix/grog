@@ -344,10 +344,9 @@ func validateResolverDocument(resolverLabel label.TargetLabel, document resolver
 	return edgeCount, nil
 }
 
-// resolverCacheKey hashes everything the output depends on: the protocol
-// version, the label and command, grog's version for a built-in or the command
-// environment for a shell resolver, and the path, size and contents of every
-// resolved input. Inputs that do not exist are skipped.
+// resolverCacheKey hashes the protocol version, the label and command, grog's
+// version for a built-in, and the path, size and contents of every resolved
+// input. Inputs that do not exist are skipped.
 func resolverCacheKey(resolver *model.DependencyResolver, grogVersion string) (string, error) {
 	// Strings are NUL-terminated and file contents length-prefixed, so distinct inputs never encode to the same bytes.
 	hasher := hashing.GetHasher()
@@ -355,17 +354,6 @@ func resolverCacheKey(resolver *model.DependencyResolver, grogVersion string) (s
 
 	if strings.HasPrefix(resolver.Command, "builtin::") {
 		_, _ = fmt.Fprintf(hasher, "%s\x00", grogVersion)
-	} else {
-		// Checkout-specific values would defeat the cache, and the protocol
-		// forbids output that depends on them.
-		environment := LoaderEnv()
-		delete(environment, "GROG_GIT_HASH")
-		delete(environment, "GROG_WORKSPACE_ROOT")
-		maps.Copy(environment, config.Global.EnvironmentVariables)
-		for _, name := range slices.Sorted(maps.Keys(environment)) {
-			_, _ = fmt.Fprintf(hasher, "%s=%s\x00", name, environment[name])
-		}
-		_, _ = fmt.Fprintf(hasher, "%t\x00", config.Global.DisableDefaultShellFlags)
 	}
 
 	packageDirectory := config.GetPathAbsoluteToWorkspaceRoot(resolver.Label.Package)

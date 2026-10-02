@@ -454,8 +454,8 @@ func TestResolverCacheKey(t *testing.T) {
 	grogVersion = "1.0.0"
 	require.Equal(t, shellKey, keyOf(), "a shell command is not keyed on the grog version")
 	config.Global.EnvironmentVariables = map[string]string{"CARGO_PROFILE": "release"}
-	environmentKey := keyOf()
-	require.NotEqual(t, shellKey, environmentKey, "a shell command is keyed on its environment")
+	config.Global.OS = "plan9"
+	require.Equal(t, shellKey, keyOf(), "the environment and platform are not part of the key")
 	require.NoError(t, os.WriteFile(filepath.Join(config.Global.WorkspaceRoot, "Cargo.toml"), []byte("[workspace]\nmembers = []"), 0644))
-	require.NotEqual(t, environmentKey, keyOf(), "input contents are part of the key")
+	require.NotEqual(t, shellKey, keyOf(), "input contents are part of the key")
 }
