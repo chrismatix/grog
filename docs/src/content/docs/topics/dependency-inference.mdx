@@ -146,9 +146,9 @@ Edges are `path` dependencies between members, including `workspace = true` entr
 Cargo allows a dev-dependency to point back at a dependant, which would be a cycle in Grog.
 If a test needs a crate that isn't a normal dependency, add its label to the test target by hand.
 
-Default `inputs`: `Cargo.toml`, `Cargo.lock`, and `<pattern>/Cargo.toml` for every `members` pattern.
+Default `inputs`: `Cargo.toml`, `Cargo.lock`, and `<pattern>/Cargo.toml` for every `members` pattern, with `target/**` excluded.
 
-Each crate's `:_cargo_package` filegroup covers `Cargo.toml`, `build.rs`, `src/**/*`, `tests/**/*`, `benches/**/*`, `examples/**/*`, `[lib] path`, `[[bin]] path` and `[package] include`.
+Each crate's `:_cargo_package` filegroup covers `Cargo.toml`, `build.rs`, `src/**/*`, `tests/**/*`, `benches/**/*`, `examples/**/*`, `[lib] path`, `[[bin]] path` and `[package] include`, minus `target/**`.
 Files a crate doesn't have are skipped, so the list errs broad: an extra glob is free, a missing one under-invalidates.
 
 ### uv
@@ -158,13 +158,13 @@ Workspace members are the `uv.lock` packages listed in `[manifest] members`; edg
 as Cargo's `[dev-dependencies]`: uv does not forbid cycles between members, and a test-only edge back to a
 dependant is the common way to get one. The root project is not a member: it has no directory of its own.
 
-Each member's synthesized `:_uv` covers `pyproject.toml` and its module tree. With `[tool.uv.build-backend]`
+Each member's synthesized `:_uv_package` covers `pyproject.toml` and its module tree, minus `**/.venv/**` and `**/__pycache__/**`. With `[tool.uv.build-backend]`
 the modules are known exactly (`module-root`, default `src`, and `module-name`, which may be a list). Any other
 build backend may package more than one directory, so the inputs are every `.py` and `.pyi` file in the package
 plus the full tree of a `src/<name>` or `<name>` directory matching the normalised project name. Package data
 outside that tree is not covered — register a filegroup with your own `inputs` for those packages.
 
-Default `inputs`: `uv.lock`, `pyproject.toml`, and every member's `pyproject.toml`, which decides its layout.
+Default `inputs`: `uv.lock`, `pyproject.toml`, and every member's `pyproject.toml`, which decides its layout, with `**/.venv/**` and `**/__pycache__/**` excluded.
 
 <Aside type="caution">
   The resolver reads the lockfile, not your imports. A stale `uv.lock` means a stale graph, so run
@@ -178,9 +178,10 @@ Members come from `pnpm-workspace.yaml` or `aube-workspace.yaml` (same format), 
 Edges are `dependencies`, `devDependencies`, `peerDependencies` and `optionalDependencies` entries that name another member; pnpm's `workspace:*` is treated like any other version spec.
 The root `package.json` is a package of its own, covering just that file, so a root target registering the resolver depends on the members it names.
 None of the package managers forbid cycles between members, and one through any of these fields fails the load.
-A synthesized filegroup covers every top-level file and directory of the member except `node_modules`.
+A synthesized filegroup covers the whole member, `**/*`, minus `**/node_modules/**`.
 
-Default `inputs`: `package.json`, `pnpm-workspace.yaml`, `aube-workspace.yaml`, the lockfiles, and every member's `package.json`.
+Default `inputs`: `package.json`, `pnpm-workspace.yaml`, `aube-workspace.yaml`, and `<pattern>/package.json` for every member glob, so a new member is picked up without touching the declaration.
+`**/node_modules/**` and every negated member glob are excluded.
 
 ### go
 
@@ -372,6 +373,7 @@ The environment matches a target command's: the process environment, `grog.toml`
   Use it to point at a specific target instead of a package's stand-in.
 - `inputs` are globs relative to **the described package**, not the declaring one.
   They're only used when no target in that package registers the resolver (see [how the wiring works](#how-the-wiring-works)); an empty list equals omitting them.
+- `exclude_inputs` are globs dropped from `inputs`, like a target's `exclude_inputs`; a pattern ending in `/**` keeps Grog out of the directory entirely.
 - An omitted package is the same as one with no `dependencies`. List every member anyway so `grog check` counts are meaningful.
 - Self-dependencies are dropped.
 - Order doesn't matter; Grog sorts every list, so shuffled output doesn't churn the cache.

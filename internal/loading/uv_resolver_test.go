@@ -13,23 +13,27 @@ func TestUvDependencies(t *testing.T) {
 	document, operationError := uvDependencies(t.Context(), "testdata/uv")
 	require.NoError(t, operationError)
 	require.Equal(t, 1, document.Version)
+	excludeInputs := []string{"**/.venv/**", "**/__pycache__/**"}
 	require.Equal(t, map[string]resolverPackage{
-		"lib/format":   {Dependencies: []string{}, Inputs: []string{"format/**/*", "pyproject.toml"}},
-		"lib/proto":    {Dependencies: []string{}, Inputs: []string{"**/*.py", "**/*.pyi", "pyproject.toml"}},
-		"server":       {Dependencies: []string{"lib/format", "lib/proto", "tools/deploy"}, Inputs: []string{"pyproject.toml", "src/server/**/*"}},
-		"cli":          {Dependencies: []string{"lib/format", "server"}, Inputs: []string{"**/*.py", "**/*.pyi", "cli/**/*", "pyproject.toml"}},
-		"tools/deploy": {Dependencies: []string{}, Inputs: []string{"**/*.py", "**/*.pyi", "pyproject.toml"}},
-		"lib/multi":    {Dependencies: []string{}, Inputs: []string{"pyproject.toml", "src/one/**/*", "src/two/inner/**/*"}},
+		"lib/format":   {Dependencies: []string{}, Inputs: []string{"format/**/*", "pyproject.toml"}, ExcludeInputs: excludeInputs},
+		"lib/proto":    {Dependencies: []string{}, Inputs: []string{"**/*.py", "**/*.pyi", "pyproject.toml"}, ExcludeInputs: excludeInputs},
+		"server":       {Dependencies: []string{"lib/format", "lib/proto", "tools/deploy"}, Inputs: []string{"pyproject.toml", "src/server/**/*"}, ExcludeInputs: excludeInputs},
+		"cli":          {Dependencies: []string{"lib/format", "server"}, Inputs: []string{"**/*.py", "**/*.pyi", "cli/**/*", "pyproject.toml"}, ExcludeInputs: excludeInputs},
+		"tools/deploy": {Dependencies: []string{}, Inputs: []string{"**/*.py", "**/*.pyi", "pyproject.toml"}, ExcludeInputs: excludeInputs},
+		"lib/multi":    {Dependencies: []string{}, Inputs: []string{"pyproject.toml", "src/one/**/*", "src/two/inner/**/*"}, ExcludeInputs: excludeInputs},
 	}, document.Packages)
 	require.NotContains(t, document.Packages, "../external")
 }
 
 func TestUvDefaultInputs(t *testing.T) {
+	inputs, excludeInputs := uvDefaultInputs("testdata/uv")
 	require.Equal(t, []string{
 		"cli/pyproject.toml", "lib/format/pyproject.toml", "lib/multi/pyproject.toml", "lib/proto/pyproject.toml",
 		"pyproject.toml", "server/pyproject.toml", "tools/deploy/pyproject.toml", "uv.lock",
-	}, uvDefaultInputs("testdata/uv"))
-	require.Equal(t, []string{"uv.lock", "pyproject.toml"}, uvDefaultInputs(t.TempDir()))
+	}, inputs)
+	require.Equal(t, []string{"**/.venv/**", "**/__pycache__/**"}, excludeInputs)
+	inputs, _ = uvDefaultInputs(t.TempDir())
+	require.Equal(t, []string{"uv.lock", "pyproject.toml"}, inputs)
 }
 
 func TestUvResolverErrors(t *testing.T) {
