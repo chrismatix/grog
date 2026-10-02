@@ -92,8 +92,8 @@ Examples:
 - If `inputs` includes all files in a directory but you want to exclude specific files, you can list them in `exclude_inputs`
 
 <Aside type="note">
-  The exclusion happens after all input patterns are resolved, so you can exclude specific files
-  that were matched by glob patterns.
+  A pattern ending in `/**`, e.g. `**/node_modules/**`, excludes the whole directory, so Grog never
+  walks into it. Other patterns are matched against each resolved file.
 </Aside>
 
 ### outputs

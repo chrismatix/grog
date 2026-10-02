@@ -28,17 +28,18 @@ func TestDependencyResolverLoaders(t *testing.T) {
   - name: cargo
     command: builtin::cargo
     inputs: ["manifests/*.toml"]
+    exclude_inputs: ["manifests/skip.toml"]
     timeout: 2s
     generated_target_name: python
 targets:
   - name: sources
     dependency_resolvers: [":cargo"]
 `},
-		{"json", JsonLoader{}, `{"dependency_resolvers":[{"name":"cargo","command":"builtin::cargo","inputs":["manifests/*.toml"],"timeout":"2s","generated_target_name":"python"}],"targets":[{"name":"sources","dependency_resolvers":[":cargo"]}]}`},
-		{"star", StarlarkLoader{}, `dependency_resolver(name="cargo", command="builtin::cargo", inputs=["manifests/*.toml"], timeout="2s", generated_target_name="python")
+		{"json", JsonLoader{}, `{"dependency_resolvers":[{"name":"cargo","command":"builtin::cargo","inputs":["manifests/*.toml"],"exclude_inputs":["manifests/skip.toml"],"timeout":"2s","generated_target_name":"python"}],"targets":[{"name":"sources","dependency_resolvers":[":cargo"]}]}`},
+		{"star", StarlarkLoader{}, `dependency_resolver(name="cargo", command="builtin::cargo", inputs=["manifests/*.toml"], exclude_inputs=["manifests/skip.toml"], timeout="2s", generated_target_name="python")
 target(name="sources", dependency_resolvers=[":cargo"])`},
 		{"pkl", &PklLoader{}, fmt.Sprintf(`amends %q
-dependency_resolvers { new { name = "cargo"; command = "builtin::cargo"; inputs { "manifests/*.toml" }; timeout = "2s"; generated_target_name = "python" } }
+dependency_resolvers { new { name = "cargo"; command = "builtin::cargo"; inputs { "manifests/*.toml" }; exclude_inputs { "manifests/skip.toml" }; timeout = "2s"; generated_target_name = "python" } }
 targets { new { name = "sources"; dependency_resolvers { ":cargo" } } }
 `, packageModule)},
 	}
@@ -50,13 +51,14 @@ targets { new { name = "sources"; dependency_resolvers { ":cargo" } } }
 			config.Global.WorkspaceRoot = directory
 			require.NoError(t, os.Mkdir(filepath.Join(directory, "manifests"), 0755))
 			require.NoError(t, os.WriteFile(filepath.Join(directory, "manifests/member.toml"), nil, 0644))
+			require.NoError(t, os.WriteFile(filepath.Join(directory, "manifests/skip.toml"), nil, 0644))
 			buildFile := filepath.Join(directory, "BUILD."+testCase.name)
 			require.NoError(t, os.WriteFile(buildFile, []byte(testCase.content), 0644))
 			packageDTO, matched, operationError := testCase.loader.Load(t.Context(), buildFile)
 			require.NoError(t, operationError)
 			require.True(t, matched)
 			require.Len(t, packageDTO.DependencyResolvers, 1)
-			require.Equal(t, &DependencyResolverDTO{Name: "cargo", Command: "builtin::cargo", Inputs: []string{"manifests/*.toml"}, Timeout: "2s", GeneratedTargetName: "python"}, packageDTO.DependencyResolvers[0])
+			require.Equal(t, &DependencyResolverDTO{Name: "cargo", Command: "builtin::cargo", Inputs: []string{"manifests/*.toml"}, ExcludeInputs: []string{"manifests/skip.toml"}, Timeout: "2s", GeneratedTargetName: "python"}, packageDTO.DependencyResolvers[0])
 			require.Equal(t, []string{":cargo"}, packageDTO.Targets[0].DependencyResolvers)
 			enrichedPackage, operationError := getEnrichedPackage(console.GetLogger(t.Context()), ".", packageDTO)
 			require.NoError(t, operationError)

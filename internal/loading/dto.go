@@ -95,10 +95,11 @@ type ResourceDTO struct {
 
 // DependencyResolverDTO is a load-time dependency resolver declaration.
 type DependencyResolverDTO struct {
-	Name    string   `json:"name" yaml:"name" pkl:"name" starlark:"name"`
-	Command string   `json:"command" yaml:"command" pkl:"command" starlark:"command"`
-	Inputs  []string `json:"inputs,omitempty" yaml:"inputs,omitempty" pkl:"inputs" starlark:"inputs"`
-	Timeout string   `json:"timeout,omitempty" yaml:"timeout,omitempty" pkl:"timeout" starlark:"timeout"`
+	Name          string   `json:"name" yaml:"name" pkl:"name" starlark:"name"`
+	Command       string   `json:"command" yaml:"command" pkl:"command" starlark:"command"`
+	Inputs        []string `json:"inputs,omitempty" yaml:"inputs,omitempty" pkl:"inputs" starlark:"inputs"`
+	ExcludeInputs []string `json:"exclude_inputs,omitempty" yaml:"exclude_inputs,omitempty" pkl:"exclude_inputs" starlark:"exclude_inputs"`
+	Timeout       string   `json:"timeout,omitempty" yaml:"timeout,omitempty" pkl:"timeout" starlark:"timeout"`
 	// GeneratedTargetName names the filegroup grog creates for a package that
 	// registers no target. Defaults to _<name>_package.
 	GeneratedTargetName string `json:"generated_target_name,omitempty" yaml:"generated_target_name,omitempty" pkl:"generated_target_name" starlark:"generated_target_name"`

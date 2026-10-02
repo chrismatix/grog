@@ -39,6 +39,7 @@ class DependencyResolver {
   name: String
   command: String
   inputs: Listing<String>(isDistinct)
+  exclude_inputs: Listing<String>(isDistinct)
   timeout: String?
   // Name of the filegroup synthesized for a package that registers no target.
   // Defaults to "_<name>_package".

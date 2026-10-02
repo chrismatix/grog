@@ -3,6 +3,7 @@ package loading
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -269,7 +270,7 @@ func enrichDependencyResolvers(
 				inputs = uvDefaultInputs(absolutePackagePath)
 			}
 		}
-		resolvedInputs, enrichmentError := resolveInputs(logger, absolutePackagePath, inputs, nil)
+		resolvedInputs, enrichmentError := resolveInputs(logger, absolutePackagePath, inputs, resolver.ExcludeInputs)
 		if enrichmentError != nil {
 			return nil, fmt.Errorf("failed to resolve inputs for dependency resolver %s: %w", resolverLabel, enrichmentError)
 		}
@@ -288,17 +289,21 @@ func enrichDependencyResolvers(
 	return dependencyResolvers, nil
 }
 
-// resolveInputs resolves the glob patterns in the inputs and excludeInputs.
+// resolveInputs resolves the glob patterns in the inputs and drops the files matching excludeInputs.
 func resolveInputs(
 	logger *console.Logger,
 	absolutePackagePath string,
 	inputs []string,
 	excludeInputs []string,
 ) ([]string, error) {
-	var resolvedInputs []string
-	fsys := os.DirFS(absolutePackagePath)
+	for _, excludePattern := range excludeInputs {
+		if !doublestar.ValidatePattern(excludePattern) {
+			return nil, fmt.Errorf("failed to resolve exclusion glob pattern %s: %w", excludePattern, doublestar.ErrBadPattern)
+		}
+	}
+	fsys := excludingFS{FS: os.DirFS(absolutePackagePath), excludeInputs: excludeInputs}
 
-	// First, resolve all input patterns
+	var resolvedInputs []string
 	for _, input := range inputs {
 		if !strings.ContainsAny(input, "*?[{") {
 			// Nothing to resolve - no special glob characters
@@ -314,38 +319,19 @@ func resolveInputs(
 		resolvedInputs = append(resolvedInputs, matches...)
 	}
 
-	// If there are no exclusions, return early
 	if len(excludeInputs) == 0 {
 		return resolvedInputs, nil
 	}
 
-	// Resolve exclusion patterns
-	var excludedPaths []string
-	for _, excludePattern := range excludeInputs {
-		matches, err := doublestar.Glob(fsys, excludePattern, doublestar.WithFilesOnly())
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve exclusion glob pattern %s: %w", excludePattern, err)
-		}
-		logger.Debugf("Resolved exclusion glob pattern %s in %s to %v", excludePattern, absolutePackagePath, matches)
-
-		excludedPaths = append(excludedPaths, matches...)
-	}
-
-	// Create a map for faster lookup of excluded paths
-	excludeMap := make(map[string]bool)
-	for _, path := range excludedPaths {
-		excludeMap[path] = true
-	}
-
 	var filteredInputs []string
 	for _, input := range resolvedInputs {
-		if !excludeMap[input] {
+		if !slices.ContainsFunc(excludeInputs, func(pattern string) bool { return doublestar.MatchUnvalidated(pattern, input) }) {
 			filteredInputs = append(filteredInputs, input)
 		}
 	}
 
 	logger.Debugf("Filtered %d inputs to %d after applying %d exclusions",
-		len(resolvedInputs), len(filteredInputs), len(excludedPaths))
+		len(resolvedInputs), len(filteredInputs), len(excludeInputs))
 
 	return filteredInputs, nil
 }
