@@ -16,21 +16,24 @@ import (
 )
 
 type nodeManifest struct {
-	Name             string            `json:"name"`
-	Workspaces       json.RawMessage   `json:"workspaces"`
-	Dependencies     map[string]string `json:"dependencies"`
-	DevDependencies  map[string]string `json:"devDependencies"`
-	PeerDependencies map[string]string `json:"peerDependencies"`
+	Name                 string            `json:"name"`
+	Workspaces           json.RawMessage   `json:"workspaces"`
+	Dependencies         map[string]string `json:"dependencies"`
+	DevDependencies      map[string]string `json:"devDependencies"`
+	PeerDependencies     map[string]string `json:"peerDependencies"`
+	OptionalDependencies map[string]string `json:"optionalDependencies"`
 }
 
-// nodeDependencies maps every workspace member to the members named in its
-// dependencies, devDependencies and peerDependencies.
+// nodeDependencies maps the root and every workspace member to the members
+// named in its dependencies, devDependencies, peerDependencies and
+// optionalDependencies.
 func nodeDependencies(resolverContext context.Context, workspaceDirectory string) (resolverDocument, error) {
 	document := resolverDocument{Version: 1, Packages: make(map[string]resolverPackage)}
 	directories, operationError := nodeMemberDirectories(workspaceDirectory)
 	if operationError != nil {
 		return document, operationError
 	}
+	directories = append(directories, "")
 
 	manifests := make(map[string]nodeManifest, len(directories))
 	directoryByName := make(map[string]string, len(directories))
@@ -50,7 +53,11 @@ func nodeDependencies(resolverContext context.Context, workspaceDirectory string
 
 	for directory, manifest := range manifests {
 		reportedPackage := resolverPackage{Dependencies: []string{}, Inputs: []string{"**/*"}, ExcludeInputs: nodeExcludeInputs}
-		for _, dependencies := range []map[string]string{manifest.Dependencies, manifest.DevDependencies, manifest.PeerDependencies} {
+		if directory == "" {
+			// Everything else under the root belongs to a member or to another tool.
+			reportedPackage.Inputs = []string{"package.json"}
+		}
+		for _, dependencies := range []map[string]string{manifest.Dependencies, manifest.DevDependencies, manifest.PeerDependencies, manifest.OptionalDependencies} {
 			for name := range dependencies {
 				if dependencyDirectory, isMember := directoryByName[name]; isMember && dependencyDirectory != directory {
 					reportedPackage.Dependencies = append(reportedPackage.Dependencies, dependencyDirectory)

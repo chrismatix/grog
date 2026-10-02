@@ -24,7 +24,8 @@ func TestNodeDependencies(t *testing.T) {
 		"packages/theme": member(),
 		"packages/utils": member(),
 		"packages/ui":    member("packages/theme", "packages/utils"),
-		"apps/web":       member("packages/theme", "packages/ui"),
+		"apps/web":       member("packages/theme", "packages/ui", "packages/utils"),
+		"":               {Dependencies: []string{"packages/utils"}, Inputs: []string{"package.json"}, ExcludeInputs: []string{"**/node_modules/**"}},
 	}, document.Packages)
 }
 
