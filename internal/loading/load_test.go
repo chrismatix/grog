@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"grog/internal/console"
 	"grog/internal/label"
@@ -181,6 +182,39 @@ func TestResolveInputs(t *testing.T) {
 			expected:      []string{},
 			expectedError: false,
 		},
+		{
+			name:          "ExcludeDirectoryTree",
+			inputs:        []string{"**/*.js"},
+			excludeInputs: []string{"**/node_modules/**"},
+			createTestFiles: func(tmpDir string) {
+				createFile(tmpDir, "index.js", "content1")
+				createFile(tmpDir, "node_modules/left-pad/index.js", "content2")
+				createFile(tmpDir, "app/node_modules/react/index.js", "content3")
+				createFile(tmpDir, "app/main.js", "content4")
+			},
+			expected:      []string{"app/main.js", "index.js"},
+			expectedError: false,
+		},
+		{
+			name:          "ExcludeDirectoryChildrenKeepsNestedFiles",
+			inputs:        []string{"**/*.txt"},
+			excludeInputs: []string{"subdir/*"},
+			createTestFiles: func(tmpDir string) {
+				createFile(tmpDir, "subdir/file1.txt", "content1")
+				createFile(tmpDir, "subdir/nested/file2.txt", "content2")
+			},
+			expected:      []string{"subdir/nested/file2.txt"},
+			expectedError: false,
+		},
+		{
+			name:          "InvalidExcludePattern",
+			inputs:        []string{"*.txt"},
+			excludeInputs: []string{"[invalid"},
+			createTestFiles: func(tmpDir string) {
+				createFile(tmpDir, "file1.txt", "content1")
+			},
+			expectedError: true,
+		},
 	}
 
 	testLogger := console.NewFromSugared(zaptest.NewLogger(t).Sugar(), zapcore.DebugLevel)
@@ -225,6 +259,28 @@ func TestResolveInputs(t *testing.T) {
 				t.Errorf("Unexpected resolved inputs.\nExpected: %v\nActual:   %v", tc.expected, actual)
 			}
 		})
+	}
+}
+
+func TestExcludingFSHidesExcludedDirectories(t *testing.T) {
+	filesystem := excludingFS{
+		FS: fstest.MapFS{
+			"index.js":                &fstest.MapFile{},
+			"node_modules/a/index.js": &fstest.MapFile{},
+			"src/main.js":             &fstest.MapFile{},
+		},
+		excludeInputs: []string{"node_modules/**", "src/*"},
+	}
+	entries, err := filesystem.ReadDir(".")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	var names []string
+	for _, entry := range entries {
+		names = append(names, entry.Name())
+	}
+	if !reflect.DeepEqual(names, []string{"index.js", "src"}) {
+		t.Errorf("Unexpected entries: %v", names)
 	}
 }
 
