@@ -6,14 +6,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 
+	"grog/internal/caching"
 	"grog/internal/config"
 	"grog/internal/console"
+	"grog/internal/hashing"
 	"grog/internal/label"
 	"grog/internal/model"
 	"grog/internal/shell"
@@ -47,10 +51,22 @@ var builtinResolvers = map[string]func(context.Context, string) (resolverDocumen
 	"builtin::uv":    uvDependencies,
 }
 
+// CasProvider is only called when the workspace declares resolvers, so a
+// broken cache setup cannot fail loads that never run one.
+type CasProvider func(context.Context) (*caching.Cas, error)
+
+// DependencyInferrer runs the dependency resolvers a load declares. A nil
+// CasProvider disables caching their output.
+type DependencyInferrer struct {
+	CasProvider CasProvider
+	// GrogVersion keys the cached output of built-in resolvers.
+	GrogVersion string
+}
+
 // inferDependencies runs every declared dependency resolver and appends the
 // edges it reports to the target each package registered for it. A reported
 // package that registers nothing gets a filegroup synthesized from its inputs.
-func inferDependencies(loadContext context.Context, packages []*model.Package) ([]*model.Package, error) {
+func (inferrer *DependencyInferrer) inferDependencies(loadContext context.Context, packages []*model.Package) ([]*model.Package, error) {
 	declarations := make(map[label.TargetLabel]*model.DependencyResolver)
 	packagesByPath := make(map[string]*model.Package, len(packages))
 	var targets []*model.Target
@@ -67,12 +83,19 @@ func inferDependencies(loadContext context.Context, packages []*model.Package) (
 		return nil, operationError
 	}
 
+	var cas *caching.Cas
+	if len(resolvers) > 0 && inferrer.CasProvider != nil {
+		cas, operationError = inferrer.CasProvider(loadContext)
+		if operationError != nil {
+			return nil, fmt.Errorf("could not instantiate cache for dependency resolvers: %w", operationError)
+		}
+	}
 	documents := make([]resolverDocument, len(resolvers))
 	resolverGroup, resolverContext := errgroup.WithContext(loadContext)
 	for index, resolver := range resolvers {
 		resolverGroup.Go(func() error {
 			var operationError error
-			documents[index], operationError = runDependencyResolver(resolverContext, resolver)
+			documents[index], operationError = inferrer.runDependencyResolver(resolverContext, resolver, cas)
 			return operationError
 		})
 	}
@@ -99,6 +122,16 @@ func inferDependencies(loadContext context.Context, packages []*model.Package) (
 			registrations[key] = synthesized
 		}
 	}
+	if operationError := linkDependencies(loadContext, resolvers, documents, registrations); operationError != nil {
+		return nil, operationError
+	}
+	return packages, nil
+}
+
+// linkDependencies appends every reported edge to the target registered for
+// the reported package. Path entries resolve through the registrations, label
+// entries are parsed as they are.
+func linkDependencies(loadContext context.Context, resolvers []*model.DependencyResolver, documents []resolverDocument, registrations map[registration]*model.Target) error {
 	for index, resolver := range resolvers {
 		document := documents[index]
 		for _, packagePath := range slices.Sorted(maps.Keys(document.Packages)) {
@@ -107,18 +140,19 @@ func inferDependencies(loadContext context.Context, packages []*model.Package) (
 				console.GetLogger(loadContext).Debugf("resolver %s reports unregistered package %s; ignoring", resolver.Label, packagePath)
 				continue
 			}
+
 			for _, dependency := range document.Packages[packagePath].Dependencies {
 				var dependencyLabel label.TargetLabel
 				if strings.HasPrefix(dependency, "//") {
 					parsedLabel, operationError := label.ParseTargetLabel("", dependency)
 					if operationError != nil {
-						return nil, fmt.Errorf("resolver %s reports invalid dependency %q: %w", resolver.Label, dependency, operationError)
+						return fmt.Errorf("resolver %s reports invalid dependency %q: %w", resolver.Label, dependency, operationError)
 					}
 					dependencyLabel = parsedLabel
 				} else {
 					dependencyTarget := registrations[registration{resolver.Label, path.Join(resolver.Label.Package, dependency)}]
 					if dependencyTarget == nil {
-						return nil, fmt.Errorf("resolver %s reports %s depends on %s, which has no target registered for %s and no inputs to synthesize one from", resolver.Label, packagePath, dependency, resolver.Label)
+						return fmt.Errorf("resolver %s reports %s depends on %s, which has no target registered for %s and no inputs to synthesize one from", resolver.Label, packagePath, dependency, resolver.Label)
 					}
 					dependencyLabel = dependencyTarget.Label
 				}
@@ -126,11 +160,12 @@ func inferDependencies(loadContext context.Context, packages []*model.Package) (
 					target.Dependencies = append(target.Dependencies, dependencyLabel)
 				}
 			}
+
 			slices.SortFunc(target.Dependencies, func(first, second label.TargetLabel) int { return strings.Compare(first.String(), second.String()) })
 			target.Dependencies = slices.Compact(target.Dependencies)
 		}
 	}
-	return packages, nil
+	return nil
 }
 
 type registration struct {
@@ -209,67 +244,145 @@ func synthesizeFilegroup(loadContext context.Context, resolver *model.Dependency
 	return target, createdPackage, nil
 }
 
-// runDependencyResolver produces one resolver's document, from Go for a
-// builtin:: command and otherwise from the JSON its shell command prints, and
-// checks it against version 1 of the protocol.
-func runDependencyResolver(loadContext context.Context, resolver *model.DependencyResolver) (resolverDocument, error) {
+// runDependencyResolver produces one resolver's document and checks it
+// against version 1 of the protocol. The document comes from the cache when
+// the resolver's inputs are unchanged, from Go for a builtin:: command and
+// otherwise from the JSON its shell command prints. Only valid output is cached.
+func (inferrer *DependencyInferrer) runDependencyResolver(loadContext context.Context, resolver *model.DependencyResolver, cas *caching.Cas) (resolverDocument, error) {
 	resolverContext, cancel := context.WithTimeout(loadContext, resolver.Timeout)
 	defer cancel()
 	logger := console.GetLogger(loadContext)
-	logger.Debugf("resolver %s: %s", resolver.Label, resolver.Command)
 	var document resolverDocument
-	var operationError error
-	if builtin, isBuiltin := builtinResolvers[resolver.Command]; isBuiltin {
-		document, operationError = builtin(resolverContext, config.GetPathAbsoluteToWorkspaceRoot(resolver.Label.Package))
-	} else {
-		document, operationError = runResolverCommand(resolverContext, resolver)
-	}
+	cacheKey, operationError := resolverCacheKey(resolver, inferrer.GrogVersion)
 	if operationError != nil {
 		return document, fmt.Errorf("resolver %s failed: %w", resolver.Label, operationError)
 	}
+	logger.Debugf("resolver %s: %s (cache key %s)", resolver.Label, resolver.Command, cacheKey)
+	var output []byte
+	cacheHit := false
+	if cas != nil {
+		output, operationError = cas.LoadBytes(resolverContext, cacheKey)
+		cacheHit = operationError == nil
+	}
+	if !cacheHit {
+		if builtin, isBuiltin := builtinResolvers[resolver.Command]; isBuiltin {
+			document, operationError = builtin(resolverContext, config.GetPathAbsoluteToWorkspaceRoot(resolver.Label.Package))
+			if operationError == nil {
+				output, operationError = json.Marshal(document)
+			}
+		} else {
+			output, operationError = runResolverCommand(resolverContext, resolver)
+		}
+		if operationError != nil {
+			return document, fmt.Errorf("resolver %s failed: %w", resolver.Label, operationError)
+		}
+	}
+	if operationError := json.Unmarshal(output, &document); operationError != nil {
+		return document, fmt.Errorf("resolver %s returned invalid JSON: %w; stdout: %q", resolver.Label, operationError, output[:min(len(output), 2048)])
+	}
+	edgeCount, operationError := validateResolverDocument(resolver.Label, document)
+	if operationError != nil {
+		return document, operationError
+	}
+	if cas != nil && !cacheHit {
+		if operationError := cas.WriteBytes(resolverContext, cacheKey, output); operationError != nil {
+			return document, fmt.Errorf("resolver %s: failed to cache output: %w", resolver.Label, operationError)
+		}
+	}
+	cacheStatus := "cache miss"
+	if cacheHit {
+		cacheStatus = "cache hit"
+	}
+	logger.Debugf("resolver %s: %s, %s, %d packages, %d edges", resolver.Label, resolver.Command, cacheStatus, len(document.Packages), edgeCount)
+	if logger.DebugEnabled() {
+		logger.Debugf("resolver %s mapping: %s", resolver.Label, output)
+	}
+	return document, nil
+}
+
+// validateResolverDocument checks a document against version 1 of the
+// protocol and returns how many edges it reports. Dependencies that are
+// labels are parsed when they are linked, so only path entries are checked.
+func validateResolverDocument(resolverLabel label.TargetLabel, document resolverDocument) (int, error) {
 	if document.Version > 1 {
-		return document, fmt.Errorf("resolver %s returned unsupported version %d; upgrade grog", resolver.Label, document.Version)
+		return 0, fmt.Errorf("resolver %s returned unsupported version %d; upgrade grog", resolverLabel, document.Version)
 	}
 	if document.Version != 1 {
-		return document, fmt.Errorf("resolver %s must return version 1", resolver.Label)
+		return 0, fmt.Errorf("resolver %s must return version 1", resolverLabel)
 	}
 	if document.Packages == nil {
-		return document, fmt.Errorf("resolver %s must return a packages object", resolver.Label)
+		return 0, fmt.Errorf("resolver %s must return a packages object", resolverLabel)
 	}
+
+	edgeCount := 0
 	for _, packagePath := range slices.Sorted(maps.Keys(document.Packages)) {
 		if operationError := validateResolverPath(packagePath); operationError != nil {
-			return document, fmt.Errorf("resolver %s: %w", resolver.Label, operationError)
+			return 0, fmt.Errorf("resolver %s: %w", resolverLabel, operationError)
 		}
+
 		reportedPackage := document.Packages[packagePath]
 		slices.Sort(reportedPackage.Dependencies)
+		edgeCount += len(reportedPackage.Dependencies)
 		for _, dependency := range reportedPackage.Dependencies {
 			if strings.HasPrefix(dependency, "//") {
 				continue
 			}
 			if operationError := validateResolverPath(dependency); operationError != nil {
-				return document, fmt.Errorf("resolver %s: %w", resolver.Label, operationError)
+				return 0, fmt.Errorf("resolver %s: %w", resolverLabel, operationError)
 			}
 		}
+
 		for _, input := range reportedPackage.Inputs {
 			if operationError := validateResolverPath(input); operationError != nil {
-				return document, fmt.Errorf("resolver %s: inputs of %s: %w", resolver.Label, packagePath, operationError)
+				return 0, fmt.Errorf("resolver %s: inputs of %s: %w", resolverLabel, packagePath, operationError)
 			}
 		}
 	}
-	if logger.DebugEnabled() {
-		mapping, _ := json.Marshal(document)
-		logger.Debugf("resolver %s mapping: %s", resolver.Label, mapping)
+	return edgeCount, nil
+}
+
+// resolverCacheKey hashes the protocol version, the label and command, grog's
+// version for a built-in, and the path, size and contents of every resolved
+// input. Inputs that do not exist are skipped.
+func resolverCacheKey(resolver *model.DependencyResolver, grogVersion string) (string, error) {
+	// Strings are NUL-terminated and file contents length-prefixed, so distinct inputs never encode to the same bytes.
+	hasher := hashing.GetHasher()
+	_, _ = fmt.Fprintf(hasher, "1\x00%s\x00%s\x00", resolver.Label, resolver.Command)
+
+	if strings.HasPrefix(resolver.Command, "builtin::") {
+		_, _ = fmt.Fprintf(hasher, "%s\x00", grogVersion)
 	}
-	return document, nil
+
+	packageDirectory := config.GetPathAbsoluteToWorkspaceRoot(resolver.Label.Package)
+	for _, input := range slices.Sorted(slices.Values(resolver.Inputs)) {
+		file, operationError := os.Open(filepath.Join(packageDirectory, input))
+		if errors.Is(operationError, os.ErrNotExist) {
+			continue
+		}
+		if operationError != nil {
+			return "", operationError
+		}
+
+		fileInfo, operationError := file.Stat()
+		if operationError == nil {
+			_, _ = fmt.Fprintf(hasher, "%s\x00%d\x00", input, fileInfo.Size())
+			_, operationError = io.Copy(hasher, file)
+		}
+		_ = file.Close()
+		if operationError != nil {
+			return "", operationError
+		}
+	}
+
+	return hasher.SumString(), nil
 }
 
 // runResolverCommand runs the resolver's shell command in its package with a
-// target's environment and parses the JSON it prints to stdout.
-func runResolverCommand(resolverContext context.Context, resolver *model.DependencyResolver) (resolverDocument, error) {
-	var document resolverDocument
+// target's environment and returns what it printed to stdout.
+func runResolverCommand(resolverContext context.Context, resolver *model.DependencyResolver) ([]byte, error) {
 	command, cleanup, operationError := shell.NewCommand(resolverContext, shell.WithDefaultFlags(resolver.Command))
 	if operationError != nil {
-		return document, operationError
+		return nil, operationError
 	}
 	defer cleanup()
 	command.Dir = config.GetPathAbsoluteToWorkspaceRoot(resolver.Label.Package)
@@ -286,15 +399,12 @@ func runResolverCommand(resolverContext context.Context, resolver *model.Depende
 	command.Stderr = &standardError
 	if operationError := command.Run(); operationError != nil {
 		if errors.Is(resolverContext.Err(), context.DeadlineExceeded) {
-			return document, fmt.Errorf("timed out after %s\n%s", resolver.Timeout, standardError.String())
+			return nil, fmt.Errorf("timed out after %s\n%s", resolver.Timeout, standardError.String())
 		}
-		return document, fmt.Errorf("%w\n%s", operationError, standardError.String())
+		return nil, fmt.Errorf("%w\n%s", operationError, standardError.String())
 	}
 	console.GetLogger(resolverContext).Debugf("resolver %s stderr: %s", resolver.Label, standardError.String())
-	if operationError := json.Unmarshal(standardOutput.Bytes(), &document); operationError != nil {
-		return document, fmt.Errorf("returned invalid JSON: %w; stdout: %q", operationError, standardOutput.Bytes()[:min(standardOutput.Len(), 2048)])
-	}
-	return document, nil
+	return standardOutput.Bytes(), nil
 }
 
 func validateResolverPath(entry string) error {

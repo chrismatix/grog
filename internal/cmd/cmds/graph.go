@@ -44,7 +44,7 @@ Supports tree, JSON, and Mermaid diagram output formats. By default, only direct
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := console.SetupCommand()
 
-		packages, err := loading.LoadAllPackages(ctx)
+		packages, err := loading.LoadAllPackages(ctx, dependencyInferrer())
 		if err != nil {
 			logger.Fatalf(
 				"could not load packages: %v",

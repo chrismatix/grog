@@ -99,7 +99,7 @@ func runScriptFile(ctx context.Context, logger *console.Logger, scriptArg string
 		return err
 	}
 
-	graph := loading.MustLoadGraphForBuild(ctx, logger)
+	graph := loading.MustLoadGraphForBuild(ctx, logger, dependencyInferrer())
 	if existing := graph.GetNodes()[target.Label]; existing != nil {
 		return fmt.Errorf("target %s is already defined in the build graph; refer to it by label instead", target.Label)
 	}
@@ -194,7 +194,7 @@ func parseMultipleTargetLabels(logger *console.Logger, currentPackagePath string
 }
 
 func runTargetsByLabels(ctx context.Context, logger *console.Logger, targetLabels []label.TargetLabel, userCommandArgs []string) {
-	graph := loading.MustLoadGraphForBuild(ctx, logger)
+	graph := loading.MustLoadGraphForBuild(ctx, logger, dependencyInferrer())
 	runTargets := make([]*model.Target, 0, len(targetLabels))
 	seen := make(map[label.TargetLabel]struct{})
 	for _, targetLabel := range targetLabels {

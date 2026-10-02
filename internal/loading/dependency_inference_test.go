@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"grog/internal/analysis"
+	"grog/internal/caching"
+	"grog/internal/caching/backends"
 	"grog/internal/config"
 	"grog/internal/label"
 	"grog/internal/model"
@@ -38,7 +40,7 @@ func inferenceTestPackages(t *testing.T, command string) []*model.Package {
 // inferDependenciesError keeps the assertions below on the error alone; the
 // packages are mutated in place, so callers still see the merged edges.
 func inferDependenciesError(loadContext context.Context, packages []*model.Package) error {
-	_, operationError := inferDependencies(loadContext, packages)
+	_, operationError := (&DependencyInferrer{}).inferDependencies(loadContext, packages)
 	return operationError
 }
 
@@ -263,7 +265,7 @@ targets:
     dependency_resolvers: [":custom"]
   - name: explicit
 `), 0644))
-	loadedPackages, operationError := LoadAllPackages(t.Context())
+	loadedPackages, operationError := LoadAllPackages(t.Context(), &DependencyInferrer{})
 	require.NoError(t, operationError)
 	require.Len(t, loadedPackages, 1)
 	require.Equal(t, []label.TargetLabel{label.TL("", "explicit")}, loadedPackages[0].Targets[label.TL("", "sources")].Dependencies)
@@ -362,7 +364,7 @@ func TestDependencyInferenceSynthesis(t *testing.T) {
 			if testCase.prepare != nil {
 				testCase.prepare(packages)
 			}
-			packages, operationError := inferDependencies(t.Context(), packages)
+			packages, operationError := (&DependencyInferrer{}).inferDependencies(t.Context(), packages)
 			if testCase.expectedError != "" {
 				require.ErrorContains(t, operationError, testCase.expectedError)
 				return
@@ -371,4 +373,74 @@ func TestDependencyInferenceSynthesis(t *testing.T) {
 			testCase.check(t, packages)
 		})
 	}
+}
+
+func TestDependencyInferenceCaching(t *testing.T) {
+	packages := inferenceTestPackages(t, `echo run >> runs; printf '%s' '{"version":1,"packages":{"app":{"dependencies":["lib"]}}}'`)
+	config.Global.Root = t.TempDir()
+	cachedInferrer := &DependencyInferrer{CasProvider: func(ctx context.Context) (*caching.Cas, error) {
+		cache, operationError := backends.GetCacheBackend(ctx, config.Global.Cache)
+		if operationError != nil {
+			return nil, operationError
+		}
+		return caching.NewCas(cache), nil
+	}}
+	uncachedInferrer := &DependencyInferrer{}
+	resolver := packages[0].DependencyResolvers[label.TL("", "custom")]
+	resolver.Inputs = []string{"manifest.txt", "missing.txt"}
+	manifestPath := filepath.Join(config.Global.WorkspaceRoot, "manifest.txt")
+	require.NoError(t, os.WriteFile(manifestPath, []byte("one"), 0644))
+	appTarget := packages[1].Targets[label.TL("app", "sources")]
+	runCount := func() int {
+		runs, _ := os.ReadFile(filepath.Join(config.Global.WorkspaceRoot, "runs"))
+		return strings.Count(string(runs), "run")
+	}
+	infer := func(inferrer *DependencyInferrer) {
+		t.Helper()
+		appTarget.Dependencies = nil
+		_, operationError := inferrer.inferDependencies(t.Context(), packages)
+		require.NoError(t, operationError)
+		require.Equal(t, []label.TargetLabel{label.TL("lib", "sources")}, appTarget.Dependencies)
+	}
+	infer(cachedInferrer)
+	infer(cachedInferrer)
+	require.Equal(t, 1, runCount(), "unchanged inputs are served from the cache")
+	require.NoError(t, os.WriteFile(manifestPath, []byte("two"), 0644))
+	infer(cachedInferrer)
+	require.Equal(t, 2, runCount(), "a changed input re-runs the resolver")
+	infer(uncachedInferrer)
+	infer(uncachedInferrer)
+	require.Equal(t, 4, runCount(), "without a CasProvider the resolver runs every time")
+	resolver.Command = `echo run >> runs; exit 1`
+	for range 2 {
+		_, operationError := cachedInferrer.inferDependencies(t.Context(), packages)
+		require.Error(t, operationError)
+	}
+	require.Equal(t, 6, runCount(), "failed runs are never cached")
+}
+
+func TestResolverCacheKey(t *testing.T) {
+	packages := inferenceTestPackages(t, "builtin::cargo")
+	resolver := packages[0].DependencyResolvers[label.TL("", "custom")]
+	resolver.Inputs = []string{"Cargo.toml"}
+	require.NoError(t, os.WriteFile(filepath.Join(config.Global.WorkspaceRoot, "Cargo.toml"), []byte("[workspace]"), 0644))
+	grogVersion := ""
+	keyOf := func() string {
+		t.Helper()
+		cacheKey, operationError := resolverCacheKey(resolver, grogVersion)
+		require.NoError(t, operationError)
+		return cacheKey
+	}
+	initial := keyOf()
+	grogVersion = "0.99.0"
+	require.NotEqual(t, initial, keyOf(), "a built-in is keyed on the grog version")
+	resolver.Command = "cargo metadata"
+	shellKey := keyOf()
+	grogVersion = "1.0.0"
+	require.Equal(t, shellKey, keyOf(), "a shell command is not keyed on the grog version")
+	config.Global.EnvironmentVariables = map[string]string{"CARGO_PROFILE": "release"}
+	config.Global.OS = "plan9"
+	require.Equal(t, shellKey, keyOf(), "the environment and platform are not part of the key")
+	require.NoError(t, os.WriteFile(filepath.Join(config.Global.WorkspaceRoot, "Cargo.toml"), []byte("[workspace]\nmembers = []"), 0644))
+	require.NotEqual(t, shellKey, keyOf(), "input contents are part of the key")
 }

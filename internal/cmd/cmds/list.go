@@ -53,7 +53,7 @@ var ListCmd = &cobra.Command{
 			}
 		}
 
-		graph := loading.MustLoadGraphForQuery(ctx, logger)
+		graph := loading.MustLoadGraphForQuery(ctx, logger, dependencyInferrer())
 
 		targetTypeFilter, err := selection.StringToTargetTypeSelection(listOptions.targetType.Value)
 		if err != nil {

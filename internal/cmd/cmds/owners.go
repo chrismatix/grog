@@ -24,7 +24,7 @@ This is useful for finding which targets will be affected by changes to specific
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := console.SetupCommand()
 
-		graph := loading.MustLoadGraphForQuery(ctx, logger)
+		graph := loading.MustLoadGraphForQuery(ctx, logger, dependencyInferrer())
 
 		nodes := graph.GetNodes()
 

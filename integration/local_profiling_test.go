@@ -33,7 +33,7 @@ func callBuildFunction(t *testing.T, repoPath string) {
 	config.Global.Root = ""
 	config.Global.WorkspaceRoot = repoPath
 	config.Global.EnableCache = true
-	graph := loading.MustLoadGraphForBuild(t.Context(), testLogger)
+	graph := loading.MustLoadGraphForBuild(t.Context(), testLogger, &loading.DependencyInferrer{})
 
 	cmds.RunBuild(
 		t.Context(),

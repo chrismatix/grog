@@ -18,7 +18,7 @@ var CheckCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, logger := console.SetupCommand()
 
-		graph := loading.MustLoadGraphForBuild(ctx, logger)
+		graph := loading.MustLoadGraphForBuild(ctx, logger, dependencyInferrer())
 
 		errs := analysis.CheckTargetConstraints(logger, graph.GetNodes())
 		if len(errs) > 0 {

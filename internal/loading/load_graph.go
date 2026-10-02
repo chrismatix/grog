@@ -11,9 +11,9 @@ import (
 	"grog/internal/model"
 )
 
-func MustLoadGraphForBuild(ctx context.Context, logger *console.Logger) *dag.DirectedTargetGraph {
+func MustLoadGraphForBuild(ctx context.Context, logger *console.Logger, inferrer *DependencyInferrer) *dag.DirectedTargetGraph {
 	startTime := time.Now()
-	packages, err := LoadAllPackages(ctx)
+	packages, err := LoadAllPackages(ctx, inferrer)
 	if err != nil {
 		logger.Fatalf(
 			"could not load packages: %v",
@@ -45,8 +45,8 @@ func MustLoadGraphForBuild(ctx context.Context, logger *console.Logger) *dag.Dir
 	return graph
 }
 
-func MustLoadGraphForQuery(ctx context.Context, logger *console.Logger) *dag.DirectedTargetGraph {
-	packages, err := LoadAllPackages(ctx)
+func MustLoadGraphForQuery(ctx context.Context, logger *console.Logger, inferrer *DependencyInferrer) *dag.DirectedTargetGraph {
+	packages, err := LoadAllPackages(ctx, inferrer)
 	if err != nil {
 		logger.Fatalf("could not load packages: %v", err)
 	}
