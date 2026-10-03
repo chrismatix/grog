@@ -13,7 +13,7 @@ cases:
   - name: go_builtin_new_import_invalidates_dependants
     grog_args: [build, "//..."]
   - name: go_builtin_edit_template
-    setup_command: "printf 'hi, ' > internal/format/templates/hello.txt"
+    setup_command: "printf 'hi,\n' > internal/format/templates/hello.txt"
   - name: go_builtin_embedded_file_reaches_app
     grog_args: [build, "//..."]
   - name: go_builtin_restore
