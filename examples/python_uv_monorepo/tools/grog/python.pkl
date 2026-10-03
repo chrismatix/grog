@@ -1,30 +1,21 @@
-/// Grog targets for a uv workspace. `Library` is the per-package standard
-/// (filegroup, pytest, ruff); `Image` adds a Docker image installed from the
-/// resolved uv.lock. python.star is the Starlark twin of this module.
+/// Grog targets for a uv workspace. `Package` is the per-package standard
+/// (pytest, ruff); `Image` adds a Docker image installed from the resolved
+/// uv.lock. Sources and workspace edges come from the `:_uv_package`
+/// filegroup that the root `uv` resolver synthesizes. python.star is the
+/// Starlark twin of this module.
 module python
 
 import "@grog/package.pkl"
 
-class Library {
+class Package {
   local self = this
 
-  /// Filegroup target name that other packages depend on (e.g. "format").
+  /// Import package directory measured for coverage (e.g. "format").
   name: String
-
-  /// Import package directory holding the sources. Defaults to `name`.
-  package_dir: String = name
-
-  sources: Listing<String> = new Listing<String> {
-    "\(self.package_dir)/**/*.py"
-    "pyproject.toml"
-  }
 
   test_sources: Listing<String> = new Listing<String> {
     "tests/**/*.py"
   }
-
-  /// Workspace members this package imports, as filegroup labels.
-  dependencies: Listing<String> = new Listing<String> {}
 
   /// Extra dependencies only the tests need.
   test_dependencies: Listing<String> = new Listing<String> {}
@@ -33,24 +24,12 @@ class Library {
 
   fixed targets: Listing<package.Target> = new Listing<package.Target> {
     new {
-      name = self.name
-      inputs = self.sources
-      dependencies {
-        "//tools/grog:python"
-        ...self.dependencies
-      }
-    }
-
-    new {
       name = "test"
-      command =
-        "uv run pytest \(self.pytest_args) --cov=\(self.package_dir) --cov-report=xml:coverage.xml"
-      inputs {
-        ...self.sources
-        ...self.test_sources
-      }
+      command = "uv run pytest \(self.pytest_args) --cov=\(self.name) --cov-report=xml:coverage.xml"
+      inputs = self.test_sources
       dependencies {
-        ":\(self.name)"
+        ":_uv_package"
+        "//tools/grog:python"
         ...self.test_dependencies
       }
       outputs {
@@ -61,11 +40,9 @@ class Library {
     new {
       name = "lint"
       command = "uv run ruff check . && uv run ruff format --check ."
-      inputs {
-        ...self.sources
-        ...self.test_sources
-      }
+      inputs = self.test_sources
       dependencies {
+        ":_uv_package"
         "//:ruff.toml"
       }
     }
@@ -77,10 +54,6 @@ class Image {
 
   /// Local image tag; also the name of the `oci::` output.
   name: String
-
-  /// Filegroup of the service package (its Library target, e.g. ":server").
-  /// Its inputs and dependencies decide when the image is re-staged.
-  library: String
 
   deploy_arch: String = "amd64"
 
@@ -111,8 +84,8 @@ class Image {
       command = "uv run --script \"$GROG_WORKSPACE_ROOT/tools/grog/uv_image_stage.py\""
       dependencies {
         ":pylock"
+        ":_uv_package"
         "//tools/grog:python"
-        self.library
       }
       outputs {
         "dir::build/uv"

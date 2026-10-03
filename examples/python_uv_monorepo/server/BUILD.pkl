@@ -5,17 +5,12 @@ import ".../tools/grog/python.pkl"
 local const git_hash = read?("env:GROG_GIT_HASH") ?? "latest"
 
 targets {
-  ...new python.Library {
+  ...new python.Package {
     name = "server"
-    dependencies {
-      "//lib/format"
-      "//lib/proto"
-    }
   }.targets
 
   ...new python.Image {
     name = "server"
-    library = ":server"
     push_destinations {
       "registry.example.com/sarcasm/server:\(git_hash)"
       "registry.example.com/sarcasm/server:latest"

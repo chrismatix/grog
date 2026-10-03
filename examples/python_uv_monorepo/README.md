@@ -12,25 +12,40 @@ cli/          service  – typer CLI, packaged as a Docker image
 tools/grog/   the shared grog helpers (Pkl and Starlark)
 ```
 
+## Dependencies come from uv.lock
+
+No BUILD file lists a source file or another package. The root `uv`
+[dependency resolver](https://grog.build/topics/dependency-inference) reads
+`uv.lock` and synthesizes a `:_uv_package` filegroup per workspace member, with
+the member's workspace dependencies as edges:
+
+```bash
+$ grog deps //server:_uv_package
+//lib/format:_uv_package
+//lib/proto:proto
+```
+
+`lib/proto` registers its codegen target with the resolver, so packages that
+import `pb` depend on the generated stubs instead of a plain filegroup.
+
 ## The helpers
 
 Every package declares its targets through one of two equivalent helper
 libraries in [`tools/grog/`](./tools/grog):
 
-- [`python.pkl`](./tools/grog/python.pkl) — `python.Library` and `python.Image`
-- [`python.star`](./tools/grog/python.star) — `python_library()` and `python_image()`
+- [`python.pkl`](./tools/grog/python.pkl) — `python.Package` and `python.Image`
+- [`python.star`](./tools/grog/python.star) — `python_package()` and `python_image()`
 
 `server` and the libraries use the Pkl flavor, `cli` uses the Starlark flavor
 ([`cli/BUILD.star`](./cli/BUILD.star)). Grog picks the loader per BUILD file, so
 both stay exercised here; a real repository would settle on one.
 
-A **library** (`python.Library` / `python_library`) gets three targets:
+A **package** (`python.Package` / `python_package`) gets:
 
-| Target    | What it does                                                       |
-| --------- | ------------------------------------------------------------------ |
-| `:<name>` | Filegroup of the sources. Other packages depend on this label.     |
-| `:test`   | `uv run pytest` with coverage; `coverage.xml` is a cached output.  |
-| `:lint`   | `uv run ruff check` and `ruff format --check`, cached per package. |
+| Target  | What it does                                                       |
+| ------- | ------------------------------------------------------------------ |
+| `:test` | `uv run pytest` with coverage; `coverage.xml` is a cached output.  |
+| `:lint` | `uv run ruff check` and `ruff format --check`, cached per package. |
 
 A **service** additionally gets an image (`python.Image` / `python_image`):
 

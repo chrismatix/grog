@@ -1,6 +1,6 @@
 ---
 title: Python
-description: Build, test, lint and containerize a uv workspace with grog, using a small shared helper library in Starlark or Pkl.
+description: Build, test, lint and containerize a uv workspace with grog, with dependencies inferred from uv.lock and a small shared helper library in Starlark or Pkl.
 sidebar:
   order: 1
 ---
@@ -20,14 +20,82 @@ cache the results, and share them across machines.
 
 The mental model is small:
 
-- A **library** is a _filegroup_ target: no command, just the package's sources as inputs.
-  Other packages depend on its label (`//lib/format`), and grog's hash chain propagates changes from there.
-- **Tests and lint** are ordinary targets that depend on the filegroup. They re-run only when the package or one of its
-  workspace dependencies changed.
-- A **service** is a library that additionally produces a Docker image.
+- The built-in `uv` [dependency resolver](/topics/dependency-inference) reads `uv.lock` and gives every workspace
+  member a `:_uv_package` filegroup: its sources as inputs, its workspace dependencies as edges. You never list
+  either by hand.
+- **Tests and lint** are ordinary targets that depend on `:_uv_package`. They re-run only when the package or one of
+  its workspace dependencies changed.
+- A **service** additionally produces a Docker image, staged from the same filegroup.
 
-Because every package follows the same shape, the target definitions live in one shared helper library rather than being
-copied between BUILD files.
+Because every package follows the same shape, the target definitions live in one shared helper library rather than
+being copied between BUILD files.
+
+## Declaring the resolver
+
+One declaration at the workspace root, next to the filegroups for the two files every package shares:
+
+<Tabs syncKey="build-file-format">
+  <TabItem label="Starlark">
+
+```starlark
+# BUILD.star
+dependency_resolver(
+    name = "uv",
+    command = "builtin::uv",
+)
+
+target(name = "uv.lock", inputs = ["uv.lock"])
+target(name = "ruff.toml", inputs = ["ruff.toml"])
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+// BUILD.pkl
+amends "@grog/package.pkl"
+
+// The uv resolver reads uv.lock and synthesizes one :_uv_package filegroup
+// per workspace member, with its workspace dependencies as edges.
+dependency_resolvers {
+  new {
+    name = "uv"
+    command = "builtin::uv"
+  }
+}
+
+targets {
+  new {
+    name = "uv.lock"
+    inputs {
+      "uv.lock"
+    }
+  }
+
+  new {
+    name = "ruff.toml"
+    inputs {
+      "ruff.toml"
+    }
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
+
+From here on `grog deps` shows the inferred graph:
+
+```bash
+$ grog deps //server:_uv_package
+//lib/format:_uv_package
+//lib/proto:proto
+```
+
+<Aside type="caution">
+  The resolver reads the lockfile, not your imports. A stale `uv.lock` means a stale graph, so set
+  `UV_LOCKED=1` in CI (see [In CI](#in-ci)).
+</Aside>
 
 ## The helper library
 
@@ -38,38 +106,29 @@ Put the helper in `tools/grog/` and write it in whichever language your BUILD fi
 
 ```starlark
 # tools/grog/python.star
-def python_library(name, package_dir = None, deps = [], test_deps = [], pytest_args = ""):
-    """Filegroup `name` plus `test` (pytest with coverage) and `lint` (ruff) targets."""
-    package_dir = package_dir or name
-    sources = [package_dir + "/**/*.py", "pyproject.toml"]
+def python_package(name, test_deps = [], pytest_args = ""):
+    """`test` (pytest with coverage of the `name` package) and `lint` (ruff) targets."""
     test_sources = ["tests/**/*.py"]
 
     target(
-        name = name,
-        inputs = sources,
-        dependencies = ["//tools/grog:python"] + deps,
-    )
-
-    target(
         name = "test",
-        command = "uv run pytest %s --cov=%s --cov-report=xml:coverage.xml" % (pytest_args, package_dir),
-        inputs = sources + test_sources,
-        dependencies = [":" + name] + test_deps,
+        command = "uv run pytest %s --cov=%s --cov-report=xml:coverage.xml" % (pytest_args, name),
+        inputs = test_sources,
+        dependencies = [":_uv_package", "//tools/grog:python"] + test_deps,
         outputs = ["coverage.xml"],
     )
 
     target(
         name = "lint",
         command = "uv run ruff check . && uv run ruff format --check .",
-        inputs = sources + test_sources,
-        dependencies = ["//:ruff.toml"],
+        inputs = test_sources,
+        dependencies = [":_uv_package", "//:ruff.toml"],
     )
 
-def python_image(name, library, deploy_arch = "amd64", dockerfile = "Dockerfile", push = []):
+def python_image(name, deploy_arch = "amd64", dockerfile = "Dockerfile", push = []):
     """`pylock`, `stage` and `image` targets building a Docker image tagged `name`.
 
-    `library` is the service's filegroup (e.g. ":server"); `push` lists the
-    `repo:tag` destinations for `grog build --push`.
+    `push` lists the `repo:tag` destinations for `grog build --push`.
     """
     target(
         name = "pylock",
@@ -82,7 +141,7 @@ def python_image(name, library, deploy_arch = "amd64", dockerfile = "Dockerfile"
     target(
         name = "stage",
         command = 'uv run --script "$GROG_WORKSPACE_ROOT/tools/grog/uv_image_stage.py"',
-        dependencies = [":pylock", "//tools/grog:python", library],
+        dependencies = [":pylock", ":_uv_package", "//tools/grog:python"],
         outputs = ["dir::build/uv"],
     )
 
@@ -108,26 +167,15 @@ module python
 
 import "@grog/package.pkl"
 
-class Library {
+class Package {
   local self = this
 
-  /// Filegroup target name that other packages depend on (e.g. "format").
+  /// Import package directory measured for coverage (e.g. "format").
   name: String
-
-  /// Import package directory holding the sources. Defaults to `name`.
-  package_dir: String = name
-
-  sources: Listing<String> = new Listing<String> {
-    "\(self.package_dir)/**/*.py"
-    "pyproject.toml"
-  }
 
   test_sources: Listing<String> = new Listing<String> {
     "tests/**/*.py"
   }
-
-  /// Workspace members this package imports, as filegroup labels.
-  dependencies: Listing<String> = new Listing<String> {}
 
   /// Extra dependencies only the tests need.
   test_dependencies: Listing<String> = new Listing<String> {}
@@ -136,24 +184,12 @@ class Library {
 
   fixed targets: Listing<package.Target> = new Listing<package.Target> {
     new {
-      name = self.name
-      inputs = self.sources
-      dependencies {
-        "//tools/grog:python"
-        ...self.dependencies
-      }
-    }
-
-    new {
       name = "test"
-      command =
-        "uv run pytest \(self.pytest_args) --cov=\(self.package_dir) --cov-report=xml:coverage.xml"
-      inputs {
-        ...self.sources
-        ...self.test_sources
-      }
+      command = "uv run pytest \(self.pytest_args) --cov=\(self.name) --cov-report=xml:coverage.xml"
+      inputs = self.test_sources
       dependencies {
-        ":\(self.name)"
+        ":_uv_package"
+        "//tools/grog:python"
         ...self.test_dependencies
       }
       outputs {
@@ -164,11 +200,9 @@ class Library {
     new {
       name = "lint"
       command = "uv run ruff check . && uv run ruff format --check ."
-      inputs {
-        ...self.sources
-        ...self.test_sources
-      }
+      inputs = self.test_sources
       dependencies {
+        ":_uv_package"
         "//:ruff.toml"
       }
     }
@@ -180,10 +214,6 @@ class Image {
 
   /// Local image tag; also the name of the `oci::` output.
   name: String
-
-  /// Filegroup of the service package (its Library target, e.g. ":server").
-  /// Its inputs and dependencies decide when the image is re-staged.
-  library: String
 
   deploy_arch: String = "amd64"
 
@@ -214,8 +244,8 @@ class Image {
       command = "uv run --script \"$GROG_WORKSPACE_ROOT/tools/grog/uv_image_stage.py\""
       dependencies {
         ":pylock"
+        ":_uv_package"
         "//tools/grog:python"
-        self.library
       }
       outputs {
         "dir::build/uv"
@@ -256,7 +286,7 @@ amends "pkl:Project"
 
 dependencies {
   ["grog"] {
-    uri = "package://grog.build/releases/v0.46.0/grog@0.46.0"
+    uri = "package://grog.build/releases/v0.48.0/grog@0.48.0"
   }
 }
 ```
@@ -270,7 +300,6 @@ Run `pkl project resolve` once to write `PklProject.deps.json`.
 
 | Target    | Purpose                                                                                                                                                                                                                        |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `:<name>` | The filegroup. Its inputs are the package sources; its dependencies are the workspace libraries the package imports. Everything else hangs off this label.                                                                     |
 | `:test`   | `uv run pytest` with coverage. `coverage.xml` is declared as an output, so it is cached and restored like any build artifact, and a repo-wide coverage report can be assembled from the cache without re-running green suites. |
 | `:lint`   | `ruff check` and `ruff format --check`, cached per package. It depends on a root `//:ruff.toml` filegroup so a config change re-lints everything.                                                                              |
 | `:pylock` | `uv export` of this service's resolved closure from `uv.lock`. See [lockfile early cutoff](#lockfile-early-cutoff).                                                                                                            |
@@ -282,30 +311,26 @@ That way an edit to the template or the staging script shows up in `grog changes
 
 ## Using the helpers
 
-A library needs one line. A service adds an image and lists the workspace packages it imports.
+A library is one line. A service adds an image. Neither mentions a source file or another package.
 
 <Tabs syncKey="build-file-format">
   <TabItem label="Starlark">
 
 ```starlark
 # lib/format/BUILD.star
-load("//tools/grog/python.star", "python_library")
+load("//tools/grog/python.star", "python_package")
 
-python_library(name = "format")
+python_package(name = "format")
 ```
 
 ```starlark
 # server/BUILD.star
-load("//tools/grog/python.star", "python_image", "python_library")
+load("//tools/grog/python.star", "python_image", "python_package")
 
-python_library(
-    name = "server",
-    deps = ["//lib/format", "//lib/proto"],
-)
+python_package(name = "server")
 
 python_image(
     name = "server",
-    library = ":server",
     push = [
         "registry.example.com/sarcasm/server:" + GROG_GIT_HASH,
         "registry.example.com/sarcasm/server:latest",
@@ -323,7 +348,7 @@ amends "@grog/package.pkl"
 import ".../tools/grog/python.pkl"
 
 targets {
-  ...new python.Library {
+  ...new python.Package {
     name = "format"
   }.targets
 }
@@ -338,17 +363,12 @@ import ".../tools/grog/python.pkl"
 local const git_hash = read?("env:GROG_GIT_HASH") ?? "latest"
 
 targets {
-  ...new python.Library {
+  ...new python.Package {
     name = "server"
-    dependencies {
-      "//lib/format"
-      "//lib/proto"
-    }
   }.targets
 
   ...new python.Image {
     name = "server"
-    library = ":server"
     push_destinations {
       "registry.example.com/sarcasm/server:\(git_hash)"
       "registry.example.com/sarcasm/server:latest"
@@ -360,16 +380,10 @@ targets {
   </TabItem>
 </Tabs>
 
-The workspace root declares the two shared files as filegroups, and `tools/grog` exposes the helpers:
+The `tools/grog` package exposes the helpers as a filegroup:
 
 <Tabs syncKey="build-file-format">
   <TabItem label="Starlark">
-
-```starlark
-# BUILD.star
-target(name = "uv.lock", inputs = ["uv.lock"])
-target(name = "ruff.toml", inputs = ["ruff.toml"])
-```
 
 ```starlark
 # tools/grog/BUILD.star
@@ -381,27 +395,6 @@ target(
 
   </TabItem>
   <TabItem label="Pkl">
-
-```pkl
-// BUILD.pkl
-amends "@grog/package.pkl"
-
-targets {
-  new {
-    name = "uv.lock"
-    inputs {
-      "uv.lock"
-    }
-  }
-
-  new {
-    name = "ruff.toml"
-    inputs {
-      "ruff.toml"
-    }
-  }
-}
-```
 
 ```pkl
 // tools/grog/BUILD.pkl
@@ -429,6 +422,60 @@ targets {
   `uv run` finds them in every package. A root `ruff.toml` applies to all packages whose own
   `pyproject.toml` has no `[tool.ruff]` section.
 </Aside>
+
+## Generated code as a workspace member
+
+`lib/proto` is a workspace member whose module is produced by a codegen target. Its synthesized `:_uv_package`
+would only be a filegroup of the generated files, so the package registers the codegen target with the resolver
+instead:
+
+<Tabs syncKey="build-file-format">
+  <TabItem label="Starlark">
+
+```starlark
+# lib/proto/BUILD.star
+target(
+    name = "proto",
+    command = "./build_proto.sh",
+    inputs = ["schema/*", "build_proto.sh"],
+    outputs = ["dir::pb/"],
+    dependency_resolvers = ["//:uv"],
+)
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+// lib/proto/BUILD.pkl
+amends "@grog/package.pkl"
+
+targets {
+  // Registers with the uv resolver, so it replaces :_uv_package: packages
+  // that import `pb` depend on the generated stubs instead of a plain filegroup.
+  new {
+    name = "proto"
+    command = "./build_proto.sh"
+    inputs {
+      "schema/*"
+      "build_proto.sh"
+    }
+    outputs {
+      "dir::pb/"
+    }
+    dependency_resolvers {
+      "//:uv"
+    }
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
+
+`//lib/proto:proto` now stands in for the package: `server`, which lists `demo-proto` in its `pyproject.toml`,
+depends on the generated stubs, and a schema change re-runs its tests and re-stages its image. No custom resolver
+is needed because the generated package is itself a workspace member.
 
 ## Lockfile early cutoff
 
@@ -506,6 +553,7 @@ grog test //...                         # every :test target, cached per package
 grog build '//...:lint'                 # every :lint target
 grog build //server:image               # stage + docker build for one service
 grog build --push //...                 # build everything and push the images
+grog deps //server:_uv_package          # the inferred workspace edges
 grog changes --since=main --dependents=transitive   # what a PR touches
 ```
 
@@ -535,3 +583,4 @@ UV_LOCKED = "1"
 
 With a [remote cache](/topics/remote-caching), a PR that touches one library re-runs that library's tests, the tests
 of the services that import it, and their image builds; every other target is downloaded rather than recomputed.
+The resolver output is cached the same way, so a cold runner does not even re-read the lockfile.

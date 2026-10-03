@@ -3,7 +3,7 @@ amends "@grog/package.pkl"
 import ".../tools/grog/python.pkl"
 
 targets {
-  ...new python.Library {
+  ...new python.Package {
     name = "format"
   }.targets
 }

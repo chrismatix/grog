@@ -1,37 +1,32 @@
-"""Grog targets for a uv workspace. Starlark twin of python.pkl."""
+"""Grog targets for a uv workspace. Starlark twin of python.pkl.
 
-def python_library(name, package_dir = None, deps = [], test_deps = [], pytest_args = ""):
-    """Filegroup `name` plus `test` (pytest with coverage) and `lint` (ruff) targets."""
-    package_dir = package_dir or name
-    sources = [package_dir + "/**/*.py", "pyproject.toml"]
+Sources and workspace edges come from the `:_uv_package` filegroup that the
+root `uv` resolver synthesizes.
+"""
+
+def python_package(name, test_deps = [], pytest_args = ""):
+    """`test` (pytest with coverage of the `name` package) and `lint` (ruff) targets."""
     test_sources = ["tests/**/*.py"]
 
     target(
-        name = name,
-        inputs = sources,
-        dependencies = ["//tools/grog:python"] + deps,
-    )
-
-    target(
         name = "test",
-        command = "uv run pytest %s --cov=%s --cov-report=xml:coverage.xml" % (pytest_args, package_dir),
-        inputs = sources + test_sources,
-        dependencies = [":" + name] + test_deps,
+        command = "uv run pytest %s --cov=%s --cov-report=xml:coverage.xml" % (pytest_args, name),
+        inputs = test_sources,
+        dependencies = [":_uv_package", "//tools/grog:python"] + test_deps,
         outputs = ["coverage.xml"],
     )
 
     target(
         name = "lint",
         command = "uv run ruff check . && uv run ruff format --check .",
-        inputs = sources + test_sources,
-        dependencies = ["//:ruff.toml"],
+        inputs = test_sources,
+        dependencies = [":_uv_package", "//:ruff.toml"],
     )
 
-def python_image(name, library, deploy_arch = "amd64", dockerfile = "Dockerfile", push = []):
+def python_image(name, deploy_arch = "amd64", dockerfile = "Dockerfile", push = []):
     """`pylock`, `stage` and `image` targets building a Docker image tagged `name`.
 
-    `library` is the service's filegroup (e.g. ":server"); `push` lists the
-    `repo:tag` destinations for `grog build --push`.
+    `push` lists the `repo:tag` destinations for `grog build --push`.
     """
     target(
         name = "pylock",
@@ -44,7 +39,7 @@ def python_image(name, library, deploy_arch = "amd64", dockerfile = "Dockerfile"
     target(
         name = "stage",
         command = 'uv run --script "$GROG_WORKSPACE_ROOT/tools/grog/uv_image_stage.py"',
-        dependencies = [":pylock", "//tools/grog:python", library],
+        dependencies = [":pylock", ":_uv_package", "//tools/grog:python"],
         outputs = ["dir::build/uv"],
     )
 

@@ -12,6 +12,18 @@ crates/server/   binary   – depends on greet, packaged as a Docker image
 tools/grog/      the shared grog helpers (Starlark and Pkl)
 ```
 
+## Dependencies come from Cargo.toml
+
+No BUILD file lists a source file or another crate. The root `cargo`
+[dependency resolver](https://grog.build/topics/dependency-inference) reads the
+workspace manifests and synthesizes a `:_cargo_package` filegroup per crate, with
+the crate's `path` dependencies as edges:
+
+```bash
+$ grog deps //crates/cli:_cargo_package
+//crates/greet:_cargo_package
+```
+
 ## The helpers
 
 Every crate declares its targets through one of two equivalent helper libraries
@@ -28,7 +40,6 @@ Each crate gets:
 
 | Target       | What it does                                                              |
 | ------------ | ------------------------------------------------------------------------- |
-| `:<name>`    | Filegroup of `src/` and `Cargo.toml`. Other crates depend on this label.  |
 | `:deps-lock` | This crate's slice of `Cargo.lock`, so unrelated lock churn stays cached. |
 | `:build`     | `cargo build --release`; binaries land in `bin/<name>` as a `bin_output`. |
 | `:test`      | `cargo test -p <name>`                                                    |

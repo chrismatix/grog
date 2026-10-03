@@ -3,16 +3,15 @@ load("//tools/grog/rust.star", "cargo_crate")
 cargo_crate(
     name = "server",
     bin = True,
-    deps = ["//crates/greet"],
 )
 
 # The docker context is the workspace root so the path dependencies resolve
-# inside the builder stage. The :server filegroup covers them transitively.
+# inside the builder stage. :_cargo_package covers them transitively.
 target(
     name = "image",
     command = "docker build --platform=linux/amd64 -f Dockerfile -t rust-monorepo-server ../..",
     dependencies = [
-        ":server",
+        ":_cargo_package",
         "//:workspace",
     ],
     inputs = ["Dockerfile"],

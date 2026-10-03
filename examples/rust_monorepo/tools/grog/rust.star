@@ -1,17 +1,13 @@
 """Grog targets for a cargo workspace. Starlark twin of rust.pkl."""
 
-def cargo_crate(name, deps = [], bin = False):
-    """Filegroup `name` plus `deps-lock`, `build`, `test` and `lint` targets for one crate.
+def cargo_crate(name, bin = False):
+    """`deps-lock`, `build`, `test` and `lint` targets for one crate.
 
-    `deps` are the filegroups of the workspace crates this crate depends on.
-    With `bin = True` the release binary is copied to bin/<name> and exposed as
-    the `build` target's bin_output, so `grog run //crates/<name>:build` works.
+    Sources and cross-crate edges come from the `:_cargo_package` filegroup
+    that the root `cargo` resolver synthesizes. With `bin = True` the release
+    binary is copied to bin/<name> and exposed as the `build` target's
+    bin_output, so `grog run //crates/<name>:build` works.
     """
-    target(
-        name = name,
-        inputs = ["src/**/*", "Cargo.toml"],
-        dependencies = ["//tools/grog:rust"] + deps,
-    )
 
     # This crate's slice of the shared Cargo.lock. Cargo targets depend on it
     # instead of //:workspace, so unrelated lockfile churn keeps them cached.
@@ -23,7 +19,7 @@ def cargo_crate(name, deps = [], bin = False):
         outputs = ["deps.lock"],
     )
 
-    cargo_deps = [":" + name, ":deps-lock"]
+    cargo_deps = [":_cargo_package", ":deps-lock", "//tools/grog:rust"]
 
     build = dict(
         name = "build",
@@ -39,7 +35,6 @@ def cargo_crate(name, deps = [], bin = False):
     target(
         name = "test",
         command = "cargo test -p %s --locked" % name,
-        inputs = ["tests/**/*"],
         dependencies = cargo_deps,
         concurrency_group = "cargo",
     )
@@ -47,7 +42,6 @@ def cargo_crate(name, deps = [], bin = False):
     target(
         name = "lint",
         command = "cargo fmt -p %s --check && cargo clippy -p %s --all-targets --locked -- -D warnings" % (name, name),
-        inputs = ["tests/**/*"],
         dependencies = cargo_deps,
         concurrency_group = "cargo",
     )

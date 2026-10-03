@@ -6,34 +6,22 @@ import "@grog/package.pkl"
 class Crate {
   local self = this
 
-  /// Cargo package name; also the filegroup target name.
+  /// Cargo package name.
   name: String
-
-  /// Filegroups of the workspace crates this crate depends on.
-  dependencies: Listing<String> = new Listing<String> {}
 
   /// Copy the release binary to bin/<name> and expose it as bin_output,
   /// so `grog run //crates/<name>:build` works.
   bin: Boolean = false
 
+  /// Sources and cross-crate edges come from the `:_cargo_package` filegroup
+  /// that the root `cargo` resolver synthesizes.
   local cargo_dependencies: Listing<String> = new Listing<String> {
-    ":\(self.name)"
+    ":_cargo_package"
     ":deps-lock"
+    "//tools/grog:rust"
   }
 
   fixed targets: Listing<package.Target> = new Listing<package.Target> {
-    new {
-      name = self.name
-      inputs {
-        "src/**/*"
-        "Cargo.toml"
-      }
-      dependencies {
-        "//tools/grog:rust"
-        ...self.dependencies
-      }
-    }
-
     // This crate's slice of the shared Cargo.lock. Cargo targets depend on it
     // instead of //:workspace, so unrelated lockfile churn keeps them cached.
     new {
@@ -69,9 +57,6 @@ class Crate {
     new {
       name = "test"
       command = "cargo test -p \(self.name) --locked"
-      inputs {
-        "tests/**/*"
-      }
       dependencies = cargo_dependencies
       concurrency_group = "cargo"
     }
@@ -80,9 +65,6 @@ class Crate {
       name = "lint"
       command =
         "cargo fmt -p \(self.name) --check && cargo clippy -p \(self.name) --all-targets --locked -- -D warnings"
-      inputs {
-        "tests/**/*"
-      }
       dependencies = cargo_dependencies
       concurrency_group = "cargo"
     }
