@@ -1,0 +1,7 @@
+INFO: 4 packages loaded, 4 targets configured.
+INFO: Selected 4 targets.
+INFO: //:_dotnet_package          DONE (cached)
+INFO: //src/App:sources           DONE (cached)
+INFO: //src/Core:sources          DONE (cached)
+INFO: //src/Utils:_dotnet_package DONE (cached)
+INFO: Build completed successfully. 4 targets completed (4 cache hits).
