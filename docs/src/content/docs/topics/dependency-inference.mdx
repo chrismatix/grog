@@ -128,12 +128,13 @@ Grog ships four resolvers.
 Use one with `command = "builtin::<name>"` and omit `inputs` to get the defaults listed below.
 Every built-in declares inputs for the packages it reports, so workspace members don't need a BUILD file.
 
-| Name    | Reads                                                                                                                         | Needs a toolchain |
-| ------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------- |
-| `cargo` | The workspace `Cargo.toml` members and each member's `[dependencies]` / `[build-dependencies]`                                | no                |
-| `uv`    | `uv.lock` — packages with an `editable` or `directory` source are workspace members                                           | no                |
-| `node`  | `pnpm-workspace.yaml` or `aube-workspace.yaml`, else `workspaces` in the root `package.json`, plus each member's dependencies | no                |
-| `go`    | `go list -deps -e -json ./...`, keeping imports under the module path                                                         | yes (`go`)        |
+| Name     | Reads                                                                                                                         | Needs a toolchain |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `cargo`  | The workspace `Cargo.toml` members and each member's `[dependencies]` / `[build-dependencies]`                                | no                |
+| `uv`     | `uv.lock` — packages with an `editable` or `directory` source are workspace members                                           | no                |
+| `node`   | `pnpm-workspace.yaml` or `aube-workspace.yaml`, else `workspaces` in the root `package.json`, plus each member's dependencies | no                |
+| `go`     | `go list -deps -e -json ./...`, keeping imports under the module path                                                         | yes (`go`)        |
+| `dotnet` | `*.sln` / `*.slnx` in the declaring package, else every project file, plus each project's `ProjectReference` items            | no                |
 
 `cargo`, `uv` and `node` parse manifests and lockfiles directly, so `grog changes` works on a CI image without Cargo, uv or Node.
 
@@ -192,6 +193,20 @@ Test-only imports are skipped for the same cycle reason as Cargo's `[dev-depende
 This is the only built-in that shells out to its toolchain, so it's the slowest on a large repo and gains the most from [caching](#caching).
 
 Default `inputs`: `go.mod`, `go.sum`, `go.work`, `**/*.go`.
+
+### dotnet
+
+Projects come from every `*.sln` or `*.slnx` file in the declaring package, or, without one, from every `*.csproj`, `*.fsproj` and `*.vbproj` in the tree outside `bin/` and `obj/`.
+Edges are `<ProjectReference Include="..">` items, resolved relative to the project.
+A referenced project the solution doesn't list is still reported, so it gets a synthesized filegroup; a reference outside the declaring package is skipped.
+`$(Property)` references can't be resolved without MSBuild and are skipped.
+
+Every project also depends on the root package `""`, which covers `Directory.Build.props`, `Directory.Build.targets`, `Directory.Packages.props`, `global.json`, `nuget.config` and the solution files.
+MSBuild imports these from the directories above a project, which a member's own inputs can't reach, so a change to them invalidates every project.
+
+A synthesized filegroup covers the whole project directory, `**/*`, minus `**/bin/**` and `**/obj/**`.
+
+Default `inputs`: `*.sln`, `*.slnx`, `**/*.csproj`, `**/*.fsproj`, `**/*.vbproj`, with `**/bin/**` and `**/obj/**` excluded.
 
 ## Fields reference
 

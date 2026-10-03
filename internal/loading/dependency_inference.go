@@ -48,9 +48,10 @@ func (reportedPackage *resolverPackage) UnmarshalJSON(contents []byte) error {
 }
 
 var builtinResolvers = map[string]func(context.Context, string) (resolverDocument, error){
-	"builtin::cargo": cargoDependencies,
-	"builtin::node":  nodeDependencies,
-	"builtin::uv":    uvDependencies,
+	"builtin::cargo":  cargoDependencies,
+	"builtin::dotnet": dotnetDependencies,
+	"builtin::node":   nodeDependencies,
+	"builtin::uv":     uvDependencies,
 }
 
 // CasProvider is only called when the workspace declares resolvers, so a
