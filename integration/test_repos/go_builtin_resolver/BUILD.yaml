@@ -1,0 +1,5 @@
+# builtin::go parses imports out of every Go file under the module;
+# internal/format has no BUILD file and is synthesized as :_go_package.
+dependency_resolvers:
+  - name: go
+    command: builtin::go

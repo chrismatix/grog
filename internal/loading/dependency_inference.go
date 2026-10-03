@@ -49,6 +49,7 @@ func (reportedPackage *resolverPackage) UnmarshalJSON(contents []byte) error {
 
 var builtinResolvers = map[string]func(context.Context, string) (resolverDocument, error){
 	"builtin::cargo": cargoDependencies,
+	"builtin::go":    goDependencies,
 	"builtin::node":  nodeDependencies,
 	"builtin::uv":    uvDependencies,
 }
