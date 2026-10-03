@@ -1,14 +1,20 @@
 amends "@grog/package.pkl"
 
 targets {
+  // Registers with the uv resolver, so it replaces :_uv_package: packages
+  // that import `pb` depend on the generated stubs instead of a plain filegroup.
   new {
     name = "proto"
     command = "./build_proto.sh"
     inputs {
       "schema/*"
+      "build_proto.sh"
     }
     outputs {
       "dir::pb/"
+    }
+    dependency_resolvers {
+      "//:uv"
     }
   }
 }

@@ -34,6 +34,11 @@ export default defineConfig({
           autogenerate: { directory: "topics" },
         },
         {
+          label: "Language Guides",
+          collapsed: false,
+          autogenerate: { directory: "guides" },
+        },
+        {
           label: "Tracing",
           collapsed: false,
           items: [

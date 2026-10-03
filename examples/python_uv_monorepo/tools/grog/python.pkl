@@ -1,0 +1,118 @@
+/// Grog targets for a uv workspace. `Package` is the per-package standard
+/// (pytest, ruff); `Image` adds a Docker image installed from the resolved
+/// uv.lock. Sources and workspace edges come from the `:_uv_package`
+/// filegroup that the root `uv` resolver synthesizes. python.star is the
+/// Starlark twin of this module.
+module python
+
+import "@grog/package.pkl"
+
+class Package {
+  local self = this
+
+  /// Import package directory measured for coverage (e.g. "format").
+  name: String
+
+  test_sources: Listing<String> = new Listing<String> {
+    "tests/**/*.py"
+  }
+
+  /// Extra dependencies only the tests need.
+  test_dependencies: Listing<String> = new Listing<String> {}
+
+  pytest_args: String = ""
+
+  fixed targets: Listing<package.Target> = new Listing<package.Target> {
+    new {
+      name = "test"
+      command = "uv run pytest \(self.pytest_args) --cov=\(self.name) --cov-report=xml:coverage.xml"
+      inputs = self.test_sources
+      dependencies {
+        ":_uv_package"
+        "//tools/grog:python"
+        ...self.test_dependencies
+      }
+      outputs {
+        "coverage.xml"
+      }
+    }
+
+    new {
+      name = "lint"
+      command = "uv run ruff check . && uv run ruff format --check ."
+      inputs = self.test_sources
+      dependencies {
+        ":_uv_package"
+        "//:ruff.toml"
+      }
+    }
+  }
+}
+
+class Image {
+  local self = this
+
+  /// Local image tag; also the name of the `oci::` output.
+  name: String
+
+  deploy_arch: String = "amd64"
+
+  dockerfile: String = "Dockerfile"
+
+  /// Fully qualified `repo:tag` destinations for `grog build --push`.
+  /// Not part of the cache key, so retagging reuses the cached image.
+  push_destinations: Listing<String> = new Listing<String> {}
+
+  fixed targets: Listing<package.Target> = new Listing<package.Target> {
+    new {
+      name = "pylock"
+      command =
+        "mkdir -p build && uv export --locked --format pylock.toml --no-dev --no-emit-project --no-header > build/uv-pylock.toml"
+      inputs {
+        "pyproject.toml"
+      }
+      dependencies {
+        "//:uv.lock"
+      }
+      outputs {
+        "build/uv-pylock.toml"
+      }
+    }
+
+    new {
+      name = "stage"
+      command = "uv run --script \"$GROG_WORKSPACE_ROOT/tools/grog/uv_image_stage.py\""
+      dependencies {
+        ":pylock"
+        ":_uv_package"
+        "//tools/grog:python"
+      }
+      outputs {
+        "dir::build/uv"
+      }
+    }
+
+    new {
+      name = "image"
+      command =
+        "docker build --platform=linux/\(self.deploy_arch) -f \(self.dockerfile) -t \(self.name) ."
+      inputs {
+        self.dockerfile
+      }
+      dependencies {
+        ":stage"
+      }
+      outputs {
+        "oci::\(self.name)"
+      }
+      oci_push =
+        if (self.push_destinations.isEmpty)
+          null
+        else
+          new Mapping { [self.name] = self.push_destinations }
+      platforms {
+        "linux/\(self.deploy_arch)"
+      }
+    }
+  }
+}
