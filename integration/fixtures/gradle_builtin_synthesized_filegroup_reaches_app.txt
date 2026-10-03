@@ -1,0 +1,7 @@
+INFO: 4 packages loaded, 4 targets configured.
+INFO: Selected 4 targets.
+INFO: //:_gradle_package     DONE (cached)
+INFO: //app:sources          DONE
+INFO: //core:sources         DONE
+INFO: //util:_gradle_package DONE
+INFO: Build completed successfully. 4 targets completed (1 cache hits).

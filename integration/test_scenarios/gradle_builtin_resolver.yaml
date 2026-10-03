@@ -1,0 +1,20 @@
+name: builtin gradle resolver
+repo: gradle_builtin_resolver
+cases:
+  - name: gradle_builtin_initial
+    grog_args: [build, "//..."]
+  - name: gradle_builtin_cached
+    grog_args: [build, "//..."]
+  - name: gradle_builtin_add_project_dependency
+    setup_command: |
+      cp core/build.gradle.kts core.build.backup
+      cp util/src/main/kotlin/Util.kt Util.kt.backup
+      printf 'plugins { kotlin("jvm") }\n\ndependencies {\n    implementation(project(":util"))\n}\n' > core/build.gradle.kts
+  - name: gradle_builtin_build_file_edit_invalidates_dependants
+    grog_args: [build, "//..."]
+  - name: gradle_builtin_edit_util_source
+    setup_command: "printf 'fun util() = \"utilities\"\n' > util/src/main/kotlin/Util.kt"
+  - name: gradle_builtin_synthesized_filegroup_reaches_app
+    grog_args: [build, "//..."]
+  - name: gradle_builtin_restore
+    setup_command: "mv core.build.backup core/build.gradle.kts; mv Util.kt.backup util/src/main/kotlin/Util.kt"

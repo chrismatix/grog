@@ -265,6 +265,8 @@ func enrichDependencyResolvers(
 			switch resolver.Command {
 			case "builtin::cargo":
 				inputs, defaultExcludeInputs = cargoDefaultInputs(absolutePackagePath)
+			case "builtin::gradle":
+				inputs, defaultExcludeInputs = gradleDefaultInputs(absolutePackagePath)
 			case "builtin::node":
 				inputs, defaultExcludeInputs = nodeDefaultInputs(absolutePackagePath)
 			case "builtin::uv":
