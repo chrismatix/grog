@@ -128,13 +128,13 @@ Grog ships four resolvers.
 Use one with `command = "builtin::<name>"` and omit `inputs` to get the defaults listed below.
 Every built-in declares inputs for the packages it reports, so workspace members don't need a BUILD file.
 
-| Name    | Reads                                                                                                                         | Needs a toolchain |
-| ------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------- |
-| `cargo` | The workspace `Cargo.toml` members and each member's `[dependencies]` / `[build-dependencies]`                                | no                |
-| `uv`    | `uv.lock` — packages with an `editable` or `directory` source are workspace members                                           | no                |
-| `node`  | `pnpm-workspace.yaml` or `aube-workspace.yaml`, else `workspaces` in the root `package.json`, plus each member's dependencies | no                |
-| `go`    | `go list -deps -e -json ./...`, keeping imports under the module path                                                         | yes (`go`)        |
-| `gradle` | `settings.gradle(.kts)` for the project tree, then `project(":x")` and `projects.x` references in each project's build file  | no                |
+| Name     | Reads                                                                                                                         | Needs a toolchain |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `cargo`  | The workspace `Cargo.toml` members and each member's `[dependencies]` / `[build-dependencies]`                                | no                |
+| `uv`     | `uv.lock` — packages with an `editable` or `directory` source are workspace members                                           | no                |
+| `node`   | `pnpm-workspace.yaml` or `aube-workspace.yaml`, else `workspaces` in the root `package.json`, plus each member's dependencies | no                |
+| `go`     | `go list -deps -e -json ./...`, keeping imports under the module path                                                         | yes (`go`)        |
+| `gradle` | `settings.gradle(.kts)` for the project tree, then `project(":x")` and `projects.x` references in each project's build file   | no                |
 
 `cargo`, `uv` and `node` parse manifests and lockfiles directly, so `grog changes` works on a CI image without Cargo, uv or Node.
 
