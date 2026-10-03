@@ -1,0 +1,5 @@
+# builtin::maven reads the root pom.xml and every module's pom.xml;
+# core has no BUILD file and is synthesized as :_maven_package.
+dependency_resolvers:
+  - name: maven
+    command: builtin::maven
