@@ -134,6 +134,7 @@ Every built-in declares inputs for the packages it reports, so workspace members
 | `uv`    | `uv.lock` — packages with an `editable` or `directory` source are workspace members                                           | no                |
 | `node`  | `pnpm-workspace.yaml` or `aube-workspace.yaml`, else `workspaces` in the root `package.json`, plus each member's dependencies | no                |
 | `go`    | `go list -deps -e -json ./...`, keeping imports under the module path                                                         | yes (`go`)        |
+| `maven` | The root `pom.xml`, its `<modules>` recursively, and each module's `<dependencies>` and `<parent>`                            | no                |
 
 `cargo`, `uv` and `node` parse manifests and lockfiles directly, so `grog changes` works on a CI image without Cargo, uv or Node.
 
@@ -192,6 +193,23 @@ Test-only imports are skipped for the same cycle reason as Cargo's `[dev-depende
 This is the only built-in that shells out to its toolchain, so it's the slowest on a large repo and gains the most from [caching](#caching).
 
 Default `inputs`: `go.mod`, `go.sum`, `go.work`, `**/*.go`.
+
+### maven
+
+Members are the modules reachable from the root `pom.xml` through `<modules>`, recursively and including modules listed under `<profiles>`.
+A module is identified by `groupId:artifactId`, with the `groupId` inherited from `<parent>` when the module doesn't set one.
+Edges are `<dependencies>` entries, including those inside `<profiles>`, that name another member, with `${project.groupId}` and `${project.parent.groupId}` interpolated, plus the `<parent>` when its `<relativePath>` (default `../pom.xml`) or coordinates point at a member.
+
+A module depends on its parent pom, and that one on its own parent, up to the root: managed versions, properties and plugin configuration are inherited along that chain.
+The root's synthesized `//:_maven_package` covers just the root `pom.xml`, so editing it rebuilds every module that inherits from it, while a module with an external parent is unaffected.
+
+`<scope>test</scope>` dependencies are included.
+Maven forbids cycles between modules, so unlike Cargo's `[dev-dependencies]` they can't produce one, and leaving them out would under-invalidate the module's tests.
+The resolver reads the poms as written, not the effective pom: a dependency only declared through a parent outside the workspace isn't seen.
+
+Each module's `:_maven_package` covers `pom.xml` and `src/**/*`, minus `target/**`.
+
+Default `inputs`: `pom.xml` and every reachable module's `pom.xml`, with `target/**` excluded.
 
 ## Fields reference
 

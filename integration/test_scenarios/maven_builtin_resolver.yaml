@@ -1,0 +1,20 @@
+name: builtin maven resolver
+repo: maven_builtin_resolver
+cases:
+  - name: maven_builtin_initial
+    grog_args: [build, "//..."]
+  - name: maven_builtin_cached
+    grog_args: [build, "//..."]
+  - name: maven_builtin_add_dependency
+    setup_command: |
+      cp app/pom.xml app.pom.backup
+      cp core/src/main/java/Core.java Core.java.backup
+      sed -i 's|</dependencies>|  <dependency><groupId>com.example</groupId><artifactId>core</artifactId><version>1.0.0</version></dependency>\n  </dependencies>|' app/pom.xml
+  - name: maven_builtin_pom_edit_invalidates_one_module
+    grog_args: [build, "//..."]
+  - name: maven_builtin_edit_core
+    setup_command: "printf 'public class Core { int version = 2; }\n' > core/src/main/java/Core.java"
+  - name: maven_builtin_synthesized_module_reaches_app
+    grog_args: [build, "//..."]
+  - name: maven_builtin_restore
+    setup_command: "mv app.pom.backup app/pom.xml; mv Core.java.backup core/src/main/java/Core.java"
