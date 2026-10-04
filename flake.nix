@@ -19,13 +19,15 @@
         system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
-          grog = pkgs.callPackage ./package.nix {
+          versionInfo = {
             version = self.shortRev or self.dirtyShortRev or "dev";
             commit = self.rev or self.dirtyRev or "unknown";
           };
+          grog = pkgs.callPackage ./package.nix versionInfo;
+          grog-full = pkgs.callPackage ./package.nix (versionInfo // { withDuckdb = true; });
         in
         {
-          inherit grog;
+          inherit grog grog-full;
           default = grog;
           grog-with-pkl = pkgs.symlinkJoin {
             name = "grog-with-pkl";
@@ -36,6 +38,7 @@
 
       overlays.default = final: prev: {
         grog = final.callPackage ./package.nix { };
+        grog-full = final.callPackage ./package.nix { withDuckdb = true; };
       };
     };
 }

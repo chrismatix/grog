@@ -1,4 +1,4 @@
-name: grog
+name: ${PACKAGE}
 arch: ${GOARCH}
 platform: linux
 version: ${VERSION}
@@ -7,11 +7,13 @@ description: Lightweight mono-repo build orchestrator that caches and paralleliz
 homepage: https://grog.build
 license: MIT
 contents:
-  - src: dist/grog-linux-${GOARCH}
+  - src: dist/${PACKAGE}-linux-${GOARCH}
     dst: /usr/bin/grog
     expand: true
     file_info:
       mode: 0755
+conflicts:
+  - ${CONFLICTS}
 overrides:
   deb:
     depends: [libstdc++6]

@@ -19,6 +19,6 @@ jobs:
       - uses: cachix/install-nix-action@v31
 
       # On a go.sum change, the failure prints the new vendorHash for package.nix.
-      - run: nix build .#grog -L
+      - run: nix build .#grog .#grog-full -L
 
       - run: ./result/bin/grog --version
