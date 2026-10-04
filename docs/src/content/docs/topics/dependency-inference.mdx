@@ -128,12 +128,13 @@ Grog ships four resolvers.
 Use one with `command = "builtin::<name>"` and omit `inputs` to get the defaults listed below.
 Every built-in declares inputs for the packages it reports, so workspace members don't need a BUILD file.
 
-| Name    | Reads                                                                                                                         | Needs a toolchain |
-| ------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------- |
-| `cargo` | The workspace `Cargo.toml` members and each member's `[dependencies]` / `[build-dependencies]`                                | no                |
-| `uv`    | `uv.lock` — packages with an `editable` or `directory` source are workspace members                                           | no                |
-| `node`  | `pnpm-workspace.yaml` or `aube-workspace.yaml`, else `workspaces` in the root `package.json`, plus each member's dependencies | no                |
-| `go`    | `go list -deps -e -json ./...`, keeping imports under the module path                                                         | yes (`go`)        |
+| Name     | Reads                                                                                                                         | Needs a toolchain |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `cargo`  | The workspace `Cargo.toml` members and each member's `[dependencies]` / `[build-dependencies]`                                | no                |
+| `uv`     | `uv.lock` — packages with an `editable` or `directory` source are workspace members                                           | no                |
+| `node`   | `pnpm-workspace.yaml` or `aube-workspace.yaml`, else `workspaces` in the root `package.json`, plus each member's dependencies | no                |
+| `go`     | `go list -deps -e -json ./...`, keeping imports under the module path                                                         | yes (`go`)        |
+| `gradle` | `settings.gradle(.kts)` for the project tree, then `project(":x")` and `projects.x` references in each project's build file   | no                |
 
 `cargo`, `uv` and `node` parse manifests and lockfiles directly, so `grog changes` works on a CI image without Cargo, uv or Node.
 
@@ -182,6 +183,23 @@ A synthesized filegroup covers the whole member, `**/*`, minus `**/node_modules/
 
 Default `inputs`: `package.json`, `pnpm-workspace.yaml`, `aube-workspace.yaml`, and `<pattern>/package.json` for every member glob, so a new member is picked up without touching the declaration.
 `**/node_modules/**` and every negated member glob are excluded.
+
+### gradle
+
+Projects come from `include` statements in `settings.gradle.kts` or `settings.gradle`, with `projectDir` overrides honoured; `:a:b` is the directory `a/b`.
+Including `:a:b` also creates the parent project `:a`, as Gradle does; it is reported when the directory `a` exists on disk.
+Edges are found by scanning each project's `build.gradle(.kts)` for `project(":x")` references and type-safe accessors such as `projects.coreUtils`, whatever configuration they sit in.
+This is a text scan, not a Gradle evaluation: a reference in a comment or a disabled block still counts, which only ever adds edges.
+If that over-connects your graph, generate the exact mapping with a Gradle init script and use a [committed mapping](#using-a-committed-mapping) instead.
+
+Every project also depends on the root package `""`, which covers `settings.gradle*`, the root `build.gradle*`, `gradle.properties`, `gradle/**` and `buildSrc/**`, since version catalogs and convention plugins apply to every project.
+For the same reason the root build file's own `project()` references add no edges.
+Builds pulled in with `includeBuild` become packages of their own that the root depends on.
+A parent project such as `:a` is not an edge of `:a:b`.
+
+A synthesized project filegroup covers `build.gradle`, `build.gradle.kts`, `gradle.properties` and `src/**/*`, minus `build/**` and `.gradle/**`.
+
+Default `inputs`: `settings.gradle`, `settings.gradle.kts`, and every included project's `build.gradle` and `build.gradle.kts`.
 
 ### go
 
