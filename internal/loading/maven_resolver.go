@@ -26,14 +26,14 @@ type mavenProject struct {
 	} `xml:"parent"`
 	Modules  []string `xml:"modules>module"`
 	Profiles []struct {
-		Modules []string `xml:"modules>module"`
+		Modules      []string           `xml:"modules>module"`
+		Dependencies []mavenCoordinates `xml:"dependencies>dependency"`
 	} `xml:"profiles>profile"`
 	Dependencies []mavenCoordinates `xml:"dependencies>dependency"`
 }
 
 // mavenDependencies maps every module reachable from the root pom.xml to the
-// modules its dependencies and parent name. Every module also depends on the
-// root, since managed versions and plugin configuration are inherited from it.
+// modules its dependencies, in any profile, and its parent name.
 func mavenDependencies(resolverContext context.Context, workspaceDirectory string) (resolverDocument, error) {
 	document := resolverDocument{Version: 1, Packages: make(map[string]resolverPackage)}
 	if operationError := resolverContext.Err(); operationError != nil {
@@ -51,11 +51,13 @@ func mavenDependencies(resolverContext context.Context, workspaceDirectory strin
 		reportedPackage := resolverPackage{Dependencies: []string{}, Inputs: []string{"pom.xml", "src/**/*"}, ExcludeInputs: mavenExcludeInputs}
 		if directory == "" {
 			reportedPackage.Inputs = []string{"pom.xml"}
-		} else {
-			reportedPackage.Dependencies = append(reportedPackage.Dependencies, "")
+		}
+		dependencies := slices.Clone(project.Dependencies)
+		for _, profile := range project.Profiles {
+			dependencies = append(dependencies, profile.Dependencies...)
 		}
 		candidates := []string{project.Parent.GroupId + ":" + project.Parent.ArtifactId}
-		for _, dependency := range project.Dependencies {
+		for _, dependency := range dependencies {
 			candidates = append(candidates, interpolateMavenGroupId(dependency.GroupId, project)+":"+dependency.ArtifactId)
 		}
 		for _, candidate := range candidates {

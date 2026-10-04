@@ -198,10 +198,10 @@ Default `inputs`: `go.mod`, `go.sum`, `go.work`, `**/*.go`.
 
 Members are the modules reachable from the root `pom.xml` through `<modules>`, recursively and including modules listed under `<profiles>`.
 A module is identified by `groupId:artifactId`, with the `groupId` inherited from `<parent>` when the module doesn't set one.
-Edges are `<dependencies>` entries that name another member, with `${project.groupId}` and `${project.parent.groupId}` interpolated, plus the `<parent>` when its `<relativePath>` (default `../pom.xml`) or coordinates point at a member.
+Edges are `<dependencies>` entries, including those inside `<profiles>`, that name another member, with `${project.groupId}` and `${project.parent.groupId}` interpolated, plus the `<parent>` when its `<relativePath>` (default `../pom.xml`) or coordinates point at a member.
 
-Every module also depends on the root package, since managed versions, properties and plugin configuration are inherited from the root `pom.xml`.
-Its synthesized `//:_maven_package` covers just that file, so editing it rebuilds every module.
+A module depends on its parent pom, and that one on its own parent, up to the root: managed versions, properties and plugin configuration are inherited along that chain.
+The root's synthesized `//:_maven_package` covers just the root `pom.xml`, so editing it rebuilds every module that inherits from it, while a module with an external parent is unaffected.
 
 `<scope>test</scope>` dependencies are included.
 Maven forbids cycles between modules, so unlike Cargo's `[dev-dependencies]` they can't produce one, and leaving them out would under-invalidate the module's tests.

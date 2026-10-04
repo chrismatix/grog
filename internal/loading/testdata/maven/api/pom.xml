@@ -19,4 +19,17 @@
       <artifactId>lib</artifactId>
     </dependency>
   </dependencies>
+
+  <profiles>
+    <profile>
+      <id>metrics</id>
+      <dependencies>
+        <dependency>
+          <groupId>com.example.tools</groupId>
+          <artifactId>release-tools</artifactId>
+          <version>1.0.0</version>
+        </dependency>
+      </dependencies>
+    </profile>
+  </profiles>
 </project>

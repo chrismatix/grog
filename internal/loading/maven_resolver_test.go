@@ -14,15 +14,15 @@ func TestMavenDependencies(t *testing.T) {
 	require.NoError(t, operationError)
 	require.Equal(t, 1, document.Version)
 	module := func(dependencies ...string) resolverPackage {
-		return resolverPackage{Dependencies: append([]string{""}, dependencies...), Inputs: []string{"pom.xml", "src/**/*"}, ExcludeInputs: []string{"target/**"}}
+		return resolverPackage{Dependencies: append([]string{}, dependencies...), Inputs: []string{"pom.xml", "src/**/*"}, ExcludeInputs: []string{"target/**"}}
 	}
 	require.Equal(t, map[string]resolverPackage{
 		"":                 {Dependencies: []string{}, Inputs: []string{"pom.xml"}, ExcludeInputs: []string{"target/**"}},
-		"core":             module(),
-		"api":              module("core"),
-		"services":         module(),
+		"core":             module(""),
+		"api":              module("", "core", "tools/release"),
+		"services":         module(""),
 		"services/payment": module("api", "core", "services"),
-		"services/billing": module("services/payment"),
+		"services/billing": module("", "services/payment"),
 		"tools/release":    module(),
 	}, document.Packages)
 }
