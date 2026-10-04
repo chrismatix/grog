@@ -17,13 +17,18 @@ func TestDotnetDependencies(t *testing.T) {
 	document, operationError := dotnetDependencies(t.Context(), "testdata/dotnet")
 	require.NoError(t, operationError)
 	require.Equal(t, 1, document.Version)
+	configuration := func(files ...string) resolverPackage {
+		return resolverPackage{Dependencies: []string{}, Inputs: files, ExcludeInputs: dotnetExcludeInputs}
+	}
 	require.Equal(t, map[string]resolverPackage{
-		"":                {Dependencies: []string{}, Inputs: dotnetRootInputs, ExcludeInputs: dotnetExcludeInputs},
-		"src/App":         dotnetMember("src/Core", "src/Fs"),
-		"src/Core":        dotnetMember("lib/Shared"),
-		"src/Fs":          dotnetMember(),
+		"":                configuration("*.sln", "*.slnx", "Directory.Build.props"),
+		"src":             configuration("Directory.Build.props"),
+		"tests":           configuration("NuGet.Config"),
+		"src/App":         dotnetMember("src", "src/Core", "src/Fs"),
+		"src/Core":        dotnetMember("lib/Shared", "src"),
+		"src/Fs":          dotnetMember("src"),
 		"lib/Shared":      dotnetMember(),
-		"tests/App.Tests": dotnetMember("src/App"),
+		"tests/App.Tests": dotnetMember("src/App", "tests"),
 	}, document.Packages)
 }
 
@@ -99,7 +104,7 @@ func TestDotnetRootProject(t *testing.T) {
 
 func TestDotnetDefaultInputs(t *testing.T) {
 	inputs, excludeInputs := dotnetDefaultInputs("testdata/dotnet")
-	require.Equal(t, []string{"*.sln", "*.slnx", "**/*.csproj", "**/*.fsproj", "**/*.vbproj"}, inputs)
+	require.Equal(t, []string{"*.sln", "*.slnx", "**/*.csproj", "**/*.fsproj", "**/*.vbproj", "**/Directory.Build.props", "**/Directory.Build.targets", "**/Directory.Packages.props", "**/global.json", "**/nuget.config", "**/NuGet.Config"}, inputs)
 	require.Equal(t, []string{"**/bin/**", "**/obj/**"}, excludeInputs)
 }
 

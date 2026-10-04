@@ -201,12 +201,13 @@ Edges are `<ProjectReference Include="..">` items, resolved relative to the proj
 A referenced project the solution doesn't list is still reported, so it gets a synthesized filegroup; a reference outside the declaring package is skipped.
 `$(Property)` references can't be resolved without MSBuild and are skipped.
 
-Every project also depends on the root package `""`, which covers `Directory.Build.props`, `Directory.Build.targets`, `Directory.Packages.props`, `global.json`, `nuget.config` and the solution files.
-MSBuild imports these from the directories above a project, which a member's own inputs can't reach, so a change to them invalidates every project.
+MSBuild imports `Directory.Build.props`, `Directory.Build.targets`, `Directory.Packages.props`, `global.json` and `nuget.config` from every directory above a project, which a member's own inputs can't reach.
+Each directory holding one of them becomes a package covering exactly those files, and every project depends on each such package above it.
+The root package `""` always exists and also covers the solution files, so `src/Directory.Build.props` invalidates the projects under `src/` while the root files invalidate every project.
 
 A synthesized filegroup covers the whole project directory, `**/*`, minus `**/bin/**` and `**/obj/**`.
 
-Default `inputs`: `*.sln`, `*.slnx`, `**/*.csproj`, `**/*.fsproj`, `**/*.vbproj`, with `**/bin/**` and `**/obj/**` excluded.
+Default `inputs`: `*.sln`, `*.slnx`, every project file and every configuration file listed above, with `**/bin/**` and `**/obj/**` excluded.
 
 ## Fields reference
 

@@ -35,24 +35,30 @@ var dotnetSolutionProjectLine = regexp.MustCompile(`^Project\("\{[^"]*\}"\)\s*=\
 
 var dotnetProjectExtensions = []string{".csproj", ".fsproj", ".vbproj"}
 
-// dotnetRootInputs are the files MSBuild imports from above a project
+// dotnetConfigurationFiles are imported by every project below their
 // directory, which a member's own inputs cannot reach.
-var dotnetRootInputs = []string{"Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props", "global.json", "nuget.config", "NuGet.Config", "*.sln", "*.slnx"}
+var dotnetConfigurationFiles = []string{"directory.build.props", "directory.build.targets", "directory.packages.props", "global.json", "nuget.config"}
 
 // dotnetExcludeInputs keeps every glob out of build outputs.
 var dotnetExcludeInputs = []string{"**/bin/**", "**/obj/**"}
 
 // dotnetDependencies maps every project to the projects its ProjectReference
 // items name, following references to projects the solution does not list.
-// Every project also depends on the root package, which holds the files
-// MSBuild imports from above the project.
+// Every project also depends on each ancestor directory holding configuration
+// files MSBuild imports from above the project, the root included.
 func dotnetDependencies(resolverContext context.Context, workspaceDirectory string) (resolverDocument, error) {
 	document := resolverDocument{Version: 1, Packages: make(map[string]resolverPackage)}
 	projectFiles, operationError := dotnetProjectFiles(workspaceDirectory)
 	if operationError != nil {
 		return document, operationError
 	}
-	document.Packages[""] = resolverPackage{Dependencies: []string{}, Inputs: slices.Clone(dotnetRootInputs), ExcludeInputs: dotnetExcludeInputs}
+	configurationDirectories, operationError := dotnetConfigurationDirectories(workspaceDirectory)
+	if operationError != nil {
+		return document, operationError
+	}
+	for directory, files := range configurationDirectories {
+		document.Packages[directory] = resolverPackage{Dependencies: []string{}, Inputs: files, ExcludeInputs: dotnetExcludeInputs}
+	}
 	visited := make(map[string]bool)
 	for queue := projectFiles; len(queue) > 0; queue = queue[1:] {
 		projectFile := queue[0]
@@ -69,11 +75,13 @@ func dotnetDependencies(resolverContext context.Context, workspaceDirectory stri
 		}
 		directory := dotnetPackagePath(path.Dir(projectFile))
 		reportedPackage, exists := document.Packages[directory]
-		if !exists || directory == "" {
+		if _, isConfigurationDirectory := configurationDirectories[directory]; !exists || isConfigurationDirectory {
 			reportedPackage = resolverPackage{Dependencies: reportedPackage.Dependencies, Inputs: []string{"**/*"}, ExcludeInputs: dotnetExcludeInputs}
 		}
-		if directory != "" {
-			reportedPackage.Dependencies = append(reportedPackage.Dependencies, "")
+		for configurationDirectory := range configurationDirectories {
+			if (configurationDirectory == "" && directory != "") || strings.HasPrefix(directory, configurationDirectory+"/") {
+				reportedPackage.Dependencies = append(reportedPackage.Dependencies, configurationDirectory)
+			}
 		}
 		for _, reference := range references {
 			referencedFile := path.Clean(path.Join(path.Dir(projectFile), reference))
@@ -97,6 +105,35 @@ func dotnetPackagePath(directory string) string {
 		return ""
 	}
 	return directory
+}
+
+// dotnetConfigurationDirectories maps every directory holding a file MSBuild
+// imports into the projects below it to those files. The root is always
+// present, since it also holds the solution files.
+func dotnetConfigurationDirectories(workspaceDirectory string) (map[string][]string, error) {
+	directories := map[string][]string{"": {"*.sln", "*.slnx"}}
+	operationError := filepath.WalkDir(workspaceDirectory, func(filePath string, entry os.DirEntry, walkError error) error {
+		if walkError != nil {
+			return walkError
+		}
+		if entry.IsDir() && (entry.Name() == "bin" || entry.Name() == "obj") {
+			return filepath.SkipDir
+		}
+		if entry.IsDir() || !slices.Contains(dotnetConfigurationFiles, strings.ToLower(entry.Name())) {
+			return nil
+		}
+		relativePath, operationError := filepath.Rel(workspaceDirectory, filePath)
+		if operationError != nil {
+			return operationError
+		}
+		directory := dotnetPackagePath(path.Dir(filepath.ToSlash(relativePath)))
+		directories[directory] = append(directories[directory], entry.Name())
+		return nil
+	})
+	for _, files := range directories {
+		slices.Sort(files)
+	}
+	return directories, operationError
 }
 
 // dotnetProjectReferences returns the slash-separated, project-relative paths
@@ -203,9 +240,10 @@ func dotnetSlnxProjects(contents []byte) ([]string, error) {
 	return projects, nil
 }
 
-// dotnetDefaultInputs are the files the built-in reads: the solution files
-// and every project file, since references lead to projects outside the
-// solution.
+// dotnetDefaultInputs are the files the built-in reads: the solution files,
+// every project file, since references lead to projects outside the
+// solution, and every configuration file, since each creates a package.
 func dotnetDefaultInputs(string) (inputs []string, excludeInputs []string) {
-	return []string{"*.sln", "*.slnx", "**/*.csproj", "**/*.fsproj", "**/*.vbproj"}, dotnetExcludeInputs
+	inputs = []string{"*.sln", "*.slnx", "**/*.csproj", "**/*.fsproj", "**/*.vbproj", "**/Directory.Build.props", "**/Directory.Build.targets", "**/Directory.Packages.props", "**/global.json", "**/nuget.config", "**/NuGet.Config"}
+	return inputs, dotnetExcludeInputs
 }
