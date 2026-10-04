@@ -17,7 +17,7 @@ var (
 	gradleIncludePattern          = regexp.MustCompile(`\binclude\s*(?:\(([^)]*)\)|((?:["'][^"']*["']\s*,?\s*)+))`)
 	gradleQuotedPattern           = regexp.MustCompile(`["']([^"']*)["']`)
 	gradleProjectDirPattern       = regexp.MustCompile(`\bproject\(\s*["'](:[^"']*)["']\s*\)\.projectDir\s*=\s*(?:new\s+)?[fF]ile\(\s*(?:(?:rootDir|settingsDir)\s*,\s*)?["']([^"']+)["']`)
-	gradleIncludeBuildPattern     = regexp.MustCompile(`\bincludeBuild\s*\(\s*["']([^"']+)["']`)
+	gradleIncludeBuildPattern     = regexp.MustCompile(`\bincludeBuild\s*\(?\s*["']([^"']+)["']`)
 	gradleProjectReferencePattern = regexp.MustCompile(`\bproject\(\s*(?:path\s*[:=]\s*)?["'](:[^"']*)["']`)
 	gradleAccessorPattern         = regexp.MustCompile(`\bprojects((?:\.[A-Za-z_][A-Za-z0-9_]*)+)`)
 )
@@ -36,7 +36,7 @@ func gradleDependencies(resolverContext context.Context, workspaceDirectory stri
 	if settings == "" {
 		return document, fmt.Errorf("no settings.gradle or settings.gradle.kts in %s", workspaceDirectory)
 	}
-	directoryByProject := gradleProjectDirectories(settings)
+	directoryByProject := gradleProjectDirectories(workspaceDirectory, settings)
 	accessorByProject := make(map[string]string, len(directoryByProject))
 	for projectPath := range directoryByProject {
 		accessorByProject[gradleAccessor(projectPath)] = projectPath
@@ -86,7 +86,8 @@ func gradleDependencies(resolverContext context.Context, workspaceDirectory stri
 
 // gradleProjectDirectories maps every included project path (":a:b") to its
 // directory, honouring projectDir overrides. The root project is left out.
-func gradleProjectDirectories(settings string) map[string]string {
+// Including ":a:b" also creates ":a"; it is kept when its directory exists.
+func gradleProjectDirectories(workspaceDirectory string, settings string) map[string]string {
 	directories := make(map[string]string)
 	for _, match := range gradleIncludePattern.FindAllStringSubmatch(settings, -1) {
 		for _, quoted := range gradleQuotedPattern.FindAllStringSubmatch(match[1]+match[2], -1) {
@@ -95,6 +96,17 @@ func gradleProjectDirectories(settings string) map[string]string {
 				continue
 			}
 			directories[projectPath] = strings.ReplaceAll(strings.TrimPrefix(projectPath, ":"), ":", "/")
+		}
+	}
+	for projectPath := range directories {
+		for parent := projectPath[:strings.LastIndex(projectPath, ":")]; parent != ""; parent = parent[:strings.LastIndex(parent, ":")] {
+			if _, included := directories[parent]; included {
+				continue
+			}
+			directory := strings.ReplaceAll(strings.TrimPrefix(parent, ":"), ":", "/")
+			if info, statError := os.Stat(filepath.Join(workspaceDirectory, filepath.FromSlash(directory))); statError == nil && info.IsDir() {
+				directories[parent] = directory
+			}
 		}
 	}
 	for _, match := range gradleProjectDirPattern.FindAllStringSubmatch(settings, -1) {
@@ -180,7 +192,7 @@ func gradleDefaultInputs(workspaceDirectory string) (inputs []string, excludeInp
 	if operationError != nil {
 		return inputs, gradleExcludeInputs
 	}
-	for _, directory := range gradleProjectDirectories(settings) {
+	for _, directory := range gradleProjectDirectories(workspaceDirectory, settings) {
 		inputs = append(inputs, path.Join(directory, "build.gradle"), path.Join(directory, "build.gradle.kts"))
 	}
 	slices.Sort(inputs[2:])

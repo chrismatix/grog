@@ -10,4 +10,5 @@ include(
     ":feature:home",
 )
 include("unused")
+include(":services:api")
 project(":feature:home").projectDir = file("feature/moved-dir")

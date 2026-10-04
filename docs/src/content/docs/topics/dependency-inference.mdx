@@ -187,6 +187,7 @@ Default `inputs`: `package.json`, `pnpm-workspace.yaml`, `aube-workspace.yaml`, 
 ### gradle
 
 Projects come from `include` statements in `settings.gradle.kts` or `settings.gradle`, with `projectDir` overrides honoured; `:a:b` is the directory `a/b`.
+Including `:a:b` also creates the parent project `:a`, as Gradle does; it is reported when the directory `a` exists on disk.
 Edges are found by scanning each project's `build.gradle(.kts)` for `project(":x")` references and type-safe accessors such as `projects.coreUtils`, whatever configuration they sit in.
 This is a text scan, not a Gradle evaluation: a reference in a comment or a disabled block still counts, which only ever adds edges.
 If that over-connects your graph, generate the exact mapping with a Gradle init script and use a [committed mapping](#using-a-committed-mapping) instead.
