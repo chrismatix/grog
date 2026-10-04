@@ -133,9 +133,9 @@ Every built-in declares inputs for the packages it reports, so workspace members
 | `cargo` | The workspace `Cargo.toml` members and each member's `[dependencies]` / `[build-dependencies]`                                | no                |
 | `uv`    | `uv.lock` — packages with an `editable` or `directory` source are workspace members                                           | no                |
 | `node`  | `pnpm-workspace.yaml` or `aube-workspace.yaml`, else `workspaces` in the root `package.json`, plus each member's dependencies | no                |
-| `go`    | `go list -deps -e -json ./...`, keeping imports under the module path                                                         | yes (`go`)        |
+| `go`    | Every `go.mod` under the declaring package and the `import` declarations of every `.go` file                                  | no                |
 
-`cargo`, `uv` and `node` parse manifests and lockfiles directly, so `grog changes` works on a CI image without Cargo, uv or Node.
+All four parse manifests, lockfiles and sources directly, so `grog changes` works on a CI image without Cargo, uv, Node or Go installed.
 
 ### cargo
 
@@ -185,13 +185,18 @@ Default `inputs`: `package.json`, `pnpm-workspace.yaml`, `aube-workspace.yaml`, 
 
 ### go
 
-Edges are imports between packages inside your module(s), as reported by `go list`.
-Every `.go` file counts, including ones excluded by build constraints, so the graph is the same for every `GOOS`, `GOARCH` and tag set.
-Test-only imports are skipped for the same cycle reason as Cargo's `[dev-dependencies]`.
+Packages are the directories holding `.go` files under the declaring package; modules are every `go.mod` found there, so a `go.work` workspace and nested modules work without configuration.
+Edges are `import` declarations that resolve into one of those modules, parsed straight out of the source files.
+Every non-test `.go` file counts, including ones excluded by build constraints, so the graph is the same for every `GOOS`, `GOARCH` and tag set.
+`vendor`, `testdata` and hidden or underscore directories are skipped, as are files whose names start with `.` or `_`, matching the Go toolchain.
 
-This is the only built-in that shells out to its toolchain, so it's the slowest on a large repo and gains the most from [caching](#caching).
+Imports in `_test.go` files are skipped for the same cycle reason as Cargo's `[dev-dependencies]`: Go allows a test to import a package that imports the one under test.
+Test files are still inputs of their package, so editing one invalidates the package and whatever hangs off it.
 
-Default `inputs`: `go.mod`, `go.sum`, `go.work`, `**/*.go`.
+Each package's synthesized `:_go_package` covers every file directly in the directory, `testdata/**`, and the files named by its `//go:embed` directives, minus `vendor/**`.
+Subdirectories are packages of their own and are reached through import edges, not inputs.
+
+Default `inputs`: `go.work`, `go.work.sum`, `**/go.mod`, `**/go.sum`, `**/*.go`, with `**/vendor/**`, `**/testdata/**`, `**/node_modules/**` and hidden or underscore directories excluded.
 
 ## Fields reference
 
@@ -493,7 +498,7 @@ The environment and platform are not part of it, so machines share one mapping.
 Anything else the output depends on must be listed in `inputs`, including a custom resolver's own script; otherwise edits to it keep serving the cached mapping.
 
 The cached value is the resolver's stdout, stored in the [content-addressable store](/topics/remote-caching).
-With a remote cache, a cold CI runner downloads the mapping instead of running `go list`.
+With a remote cache, a cold CI runner downloads the mapping instead of running the tool.
 
 |                      | Work                                                    |
 | -------------------- | ------------------------------------------------------- |
