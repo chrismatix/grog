@@ -188,7 +188,7 @@ Default `inputs`: `package.json`, `pnpm-workspace.yaml`, `aube-workspace.yaml`, 
 Packages are the directories holding `.go` files under the declaring package; modules are every `go.mod` found there, so a `go.work` workspace and nested modules work without configuration.
 Edges are `import` declarations that resolve into one of those modules, parsed straight out of the source files.
 Every non-test `.go` file counts, including ones excluded by build constraints, so the graph is the same for every `GOOS`, `GOARCH` and tag set.
-`vendor`, `testdata` and hidden or underscore directories are skipped, as the Go toolchain does.
+`vendor`, `testdata` and hidden or underscore directories are skipped, as are files whose names start with `.` or `_`, matching the Go toolchain.
 
 Imports in `_test.go` files are skipped for the same cycle reason as Cargo's `[dev-dependencies]`: Go allows a test to import a package that imports the one under test.
 Test files are still inputs of their package, so editing one invalidates the package and whatever hangs off it.

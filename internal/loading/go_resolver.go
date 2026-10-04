@@ -1,8 +1,6 @@
 package loading
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"fmt"
 	"go/parser"
@@ -115,7 +113,7 @@ func goWorkspaceLayout(workspaceDirectory string) ([]goModule, []string, error) 
 				return fmt.Errorf("parse %s: no module directive", currentPath)
 			}
 			modules = append(modules, goModule{Path: modulePath, Directory: directory})
-		case strings.HasSuffix(entry.Name(), ".go"):
+		case isGoSourceFile(entry.Name()):
 			packageDirectories[directory] = true
 		}
 		return nil
@@ -143,7 +141,7 @@ func goImportDirectory(importPath string, modules []goModule) (string, bool) {
 }
 
 // goPackageSources returns the imports of the non-test Go files in a directory
-// and the patterns of every //go:embed directive in them.
+// and the patterns of every //go:embed directive, test files included.
 func goPackageSources(packageDirectory string) (imports []string, embedPatterns []string, operationError error) {
 	entries, operationError := os.ReadDir(packageDirectory)
 	if operationError != nil {
@@ -151,17 +149,21 @@ func goPackageSources(packageDirectory string) (imports []string, embedPatterns 
 	}
 	fileSet := token.NewFileSet()
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+		if entry.IsDir() || !isGoSourceFile(entry.Name()) {
 			continue
 		}
 		filePath := filepath.Join(packageDirectory, entry.Name())
-		contents, operationError := os.ReadFile(filePath)
-		if operationError != nil {
-			return nil, nil, fmt.Errorf("read %s: %w", filePath, operationError)
-		}
-		file, operationError := parser.ParseFile(fileSet, filePath, contents, parser.ImportsOnly)
+		file, operationError := parser.ParseFile(fileSet, filePath, nil, parser.ParseComments)
 		if operationError != nil {
 			return nil, nil, fmt.Errorf("parse %s: %w", filePath, operationError)
+		}
+		for _, commentGroup := range file.Comments {
+			for _, comment := range commentGroup.List {
+				embedPatterns = append(embedPatterns, goEmbedPatterns(comment.Text)...)
+			}
+		}
+		if strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
 		}
 		for _, importSpec := range file.Imports {
 			importPath, operationError := strconv.Unquote(importSpec.Path.Value)
@@ -170,48 +172,50 @@ func goPackageSources(packageDirectory string) (imports []string, embedPatterns 
 			}
 			imports = append(imports, importPath)
 		}
-		embedPatterns = append(embedPatterns, goEmbedPatterns(contents)...)
 	}
 	return imports, embedPatterns, nil
 }
 
-// goEmbedPatterns scans for //go:embed lines, which may sit anywhere in the
-// file and carry several bare, quoted or backquoted patterns.
-func goEmbedPatterns(contents []byte) []string {
+// isGoSourceFile applies the go tool's rule of ignoring files whose names
+// start with a dot or an underscore.
+func isGoSourceFile(name string) bool {
+	return strings.HasSuffix(name, ".go") && !strings.HasPrefix(name, ".") && !strings.HasPrefix(name, "_")
+}
+
+// goEmbedPatterns reads the bare, quoted or backquoted patterns of one
+// //go:embed comment. An all: prefix changes traversal, not the path.
+func goEmbedPatterns(comment string) []string {
+	line, isEmbed := strings.CutPrefix(comment, "//go:embed")
+	if !isEmbed || (line != "" && line[0] != ' ' && line[0] != '\t') {
+		return nil
+	}
 	var patterns []string
-	scanner := bufio.NewScanner(bytes.NewReader(contents))
-	for scanner.Scan() {
-		line, isEmbed := strings.CutPrefix(strings.TrimSpace(scanner.Text()), "//go:embed")
-		if !isEmbed || (line != "" && line[0] != ' ' && line[0] != '\t') {
-			continue
-		}
-		for line = strings.TrimSpace(line); line != ""; line = strings.TrimSpace(line) {
-			var pattern string
-			switch line[0] {
-			case '"':
-				quoted, operationError := strconv.QuotedPrefix(line)
-				if operationError != nil {
-					return patterns
-				}
-				pattern, _ = strconv.Unquote(quoted)
-				line = line[len(quoted):]
-			case '`':
-				end := strings.IndexByte(line[1:], '`')
-				if end < 0 {
-					return patterns
-				}
-				pattern = line[1 : end+1]
-				line = line[end+2:]
-			default:
-				end := strings.IndexAny(line, " \t")
-				if end < 0 {
-					end = len(line)
-				}
-				pattern = line[:end]
-				line = line[end:]
+	for line = strings.TrimSpace(line); line != ""; line = strings.TrimSpace(line) {
+		var pattern string
+		switch line[0] {
+		case '"':
+			quoted, operationError := strconv.QuotedPrefix(line)
+			if operationError != nil {
+				return patterns
 			}
-			patterns = append(patterns, pattern)
+			pattern, _ = strconv.Unquote(quoted)
+			line = line[len(quoted):]
+		case '`':
+			end := strings.IndexByte(line[1:], '`')
+			if end < 0 {
+				return patterns
+			}
+			pattern = line[1 : end+1]
+			line = line[end+2:]
+		default:
+			end := strings.IndexAny(line, " \t")
+			if end < 0 {
+				end = len(line)
+			}
+			pattern = line[:end]
+			line = line[end:]
 		}
+		patterns = append(patterns, strings.TrimPrefix(pattern, "all:"))
 	}
 	return patterns
 }

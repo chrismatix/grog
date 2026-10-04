@@ -21,7 +21,7 @@ func TestGoDependencies(t *testing.T) {
 		"cmd/app":          member(plain, "internal/greet", "tools/gen"),
 		"internal/greet":   member(plain, "internal/format", "internal/winutil"),
 		"internal/format":  member([]string{"*", "banner.txt", "banner.txt/**", "static", "static/**", "templates/*.txt", "templates/*.txt/**", "testdata/**"}),
-		"internal/winutil": member(plain),
+		"internal/winutil": member([]string{"*", "fixtures", "fixtures/**", "testdata/**"}),
 		"tools/gen":        member(plain),
 	}, document.Packages)
 }
@@ -53,12 +53,14 @@ func TestGoEmbedPatterns(t *testing.T) {
 		source   string
 		expected []string
 	}{
-		{name: "bare", source: "//go:embed templates/*.txt\nvar x embed.FS\n", expected: []string{"templates/*.txt"}},
-		{name: "quoted and raw", source: "  //go:embed \"a b.txt\" `static` plain\n", expected: []string{"a b.txt", "static", "plain"}},
-		{name: "not a directive", source: "//go:embedded\n// go:embed x\n//go:embed\n", expected: nil},
+		{name: "bare", source: "//go:embed templates/*.txt", expected: []string{"templates/*.txt"}},
+		{name: "quoted and raw", source: "//go:embed \"a b.txt\" `static` plain", expected: []string{"a b.txt", "static", "plain"}},
+		{name: "all prefix", source: "//go:embed all:assets", expected: []string{"assets"}},
+		{name: "not a directive", source: "//go:embedded x", expected: nil},
+		{name: "empty", source: "//go:embed", expected: nil},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			require.Equal(t, testCase.expected, goEmbedPatterns([]byte(testCase.source)))
+			require.Equal(t, testCase.expected, goEmbedPatterns(testCase.source))
 		})
 	}
 }
@@ -78,6 +80,7 @@ func TestGoResolverErrors(t *testing.T) {
 		{name: "no module", files: map[string]string{"main.go": "package main\n"}, expectedError: "no go.mod under"},
 		{name: "module without path", files: map[string]string{"go.mod": "go 1.24\n"}, expectedError: "no module directive"},
 		{name: "syntax error", files: map[string]string{"go.mod": "module example.com/x\n", "main.go": "package main\nimport (\n"}, expectedError: "parse"},
+		{name: "ignored files are not parsed", files: map[string]string{"go.mod": "module example.com/x\n", "_scratch.go": "not go", ".hidden.go": "not go"}, expectedError: ""},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			directory := t.TempDir()
@@ -85,6 +88,10 @@ func TestGoResolverErrors(t *testing.T) {
 				require.NoError(t, os.WriteFile(filepath.Join(directory, name), []byte(contents), 0644))
 			}
 			_, operationError := goDependencies(t.Context(), directory)
+			if testCase.expectedError == "" {
+				require.NoError(t, operationError)
+				return
+			}
 			require.ErrorContains(t, operationError, testCase.expectedError)
 		})
 	}
