@@ -1,0 +1,35 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+overrides:
+  icon-set: link:packages/icons
+
+importers:
+
+  .: {}
+
+  apps/web:
+    dependencies:
+      ui:
+        specifier: workspace:@demo/ui@*
+        version: link:../../packages/ui
+
+  packages/icons: {}
+
+  packages/theme:
+    dependencies:
+      icon-set:
+        specifier: link:../icons
+        version: link:../icons
+
+  packages/ui:
+    dependencies:
+      '@demo/icons':
+        specifier: workspace:*
+        version: link:../icons
+      '@demo/theme':
+        specifier: workspace:*
+        version: link:../theme

@@ -1,0 +1,9 @@
+lockfileVersion: '9.0'
+
+importers:
+
+  packages/core:
+    dependencies:
+      cli:
+        specifier: link:../cli
+        version: link:../cli

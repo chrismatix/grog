@@ -1,0 +1,2 @@
+//packages/core:sources
+//packages/docs:_npm_package

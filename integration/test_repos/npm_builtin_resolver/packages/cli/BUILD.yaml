@@ -1,0 +1,5 @@
+targets:
+  - name: sources
+    inputs: ["package.json", "src/**/*"]
+    command: echo checking cli
+    dependency_resolvers: ["//:npm"]

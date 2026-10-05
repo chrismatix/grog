@@ -1,0 +1,7 @@
+{
+  "name": "npm-builtin-resolver",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ]
+}

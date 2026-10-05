@@ -1,0 +1,8 @@
+{
+  "name": "@demo/cli",
+  "version": "1.0.0",
+  "dependencies": {
+    "core": "npm:@demo/core@^1.0.0",
+    "docs": "file:../docs"
+  }
+}
