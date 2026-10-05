@@ -1,13 +1,26 @@
 amends "@grog/package.pkl"
 
+// The uv resolver reads uv.lock and synthesizes one :_uv_package filegroup
+// per workspace member, with its workspace dependencies as edges.
+dependency_resolvers {
+  new {
+    name = "uv"
+    command = "builtin::uv"
+  }
+}
+
 targets {
   new {
     name = "uv.lock"
     inputs {
       "uv.lock"
     }
-    outputs {
-      "uv.lock"
+  }
+
+  new {
+    name = "ruff.toml"
+    inputs {
+      "ruff.toml"
     }
   }
 }

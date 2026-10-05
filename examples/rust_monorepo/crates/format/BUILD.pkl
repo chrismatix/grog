@@ -1,9 +1,9 @@
 amends "@grog/package.pkl"
 
-import ".../tools/grog/python.pkl"
+import ".../tools/grog/rust.pkl"
 
 targets {
-  ...new python.Package {
+  ...new rust.Crate {
     name = "format"
   }.targets
 }

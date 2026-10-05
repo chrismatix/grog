@@ -1,0 +1,5 @@
+line-length = 100
+extend-exclude = ["lib/proto/pb"]
+
+[lint]
+select = ["E", "F", "I", "B", "UP"]
