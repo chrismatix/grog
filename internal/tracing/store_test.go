@@ -2,6 +2,7 @@ package tracing
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -409,5 +410,131 @@ func TestTraceStore_Prune(t *testing.T) {
 	}
 	if entries[0].TraceID != "new-trace" {
 		t.Errorf("expected new-trace, got %s", entries[0].TraceID)
+	}
+}
+
+func TestTraceStore_Bottlenecks(t *testing.T) {
+	dir := t.TempDir()
+	fs := backends.NewFileSystemCacheForTest(dir, t.TempDir())
+	writer := NewTraceWriter(fs)
+	ctx := context.Background()
+
+	span := func(label string, modify func(*SpanRow)) SpanRow {
+		row := SpanRow{Label: label, Status: "SUCCESS", CacheResult: "CACHE_HIT", CommandDurationMillis: 100}
+		modify(&row)
+		return row
+	}
+	now := time.Now()
+	for index, traceID := range []string{"bottleneck-1", "bottleneck-2"} {
+		trace := makeTestTrace(traceID, now.Add(time.Duration(index)*time.Minute).UnixMilli(), "build")
+		trace.Spans = []SpanRow{
+			span("//pkg:always_miss", func(row *SpanRow) { row.CacheResult = "CACHE_MISS"; row.CommandDurationMillis = 5000 }),
+			span("//pkg:queued", func(row *SpanRow) { row.QueueWaitMillis = 800 }),
+			span("//pkg:io_heavy", func(row *SpanRow) { row.OutputWriteMillis = 1500 }),
+			span("//pkg:slow_hash", func(row *SpanRow) { row.HashDurationMillis = 300 }),
+			span("//pkg:flaky", func(row *SpanRow) {
+				if index == 0 {
+					row.Status = "FAILURE"
+				}
+			}),
+		}
+		if index == 0 {
+			trace.Spans = append(trace.Spans, span("//pkg:only_once", func(row *SpanRow) { row.QueueWaitMillis = 9000 }))
+		}
+		for spanIndex := range trace.Spans {
+			trace.Spans[spanIndex].TraceID = traceID
+		}
+		if err := writer.Write(ctx, trace); err != nil {
+			t.Fatalf("Write failed: %v", err)
+		}
+	}
+
+	store, err := NewTraceStore(fs, &PathResolver{
+		buildsBase: dir + "/traces/builds",
+		spansBase:  dir + "/traces/spans",
+	})
+	if err != nil {
+		t.Fatalf("NewTraceStore failed: %v", err)
+	}
+	defer store.Close()
+
+	report, err := store.Bottlenecks(ctx, StatsOptions{Limit: 10})
+	if err != nil {
+		t.Fatalf("Bottlenecks failed: %v", err)
+	}
+
+	if count := len(report.SlowestTargets); count != 5 {
+		t.Fatalf("expected 5 targets seen in more than one build, got %d", count)
+	}
+
+	labels := func(targets []TargetBottleneck) []string {
+		var result []string
+		for _, target := range targets {
+			result = append(result, target.Label)
+		}
+		return result
+	}
+	testCases := []struct {
+		category string
+		actual   []TargetBottleneck
+		expected []string
+	}{
+		{"slowest", report.SlowestTargets[:1], []string{"//pkg:always_miss"}},
+		{"queue saturated", report.QueueSaturated, []string{"//pkg:queued"}},
+		{"io", report.IOBottlenecks, []string{"//pkg:io_heavy"}},
+		{"slow hashing", report.SlowHashing, []string{"//pkg:slow_hash"}},
+		{"frequent misses", report.FrequentMisses, []string{"//pkg:always_miss"}},
+		{"flaky", report.FlakyTargets, []string{"//pkg:flaky"}},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.category, func(t *testing.T) {
+			if actual := labels(testCase.actual); !slices.Equal(actual, testCase.expected) {
+				t.Errorf("expected %v, got %v", testCase.expected, actual)
+			}
+		})
+	}
+}
+
+func TestTraceStore_Pull(t *testing.T) {
+	ctx := context.Background()
+	localDir := t.TempDir()
+	local := backends.NewFileSystemCacheForTest(localDir, t.TempDir())
+	remote := backends.NewFileSystemCacheForTest(t.TempDir(), t.TempDir())
+
+	now := time.Now()
+	if err := NewTraceWriter(remote).Write(ctx, makeTestTrace("remote-only", now.UnixMilli(), "build")); err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+	shared := makeTestTrace("shared", now.Add(time.Minute).UnixMilli(), "build")
+	for _, backend := range []backends.CacheBackend{local, remote} {
+		if err := NewTraceWriter(backend).Write(ctx, shared); err != nil {
+			t.Fatalf("Write failed: %v", err)
+		}
+	}
+
+	store, err := NewTraceStore(backends.NewRemoteWrapper(local, remote), &PathResolver{
+		buildsBase: localDir + "/traces/builds",
+		spansBase:  localDir + "/traces/spans",
+	})
+	if err != nil {
+		t.Fatalf("NewTraceStore failed: %v", err)
+	}
+	defer store.Close()
+
+	var lastCurrent, lastTotal int
+	pulled, err := store.Pull(ctx, func(current, total int) { lastCurrent, lastTotal = current, total })
+	if err != nil {
+		t.Fatalf("Pull failed: %v", err)
+	}
+	if pulled != 2 || lastCurrent != 2 || lastTotal != 2 {
+		t.Errorf("expected the build and span file of remote-only to be pulled, got pulled=%d progress=%d/%d", pulled, lastCurrent, lastTotal)
+	}
+
+	entries, err := store.List(ctx, ListOptions{Limit: 10})
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("expected both traces locally after pull, got %d", len(entries))
 	}
 }

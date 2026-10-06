@@ -101,6 +101,13 @@ func TestDirectoryOutputHandler_WriteAndLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Write failed: %v", err)
 	}
+	if err := dirOutput.WritePlan.Execute(ctx, nil); err != nil {
+		t.Fatalf("WritePlan.Execute failed: %v", err)
+	}
+
+	if err := os.RemoveAll(dirPath); err != nil {
+		t.Fatalf("failed to remove directory before load: %v", err)
+	}
 
 	if err := handler.Load(ctx, target, dirOutput.Output, nil); err != nil {
 		t.Fatalf("Load failed: %v", err)
