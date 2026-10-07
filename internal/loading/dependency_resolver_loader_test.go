@@ -97,6 +97,7 @@ func TestDependencyResolverEnrichment(t *testing.T) {
 		{"default timeout", DependencyResolverDTO{Name: "cargo", Command: "builtin::cargo"}, ""},
 		{"missing name", DependencyResolverDTO{Command: "true"}, "target name is empty"},
 		{"missing command", DependencyResolverDTO{Name: "cargo"}, "must define a command"},
+		{"removed node built-in", DependencyResolverDTO{Name: "cargo", Command: "builtin::node"}, "builtin::node was split; use builtin::pnpm, builtin::npm or builtin::yarn"},
 		{"invalid timeout", DependencyResolverDTO{Name: "cargo", Command: "true", Timeout: "later"}, "failed to parse timeout for dependency resolver //:cargo"},
 		{"invalid synthesized target", DependencyResolverDTO{Name: "cargo", Command: "true", GeneratedTargetName: "no spaces"}, "invalid generated_target_name for dependency resolver //:cargo"},
 		{"invalid glob", DependencyResolverDTO{Name: "cargo", Command: "true", Inputs: []string{"["}}, "failed to resolve inputs"},

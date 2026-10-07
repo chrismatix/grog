@@ -1,0 +1,5 @@
+# builtin::npm reads "workspaces" and each member's package.json, never
+# pnpm-lock.yaml; packages/docs has no BUILD file and is synthesized.
+dependency_resolvers:
+  - name: npm
+    command: builtin::npm

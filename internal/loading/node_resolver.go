@@ -24,16 +24,35 @@ type nodeManifest struct {
 	OptionalDependencies map[string]string `json:"optionalDependencies"`
 }
 
-// nodeDependencies maps the root and every workspace member to the members
-// named in its dependencies, devDependencies, peerDependencies and
-// optionalDependencies.
-func nodeDependencies(resolverContext context.Context, workspaceDirectory string) (resolverDocument, error) {
+// nodePackageManager names the files one package manager keeps its
+// workspace in. Without a workspaceFile the member globs come from
+// "workspaces" in package.json.
+type nodePackageManager struct {
+	workspaceFile string
+	lockfile      string
+}
+
+var (
+	npmPackageManager  = nodePackageManager{}
+	pnpmPackageManager = nodePackageManager{workspaceFile: "pnpm-workspace.yaml", lockfile: "pnpm-lock.yaml"}
+	// aube writes its workspace and lockfile in pnpm's v9 format.
+	aubePackageManager = nodePackageManager{workspaceFile: "aube-workspace.yaml", lockfile: "aube-lock.yaml"}
+)
+
+// dependencies maps the root and every workspace member to the members its
+// dependencies, devDependencies, peerDependencies and optionalDependencies
+// point at, plus the members the lockfile links it to.
+func (packageManager nodePackageManager) dependencies(resolverContext context.Context, workspaceDirectory string) (resolverDocument, error) {
 	document := resolverDocument{Version: 1, Packages: make(map[string]resolverPackage)}
-	directories, operationError := nodeMemberDirectories(workspaceDirectory)
+	directories, operationError := packageManager.memberDirectories(workspaceDirectory)
 	if operationError != nil {
 		return document, operationError
 	}
 	directories = append(directories, "")
+	linkedDirectories, operationError := packageManager.linkedDirectories(workspaceDirectory)
+	if operationError != nil {
+		return document, operationError
+	}
 
 	manifests := make(map[string]nodeManifest, len(directories))
 	directoryByName := make(map[string]string, len(directories))
@@ -57,11 +76,22 @@ func nodeDependencies(resolverContext context.Context, workspaceDirectory string
 			// Everything else under the root belongs to a member or to another tool.
 			reportedPackage.Inputs = []string{"package.json"}
 		}
+		dependencyDirectories := slices.Clone(linkedDirectories[directory])
 		for _, dependencies := range []map[string]string{manifest.Dependencies, manifest.DevDependencies, manifest.PeerDependencies, manifest.OptionalDependencies} {
-			for name := range dependencies {
-				if dependencyDirectory, isMember := directoryByName[name]; isMember && dependencyDirectory != directory {
-					reportedPackage.Dependencies = append(reportedPackage.Dependencies, dependencyDirectory)
+			for name, specifier := range dependencies {
+				if dependencyDirectory, isNamed := directoryByName[nodeDependencyName(name, specifier)]; isNamed {
+					dependencyDirectories = append(dependencyDirectories, dependencyDirectory)
 				}
+				for _, protocol := range []string{"link:", "file:"} {
+					if linkPath, isLink := strings.CutPrefix(specifier, protocol); isLink {
+						dependencyDirectories = append(dependencyDirectories, path.Join(directory, linkPath))
+					}
+				}
+			}
+		}
+		for _, dependencyDirectory := range dependencyDirectories {
+			if _, isMember := manifests[dependencyDirectory]; isMember && dependencyDirectory != directory {
+				reportedPackage.Dependencies = append(reportedPackage.Dependencies, dependencyDirectory)
 			}
 		}
 		slices.Sort(reportedPackage.Dependencies)
@@ -71,10 +101,73 @@ func nodeDependencies(resolverContext context.Context, workspaceDirectory string
 	return document, nil
 }
 
-// nodeMemberDirectories resolves the workspace's member globs to the
+// nodeDependencyName is the package a dependency installs: the aliased name
+// for "workspace:<name>@<range>" and "npm:<name>@<range>", else its key.
+func nodeDependencyName(key string, specifier string) string {
+	if alias, isAlias := strings.CutPrefix(specifier, "npm:"); isAlias {
+		if separator := strings.LastIndex(alias, "@"); separator > 0 {
+			return alias[:separator]
+		}
+		return alias
+	}
+	if alias, isAlias := strings.CutPrefix(specifier, "workspace:"); isAlias {
+		if separator := strings.LastIndex(alias, "@"); separator > 0 {
+			return alias[:separator]
+		}
+	}
+	return key
+}
+
+// linkedDirectories reads the lockfile's importers and maps each to the
+// directories its dependencies resolve to as "link:<path>", which catches
+// aliases and overrides. Nothing is linked before the first install.
+func (packageManager nodePackageManager) linkedDirectories(workspaceDirectory string) (map[string][]string, error) {
+	if packageManager.lockfile == "" {
+		return nil, nil
+	}
+	lockfilePath := filepath.Join(workspaceDirectory, packageManager.lockfile)
+	contents, operationError := os.ReadFile(lockfilePath)
+	if errors.Is(operationError, os.ErrNotExist) {
+		return nil, nil
+	}
+	if operationError != nil {
+		return nil, operationError
+	}
+	type lockedDependencies map[string]struct {
+		Version string `yaml:"version"`
+	}
+	var lockfile struct {
+		Importers map[string]struct {
+			Dependencies         lockedDependencies `yaml:"dependencies"`
+			DevDependencies      lockedDependencies `yaml:"devDependencies"`
+			PeerDependencies     lockedDependencies `yaml:"peerDependencies"`
+			OptionalDependencies lockedDependencies `yaml:"optionalDependencies"`
+		} `yaml:"importers"`
+	}
+	if operationError := yaml.Unmarshal(contents, &lockfile); operationError != nil {
+		return nil, fmt.Errorf("parse %s: %w", lockfilePath, operationError)
+	}
+	linkedDirectories := make(map[string][]string, len(lockfile.Importers))
+	for importer, importerDependencies := range lockfile.Importers {
+		directory := path.Clean(importer)
+		if directory == "." {
+			directory = ""
+		}
+		for _, dependencies := range []lockedDependencies{importerDependencies.Dependencies, importerDependencies.DevDependencies, importerDependencies.PeerDependencies, importerDependencies.OptionalDependencies} {
+			for _, dependency := range dependencies {
+				if linkPath, isLink := strings.CutPrefix(dependency.Version, "link:"); isLink {
+					linkedDirectories[directory] = append(linkedDirectories[directory], path.Join(directory, linkPath))
+				}
+			}
+		}
+	}
+	return linkedDirectories, nil
+}
+
+// memberDirectories resolves the workspace's member globs to the
 // directories holding a package.json. A "!" pattern removes its matches.
-func nodeMemberDirectories(workspaceDirectory string) ([]string, error) {
-	patterns, operationError := nodeMemberPatterns(workspaceDirectory)
+func (packageManager nodePackageManager) memberDirectories(workspaceDirectory string) ([]string, error) {
+	patterns, operationError := packageManager.memberPatterns(workspaceDirectory)
 	if operationError != nil {
 		return nil, operationError
 	}
@@ -104,14 +197,15 @@ func nodeMemberDirectories(workspaceDirectory string) ([]string, error) {
 	return slices.Compact(directories), nil
 }
 
-// nodeMemberPatterns reads the member globs from pnpm-workspace.yaml or
-// aube-workspace.yaml, which share a format, else from "workspaces" in
-// package.json, which npm writes as a list and yarn may wrap in an object.
-func nodeMemberPatterns(workspaceDirectory string) ([]string, error) {
-	for _, fileName := range []string{"pnpm-workspace.yaml", "aube-workspace.yaml"} {
-		contents, operationError := os.ReadFile(filepath.Join(workspaceDirectory, fileName))
+// memberPatterns reads the member globs from the package manager's
+// workspace file, else from "workspaces" in package.json, which npm writes
+// as a list and yarn may wrap in an object.
+func (packageManager nodePackageManager) memberPatterns(workspaceDirectory string) ([]string, error) {
+	if packageManager.workspaceFile != "" {
+		workspacePath := filepath.Join(workspaceDirectory, packageManager.workspaceFile)
+		contents, operationError := os.ReadFile(workspacePath)
 		if errors.Is(operationError, os.ErrNotExist) {
-			continue
+			return nil, fmt.Errorf("no %s in %s", packageManager.workspaceFile, workspaceDirectory)
 		}
 		if operationError != nil {
 			return nil, operationError
@@ -120,7 +214,7 @@ func nodeMemberPatterns(workspaceDirectory string) ([]string, error) {
 			Packages []string `yaml:"packages"`
 		}
 		if operationError := yaml.Unmarshal(contents, &workspace); operationError != nil {
-			return nil, fmt.Errorf("parse %s: %w", filepath.Join(workspaceDirectory, fileName), operationError)
+			return nil, fmt.Errorf("parse %s: %w", workspacePath, operationError)
 		}
 		return workspace.Packages, nil
 	}
@@ -140,7 +234,7 @@ func nodeMemberPatterns(workspaceDirectory string) ([]string, error) {
 		patterns = workspaces.Packages
 	}
 	if len(patterns) == 0 {
-		return nil, fmt.Errorf("no workspace in %s: expected pnpm-workspace.yaml, aube-workspace.yaml or workspaces in package.json", workspaceDirectory)
+		return nil, fmt.Errorf("no workspaces in %s", filepath.Join(workspaceDirectory, "package.json"))
 	}
 	return patterns, nil
 }
@@ -160,13 +254,19 @@ func readNodeManifest(manifestPath string) (nodeManifest, error) {
 // nodeExcludeInputs keeps every glob out of installed packages.
 var nodeExcludeInputs = []string{"**/node_modules/**"}
 
-// nodeDefaultInputs are the files the built-in reads: the workspace files and
-// a package.json under every member glob, so a new member is seen without a
-// re-declaration. Negated member globs become exclusions.
-func nodeDefaultInputs(workspaceDirectory string) (inputs []string, excludeInputs []string) {
-	inputs = []string{"package.json", "pnpm-workspace.yaml", "aube-workspace.yaml"}
+// defaultInputs are the files the built-in reads: package.json, the package
+// manager's workspace file and lockfile, and a package.json under every
+// member glob, so a new member is seen without a re-declaration. Negated
+// member globs become exclusions.
+func (packageManager nodePackageManager) defaultInputs(workspaceDirectory string) (inputs []string, excludeInputs []string) {
+	inputs = []string{"package.json"}
+	for _, fileName := range []string{packageManager.workspaceFile, packageManager.lockfile} {
+		if fileName != "" {
+			inputs = append(inputs, fileName)
+		}
+	}
 	excludeInputs = nodeExcludeInputs
-	patterns, operationError := nodeMemberPatterns(workspaceDirectory)
+	patterns, operationError := packageManager.memberPatterns(workspaceDirectory)
 	if operationError != nil {
 		return inputs, excludeInputs
 	}

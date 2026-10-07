@@ -2,6 +2,6 @@
   "name": "@demo/web",
   "version": "1.0.0",
   "dependencies": {
-    "@demo/ui": "workspace:*"
+    "ui": "workspace:@demo/ui@*"
   }
 }

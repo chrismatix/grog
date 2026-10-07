@@ -124,18 +124,20 @@ Only one target per package may register a given resolver, but a target may regi
 
 ## Built-in resolvers
 
-Grog ships four resolvers.
+Grog ships these resolvers.
 Use one with `command = "builtin::<name>"` and omit `inputs` to get the defaults listed below.
 Every built-in declares inputs for the packages it reports, so workspace members don't need a BUILD file.
 
-| Name    | Reads                                                                                                                         | Needs a toolchain |
-| ------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------- |
-| `cargo` | The workspace `Cargo.toml` members and each member's `[dependencies]` / `[build-dependencies]`                                | no                |
-| `uv`    | `uv.lock` — packages with an `editable` or `directory` source are workspace members                                           | no                |
-| `node`  | `pnpm-workspace.yaml` or `aube-workspace.yaml`, else `workspaces` in the root `package.json`, plus each member's dependencies | no                |
-| `go`    | `go list -deps -e -json ./...`, keeping imports under the module path                                                         | yes (`go`)        |
+| Name          | Reads                                                                                          | Needs a toolchain |
+| ------------- | ---------------------------------------------------------------------------------------------- | ----------------- |
+| `cargo`       | The workspace `Cargo.toml` members and each member's `[dependencies]` / `[build-dependencies]` | no                |
+| `uv`          | `uv.lock` — packages with an `editable` or `directory` source are workspace members            | no                |
+| `pnpm`        | `pnpm-workspace.yaml`, each member's `package.json` and the links in `pnpm-lock.yaml`          | no                |
+| `aube`        | `aube-workspace.yaml`, each member's `package.json` and the links in `aube-lock.yaml`          | no                |
+| `npm`, `yarn` | `workspaces` in the root `package.json` and each member's `package.json`                       | no                |
+| `go`          | `go list -deps -e -json ./...`, keeping imports under the module path                          | yes (`go`)        |
 
-`cargo`, `uv` and `node` parse manifests and lockfiles directly, so `grog changes` works on a CI image without Cargo, uv or Node.
+All but `go` parse manifests and lockfiles directly, so `grog changes` works on a CI image without Cargo, uv or Node.
 
 ### cargo
 
@@ -171,17 +173,29 @@ Default `inputs`: `uv.lock`, `pyproject.toml`, and every member's `pyproject.tom
   `uv sync` or set `UV_LOCKED=1` in CI.
 </Aside>
 
-### node
+### pnpm, npm and yarn
 
-Covers npm, yarn and pnpm workspaces.
-Members come from `pnpm-workspace.yaml` or `aube-workspace.yaml` (same format), falling back to `workspaces` in the root `package.json`.
-Edges are `dependencies`, `devDependencies`, `peerDependencies` and `optionalDependencies` entries that name another member; pnpm's `workspace:*` is treated like any other version spec.
+Pick the resolver for the package manager your workspace uses; each reads only its own files, so a stray lockfile from another manager changes neither the graph nor the cache key.
+`pnpm` takes its members from `pnpm-workspace.yaml` and fails the load without one; `npm` and `yarn` take them from `workspaces` in the root `package.json`, as a list or as `{"packages": [...]}`.
+For a project managed by [aube](https://aube.sh), use `pnpm` if it kept your pnpm files, else `aube`, which reads `aube-workspace.yaml` and `aube-lock.yaml` in the same format.
+
+Edges are `dependencies`, `devDependencies`, `peerDependencies` and `optionalDependencies` entries that point at another member:
+
+- by key, as with `workspace:*` or a plain version range,
+- by alias, `workspace:<name>@<range>` or `npm:<name>@<range>`,
+- by path, `link:<path>` or `file:<path>`.
+
+`pnpm` and `aube` also add every importer dependency the lockfile resolves to `link:<path>`, which covers overrides and anything else the manifests don't spell out.
+Before the first install there is no lockfile, and the manifests alone decide.
+
 The root `package.json` is a package of its own, covering just that file, so a root target registering the resolver depends on the members it names.
 None of the package managers forbid cycles between members, and one through any of these fields fails the load.
 A synthesized filegroup covers the whole member, `**/*`, minus `**/node_modules/**`.
 
-Default `inputs`: `package.json`, `pnpm-workspace.yaml`, `aube-workspace.yaml`, and `<pattern>/package.json` for every member glob, so a new member is picked up without touching the declaration.
+Default `inputs`: `package.json`, the workspace file and lockfile (`pnpm` and `aube` only), and `<pattern>/package.json` for every member glob, so a new member is picked up without touching the declaration.
 `**/node_modules/**` and every negated member glob are excluded.
+
+`builtin::node`, which guessed the package manager, was split into these resolvers; a declaration still using it fails the load.
 
 ### go
 

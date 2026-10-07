@@ -1,0 +1,6 @@
+# builtin::pnpm reads the member globs, each member's package.json and the
+# links in pnpm-lock.yaml; packages/icons has no BUILD file and is
+# synthesized as :_pnpm_package.
+dependency_resolvers:
+  - name: pnpm
+    command: builtin::pnpm

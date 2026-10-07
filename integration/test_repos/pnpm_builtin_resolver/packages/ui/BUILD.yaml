@@ -2,5 +2,5 @@ targets:
   # Workspace dependencies come from package.json, so none are listed here.
   - name: sources
     inputs: ["package.json", "src/**/*"]
-    command: echo checking web
-    dependency_resolvers: ["//:node"]
+    command: echo checking ui
+    dependency_resolvers: ["//:pnpm"]

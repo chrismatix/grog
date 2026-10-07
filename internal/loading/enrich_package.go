@@ -252,6 +252,9 @@ func enrichDependencyResolvers(
 		if resolver.Command == "" {
 			return nil, fmt.Errorf("dependency resolver %s must define a command (package file %s)", resolverLabel, pkg.SourceFilePath)
 		}
+		if resolver.Command == "builtin::node" {
+			return nil, fmt.Errorf("dependency resolver %s: builtin::node was split; use builtin::pnpm, builtin::npm or builtin::yarn (package file %s)", resolverLabel, pkg.SourceFilePath)
+		}
 		timeout := 60 * time.Second
 		if resolver.Timeout != "" {
 			timeout, enrichmentError = time.ParseDuration(resolver.Timeout)
@@ -265,8 +268,12 @@ func enrichDependencyResolvers(
 			switch resolver.Command {
 			case "builtin::cargo":
 				inputs, defaultExcludeInputs = cargoDefaultInputs(absolutePackagePath)
-			case "builtin::node":
-				inputs, defaultExcludeInputs = nodeDefaultInputs(absolutePackagePath)
+			case "builtin::npm", "builtin::yarn":
+				inputs, defaultExcludeInputs = npmPackageManager.defaultInputs(absolutePackagePath)
+			case "builtin::pnpm":
+				inputs, defaultExcludeInputs = pnpmPackageManager.defaultInputs(absolutePackagePath)
+			case "builtin::aube":
+				inputs, defaultExcludeInputs = aubePackageManager.defaultInputs(absolutePackagePath)
 			case "builtin::uv":
 				inputs, defaultExcludeInputs = uvDefaultInputs(absolutePackagePath)
 			}

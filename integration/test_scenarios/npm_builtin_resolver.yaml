@@ -1,0 +1,7 @@
+name: builtin npm resolver
+repo: npm_builtin_resolver
+cases:
+  - name: npm_builtin_deps
+    grog_args: [deps, "//packages/cli:sources"]
+  - name: npm_builtin_ignores_pnpm_lockfile
+    grog_args: [deps, "//packages/core:sources"]

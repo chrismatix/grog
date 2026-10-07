@@ -4,7 +4,7 @@ targets:
       - "app/**/*.tsx"
       - "package.json"
     command: npm run build
-    dependency_resolvers: ["//:node"]
+    dependency_resolvers: ["//:npm"]
     dependencies:
       - //:install
     outputs:
