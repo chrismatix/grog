@@ -11,14 +11,14 @@ import (
 // resource's complete behavior-affecting definition.
 func GetResourceIdentity(resource model.Resource) string {
 	hasher := GetHasher()
-	writeResourceIdentityValue(hasher, resource.Label.String())
-	writeResourceIdentityValue(hasher, resource.Up)
-	writeResourceIdentityValue(hasher, resource.Down)
-	writeResourceIdentityValue(hasher, resource.Ready)
-	writeResourceIdentityValue(hasher, resource.GetTimeout().String())
-	writeResourceIdentityValue(hasher, strconv.Itoa(len(resource.Dependencies)))
+	writeIdentityValue(hasher, resource.Label.String())
+	writeIdentityValue(hasher, resource.Up)
+	writeIdentityValue(hasher, resource.Down)
+	writeIdentityValue(hasher, resource.Ready)
+	writeIdentityValue(hasher, resource.GetTimeout().String())
+	writeIdentityValue(hasher, strconv.Itoa(len(resource.Dependencies)))
 	for _, dependency := range resource.Dependencies {
-		writeResourceIdentityValue(hasher, dependency.String())
+		writeIdentityValue(hasher, dependency.String())
 	}
 
 	exportKeys := make([]string, 0, len(resource.Exports))
@@ -26,10 +26,10 @@ func GetResourceIdentity(resource model.Resource) string {
 		exportKeys = append(exportKeys, key)
 	}
 	sort.Strings(exportKeys)
-	writeResourceIdentityValue(hasher, strconv.Itoa(len(exportKeys)))
+	writeIdentityValue(hasher, strconv.Itoa(len(exportKeys)))
 	for _, key := range exportKeys {
-		writeResourceIdentityValue(hasher, key)
-		writeResourceIdentityValue(hasher, resource.Exports[key])
+		writeIdentityValue(hasher, key)
+		writeIdentityValue(hasher, resource.Exports[key])
 	}
 
 	sum := hasher.SumString()
@@ -39,7 +39,7 @@ func GetResourceIdentity(resource model.Resource) string {
 	return sum
 }
 
-func writeResourceIdentityValue(hasher Hasher, value string) {
+func writeIdentityValue(hasher Hasher, value string) {
 	_, _ = hasher.WriteString(strconv.Itoa(len(value)))
 	_, _ = hasher.WriteString(":")
 	_, _ = hasher.WriteString(value)

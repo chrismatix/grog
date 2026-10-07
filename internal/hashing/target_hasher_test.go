@@ -48,3 +48,52 @@ func TestTargetHasherIgnoresResourceDependencies(t *testing.T) {
 		t.Fatalf("resource changed target hash: %s != %s", withoutResource.ChangeHash, withResource.ChangeHash)
 	}
 }
+
+func TestTargetHasherIncludesEnvironmentIdentity(t *testing.T) {
+	hashTarget := func(imageOutputHash string, configuration map[string]string) string {
+		t.Helper()
+		image := &model.Target{Label: label.TL("envs", "image"), OutputHash: imageOutputHash}
+		environment := &model.Environment{
+			Label:        label.TL("envs", "linux"),
+			Provider:     model.DockerProvider,
+			Config:       configuration,
+			Dependencies: []label.TargetLabel{image.Label},
+		}
+		target := &model.Target{
+			Label:       label.TL("app", "server"),
+			Command:     "make",
+			Environment: &environment.Label,
+		}
+
+		graph := dag.NewDirectedGraphFromTargets(image, environment, target)
+		if err := graph.AddEdge(image, environment); err != nil {
+			t.Fatalf("failed to add image edge: %v", err)
+		}
+		if err := graph.AddEdge(environment, target); err != nil {
+			t.Fatalf("failed to add environment edge: %v", err)
+		}
+
+		hasher := NewTargetHasher(graph)
+		if err := hasher.SetTargetChangeHash(target); err == nil {
+			t.Fatalf("expected an error while the environment has no identity hash")
+		}
+		if err := hasher.SetEnvironmentIdentityHash(environment); err != nil {
+			t.Fatalf("failed to hash environment: %v", err)
+		}
+		if err := hasher.SetTargetChangeHash(target); err != nil {
+			t.Fatalf("failed to hash target: %v", err)
+		}
+		return target.ChangeHash
+	}
+
+	baseline := hashTarget("image-v1", map[string]string{"image": "builder:1"})
+	if baseline != hashTarget("image-v1", map[string]string{"image": "builder:1"}) {
+		t.Fatalf("expected a stable change hash")
+	}
+	if baseline == hashTarget("image-v2", map[string]string{"image": "builder:1"}) {
+		t.Errorf("rebuilding the environment's image must change the target hash")
+	}
+	if baseline == hashTarget("image-v1", map[string]string{"image": "builder:2"}) {
+		t.Errorf("changing the environment config must change the target hash")
+	}
+}

@@ -1,0 +1,31 @@
+environments:
+  - name: local
+    provider: ./provider.sh
+    inputs: [provider.sh]
+    config:
+      greeting: hello-config
+
+targets:
+  - name: first
+    environment: ":local"
+    command: echo "$PROVIDER_GREETING $PROVIDER_SESSION $GROG_TARGET ${HOME:-no-host-env}" > first.out
+    outputs: [first.out]
+    output_checks:
+      - command: cat first.out
+        expected_output: hello-config session-from-up //sandboxed:first no-host-env
+
+  - name: second
+    environment: ":local"
+    dependencies: [":first"]
+    command: echo "after $(cat first.out)" > second.out
+    outputs: [second.out]
+    output_checks:
+      - command: cat second.out
+        expected_output: after hello-config session-from-up //sandboxed:first no-host-env
+
+  - name: on_host
+    command: echo "${HOME:+host}" > on_host.out
+    outputs: [on_host.out]
+    output_checks:
+      - command: cat on_host.out
+        expected_output: host
