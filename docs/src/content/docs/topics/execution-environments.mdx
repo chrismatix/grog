@@ -1,0 +1,267 @@
+---
+title: Execution Environments
+description: Run target commands in containers, VMs or on other machines through a small provider protocol.
+---
+
+import { Aside, TabItem, Tabs } from "@astrojs/starlight/components";
+
+By default, Grog runs a target's command on the host. An **environment** runs it somewhere else — a Docker container, a VM, a remote machine — through a **provider**: an executable that Grog calls with a handful of environment variables. Grog decides _what_ to run; the provider decides _where_ and _how_.
+
+- Grog ships `builtin::docker`. Any other backend is a script, in any language.
+- An environment starts **lazily**, at most once per invocation: a fully cached build never starts it.
+- It is **torn down automatically** when the build finishes, even when the build fails or is interrupted.
+- It is part of the **cache key**: changing the provider, its config or the image it depends on re-runs its targets.
+
+## Running targets in Docker
+
+<Tabs syncKey="build-file-format">
+  <TabItem label="YAML">
+
+```yaml
+environments:
+  - name: linux
+    provider: builtin::docker
+    dependencies: [":builder-image"]
+    config:
+      image: acme/builder:dev
+
+targets:
+  - name: builder-image
+    command: docker build -t acme/builder:dev .
+    inputs: [Dockerfile]
+    outputs: ["oci::acme/builder:dev"]
+
+  - name: app
+    command: go build -o dist/app ./cmd/app
+    inputs: ["**/*.go", go.mod, go.sum]
+    outputs: [dist/app]
+    environment: ":linux"
+```
+
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+environment(
+    name = "linux",
+    provider = "builtin::docker",
+    dependencies = [":builder-image"],
+    config = {"image": "acme/builder:dev"},
+)
+
+target(
+    name = "builder-image",
+    command = "docker build -t acme/builder:dev .",
+    inputs = ["Dockerfile"],
+    outputs = ["oci::acme/builder:dev"],
+)
+
+target(
+    name = "app",
+    command = "go build -o dist/app ./cmd/app",
+    inputs = ["**/*.go", "go.mod", "go.sum"],
+    outputs = ["dist/app"],
+    environment = ":linux",
+)
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+environments {
+  new {
+    name = "linux"
+    provider = "builtin::docker"
+    dependencies { ":builder-image" }
+    config {
+      ["image"] = "acme/builder:dev"
+    }
+  }
+}
+
+targets {
+  new {
+    name = "builder-image"
+    command = "docker build -t acme/builder:dev ."
+    inputs { "Dockerfile" }
+    outputs { "oci::acme/builder:dev" }
+  }
+  new {
+    name = "app"
+    command = "go build -o dist/app ./cmd/app"
+    inputs { "**/*.go"; "go.mod"; "go.sum" }
+    outputs { "dist/app" }
+    environment = ":linux"
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
+
+Setting `environment` on a target makes the environment an implicit dependency, so `:builder-image` is built before `:app` runs. `builtin::docker` then runs the command with `docker run --rm`:
+
+- The workspace is mounted **at the same path** inside the container, and the working directory is the target's package. Absolute paths such as `$GROG_WORKSPACE_ROOT` stay valid.
+- The command runs as **your user**, so outputs land in the workspace owned by you and are cached as usual.
+- The command sees the variables Grog sets for targets (`GROG_*`, `environment_variables`, resource exports) and the image's own `PATH` — not your host environment.
+
+`up` pulls `config.image` unless it already exists locally. Docker must be available on the host.
+
+## Fields Reference
+
+| Field          | Type                     | Description                                                                                        |
+| -------------- | ------------------------ | -------------------------------------------------------------------------------------------------- |
+| `name`         | `string`                 | Unique identifier for the environment within its package                                           |
+| `provider`     | `string`                 | `builtin::docker`, or a shell command implementing the [provider protocol](#writing-a-provider)    |
+| `config`       | `Record<string, string>` | Passed to the provider as JSON. `builtin::docker` requires `image`                                 |
+| `inputs`       | `string[]`               | Files the provider depends on, such as its script. Changing them re-runs the environment's targets |
+| `dependencies` | `label[]`                | Targets built before the environment starts, e.g. the image build. Only targets are allowed        |
+| `fingerprint`  | `Record<string, string>` | Extra identity values, as on [targets](/reference/target-configuration/#fingerprint)               |
+| `timeout`      | `string`                 | Bounds the `up` phase and, separately, `down`. Defaults to `5m`                                    |
+
+Targets opt in with [`environment`](/reference/target-configuration/#environment), a single label. Targets without it run on the host exactly as before.
+
+## Lifecycle
+
+1. The first **executing** (i.e. not cached) target in the environment triggers `up`. Concurrent targets wait for the same start.
+2. Every target command in the environment is one `exec` call. Targets run concurrently as usual.
+3. When the build finishes — successfully, with failures, or interrupted — `down` runs for every started environment in reverse start order.
+
+If `up` fails, every target in the environment fails; `down` still runs at the end of the build so partial starts are cleaned up.
+
+## Writing a provider
+
+A provider is a shell command, run in the environment's package directory, that handles three phases. Grog selects the phase with `GROG_ENV_PHASE` and passes data through files, so the provider's stdout and stderr stay free: during `exec` they become the target's log.
+
+| Phase  | When Grog calls it                                        | What the provider does                                                       |
+| ------ | --------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `up`   | At most once per invocation, before the first target runs | Prepare: pull the image, boot the VM, open the connection. Return once ready |
+| `exec` | Once per target command, possibly concurrently            | Run the action in `$GROG_ACTION_FILE` and exit with the command's exit code  |
+| `down` | Once at the end of the build if `up` ran                  | Tear down. Must be idempotent                                                |
+
+A provider with nothing to prepare or tear down simply exits `0` for `up` and `down`. Exit non-zero for phases you don't recognize, so that later protocol versions can add phases safely.
+
+This provider runs targets with rootless Podman:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+image=$(jq -r .image "$GROG_ENV_CONFIG_FILE")
+
+case "$GROG_ENV_PHASE" in
+  up)
+    podman image exists "$image" || podman pull "$image"
+    ;;
+  exec)
+    root=$(jq -r .input_root "$GROG_ACTION_FILE")
+    workdir=$(jq -r .working_directory "$GROG_ACTION_FILE")
+    mapfile -d '' -t argv < <(jq -j '.argv[] | (., "\u0000")' "$GROG_ACTION_FILE")
+    env_args=()
+    while IFS= read -r -d '' entry; do env_args+=(--env "$entry"); done \
+      < <(jq -j '.environment_variables | to_entries[] | ("\(.key)=\(.value)", "\u0000")' "$GROG_ACTION_FILE")
+    exec podman run --rm --init --userns=keep-id \
+      --label "grog.invocation=$GROG_INVOCATION_ID" \
+      --volume "$root:$root" --workdir "$root/$workdir" \
+      "${env_args[@]}" "$image" "${argv[@]}"
+    ;;
+  down)
+    podman rm --force --filter "label=grog.invocation=$GROG_INVOCATION_ID"
+    ;;
+  *)
+    exit 2
+    ;;
+esac
+```
+
+```yaml
+environments:
+  - name: podman
+    provider: ./podman.sh
+    inputs: [podman.sh]
+    config:
+      image: docker.io/library/golang:1.26
+```
+
+`argv` and the variables are read NUL-separated because target commands are often multi-line. Listing the script in `inputs` re-runs the environment's targets when it changes.
+
+### Environment variables
+
+Grog runs the provider with the host environment plus:
+
+| Variable Name                             | Phases | Description                                                                                                                   |
+| ----------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `GROG_ENV_PHASE`                          | all    | `up`, `exec` or `down`                                                                                                        |
+| `GROG_ENV_PROTOCOL`                       | all    | The protocol version, currently `1`. Reject versions you don't know                                                           |
+| `GROG_ENV`                                | all    | The full label of the environment, e.g. `//envs:linux`                                                                        |
+| `GROG_ENV_ID`                             | all    | A short identifier derived from the environment's [identity](#caching-semantics). Use it to name long-lived containers or VMs |
+| `GROG_INVOCATION_ID`                      | all    | Unique per Grog run. Tag what you create with it so that `down` can find leftovers                                            |
+| `GROG_ENV_CONFIG_FILE`                    | all    | JSON object holding the environment's `config`                                                                                |
+| `GROG_ENV_STATE_FILE`                     | `up`   | File to append `KEY=VALUE` lines to. Grog sets them as variables for every later `exec` and `down`                            |
+| `GROG_ACTION_FILE`                        | `exec` | The [action](#the-action-file) to run                                                                                         |
+| `GROG_PACKAGE`                            | all    | The path to the environment's package directory                                                                               |
+| `GROG_WORKSPACE_ROOT`                     | all    | The workspace root directory                                                                                                  |
+| `GROG_OS` / `GROG_ARCH` / `GROG_PLATFORM` | all    | Grog's target operating system, architecture, and platform                                                                    |
+
+The state file is how `up` hands values to later phases, such as the id of a VM it booted or the address of a remote builder.
+
+### The action file
+
+`exec` receives everything about one target command in a single JSON document:
+
+```json
+{
+  "target": "//services/api:app",
+  "argv": ["sh", "-c", "...\ngo build -o dist/app ./cmd/app", "sh"],
+  "working_directory": "services/api",
+  "environment_variables": {
+    "GROG_TARGET": "//services/api:app",
+    "GROG_PACKAGE": "services/api",
+    "GROG_WORKSPACE_ROOT": "/home/me/repo"
+  },
+  "input_root": "/home/me/repo",
+  "output_paths": ["services/api/dist/app"]
+}
+```
+
+| Field                   | Description                                                                                                                                           |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `target`                | The label of the target                                                                                                                               |
+| `argv`                  | `sh -c` with the target's command, prefixed by the [script functions](/topics/script-functions). Arguments passed with `grog test -- ...` follow `sh` |
+| `working_directory`     | Relative to `input_root`: the target's package, or `.` for the root package                                                                           |
+| `environment_variables` | The command's complete environment. The host environment is not included; add your own variables, such as `PATH`, if the sandbox has none             |
+| `input_root`            | The workspace root. The provider must make it available to the command, ideally at the same path                                                      |
+| `output_paths`          | The target's file and directory outputs, relative to `input_root`. A provider running the command on another machine copies them back before exiting  |
+
+### Exit codes
+
+The exit code of `exec` is the exit code of the command, and Grog reports a non-zero one as the target failing.
+The one exception is `125` — the convention `docker run` and `podman run` already follow — which means the provider itself failed. Grog then reports the environment as failed instead of blaming the target's command.
+
+`up` and `down` succeed with `0`. A failing `down` is logged as a warning and does not fail the build.
+
+### Cancellation
+
+When a target times out or the build is interrupted, Grog sends `SIGTERM` to the provider's **process group** and kills it if it is still running 10 seconds later. A provider that started remote work must stop it on `SIGTERM`. `down` still runs afterwards.
+
+## Caching semantics
+
+A target in an environment adds the environment's identity to its change hash. The identity covers:
+
+- The environment's label, `provider`, `config` and `fingerprint`.
+- The contents of its `inputs`.
+- The output hashes of its `dependencies`: rebuilding `:builder-image` produces a new image id and re-runs every target in the environment.
+
+Values only known at runtime, like `GROG_INVOCATION_ID` or what `up` writes to the state file, are not part of it: restarting a VM does not invalidate anything.
+
+<Aside type="caution">
+  An image referenced only by a mutable tag, like `config: {image: ubuntu:latest}` with no
+  dependency, is hashed by its tag string. Pulling a newer `ubuntu:latest` does not re-run
+  anything. Pin a digest (`ubuntu@sha256:...`) or build the image as a dependency.
+</Aside>
+
+## Limitations
+
+- The provider exposes the whole workspace, so a command can still read files it did not declare as `inputs`. Environments isolate toolchains, not inputs.
+- [Output checks](/topics/binary-outputs/#output-checks) and `grog run` run on the host.
+- Environments depend on targets only, not on resources or other environments.

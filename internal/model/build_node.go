@@ -6,13 +6,14 @@ import "grog/internal/label"
 type NodeType string
 
 const (
-	TargetNode   NodeType = "target"
-	AliasNode    NodeType = "alias"
-	ResourceNode NodeType = "resource"
+	TargetNode      NodeType = "target"
+	AliasNode       NodeType = "alias"
+	ResourceNode    NodeType = "resource"
+	EnvironmentNode NodeType = "environment"
 )
 
 // BuildNode represents a node in the build graph. It is implemented by
-// regular build targets and environment targets.
+// targets, aliases, resources and environments.
 type BuildNode interface {
 	GetLabel() label.TargetLabel
 	GetDependencies() []label.TargetLabel

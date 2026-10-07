@@ -528,3 +528,50 @@ target(name = "test", command = "echo " + str(d))
 		})
 	}
 }
+
+func TestStarlarkLoader_Environment(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWorkspaceRoot := config.Global.WorkspaceRoot
+	config.Global.WorkspaceRoot = tmpDir
+	defer func() { config.Global.WorkspaceRoot = oldWorkspaceRoot }()
+
+	build := filepath.Join(tmpDir, "BUILD.star")
+	if err := os.WriteFile(build, []byte(`environment(
+    name = "linux",
+    provider = "builtin::docker",
+    config = {"image": "builder:1"},
+    inputs = ["Dockerfile"],
+    fingerprint = {"kernel": "6.12"},
+    timeout = "2m",
+    dependencies = [":image"],
+)
+
+target(
+    name = "app",
+    command = "make",
+    environment = ":linux",
+)
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	pkg, _, err := (StarlarkLoader{}).Load(context.Background(), build)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	expectedEnvironments := []*EnvironmentDTO{{
+		Name:         "linux",
+		Provider:     "builtin::docker",
+		Config:       map[string]string{"image": "builder:1"},
+		Inputs:       []string{"Dockerfile"},
+		Fingerprint:  map[string]string{"kernel": "6.12"},
+		Timeout:      "2m",
+		Dependencies: []string{":image"},
+	}}
+	if !reflect.DeepEqual(pkg.Environments, expectedEnvironments) {
+		t.Errorf("unexpected environments: %+v", pkg.Environments[0])
+	}
+	if len(pkg.Targets) != 1 || pkg.Targets[0].Environment != ":linux" {
+		t.Errorf("target environment not parsed: %+v", pkg.Targets)
+	}
+}

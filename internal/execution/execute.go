@@ -35,24 +35,25 @@ func (e *CommandError) Error() string {
 }
 
 type Executor struct {
-	targetCache      *caching.TargetResultCache
-	taintStore       *caching.TaintStore
-	registry         *output.Registry
-	pusher           *push.Pusher
-	graph            *dag.DirectedTargetGraph
-	failFast         bool
-	enableCache      bool
-	loadOutputsMode  config.LoadOutputsMode
-	targetHasher     *hashing.TargetHasher
-	streamLogsToggle *console.StreamLogsToggle
-	coordinator      *PoolCoordinator
-	scheduler        *Scheduler
-	cacheWriter      *CacheWriter
-	asyncWaitTime    time.Duration
-	deferAsyncWait   bool
-	asyncDrained     bool
-	rerunGroup       singleflight.Group
-	resourceManager  *ResourceManager
+	targetCache        *caching.TargetResultCache
+	taintStore         *caching.TaintStore
+	registry           *output.Registry
+	pusher             *push.Pusher
+	graph              *dag.DirectedTargetGraph
+	failFast           bool
+	enableCache        bool
+	loadOutputsMode    config.LoadOutputsMode
+	targetHasher       *hashing.TargetHasher
+	streamLogsToggle   *console.StreamLogsToggle
+	coordinator        *PoolCoordinator
+	scheduler          *Scheduler
+	cacheWriter        *CacheWriter
+	asyncWaitTime      time.Duration
+	deferAsyncWait     bool
+	asyncDrained       bool
+	rerunGroup         singleflight.Group
+	resourceManager    *ResourceManager
+	environmentManager *EnvironmentManager
 }
 
 func NewExecutor(
@@ -67,17 +68,18 @@ func NewExecutor(
 	loadOutputsMode config.LoadOutputsMode,
 ) *Executor {
 	return &Executor{
-		targetCache:      targetCache,
-		taintStore:       taintStore,
-		registry:         registry,
-		pusher:           pusher,
-		graph:            graph,
-		failFast:         failFast,
-		enableCache:      enableCache,
-		loadOutputsMode:  loadOutputsMode,
-		targetHasher:     hashing.NewTargetHasher(graph),
-		streamLogsToggle: console.NewStreamLogsToggle(streamLogs),
-		resourceManager:  NewResourceManager(),
+		targetCache:        targetCache,
+		taintStore:         taintStore,
+		registry:           registry,
+		pusher:             pusher,
+		graph:              graph,
+		failFast:           failFast,
+		enableCache:        enableCache,
+		loadOutputsMode:    loadOutputsMode,
+		targetHasher:       hashing.NewTargetHasher(graph),
+		streamLogsToggle:   console.NewStreamLogsToggle(streamLogs),
+		resourceManager:    NewResourceManager(),
+		environmentManager: NewEnvironmentManager(),
 	}
 }
 
@@ -139,11 +141,14 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 
 	// walkCallback will be called at max parallelism by the graph walker
 	walkCallback := func(ctx context.Context, node model.BuildNode) (dag.CacheResult, error) {
+		if environment, ok := node.(*model.Environment); ok {
+			return dag.CacheHit, e.targetHasher.SetEnvironmentIdentityHash(environment)
+		}
 		target, ok := node.(*model.Target)
 		if !ok {
-			// Aliases complete trivially; resources start lazily when the
-			// first dependent target executes (see ResourceManager), so fully
-			// cached builds never pay for a resource start.
+			// Aliases complete trivially; resources and environments start
+			// lazily when the first dependent target executes, so fully
+			// cached builds never pay for a start.
 			return dag.CacheHit, nil
 		}
 
@@ -178,8 +183,9 @@ func (e *Executor) Execute(ctx context.Context) (dag.CompletionMap, error) {
 	// otherwise they were streamed as targets completed).
 	resultLogger.Flush(stdLogger)
 
-	// Tear down started resources even when the build was interrupted, hence
-	// the non-cancellable context.
+	// Tear down started environments and resources even when the build was
+	// interrupted, hence the non-cancellable context.
+	e.environmentManager.TeardownAll(context.WithoutCancel(ctx))
 	e.resourceManager.TeardownAll(context.WithoutCancel(ctx))
 
 	// Drain the I/O pool before returning, but only if the build was not
@@ -259,6 +265,16 @@ func (e *Executor) getBinToolPaths(target *model.Target) (BinToolMap, error) {
 		}
 	}
 	return binTools, nil
+}
+
+// getTargetEnvironment returns the environment the target's command runs in,
+// or nil when it runs on the host.
+func (e *Executor) getTargetEnvironment(target *model.Target) *model.Environment {
+	if target.Environment == nil {
+		return nil
+	}
+	environment, _ := e.graph.GetNodes()[*target.Environment].(*model.Environment)
+	return environment
 }
 
 // getDependencyOutputIdentifiers builds the output map available to the shell
@@ -539,13 +555,18 @@ func (e *Executor) executeTarget(
 	startTime := time.Now()
 	var err error
 	var resourceEnvironment []string
+	var environment *environmentStart
 	if target.Command != "" {
 		resourceEnvironment, err = e.resourceManager.EnsureResourcesStarted(ctx, e.graph, target, update)
+		if targetEnvironment := e.getTargetEnvironment(target); err == nil && targetEnvironment != nil {
+			update(worker.Status(fmt.Sprintf("%s: waiting for environment %s", target.Label, targetEnvironment.Label)))
+			environment, err = e.environmentManager.EnsureStarted(ctx, targetEnvironment)
+		}
 		if err == nil {
 			update(worker.Status(fmt.Sprintf("%s: running \"%s\"", target.Label, target.CommandEllipsis())))
 			logger.Debugf("running target %s: %s", target.Label, target.CommandEllipsis())
 			ociImagesBefore := e.registry.SnapshotOciImages(ctx, target)
-			err = executeTarget(ctx, target, binToolPaths, outputIdentifiers, transitiveOutputs, taggedOutputs, resourceEnvironment, e.streamLogsToggle.Enabled())
+			err = executeTarget(ctx, target, binToolPaths, outputIdentifiers, transitiveOutputs, taggedOutputs, resourceEnvironment, environment, e.streamLogsToggle.Enabled())
 			if err == nil {
 				e.registry.WarnOnUnproducedOciImages(ctx, target, ociImagesBefore)
 			}
@@ -690,7 +711,12 @@ func (e *Executor) LoadDependencyOutputs(
 		"loading dependency outputs for target %s.",
 		target.Label,
 	)
-	for _, dep := range e.graph.GetTargetDependencies(target) {
+	dependencies := e.graph.GetTargetDependencies(target)
+	if environment := e.getTargetEnvironment(target); environment != nil {
+		// The provider needs what the environment depends on, e.g. its image.
+		dependencies = append(dependencies, e.graph.GetTargetDependencies(environment)...)
+	}
+	for _, dep := range dependencies {
 		localDep := dep
 		if localDep.OutputsLoaded {
 			continue

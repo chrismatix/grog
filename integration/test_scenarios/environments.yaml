@@ -1,0 +1,29 @@
+name: execution environments
+repo: environments
+cases:
+  # Both targets share the environment: up runs once, its state and config
+  # reach exec, the command sees only the action's variables, and down runs
+  # at the end. The host target runs as before.
+  - name: build_runs_targets_in_environment
+    grog_args:
+      - build
+      - //sandboxed/...
+
+  # A fully cached build never starts the environment.
+  - name: cached_build_skips_environment
+    grog_args:
+      - build
+      - //sandboxed/...
+
+  # Exit code 125 from exec reports a provider failure, not a command failure.
+  - name: provider_failure_is_reported
+    expect_fail: true
+    grog_args:
+      - build
+      - //failing/...
+
+  - name: graph_shows_environment
+    grog_args:
+      - graph
+      - -t
+      - //sandboxed:second

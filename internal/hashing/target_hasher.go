@@ -40,22 +40,9 @@ func (t *TargetHasher) SetTargetChangeHash(target *model.Target) error {
 		return nil
 	}
 
-	// Collect the OutputHash values of all dependencies
-	dependencies := t.graph.GetDependencies(target)
-	dependencyHashes := make([]string, 0, len(dependencies))
-	for _, dependency := range dependencies {
-		targetDependency, ok := dependency.(*model.Target)
-		if !ok {
-			// Only consider dependencies that are targets
-			continue
-		}
-
-		outputHash := targetDependency.OutputHash
-		if outputHash == "" {
-			return fmt.Errorf("dependency %s of %s has no output hash", targetDependency.Label, target.Label)
-		}
-
-		dependencyHashes = append(dependencyHashes, targetDependency.OutputHash)
+	dependencyHashes, err := t.dependencyHashes(target)
+	if err != nil {
+		return err
 	}
 
 	changeHash, err := GetTargetChangeHash(*target, dependencyHashes, t.extraArgs)
@@ -64,4 +51,44 @@ func (t *TargetHasher) SetTargetChangeHash(target *model.Target) error {
 	}
 	target.ChangeHash = changeHash
 	return nil
+}
+
+// SetEnvironmentIdentityHash computes and sets the identity hash of an
+// environment once all of its dependencies have completed.
+func (t *TargetHasher) SetEnvironmentIdentityHash(environment *model.Environment) error {
+	dependencyHashes, err := t.dependencyHashes(environment)
+	if err != nil {
+		return err
+	}
+
+	identityHash, err := GetEnvironmentIdentity(*environment, dependencyHashes)
+	if err != nil {
+		return err
+	}
+	environment.IdentityHash = identityHash
+	return nil
+}
+
+// dependencyHashes returns the output hashes of the node's target
+// dependencies and the identity hash of its environment.
+func (t *TargetHasher) dependencyHashes(node model.BuildNode) ([]string, error) {
+	dependencies := t.graph.GetDependencies(node)
+	dependencyHashes := make([]string, 0, len(dependencies))
+	for _, dependency := range dependencies {
+		var dependencyHash string
+		switch typedDependency := dependency.(type) {
+		case *model.Target:
+			dependencyHash = typedDependency.OutputHash
+		case *model.Environment:
+			dependencyHash = typedDependency.IdentityHash
+		default:
+			continue
+		}
+
+		if dependencyHash == "" {
+			return nil, fmt.Errorf("dependency %s of %s has no output hash", dependency.GetLabel(), node.GetLabel())
+		}
+		dependencyHashes = append(dependencyHashes, dependencyHash)
+	}
+	return dependencyHashes, nil
 }

@@ -1,0 +1,8 @@
+INFO: 2 packages loaded, 4 targets configured.
+INFO: Selected 3 targets.
+INFO: Environment //sandboxed:local started.
+INFO: //sandboxed:first   DONE
+INFO: //sandboxed:on_host DONE
+INFO: //sandboxed:second  DONE
+INFO: Environment //sandboxed:local stopped.
+INFO: Build completed successfully. 3 targets completed (0 cache hits).

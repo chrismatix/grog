@@ -1,0 +1,26 @@
+amends ".../pkl/package.pkl"
+
+environments {
+  new {
+    name = "full"
+    provider =
+      """
+      if [ "$GROG_ENV_PHASE" = exec ]; then
+        echo "no capacity left" >&2
+        exit 125
+      fi
+      """
+  }
+}
+
+targets {
+  new {
+    name = "rejected"
+    environment = ":full"
+    command = "echo never > rejected.out"
+    outputs { "rejected.out" }
+    fingerprint {
+      ["reason"] = "provider-failure"
+    }
+  }
+}

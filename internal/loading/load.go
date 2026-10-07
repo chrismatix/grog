@@ -138,6 +138,9 @@ func mergePackages(from *model.Package, into *model.Package) error {
 	if into.Resources == nil {
 		into.Resources = make(map[label.TargetLabel]*model.Resource)
 	}
+	if into.Environments == nil {
+		into.Environments = make(map[label.TargetLabel]*model.Environment)
+	}
 
 	if into.DependencyResolvers == nil {
 		into.DependencyResolvers = make(map[label.TargetLabel]*model.DependencyResolver)
@@ -170,6 +173,13 @@ func mergePackages(from *model.Package, into *model.Package) error {
 		into.Resources[resourceLabel] = resource
 	}
 
+	for environmentLabel, environment := range from.Environments {
+		if kind, sourceFilePath, exists := existingDefinition(into, environmentLabel); exists {
+			return fmt.Errorf("duplicate environment label: %s (defined in %s and as %s in %s)", environmentLabel, environment.SourceFilePath, kind, sourceFilePath)
+		}
+		into.Environments[environmentLabel] = environment
+	}
+
 	return nil
 }
 
@@ -183,6 +193,9 @@ func existingDefinition(pkg *model.Package, targetLabel label.TargetLabel) (kind
 	}
 	if resource, exists := pkg.Resources[targetLabel]; exists {
 		return "resource", resource.SourceFilePath, true
+	}
+	if environment, exists := pkg.Environments[targetLabel]; exists {
+		return "environment", environment.SourceFilePath, true
 	}
 	if resolver, exists := pkg.DependencyResolvers[targetLabel]; exists {
 		return "dependency resolver", resolver.SourceFilePath, true

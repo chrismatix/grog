@@ -1,6 +1,0 @@
-module environment
-
-name: String
-type: String
-dependencies: Listing<String>(isDistinct)
-oci_image: String
