@@ -254,7 +254,7 @@ dependency_resolvers {
 
 | Field                   | Type       | Description                                                                                              |
 | ----------------------- | ---------- | -------------------------------------------------------------------------------------------------------- |
-| `name`                  | `string`   | Unique within the package, shared namespace with targets, aliases and resources.                         |
+| `name`                  | `string`   | Unique within the package, shared namespace with targets, aliases, resources and environments.           |
 | `command`               | `string`   | Shell command that prints the [mapping](#the-resolver-protocol) to stdout, or `builtin::<name>`.         |
 | `inputs`                | `string[]` | Globs relative to the declaring package that form the [cache key](#caching). Defaults to the built-in's. |
 | `exclude_inputs`        | `string[]` | Globs dropped from `inputs` before hashing. A pattern ending in `/**` skips the whole directory.         |

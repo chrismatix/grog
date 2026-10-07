@@ -44,6 +44,10 @@ type Target struct {
 	// means fully serialized). Group capacities are configured in grog.toml.
 	ConcurrencyGroup string `json:"concurrency_group,omitempty"`
 
+	// Environment is the label of the environment the command runs in, or nil
+	// to run it on the host. It is an implicit dependency.
+	Environment *label.TargetLabel `json:"environment,omitempty"`
+
 	// UnresolvedInputs are the inputs as specified by the user (no glob resolving)
 	UnresolvedInputs []string `json:"-"`
 	// BinOutput is always a path to a binary file
@@ -190,7 +194,10 @@ func (t *Target) GetLabel() label.TargetLabel {
 }
 
 func (t *Target) GetDependencies() []label.TargetLabel {
-	return t.Dependencies
+	if t.Environment == nil {
+		return t.Dependencies
+	}
+	return append(slices.Clone(t.Dependencies), *t.Environment)
 }
 
 func (t *Target) Select() {

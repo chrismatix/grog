@@ -15,7 +15,7 @@ func runOutputChecks(
 	resourceEnvironment []string,
 ) error {
 	for _, check := range target.OutputChecks {
-		output, err := runTargetCommand(ctx, target, binToolPaths, outputIdentifiers, nil, nil, resourceEnvironment, check.Command, false)
+		output, err := runTargetCommand(ctx, target, binToolPaths, outputIdentifiers, nil, nil, resourceEnvironment, nil, check.Command, false)
 		if err != nil {
 			return fmt.Errorf("output check failed for target %s: %w\ncommand %s",
 				target.Label, err, check.Command)

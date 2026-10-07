@@ -193,6 +193,7 @@ func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *st
 	var timeout string
 	var concurrencyGroup string
 	var ociPush *starlark.Dict
+	var environment string
 
 	// Parse keyword arguments
 	if err := starlark.UnpackArgs("target", args, kwargs,
@@ -213,6 +214,7 @@ func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *st
 		"timeout?", &timeout,
 		"concurrency_group?", &concurrencyGroup,
 		"oci_push?", &ociPush,
+		"environment?", &environment,
 	); err != nil {
 		return nil, err
 	}
@@ -224,6 +226,7 @@ func (c *starlarkPackageCollector) targetBuiltin(thread *starlark.Thread, fn *st
 		BinaryRequiresPush: binaryRequiresPush,
 		Timeout:            timeout,
 		ConcurrencyGroup:   concurrencyGroup,
+		Environment:        environment,
 	}
 
 	stringListArguments := []struct {
@@ -360,35 +363,64 @@ func (c *starlarkPackageCollector) resourceBuiltin(thread *starlark.Thread, fn *
 // environmentBuiltin implements the environment() function in Starlark.
 func (c *starlarkPackageCollector) environmentBuiltin(thread *starlark.Thread, fn *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var name string
-	var envType string
+	var provider string
+	var configuration *starlark.Dict
+	var inputs *starlark.List
+	var fingerprint *starlark.Dict
+	var timeout string
 	var dependencies *starlark.List
-	var ociImage string
 
 	if err := starlark.UnpackArgs("environment", args, kwargs,
 		"name", &name,
-		"type", &envType,
+		"provider", &provider,
+		"config?", &configuration,
+		"inputs?", &inputs,
+		"fingerprint?", &fingerprint,
+		"timeout?", &timeout,
 		"dependencies?", &dependencies,
-		"oci_image?", &ociImage,
 	); err != nil {
 		return nil, err
 	}
 
-	env := &EnvironmentDTO{
+	environment := &EnvironmentDTO{
 		Name:     name,
-		Type:     envType,
-		OCIImage: ociImage,
+		Provider: provider,
+		Timeout:  timeout,
 	}
 
-	// Convert dependencies
+	if configuration != nil {
+		configurationMap, err := starlarkDictToStringMap(configuration)
+		if err != nil {
+			return nil, fmt.Errorf("config: %w", err)
+		}
+		environment.Config = configurationMap
+	}
+
+	if fingerprint != nil {
+		fingerprintMap, err := starlarkDictToStringMap(fingerprint)
+		if err != nil {
+			return nil, fmt.Errorf("fingerprint: %w", err)
+		}
+		environment.Fingerprint = fingerprintMap
+	}
+
+	if inputs != nil {
+		inputPatterns, err := starlarkListToStringSlice(inputs)
+		if err != nil {
+			return nil, fmt.Errorf("inputs: %w", err)
+		}
+		environment.Inputs = inputPatterns
+	}
+
 	if dependencies != nil {
 		deps, err := starlarkListToStringSlice(dependencies)
 		if err != nil {
 			return nil, fmt.Errorf("dependencies: %w", err)
 		}
-		env.Dependencies = deps
+		environment.Dependencies = deps
 	}
 
-	c.environments = append(c.environments, env)
+	c.environments = append(c.environments, environment)
 	return starlark.None, nil
 }
 

@@ -317,3 +317,25 @@ func TestMergePackagesRejectsResourceTargetCollisionsInBothOrders(t *testing.T) 
 		})
 	}
 }
+
+func TestMergePackagesEnvironments(t *testing.T) {
+	environmentLabel := label.TL("pkg", "linux")
+	fromPackage := &model.Package{Environments: map[label.TargetLabel]*model.Environment{
+		environmentLabel: {Label: environmentLabel, SourceFilePath: "BUILD.yaml"},
+	}}
+	intoPackage := &model.Package{}
+	if err := mergePackages(fromPackage, intoPackage); err != nil {
+		t.Fatalf("failed to merge packages: %v", err)
+	}
+	if intoPackage.Environments[environmentLabel] == nil {
+		t.Fatal("environment was not merged")
+	}
+
+	collidingPackage := &model.Package{Targets: map[label.TargetLabel]*model.Target{
+		environmentLabel: {Label: environmentLabel, SourceFilePath: "BUILD.star"},
+	}}
+	err := mergePackages(collidingPackage, intoPackage)
+	if err == nil || !strings.Contains(err.Error(), "as environment in BUILD.yaml") {
+		t.Fatalf("expected a duplicate label error naming the environment, got %v", err)
+	}
+}

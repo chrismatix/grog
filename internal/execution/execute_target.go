@@ -72,6 +72,7 @@ func executeTarget(
 	transitiveOutputs []string,
 	taggedOutputs TransitiveTaggedOutputs,
 	resourceEnvironment []string,
+	environment *environmentStart,
 	streamLogs bool,
 ) error {
 	if target.Timeout > 0 {
@@ -80,7 +81,7 @@ func executeTarget(
 		defer cancel()
 	}
 
-	cmdOut, err := runTargetCommand(ctx, target, binToolPaths, outputIdentifiers, transitiveOutputs, taggedOutputs, resourceEnvironment, target.Command, streamLogs)
+	cmdOut, err := runTargetCommand(ctx, target, binToolPaths, outputIdentifiers, transitiveOutputs, taggedOutputs, resourceEnvironment, environment, target.Command, streamLogs)
 
 	if err != nil {
 		if ctx.Err() != nil {
@@ -92,6 +93,10 @@ func executeTarget(
 		}
 
 		if exitError, isExitError := errors.AsType[*exec.ExitError](err); isExitError {
+			if environment != nil && exitError.ExitCode() == environmentFailureExitCode {
+				return fmt.Errorf("environment %s failed (exit code %d): %s",
+					environment.environment.Label, environmentFailureExitCode, strings.TrimSpace(string(cmdOut)))
+			}
 			return &CommandError{
 				TargetLabel: target.Label,
 				ExitCode:    exitError.ExitCode(),
@@ -103,7 +108,8 @@ func executeTarget(
 	return nil
 }
 
-// runTargetCommand runs a single shell command in the context of a target.
+// runTargetCommand runs a single shell command in the context of a target,
+// on the host or, when environment is set, through its provider.
 func runTargetCommand(
 	ctx context.Context,
 	target *model.Target,
@@ -112,24 +118,32 @@ func runTargetCommand(
 	transitiveOutputs []string,
 	taggedOutputs TransitiveTaggedOutputs,
 	resourceEnvironment []string,
+	environment *environmentStart,
 	command string,
 	streamLogs bool,
 ) ([]byte, error) {
-	executionPath := config.GetPathAbsoluteToWorkspaceRoot(target.Label.Package)
 	templatedCommand, err := getCommand(binToolPaths, outputIdentifiers, transitiveOutputs, taggedOutputs, command)
 	if err != nil {
 		return nil, err
 	}
 
-	shellCommand, cleanup, err := shell.NewCommand(ctx, templatedCommand, ExtraArgsFromContext(ctx)...)
+	var shellCommand *exec.Cmd
+	var cleanup func()
+	if environment != nil {
+		argv := append([]string{"sh", "-c", templatedCommand, "sh"}, ExtraArgsFromContext(ctx)...)
+		commandEnvironment := append(targetEnvironmentVariables(ctx, target), resourceEnvironment...)
+		shellCommand, cleanup, err = environment.execCommand(ctx, target, argv, commandEnvironment)
+	} else {
+		shellCommand, cleanup, err = shell.NewCommand(ctx, templatedCommand, ExtraArgsFromContext(ctx)...)
+		if err == nil {
+			shellCommand.Env = append(GetExtendedTargetEnv(ctx, target), resourceEnvironment...)
+			shellCommand.Dir = config.GetPathAbsoluteToWorkspaceRoot(target.Label.Package)
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
 	defer cleanup()
-
-	// Attach env variables to the existing environment
-	shellCommand.Env = append(GetExtendedTargetEnv(ctx, target), resourceEnvironment...)
-	shellCommand.Dir = executionPath
 
 	targetLogs := logs.NewTargetLogFile(*target)
 	logWriter, err := targetLogs.Open()
@@ -173,12 +187,18 @@ func runTargetCommand(
 }
 
 func GetExtendedTargetEnv(ctx context.Context, target *model.Target) []string {
+	return append(os.Environ(), targetEnvironmentVariables(ctx, target)...)
+}
+
+// targetEnvironmentVariables returns the variables grog sets for a target's
+// command on top of the host environment.
+func targetEnvironmentVariables(ctx context.Context, target *model.Target) []string {
 	gitHash, err := config.GetGitHash()
 	if err != nil {
 		console.GetLogger(ctx).Debugf("failed to get git hash: %v", err)
 	}
 
-	env := append([]string{}, os.Environ()...)
+	var env []string
 	for k, v := range config.Global.EnvironmentVariables {
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}

@@ -214,10 +214,11 @@ func synthesizeFilegroup(loadContext context.Context, resolver *model.Dependency
 	owningPackage, exists := packagesByPath[packagePath]
 	if !exists {
 		createdPackage = &model.Package{
-			Path:      packagePath,
-			Targets:   make(map[label.TargetLabel]*model.Target),
-			Aliases:   make(map[label.TargetLabel]*model.Alias),
-			Resources: make(map[label.TargetLabel]*model.Resource),
+			Path:         packagePath,
+			Targets:      make(map[label.TargetLabel]*model.Target),
+			Aliases:      make(map[label.TargetLabel]*model.Alias),
+			Resources:    make(map[label.TargetLabel]*model.Resource),
+			Environments: make(map[label.TargetLabel]*model.Environment),
 		}
 		packagesByPath[packagePath] = createdPackage
 		owningPackage = createdPackage
@@ -230,6 +231,9 @@ func synthesizeFilegroup(loadContext context.Context, resolver *model.Dependency
 	}
 	if existing := owningPackage.Resources[targetLabel]; existing != nil {
 		return nil, nil, fmt.Errorf("resolver %s cannot synthesize %s: a resource with that name is defined in %s", resolver.Label, targetLabel, existing.SourceFilePath)
+	}
+	if existing := owningPackage.Environments[targetLabel]; existing != nil {
+		return nil, nil, fmt.Errorf("resolver %s cannot synthesize %s: an environment with that name is defined in %s", resolver.Label, targetLabel, existing.SourceFilePath)
 	}
 	resolvedInputs, operationError := resolveInputs(console.GetLogger(loadContext), config.GetPathAbsoluteToWorkspaceRoot(packagePath), reportedPackage.Inputs, reportedPackage.ExcludeInputs)
 	if operationError != nil {

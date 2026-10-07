@@ -412,6 +412,73 @@ func TestCheckTargetConstraintsDependencyRules(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "target can run in an environment that depends on a target",
+			targetMap: model.BuildNodeMap{
+				label.TL("app", "server"): &model.Target{
+					Label:       label.TL("app", "server"),
+					Command:     "make",
+					Environment: new(label.TL("envs", "linux")),
+				},
+				label.TL("envs", "linux"): &model.Environment{
+					Label:        label.TL("envs", "linux"),
+					Provider:     model.DockerProvider,
+					Dependencies: []label.TargetLabel{label.TL("envs", "image")},
+				},
+				label.TL("envs", "image"): &model.Target{
+					Label:   label.TL("envs", "image"),
+					Command: "docker build .",
+					Inputs:  []string{"Dockerfile"},
+				},
+			},
+		},
+		{
+			name: "target environment must be an environment",
+			targetMap: model.BuildNodeMap{
+				label.TL("app", "server"): &model.Target{
+					Label:       label.TL("app", "server"),
+					Command:     "make",
+					Inputs:      []string{"Makefile"},
+					Environment: new(label.TL("envs", "image")),
+				},
+				label.TL("envs", "image"): &model.Target{
+					Label:   label.TL("envs", "image"),
+					Command: "docker build .",
+					Inputs:  []string{"Dockerfile"},
+				},
+			},
+			expectedErrorSubstrings: []string{"target //app:server uses //envs:image as its environment, but it is a target"},
+		},
+		{
+			name: "environment cannot depend on a resource",
+			targetMap: model.BuildNodeMap{
+				label.TL("envs", "linux"): &model.Environment{
+					Label:        label.TL("envs", "linux"),
+					Provider:     "./provider.sh",
+					Dependencies: []label.TargetLabel{label.TL("envs", "registry")},
+				},
+				label.TL("envs", "registry"): &model.Resource{
+					Label: label.TL("envs", "registry"),
+					Up:    "true",
+				},
+			},
+			expectedErrorSubstrings: []string{"environment //envs:linux depends on //envs:registry, but environments may only depend on targets"},
+		},
+		{
+			name: "environment cannot depend on a test target",
+			targetMap: model.BuildNodeMap{
+				label.TL("envs", "linux"): &model.Environment{
+					Label:        label.TL("envs", "linux"),
+					Provider:     "./provider.sh",
+					Dependencies: []label.TargetLabel{label.TL("envs", "image_test")},
+				},
+				label.TL("envs", "image_test"): &model.Target{
+					Label:   label.TL("envs", "image_test"),
+					Command: "echo test",
+				},
+			},
+			expectedErrorSubstrings: []string{"//envs:linux depends on //envs:image_test which is a test target"},
+		},
 	}
 
 	for _, testCase := range tests {

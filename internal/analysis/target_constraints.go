@@ -58,6 +58,55 @@ func CheckTargetConstraints(logger *console.Logger, nodeMap model.BuildNodeMap) 
 	resourceConstraintErrors := checkResourceConstraints(nodeMap)
 	errs = append(errs, resourceConstraintErrors...)
 
+	environmentConstraintErrors := checkEnvironmentConstraints(nodeMap)
+	errs = append(errs, environmentConstraintErrors...)
+
+	return errs
+}
+
+// checkEnvironmentConstraints validates that targets reference actual
+// environments and that environments only depend on non-test targets.
+func checkEnvironmentConstraints(nodeMap model.BuildNodeMap) (errs []error) {
+	for _, node := range nodeMap.NodesAlphabetically() {
+		switch typedNode := node.(type) {
+		case *model.Target:
+			if typedNode.Environment == nil {
+				continue
+			}
+			environmentNode, exists := nodeMap[*typedNode.Environment]
+			if !exists {
+				continue
+			}
+			if _, isEnvironment := environmentNode.(*model.Environment); !isEnvironment {
+				errs = append(errs, fmt.Errorf("target %s uses %s as its environment, but it is a %s",
+					typedNode.Label,
+					typedNode.Environment,
+					environmentNode.GetType(),
+				))
+			}
+		case *model.Environment:
+			for _, dependencyLabel := range typedNode.Dependencies {
+				if _, exists := nodeMap[dependencyLabel]; !exists {
+					continue
+				}
+				dependencyTarget := resolveDependencyTarget(nodeMap, dependencyLabel)
+				if dependencyTarget == nil {
+					errs = append(errs, fmt.Errorf("environment %s depends on %s, but environments may only depend on targets",
+						typedNode.Label,
+						dependencyLabel,
+					))
+					continue
+				}
+				if dependencyTarget.IsTest() {
+					errs = append(errs, fmt.Errorf("%s depends on %s which is a test target",
+						typedNode.Label,
+						dependencyTarget.Label,
+					))
+				}
+			}
+		}
+	}
+
 	return errs
 }
 

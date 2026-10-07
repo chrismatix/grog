@@ -1,0 +1,16 @@
+environments:
+  - name: busybox
+    provider: builtin::docker
+    config:
+      image: busybox:1.37
+
+targets:
+  - name: in_container
+    environment: ":busybox"
+    command: |
+      test -f /.dockerenv
+      echo "$(uname -s) $GROG_TARGET" > in_container.out
+    outputs: [in_container.out]
+    output_checks:
+      - command: test -O in_container.out && cat in_container.out
+        expected_output: Linux //:in_container

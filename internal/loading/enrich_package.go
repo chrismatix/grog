@@ -44,6 +44,11 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 		return nil, err
 	}
 
+	environments, err := enrichEnvironments(logger, packagePath, absolutePackagePath, pkg, targets, resources)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, alias := range pkg.Aliases {
 		actualLabel, err := label.ParseTargetLabel(packagePath, alias.Actual)
 		if err != nil {
@@ -51,7 +56,7 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 		}
 
 		aliasLabel := label.TargetLabel{Package: packagePath, Name: alias.Name}
-		if _, ok := targets[aliasLabel]; ok || aliases[aliasLabel] != nil || resources[aliasLabel] != nil {
+		if _, ok := targets[aliasLabel]; ok || aliases[aliasLabel] != nil || resources[aliasLabel] != nil || environments[aliasLabel] != nil {
 			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", alias.Name, pkg.SourceFilePath)
 		}
 
@@ -62,7 +67,7 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 		}
 	}
 
-	dependencyResolvers, err := enrichDependencyResolvers(logger, packagePath, absolutePackagePath, pkg, targets, aliases, resources)
+	dependencyResolvers, err := enrichDependencyResolvers(logger, packagePath, absolutePackagePath, pkg, targets, aliases, resources, environments)
 	if err != nil {
 		return nil, err
 	}
@@ -73,6 +78,7 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 		Targets:             targets,
 		Aliases:             aliases,
 		Resources:           resources,
+		Environments:        environments,
 	}, nil
 }
 
@@ -149,6 +155,15 @@ func enrichTarget(
 		}
 	}
 
+	var environment *label.TargetLabel
+	if target.Environment != "" {
+		environmentLabel, parseError := label.ParseTargetLabel(packagePath, target.Environment)
+		if parseError != nil {
+			return nil, fmt.Errorf("failed to parse environment for target %s: %w", targetLabel, parseError)
+		}
+		environment = &environmentLabel
+	}
+
 	var dependencyResolvers []label.TargetLabel
 	for _, resolver := range target.DependencyResolvers {
 		resolverLabel, parseError := label.ParseTargetLabel(packagePath, resolver)
@@ -178,6 +193,7 @@ func enrichTarget(
 		EnvironmentVariables: target.EnvironmentVariables,
 		Timeout:              timeout,
 		ConcurrencyGroup:     target.ConcurrencyGroup,
+		Environment:          environment,
 	}, nil
 }
 
@@ -230,6 +246,67 @@ func enrichResources(
 	return resources, nil
 }
 
+// enrichEnvironments converts the package's environment dtos into model environments.
+func enrichEnvironments(
+	logger *console.Logger,
+	packagePath string,
+	absolutePackagePath string,
+	pkg PackageDTO,
+	targets map[label.TargetLabel]*model.Target,
+	resources map[label.TargetLabel]*model.Resource,
+) (map[label.TargetLabel]*model.Environment, error) {
+	environments := make(map[label.TargetLabel]*model.Environment)
+	for _, environment := range pkg.Environments {
+		environmentLabel := label.TargetLabel{Package: packagePath, Name: environment.Name}
+		if targets[environmentLabel] != nil || resources[environmentLabel] != nil || environments[environmentLabel] != nil {
+			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", environment.Name, pkg.SourceFilePath)
+		}
+
+		switch {
+		case environment.Provider == "":
+			return nil, fmt.Errorf("environment %s must define a provider (package file %s)", environmentLabel, pkg.SourceFilePath)
+		case environment.Provider == model.DockerProvider && environment.Config["image"] == "":
+			return nil, fmt.Errorf("environment %s uses %s and must set config.image (package file %s)", environmentLabel, model.DockerProvider, pkg.SourceFilePath)
+		case strings.HasPrefix(environment.Provider, "builtin::") && environment.Provider != model.DockerProvider:
+			return nil, fmt.Errorf("environment %s uses unknown built-in provider %s (package file %s)", environmentLabel, environment.Provider, pkg.SourceFilePath)
+		}
+
+		var dependencies []label.TargetLabel
+		for _, dependency := range environment.Dependencies {
+			dependencyLabel, err := label.ParseTargetLabel(packagePath, dependency)
+			if err != nil {
+				return nil, err
+			}
+			dependencies = append(dependencies, dependencyLabel)
+		}
+
+		resolvedInputs, err := resolveInputs(logger, absolutePackagePath, environment.Inputs, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve inputs for environment %s: %w", environmentLabel, err)
+		}
+
+		var timeout time.Duration
+		if environment.Timeout != "" {
+			timeout, err = time.ParseDuration(environment.Timeout)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse timeout for environment %s: %w", environmentLabel, err)
+			}
+		}
+
+		environments[environmentLabel] = &model.Environment{
+			SourceFilePath: pkg.SourceFilePath,
+			Label:          environmentLabel,
+			Provider:       environment.Provider,
+			Config:         environment.Config,
+			Inputs:         resolvedInputs,
+			Fingerprint:    environment.Fingerprint,
+			Timeout:        timeout,
+			Dependencies:   dependencies,
+		}
+	}
+	return environments, nil
+}
+
 // enrichDependencyResolvers converts the package's dependency resolver dtos into model dependency resolvers.
 func enrichDependencyResolvers(
 	logger *console.Logger,
@@ -239,6 +316,7 @@ func enrichDependencyResolvers(
 	targets map[label.TargetLabel]*model.Target,
 	aliases map[label.TargetLabel]*model.Alias,
 	resources map[label.TargetLabel]*model.Resource,
+	environments map[label.TargetLabel]*model.Environment,
 ) (map[label.TargetLabel]*model.DependencyResolver, error) {
 	dependencyResolvers := make(map[label.TargetLabel]*model.DependencyResolver)
 	for _, resolver := range pkg.DependencyResolvers {
@@ -246,7 +324,7 @@ func enrichDependencyResolvers(
 		if enrichmentError != nil {
 			return nil, fmt.Errorf("invalid dependency resolver name: %w", enrichmentError)
 		}
-		if targets[resolverLabel] != nil || aliases[resolverLabel] != nil || resources[resolverLabel] != nil || dependencyResolvers[resolverLabel] != nil {
+		if targets[resolverLabel] != nil || aliases[resolverLabel] != nil || resources[resolverLabel] != nil || environments[resolverLabel] != nil || dependencyResolvers[resolverLabel] != nil {
 			return nil, fmt.Errorf("duplicate target label: %s (package file %s)", resolver.Name, pkg.SourceFilePath)
 		}
 		if resolver.Command == "" {

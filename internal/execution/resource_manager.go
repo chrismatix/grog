@@ -356,10 +356,23 @@ func (m *ResourceManager) resolveExports(resource *model.Resource, exportsFilePa
 	merged := make(map[string]string, len(resource.Exports))
 	maps.Copy(merged, resource.Exports)
 
-	content, err := os.ReadFile(exportsFilePath)
+	dynamicExports, err := readKeyValueFile(exportsFilePath)
+	maps.Copy(merged, dynamicExports)
 	if err != nil {
-		return exportsEnvironment(merged), fmt.Errorf("failed to read exports file: %w", err)
+		return exportsEnvironment(merged), fmt.Errorf("resource %s exports: %w", resource.Label, err)
 	}
+	return exportsEnvironment(merged), nil
+}
+
+// readKeyValueFile parses the KEY=VALUE lines a hook command appended to the
+// file, skipping blank lines and comments.
+func readKeyValueFile(filePath string) (map[string]string, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read %s: %w", filePath, err)
+	}
+
+	values := make(map[string]string)
 	for line := range strings.SplitSeq(string(content), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -367,11 +380,11 @@ func (m *ResourceManager) resolveExports(resource *model.Resource, exportsFilePa
 		}
 		key, value, found := strings.Cut(line, "=")
 		if !found || key == "" {
-			return exportsEnvironment(merged), fmt.Errorf("resource %s wrote an invalid exports line (want KEY=VALUE): %q", resource.Label, line)
+			return values, fmt.Errorf("invalid line (want KEY=VALUE): %q", line)
 		}
-		merged[key] = value
+		values[key] = value
 	}
-	return exportsEnvironment(merged), nil
+	return values, nil
 }
 
 func exportsEnvironment(exports map[string]string) []string {
