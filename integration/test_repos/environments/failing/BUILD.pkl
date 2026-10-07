@@ -3,7 +3,8 @@ amends ".../pkl/package.pkl"
 environments {
   new {
     name = "full"
-    provider = """
+    provider =
+      """
       if [ "$GROG_ENV_PHASE" = exec ]; then
         echo "no capacity left" >&2
         exit 125
