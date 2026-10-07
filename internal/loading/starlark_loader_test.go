@@ -528,3 +528,59 @@ target(name = "test", command = "echo " + str(d))
 		})
 	}
 }
+
+func TestStarlarkLoader_ResourcesAndEnvironments(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWorkspaceRoot := config.Global.WorkspaceRoot
+	config.Global.WorkspaceRoot = tmpDir
+	defer func() { config.Global.WorkspaceRoot = oldWorkspaceRoot }()
+
+	build := filepath.Join(tmpDir, "BUILD.star")
+	if err := os.WriteFile(build, []byte(`resource(
+    name = "db",
+    up = "docker run -d postgres",
+    down = "docker rm -f postgres",
+    ready = "pg_isready",
+    timeout = "30s",
+    exports = {"DATABASE_URL": "postgres://localhost"},
+    dependencies = [":image"],
+)
+resource(name = "minimal", up = "true")
+environment(
+    name = "builder",
+    type = "docker",
+    dependencies = [":image"],
+    oci_image = "builder:latest",
+)
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	pkg, _, err := (StarlarkLoader{}).Load(context.Background(), build)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+
+	expectedResources := []*ResourceDTO{
+		{
+			Name:         "db",
+			Up:           "docker run -d postgres",
+			Down:         "docker rm -f postgres",
+			Ready:        "pg_isready",
+			Timeout:      "30s",
+			Exports:      map[string]string{"DATABASE_URL": "postgres://localhost"},
+			Dependencies: []string{":image"},
+		},
+		{Name: "minimal", Up: "true"},
+	}
+	if !reflect.DeepEqual(pkg.Resources, expectedResources) {
+		t.Errorf("resources = %+v, want %+v", pkg.Resources, expectedResources)
+	}
+
+	expectedEnvironments := []*EnvironmentDTO{
+		{Name: "builder", Type: "docker", Dependencies: []string{":image"}, OCIImage: "builder:latest"},
+	}
+	if !reflect.DeepEqual(pkg.Environments, expectedEnvironments) {
+		t.Errorf("environments = %+v, want %+v", pkg.Environments, expectedEnvironments)
+	}
+}

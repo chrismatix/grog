@@ -19,6 +19,16 @@ cases:
       - list
     skip_fixture: true
 
+  # An empty ID prefix matches the only trace recorded so far
+  - name: traces_show_only_trace
+    grog_args:
+      - traces
+      - show
+      - ""
+      - --sort-by=command
+      - --top=1
+    skip_fixture: true
+
   # Verify list filtering by command returns no match for 'test'
   - name: traces_list_filter_no_match
     grog_args:
@@ -36,6 +46,14 @@ cases:
     grog_args:
       - traces
       - stats
+    skip_fixture: true
+
+  # Verify the per-target bottleneck report renders (durations are non-deterministic)
+  - name: traces_stats_detailed
+    grog_args:
+      - traces
+      - stats
+      - --detailed
     skip_fixture: true
 
   # Verify stats supports filtering by build command type

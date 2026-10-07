@@ -317,3 +317,46 @@ func TestAzureCache_BuildPath(t *testing.T) {
 		assert.Equal(t, "prefix/path/key", cache.buildPath("path", "key"))
 	})
 }
+
+func TestAzureCache_StagedWrite(t *testing.T) {
+	ctx := context.Background()
+	newCache := func(t *testing.T) (*AzureCache, *mockAzureBlobClient) {
+		t.Helper()
+		mockClient := newMockAzureBlobClient()
+		cache, err := NewAzureCacheWithClient(ctx, config.AzureCacheConfig{
+			Container: "test-container",
+			Prefix:    "prefix",
+		}, mockClient)
+		assert.NoError(t, err)
+		cache.workspacePrefix = "workspace"
+		return cache, mockClient
+	}
+
+	t.Run("commit promotes the staged object to its final key", func(t *testing.T) {
+		cache, mockClient := newCache(t)
+		writer, err := cache.BeginWrite(ctx)
+		assert.NoError(t, err)
+
+		_, err = writer.Write([]byte("staged data"))
+		assert.NoError(t, err)
+		assert.NoError(t, writer.Commit(ctx, "cas", "digest"))
+
+		assert.Equal(t, map[string][]byte{"prefix/workspace/cas/digest": []byte("staged data")}, mockClient.objects)
+		assert.Error(t, writer.Commit(ctx, "cas", "digest"), "second commit must fail")
+		assert.NoError(t, writer.Cancel(ctx), "cancel after commit is a no-op")
+	})
+
+	t.Run("cancel leaves no object behind", func(t *testing.T) {
+		cache, mockClient := newCache(t)
+		writer, err := cache.BeginWrite(ctx)
+		assert.NoError(t, err)
+
+		_, err = writer.Write([]byte("partial"))
+		assert.NoError(t, err)
+		// The aborted upload never stores the staging key, so the mock's delete reports it missing.
+		_ = writer.Cancel(ctx)
+
+		assert.Empty(t, mockClient.objects)
+		assert.Error(t, writer.Commit(ctx, "cas", "digest"), "commit after cancel must fail")
+	})
+}
