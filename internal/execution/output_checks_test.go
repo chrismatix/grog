@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"grog/internal/label"
-	"grog/internal/model"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/model"
 )
 
 func TestRunOutputChecksReceivesResourceEnvironment(t *testing.T) {

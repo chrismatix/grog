@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"grog/internal/caching"
-	"grog/internal/console"
-	"grog/internal/output"
-	"grog/internal/output/handlers"
-	"grog/internal/worker"
+	"github.com/chrismatix/grog/internal/caching"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/output"
+	"github.com/chrismatix/grog/internal/output/handlers"
+	"github.com/chrismatix/grog/internal/worker"
 )
 
 // CacheWriter bridges the gap between output preparation (which must be synchronous) and

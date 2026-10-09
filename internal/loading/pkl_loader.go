@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"grog/internal/config"
-	"grog/internal/console"
 	"maps"
 	"net/url"
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
 
 	"github.com/apple/pkl-go/pkl"
 )

@@ -2,10 +2,11 @@ package model
 
 import (
 	"fmt"
-	"grog/internal/label"
 	"maps"
 	"slices"
 	"sort"
+
+	"github.com/chrismatix/grog/internal/label"
 )
 
 type BuildNodeMap map[label.TargetLabel]BuildNode

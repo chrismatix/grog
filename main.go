@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"grog/internal/cmd"
 	"os"
+
+	"github.com/chrismatix/grog/internal/cmd"
 )
 
 // Provisioned by ldflags.

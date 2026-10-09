@@ -16,14 +16,14 @@ import (
 
 	"golang.org/x/sync/singleflight"
 
-	"grog/internal/config"
-	"grog/internal/console"
-	"grog/internal/dag"
-	"grog/internal/hashing"
-	"grog/internal/logs"
-	"grog/internal/model"
-	"grog/internal/shell"
-	"grog/internal/worker"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/dag"
+	"github.com/chrismatix/grog/internal/hashing"
+	"github.com/chrismatix/grog/internal/logs"
+	"github.com/chrismatix/grog/internal/model"
+	"github.com/chrismatix/grog/internal/shell"
+	"github.com/chrismatix/grog/internal/worker"
 )
 
 // ResourceManager starts resource nodes lazily and at most once per

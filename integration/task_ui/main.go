@@ -7,7 +7,7 @@ import (
 	"syscall"
 	"time"
 
-	"grog/internal/console"
+	"github.com/chrismatix/grog/internal/console"
 )
 
 // Vibe-coded demo entry point that spawns the Task UI and feeds it with some test tasks

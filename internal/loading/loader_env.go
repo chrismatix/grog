@@ -3,7 +3,7 @@ package loading
 import (
 	"strings"
 
-	"grog/internal/config"
+	"github.com/chrismatix/grog/internal/config"
 
 	"go.starlark.net/starlark"
 )

@@ -3,7 +3,7 @@ package model
 import (
 	"time"
 
-	"grog/internal/label"
+	"github.com/chrismatix/grog/internal/label"
 )
 
 var _ BuildNode = &Resource{}

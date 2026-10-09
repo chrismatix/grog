@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"grog/internal/config"
-	"grog/internal/label"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/label"
 )
 
 // TaintStore tracks targets that the user has marked for forced rebuild.

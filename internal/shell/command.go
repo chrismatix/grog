@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"time"
 
-	"grog/internal/config"
+	"github.com/chrismatix/grog/internal/config"
 )
 
 // WithDefaultFlags applies the configured shell failure behavior.

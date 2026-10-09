@@ -2,11 +2,12 @@ package cmds
 
 import (
 	"fmt"
-	"grog/internal/config"
-	"grog/internal/console"
-	"grog/internal/locking"
 	"os"
 	"strings"
+
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/locking"
 
 	"github.com/spf13/cobra"
 )

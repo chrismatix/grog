@@ -15,8 +15,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/google/uuid"
 
-	grogconfig "grog/internal/config"
-	"grog/internal/console"
+	grogconfig "github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
 )
 
 // S3Client defines the interface for S3 operations.

@@ -3,16 +3,17 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"grog/internal/cmd/cmds"
-	"grog/internal/cmd/cmds/traces"
-	"grog/internal/cmd/flagtypes"
-	"grog/internal/config"
-	"grog/internal/console"
 	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/chrismatix/grog/internal/cmd/cmds"
+	"github.com/chrismatix/grog/internal/cmd/cmds/traces"
+	"github.com/chrismatix/grog/internal/cmd/flagtypes"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
 
 	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"

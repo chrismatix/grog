@@ -4,11 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"grog/internal/label"
-	"grog/internal/model"
-	"grog/internal/output/handlers"
-	"grog/internal/proto/gen"
-	"grog/internal/worker"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/model"
+	"github.com/chrismatix/grog/internal/output/handlers"
+	"github.com/chrismatix/grog/internal/proto/gen"
+	"github.com/chrismatix/grog/internal/worker"
 )
 
 type fakeOciHandler struct {

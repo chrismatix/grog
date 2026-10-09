@@ -1,9 +1,10 @@
 package output
 
 import (
-	"grog/internal/model"
-	"grog/internal/output/handlers"
 	"testing"
+
+	"github.com/chrismatix/grog/internal/model"
+	"github.com/chrismatix/grog/internal/output/handlers"
 )
 
 func TestParseOutput(t *testing.T) {

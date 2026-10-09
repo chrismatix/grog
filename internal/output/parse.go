@@ -2,10 +2,11 @@ package output
 
 import (
 	"fmt"
-	"grog/internal/model"
-	"grog/internal/output/handlers"
 	"slices"
 	"strings"
+
+	"github.com/chrismatix/grog/internal/model"
+	"github.com/chrismatix/grog/internal/output/handlers"
 )
 
 func ParseOutputs(outputs []string) ([]model.Output, error) {

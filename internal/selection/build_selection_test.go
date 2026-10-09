@@ -1,12 +1,13 @@
 package selection
 
 import (
-	"grog/internal/config"
-	"grog/internal/dag"
-	"grog/internal/label"
-	"grog/internal/model"
 	"strings"
 	"testing"
+
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/dag"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/model"
 )
 
 func TestSelectTargetsForBuild(t *testing.T) {

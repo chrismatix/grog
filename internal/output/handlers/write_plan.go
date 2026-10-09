@@ -3,7 +3,7 @@ package handlers
 import (
 	"context"
 
-	"grog/internal/worker"
+	"github.com/chrismatix/grog/internal/worker"
 )
 
 type nopWritePlan struct{}

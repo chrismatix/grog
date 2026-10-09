@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"grog/internal/config"
-	"grog/internal/label"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/label"
 )
 
 func withIsolatedWorkspace(t *testing.T) string {

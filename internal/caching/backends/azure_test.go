@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"grog/internal/config"
+	"github.com/chrismatix/grog/internal/config"
 )
 
 // mockAzureBlobClient implements the AzureBlobClient interface for testing.

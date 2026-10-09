@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"grog/internal/cmd"
-	"grog/internal/cmd/flagtypes"
+	"github.com/chrismatix/grog/internal/cmd"
+	"github.com/chrismatix/grog/internal/cmd/flagtypes"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"

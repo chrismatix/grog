@@ -7,7 +7,7 @@ import (
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 
-	"grog/internal/worker"
+	"github.com/chrismatix/grog/internal/worker"
 )
 
 // pushImageFromDaemon is the fallback for images that never reached the cache.

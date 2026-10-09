@@ -5,9 +5,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"grog/internal/label"
-	"grog/internal/model"
-	"grog/internal/output"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/model"
+	"github.com/chrismatix/grog/internal/output"
 )
 
 func TestBuildGraphDetectsIndependentOutputConflicts(t *testing.T) {

@@ -2,9 +2,10 @@ package analysis
 
 import (
 	"fmt"
-	"grog/internal/dag"
-	"grog/internal/model"
 	"strings"
+
+	"github.com/chrismatix/grog/internal/dag"
+	"github.com/chrismatix/grog/internal/model"
 )
 
 // BuildGraph builds a directed graph of targets and analyzes it.

@@ -14,8 +14,8 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 	"github.com/google/uuid"
 
-	"grog/internal/config"
-	"grog/internal/console"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
 )
 
 // azureStagingPath is the path used for in-flight uploads. Anything under

@@ -1,11 +1,12 @@
 package dag
 
 import (
-	"grog/internal/label"
-	"grog/internal/model"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/model"
 
 	"github.com/stretchr/testify/require"
 )

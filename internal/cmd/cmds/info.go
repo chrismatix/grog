@@ -2,11 +2,12 @@ package cmds
 
 import (
 	"fmt"
-	"grog/internal/caching/backends"
-	"grog/internal/config"
-	"grog/internal/console"
 	"os"
 	"text/tabwriter"
+
+	"github.com/chrismatix/grog/internal/caching/backends"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"

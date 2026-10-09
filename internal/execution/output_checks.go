@@ -3,8 +3,9 @@ package execution
 import (
 	"context"
 	"fmt"
-	"grog/internal/model"
 	"strings"
+
+	"github.com/chrismatix/grog/internal/model"
 )
 
 func runOutputChecks(

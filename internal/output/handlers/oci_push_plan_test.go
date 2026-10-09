@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"grog/internal/label"
-	"grog/internal/model"
-	"grog/internal/proto/gen"
-	"grog/internal/worker"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/model"
+	"github.com/chrismatix/grog/internal/proto/gen"
+	"github.com/chrismatix/grog/internal/worker"
 )
 
 // fakeImagePusher records every PushImage call and returns the canned outcome

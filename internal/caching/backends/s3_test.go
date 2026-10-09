@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"grog/internal/config"
 	"io"
 	"testing"
+
+	"github.com/chrismatix/grog/internal/config"
 
 	"github.com/stretchr/testify/assert"
 )

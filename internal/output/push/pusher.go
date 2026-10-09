@@ -10,10 +10,10 @@ import (
 	"maps"
 	"slices"
 
-	"grog/internal/model"
-	"grog/internal/output/handlers"
-	"grog/internal/proto/gen"
-	"grog/internal/worker"
+	"github.com/chrismatix/grog/internal/model"
+	"github.com/chrismatix/grog/internal/output/handlers"
+	"github.com/chrismatix/grog/internal/proto/gen"
+	"github.com/chrismatix/grog/internal/worker"
 )
 
 // Pusher owns everything --push: which images ship where, and the summary the

@@ -11,16 +11,16 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"grog/internal/completions"
-	"grog/internal/config"
-	"grog/internal/console"
-	"grog/internal/dag"
-	"grog/internal/execution"
-	"grog/internal/label"
-	"grog/internal/loading"
-	"grog/internal/model"
-	"grog/internal/selection"
-	"grog/internal/worker"
+	"github.com/chrismatix/grog/internal/completions"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/dag"
+	"github.com/chrismatix/grog/internal/execution"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/loading"
+	"github.com/chrismatix/grog/internal/model"
+	"github.com/chrismatix/grog/internal/selection"
+	"github.com/chrismatix/grog/internal/worker"
 )
 
 var runOptions struct {

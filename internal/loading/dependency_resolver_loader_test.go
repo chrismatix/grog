@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"grog/internal/config"
-	"grog/internal/console"
-	"grog/internal/label"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/label"
 
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"

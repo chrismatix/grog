@@ -9,13 +9,13 @@ import (
 	"github.com/charmbracelet/lipgloss/tree"
 	"github.com/spf13/cobra"
 
-	"grog/internal/analysis"
-	"grog/internal/config"
-	"grog/internal/console"
-	"grog/internal/dag"
-	"grog/internal/label"
-	"grog/internal/loading"
-	"grog/internal/model"
+	"github.com/chrismatix/grog/internal/analysis"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/dag"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/loading"
+	"github.com/chrismatix/grog/internal/model"
 )
 
 var explainChangesOptions struct {

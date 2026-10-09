@@ -2,9 +2,10 @@ package handlers
 
 import (
 	"context"
-	"grog/internal/model"
-	"grog/internal/proto/gen"
-	"grog/internal/worker"
+
+	"github.com/chrismatix/grog/internal/model"
+	"github.com/chrismatix/grog/internal/proto/gen"
+	"github.com/chrismatix/grog/internal/worker"
 )
 
 // OutputWritePlan captures everything needed to persist a single output artifact to the cache.

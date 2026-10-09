@@ -2,10 +2,11 @@ package selection
 
 import (
 	"fmt"
-	"grog/internal/config"
-	"grog/internal/dag"
-	"grog/internal/model"
 	"strings"
+
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/dag"
+	"github.com/chrismatix/grog/internal/model"
 )
 
 /*

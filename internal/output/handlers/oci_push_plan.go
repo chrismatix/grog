@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"grog/internal/console"
-	"grog/internal/proto/gen"
-	"grog/internal/worker"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/proto/gen"
+	"github.com/chrismatix/grog/internal/worker"
 )
 
 // OciPushPlan ships an image to a user-facing destination via the oci handler.

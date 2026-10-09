@@ -14,13 +14,13 @@ import (
 	"slices"
 	"strings"
 
-	"grog/internal/caching"
-	"grog/internal/config"
-	"grog/internal/console"
-	"grog/internal/hashing"
-	"grog/internal/label"
-	"grog/internal/model"
-	"grog/internal/shell"
+	"github.com/chrismatix/grog/internal/caching"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/hashing"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/model"
+	"github.com/chrismatix/grog/internal/shell"
 
 	"golang.org/x/sync/errgroup"
 )

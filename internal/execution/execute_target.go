@@ -6,16 +6,17 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"grog/internal/config"
-	"grog/internal/console"
-	"grog/internal/logs"
-	"grog/internal/model"
-	"grog/internal/shell"
 	"io"
 	"os"
 	"os/exec"
 	"strings"
 	"text/template"
+
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/logs"
+	"github.com/chrismatix/grog/internal/model"
+	"github.com/chrismatix/grog/internal/shell"
 )
 
 //go:embed run_sh.sh.tmpl

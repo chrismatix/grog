@@ -1,9 +1,10 @@
 package model
 
 import (
-	"grog/internal/label"
 	"maps"
 	"slices"
+
+	"github.com/chrismatix/grog/internal/label"
 )
 
 // Package defines all the information that a package needs to build.

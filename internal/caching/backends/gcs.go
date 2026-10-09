@@ -12,8 +12,8 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/api/iterator"
 
-	"grog/internal/config"
-	"grog/internal/console"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
 )
 
 // gcsStagingPath is the path used for in-flight uploads. Anything under this

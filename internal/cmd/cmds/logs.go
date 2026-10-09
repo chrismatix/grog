@@ -2,13 +2,14 @@ package cmds
 
 import (
 	"fmt"
-	"grog/internal/completions"
-	"grog/internal/config"
-	"grog/internal/console"
-	"grog/internal/label"
-	"grog/internal/loading"
-	"grog/internal/logs"
-	"grog/internal/model"
+
+	"github.com/chrismatix/grog/internal/completions"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/loading"
+	"github.com/chrismatix/grog/internal/logs"
+	"github.com/chrismatix/grog/internal/model"
 
 	"github.com/spf13/cobra"
 )

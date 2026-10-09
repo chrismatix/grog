@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"grog/internal/config"
-	"grog/internal/console"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
 
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"

@@ -3,10 +3,11 @@ package dag
 import (
 	"context"
 	"errors"
-	"grog/internal/console"
-	"grog/internal/label"
-	"grog/internal/model"
 	"sync"
+
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/model"
 )
 
 type CacheResult int

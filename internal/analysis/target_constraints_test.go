@@ -1,17 +1,18 @@
 package analysis
 
 import (
-	"grog/internal/config"
-	"grog/internal/console"
-	"grog/internal/output"
 	"os"
 	"strings"
 	"testing"
 
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/output"
+
 	"github.com/stretchr/testify/assert"
 
-	"grog/internal/label"
-	"grog/internal/model"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/model"
 
 	"github.com/spf13/viper"
 	"go.uber.org/zap"

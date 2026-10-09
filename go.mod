@@ -1,4 +1,4 @@
-module grog
+module github.com/chrismatix/grog
 
 go 1.27.0
 

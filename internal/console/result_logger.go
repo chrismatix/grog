@@ -9,7 +9,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"grog/internal/config"
+	"github.com/chrismatix/grog/internal/config"
 
 	"github.com/fatih/color"
 )

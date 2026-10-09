@@ -2,9 +2,10 @@ package backends
 
 import (
 	"context"
-	"grog/internal/config"
 	"io"
 	"sync"
+
+	"github.com/chrismatix/grog/internal/config"
 )
 
 // CacheBackend represents an interface for a file system-based cache.

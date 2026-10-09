@@ -3,9 +3,9 @@ package hashing
 import (
 	"testing"
 
-	"grog/internal/config"
-	"grog/internal/label"
-	"grog/internal/model"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/model"
 )
 
 func TestHashTargetDefinition_FingerprintAffectsHash(t *testing.T) {

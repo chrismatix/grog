@@ -1,10 +1,11 @@
 package cmds
 
 import (
-	"grog/internal/analysis"
-	"grog/internal/console"
-	"grog/internal/loading"
 	"os"
+
+	"github.com/chrismatix/grog/internal/analysis"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/loading"
 
 	"github.com/spf13/cobra"
 )

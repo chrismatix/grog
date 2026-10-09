@@ -1,7 +1,7 @@
 package tracing
 
 import (
-	"grog/internal/config"
+	"github.com/chrismatix/grog/internal/config"
 )
 
 // PathResolver constructs DuckDB-readable glob paths for Parquet trace files.

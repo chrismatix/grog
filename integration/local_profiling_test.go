@@ -1,13 +1,14 @@
 package main
 
 import (
-	"grog/internal/cmd/cmds"
-	"grog/internal/config"
-	"grog/internal/console"
-	"grog/internal/label"
-	"grog/internal/loading"
-	"grog/internal/selection"
 	"testing"
+
+	"github.com/chrismatix/grog/internal/cmd/cmds"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/loading"
+	"github.com/chrismatix/grog/internal/selection"
 
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"

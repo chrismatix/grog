@@ -7,13 +7,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"grog/internal/caching"
-	"grog/internal/config"
-	"grog/internal/console"
-	"grog/internal/hashing"
-	"grog/internal/model"
-	"grog/internal/proto/gen"
-	"grog/internal/worker"
+	"github.com/chrismatix/grog/internal/caching"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/hashing"
+	"github.com/chrismatix/grog/internal/model"
+	"github.com/chrismatix/grog/internal/proto/gen"
+	"github.com/chrismatix/grog/internal/worker"
 )
 
 // fileWritePlan uploads a single staged file to the CAS.

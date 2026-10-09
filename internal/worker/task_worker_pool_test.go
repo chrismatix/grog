@@ -4,10 +4,11 @@ package worker
 import (
 	"context"
 	"errors"
-	"grog/internal/console"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/chrismatix/grog/internal/console"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"go.uber.org/zap/zapcore"

@@ -1,13 +1,14 @@
 package completions
 
 import (
-	"grog/internal/config"
-	"grog/internal/selection"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"testing"
+
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/selection"
 
 	"github.com/spf13/cobra"
 )

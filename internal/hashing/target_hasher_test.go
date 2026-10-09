@@ -3,9 +3,9 @@ package hashing
 import (
 	"testing"
 
-	"grog/internal/dag"
-	"grog/internal/label"
-	"grog/internal/model"
+	"github.com/chrismatix/grog/internal/dag"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/model"
 )
 
 func TestTargetHasherIgnoresResourceDependencies(t *testing.T) {

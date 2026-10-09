@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"grog/internal/config"
+	"github.com/chrismatix/grog/internal/config"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fatih/color"

@@ -8,12 +8,12 @@ import (
 
 	"github.com/alitto/pond/v2"
 
-	"grog/internal/label"
-	"grog/internal/maps"
-	"grog/internal/model"
-	"grog/internal/output/handlers"
-	"grog/internal/proto/gen"
-	"grog/internal/worker"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/maps"
+	"github.com/chrismatix/grog/internal/model"
+	"github.com/chrismatix/grog/internal/output/handlers"
+	"github.com/chrismatix/grog/internal/proto/gen"
+	"github.com/chrismatix/grog/internal/worker"
 )
 
 type mockRegistryHandler struct {

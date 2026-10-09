@@ -3,15 +3,16 @@ package completions
 import (
 	"context"
 	"fmt"
-	"grog/internal/config"
-	"grog/internal/console"
-	"grog/internal/label"
-	"grog/internal/loading"
-	"grog/internal/model"
-	"grog/internal/selection"
 	os "os"
 	"slices"
 	"strings"
+
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/loading"
+	"github.com/chrismatix/grog/internal/model"
+	"github.com/chrismatix/grog/internal/selection"
 
 	"github.com/spf13/cobra"
 )

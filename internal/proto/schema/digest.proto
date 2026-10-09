@@ -1,7 +1,7 @@
 syntax = "proto3";
 package grog.proto.v1;
 
-option go_package = "grog/proto/gen";
+option go_package = "github.com/chrismatix/grog/internal/proto/gen";
 
 // A content digest for any blob stored in the CAS.
 message Digest {

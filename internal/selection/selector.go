@@ -2,9 +2,10 @@ package selection
 
 import (
 	"fmt"
-	"grog/internal/label"
-	"grog/internal/model"
 	"slices"
+
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/model"
 )
 
 type TargetTypeSelection string

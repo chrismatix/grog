@@ -1,9 +1,10 @@
 package selection
 
 import (
-	"grog/internal/config"
-	"grog/internal/model"
 	"slices"
+
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/model"
 )
 
 func nodeMatchesPlatform(node model.BuildNode) bool {
