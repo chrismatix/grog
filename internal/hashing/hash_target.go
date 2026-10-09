@@ -2,10 +2,11 @@ package hashing
 
 import (
 	"fmt"
-	"grog/internal/config"
-	"grog/internal/model"
 	"slices"
 	"strings"
+
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/model"
 )
 
 // GetTargetChangeHash computes the hash that tells us if a target has changed.

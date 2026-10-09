@@ -2,11 +2,12 @@ package logs
 
 import (
 	"fmt"
-	"grog/internal/config"
-	"grog/internal/model"
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/model"
 )
 
 type TargetLogFile struct {

@@ -3,7 +3,7 @@ package loading
 import (
 	"context"
 
-	"grog/internal/console"
+	"github.com/chrismatix/grog/internal/console"
 )
 
 // Loader Implement this to provide a loader for a user provided BUILD file format.

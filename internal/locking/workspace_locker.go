@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"grog/internal/config"
-	"grog/internal/console"
 	"os"
 	"path/filepath"
 	"slices"
@@ -14,6 +12,9 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
 
 	"github.com/fatih/color"
 )

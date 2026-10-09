@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strconv"
 
-	"grog/internal/model"
+	"github.com/chrismatix/grog/internal/model"
 )
 
 // GetResourceIdentity returns a short stable identifier derived from the

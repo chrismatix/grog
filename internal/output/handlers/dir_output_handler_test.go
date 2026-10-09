@@ -4,18 +4,19 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"grog/internal/caching"
-	"grog/internal/caching/backends"
-	"grog/internal/config"
-	"grog/internal/label"
-	"grog/internal/model"
-	"grog/internal/output/handlers"
-	"grog/internal/proto/gen"
 	"io"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/chrismatix/grog/internal/caching"
+	"github.com/chrismatix/grog/internal/caching/backends"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/model"
+	"github.com/chrismatix/grog/internal/output/handlers"
+	"github.com/chrismatix/grog/internal/proto/gen"
 )
 
 // mockCacheBackend is a simple mock for CacheBackend to simulate failures.

@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"grog/internal/cmd/flagtypes"
-	"grog/internal/console"
-	"grog/internal/tracing"
+	"github.com/chrismatix/grog/internal/cmd/flagtypes"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/tracing"
 )
 
 var (

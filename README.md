@@ -4,7 +4,8 @@
   <img src="docs/src/assets/grog-full.svg" width="200" />
   <br>
   <img src="https://github.com/chrismatix/grog/actions/workflows/test.yml/badge.svg" alt="Test status">
-  <img src="https://storage.googleapis.com/grog-assets/github/coverage.svg" alt="Coverage">
+  <a href="https://pkg.go.dev/github.com/chrismatix/grog"><img src="https://pkg.go.dev/badge/github.com/chrismatix/grog.svg" alt="Go Reference"></a>
+  <a href="https://app.codecov.io/gh/chrismatix/grog"><img src="https://codecov.io/gh/chrismatix/grog/graph/badge.svg" alt="Coverage"></a>
   <img src="https://img.shields.io/github/v/release/chrismatix/grog.svg" alt="release version">
   <a href="https://join.slack.com/t/grog-build/shared_invite/zt-3vipu1c5w-9ouz0nDV0YNKYIqskMgv5Q"><img src="https://img.shields.io/badge/Slack-Join%20chat-4A154B?logo=slack&logoColor=white" alt="Join Slack"></a>
 </p>

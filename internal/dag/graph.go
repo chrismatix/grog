@@ -3,11 +3,12 @@ package dag
 import (
 	"encoding/json"
 	"fmt"
-	"grog/internal/label"
-	"grog/internal/model"
 	"slices"
 	"sort"
 	"time"
+
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/model"
 )
 
 // DirectedTargetGraph represents a directed graph of build targets.

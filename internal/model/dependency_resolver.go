@@ -1,8 +1,9 @@
 package model
 
 import (
-	"grog/internal/label"
 	"time"
+
+	"github.com/chrismatix/grog/internal/label"
 )
 
 // DependencyResolver declares a command that infers dependencies during loading.

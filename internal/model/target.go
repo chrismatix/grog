@@ -2,12 +2,13 @@ package model
 
 import (
 	"encoding/json"
-	"grog/internal/config"
-	"grog/internal/label"
 	"path/filepath"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/label"
 )
 
 var _ BuildNode = &Target{}

@@ -6,7 +6,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"grog/internal/console"
+	"github.com/chrismatix/grog/internal/console"
 )
 
 // styled returns true if lipgloss rendering should be used.

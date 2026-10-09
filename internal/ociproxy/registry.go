@@ -46,8 +46,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"grog/internal/caching"
-	"grog/internal/console"
+	"github.com/chrismatix/grog/internal/caching"
+	"github.com/chrismatix/grog/internal/console"
 )
 
 // Registry is an in-process OCI Distribution v2 server backed by a CAS.

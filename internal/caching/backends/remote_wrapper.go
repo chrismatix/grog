@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"grog/internal/console"
+	"github.com/chrismatix/grog/internal/console"
 )
 
 // RemoteWrapper is the default implementation when using a remote cache

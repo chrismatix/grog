@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"grog/internal/config"
-	"grog/internal/console"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
 )
 
 // ProgressTracker aggregates progress updates and throttles UI refreshes.

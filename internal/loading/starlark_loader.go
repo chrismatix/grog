@@ -3,10 +3,11 @@ package loading
 import (
 	"context"
 	"fmt"
-	"grog/internal/config"
-	"grog/internal/model"
 	"os"
 	"path/filepath"
+
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/model"
 
 	"go.starlark.net/lib/json"
 	"go.starlark.net/lib/math"

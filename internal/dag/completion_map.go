@@ -1,8 +1,8 @@
 package dag
 
 import (
-	"grog/internal/label"
-	"grog/internal/model"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/model"
 )
 
 type CompletionMap map[label.TargetLabel]Completion

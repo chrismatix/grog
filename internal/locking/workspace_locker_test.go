@@ -3,13 +3,14 @@ package locking
 import (
 	"context"
 	"errors"
-	"grog/internal/config"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/chrismatix/grog/internal/config"
 )
 
 func setupTestWorkspace(t *testing.T) string {

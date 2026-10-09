@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"grog/internal/hashing"
+
+	"github.com/chrismatix/grog/internal/hashing"
 
 	"io"
 	"os"
@@ -12,13 +13,13 @@ import (
 	"sort"
 	"sync/atomic"
 
-	"grog/internal/caching"
-	"grog/internal/caching/backends"
-	"grog/internal/config"
-	"grog/internal/console"
-	"grog/internal/model"
-	"grog/internal/proto/gen"
-	"grog/internal/worker"
+	"github.com/chrismatix/grog/internal/caching"
+	"github.com/chrismatix/grog/internal/caching/backends"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/model"
+	"github.com/chrismatix/grog/internal/proto/gen"
+	"github.com/chrismatix/grog/internal/worker"
 
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"

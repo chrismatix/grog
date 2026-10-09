@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"grog/internal/caching/backends"
+	"github.com/chrismatix/grog/internal/caching/backends"
 
 	"github.com/parquet-go/parquet-go"
 )

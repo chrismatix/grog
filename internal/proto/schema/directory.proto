@@ -3,7 +3,7 @@ package grog.proto.v1;
 
 import "digest.proto";
 
-option go_package = "grog/proto/gen";
+option go_package = "github.com/chrismatix/grog/internal/proto/gen";
 
 
 // A file entry in a directory.

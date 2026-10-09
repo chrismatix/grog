@@ -26,7 +26,7 @@ linters:
         - (*text/tabwriter.Writer).Flush
         - (io.Closer).Close
         - (*database/sql.Rows).Close
-        - (*grog/internal/tracing.TraceStore).Close
+        - (*github.com/chrismatix/grog/internal/tracing.TraceStore).Close
     gocyclo:
       # Functions already above the ceiling carry `//nolint:gocyclo`; ratchet down as they shrink.
       min-complexity: 20

@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"grog/internal/analysis"
-	"grog/internal/caching"
-	"grog/internal/caching/backends"
-	"grog/internal/config"
-	"grog/internal/label"
-	"grog/internal/model"
+	"github.com/chrismatix/grog/internal/analysis"
+	"github.com/chrismatix/grog/internal/caching"
+	"github.com/chrismatix/grog/internal/caching/backends"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/model"
 
 	"github.com/stretchr/testify/require"
 )

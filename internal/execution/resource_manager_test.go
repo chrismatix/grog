@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"grog/internal/config"
-	"grog/internal/dag"
-	"grog/internal/label"
-	"grog/internal/model"
-	"grog/internal/worker"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/dag"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/model"
+	"github.com/chrismatix/grog/internal/worker"
 )
 
 func setupResourceTestWorkspace(t *testing.T) string {

@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"grog/internal/cmd"
+	"github.com/chrismatix/grog/internal/cmd"
 
 	"github.com/spf13/cobra"
 )

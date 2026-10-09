@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"grog/internal/label"
-	"grog/internal/model"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/model"
 )
 
 func GetTarget(name string) *model.Target {

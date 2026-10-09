@@ -2,19 +2,21 @@ package cmds
 
 import (
 	"fmt"
-	"grog/internal/console"
 	"sort"
 
-	"grog/internal/analysis"
-	"grog/internal/cmd/flagtypes"
-	"grog/internal/completions"
-	"grog/internal/config"
-	"grog/internal/dag"
-	"grog/internal/label"
-	"grog/internal/loading"
-	"grog/internal/model"
-	"grog/internal/selection"
+	"github.com/chrismatix/grog/internal/console"
+
 	"path/filepath"
+
+	"github.com/chrismatix/grog/internal/analysis"
+	"github.com/chrismatix/grog/internal/cmd/flagtypes"
+	"github.com/chrismatix/grog/internal/completions"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/dag"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/loading"
+	"github.com/chrismatix/grog/internal/model"
+	"github.com/chrismatix/grog/internal/selection"
 
 	"github.com/TyphonHill/go-mermaid/diagrams/flowchart"
 	"github.com/charmbracelet/lipgloss"

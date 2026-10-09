@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"grog/internal/label"
-	"grog/internal/model"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/model"
 )
 
 func TestGetResourceIdentityIncludesCompleteDefinition(t *testing.T) {

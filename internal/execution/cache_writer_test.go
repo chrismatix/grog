@@ -12,13 +12,13 @@ import (
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
 
-	"grog/internal/caching"
-	"grog/internal/caching/backends"
-	"grog/internal/console"
-	"grog/internal/output"
-	"grog/internal/output/handlers"
-	"grog/internal/proto/gen"
-	"grog/internal/worker"
+	"github.com/chrismatix/grog/internal/caching"
+	"github.com/chrismatix/grog/internal/caching/backends"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/output"
+	"github.com/chrismatix/grog/internal/output/handlers"
+	"github.com/chrismatix/grog/internal/proto/gen"
+	"github.com/chrismatix/grog/internal/worker"
 )
 
 type recordingCacheBackend struct {

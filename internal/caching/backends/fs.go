@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"grog/internal/config"
-	"grog/internal/console"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
 )
 
 // fsStagingDirName is the subdirectory under the shared CAS directory where

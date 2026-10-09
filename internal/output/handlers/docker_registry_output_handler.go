@@ -16,13 +16,13 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 
-	"grog/internal/caching"
-	"grog/internal/config"
-	"grog/internal/console"
-	"grog/internal/model"
-	"grog/internal/oci_push"
-	"grog/internal/proto/gen"
-	"grog/internal/worker"
+	"github.com/chrismatix/grog/internal/caching"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/model"
+	"github.com/chrismatix/grog/internal/oci_push"
+	"github.com/chrismatix/grog/internal/proto/gen"
+	"github.com/chrismatix/grog/internal/worker"
 
 	"github.com/docker/docker/client"
 )

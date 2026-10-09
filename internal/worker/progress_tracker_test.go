@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"grog/internal/config"
+	"github.com/chrismatix/grog/internal/config"
 )
 
 func TestProgressTrackerSetStatusEmitsUpdate(t *testing.T) {

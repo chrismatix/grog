@@ -1,9 +1,10 @@
 package loading
 
 import (
-	"grog/internal/console"
-	"grog/internal/label"
 	"testing"
+
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/label"
 
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"

@@ -3,12 +3,13 @@ package loading
 import (
 	"context"
 	"fmt"
-	"grog/internal/config"
-	"grog/internal/console"
-	"grog/internal/label"
-	"grog/internal/model"
 	"runtime"
 	"sync"
+
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/model"
 
 	"github.com/boyter/gocodewalker"
 )

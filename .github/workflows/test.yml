@@ -58,6 +58,9 @@ jobs:
       - name: Build and test
         run: make full-test
 
-      - name: Upload coverage badge
-        run: |
-          .github/upload_badge.sh
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v5
+        with:
+          fail_ci_if_error: false
+          files: ./coverdata/coverage.out
+          use_oidc: true

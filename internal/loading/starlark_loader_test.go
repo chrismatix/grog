@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"grog/internal/config"
+	"github.com/chrismatix/grog/internal/config"
 )
 
 func TestStarlarkLoader_CycleDetection(t *testing.T) {

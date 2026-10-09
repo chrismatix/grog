@@ -5,7 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"grog/internal/console"
+	"github.com/chrismatix/grog/internal/console"
 )
 
 // PushReport is the outcome of one push. Skipped means the HEAD probe matched.

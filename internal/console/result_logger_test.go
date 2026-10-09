@@ -8,7 +8,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 
-	"grog/internal/config"
+	"github.com/chrismatix/grog/internal/config"
 )
 
 func captureLogger() (*Logger, *observer.ObservedLogs) {

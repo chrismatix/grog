@@ -1,8 +1,8 @@
 package selection
 
 import (
-	"grog/internal/dag"
-	"grog/internal/model"
+	"github.com/chrismatix/grog/internal/dag"
+	"github.com/chrismatix/grog/internal/model"
 )
 
 // SelectTargets sets targets as selected.

@@ -9,7 +9,7 @@ import (
 
 	"github.com/docker/docker/pkg/jsonmessage"
 
-	"grog/internal/worker"
+	"github.com/chrismatix/grog/internal/worker"
 )
 
 func TestFormatPhaseSummary_NoLayers(t *testing.T) {

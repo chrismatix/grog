@@ -2,9 +2,10 @@ package hashing
 
 import (
 	"fmt"
-	"grog/internal/dag"
-	"grog/internal/maps"
-	"grog/internal/model"
+
+	"github.com/chrismatix/grog/internal/dag"
+	"github.com/chrismatix/grog/internal/maps"
+	"github.com/chrismatix/grog/internal/model"
 )
 
 type TargetHasher struct {

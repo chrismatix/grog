@@ -4,11 +4,11 @@ import (
 	"context"
 	"time"
 
-	"grog/internal/analysis"
-	"grog/internal/config"
-	"grog/internal/console"
-	"grog/internal/dag"
-	"grog/internal/model"
+	"github.com/chrismatix/grog/internal/analysis"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/dag"
+	"github.com/chrismatix/grog/internal/model"
 )
 
 func MustLoadGraphForBuild(ctx context.Context, logger *console.Logger, inferrer *DependencyInferrer) *dag.DirectedTargetGraph {

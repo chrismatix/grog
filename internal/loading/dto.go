@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"grog/internal/model"
+	"github.com/chrismatix/grog/internal/model"
 
 	"gopkg.in/yaml.v3"
 )

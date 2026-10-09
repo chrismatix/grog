@@ -9,9 +9,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fatih/color"
 
-	"grog/internal/console"
-	"grog/internal/dag"
-	"grog/internal/worker"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/dag"
+	"github.com/chrismatix/grog/internal/worker"
 )
 
 // PoolCoordinator composes a task worker pool and an I/O worker pool,

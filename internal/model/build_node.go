@@ -1,6 +1,6 @@
 package model
 
-import "grog/internal/label"
+import "github.com/chrismatix/grog/internal/label"
 
 // NodeType represents the type of a build node.
 type NodeType string

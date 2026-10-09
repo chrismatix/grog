@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"grog/internal/console"
-	"grog/internal/tracing"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/tracing"
 )
 
 var pullCmd = &cobra.Command{

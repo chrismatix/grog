@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"grog/internal/console"
-	"grog/internal/label"
-	"grog/internal/model"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/model"
 
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"

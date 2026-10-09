@@ -3,9 +3,10 @@ package caching
 import (
 	"bytes"
 	"context"
-	"grog/internal/caching/backends"
-	"grog/internal/proto/gen"
 	"io"
+
+	"github.com/chrismatix/grog/internal/caching/backends"
+	"github.com/chrismatix/grog/internal/proto/gen"
 
 	"google.golang.org/protobuf/proto"
 )

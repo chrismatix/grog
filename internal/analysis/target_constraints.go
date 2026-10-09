@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"grog/internal/config"
-	"grog/internal/console"
-	"grog/internal/label"
-	"grog/internal/model"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/model"
 
 	"github.com/fatih/color"
 )

@@ -6,7 +6,7 @@ import (
 	"hash"
 	"io"
 
-	"grog/internal/config"
+	"github.com/chrismatix/grog/internal/config"
 
 	"github.com/zeebo/xxh3"
 )

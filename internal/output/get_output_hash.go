@@ -2,9 +2,10 @@ package output
 
 import (
 	"fmt"
-	"grog/internal/hashing"
-	"grog/internal/proto/gen"
 	"sort"
+
+	"github.com/chrismatix/grog/internal/hashing"
+	"github.com/chrismatix/grog/internal/proto/gen"
 
 	"google.golang.org/protobuf/proto"
 )

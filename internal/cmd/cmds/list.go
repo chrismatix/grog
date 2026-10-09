@@ -1,13 +1,13 @@
 package cmds
 
 import (
-	"grog/internal/cmd/flagtypes"
-	"grog/internal/completions"
-	"grog/internal/config"
-	"grog/internal/console"
-	"grog/internal/label"
-	"grog/internal/loading"
-	"grog/internal/selection"
+	"github.com/chrismatix/grog/internal/cmd/flagtypes"
+	"github.com/chrismatix/grog/internal/completions"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
+	"github.com/chrismatix/grog/internal/label"
+	"github.com/chrismatix/grog/internal/loading"
+	"github.com/chrismatix/grog/internal/selection"
 
 	"github.com/spf13/cobra"
 )

@@ -16,9 +16,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"grog/internal/caching"
-	"grog/internal/caching/backends"
-	"grog/internal/ociproxy"
+	"github.com/chrismatix/grog/internal/caching"
+	"github.com/chrismatix/grog/internal/caching/backends"
+	"github.com/chrismatix/grog/internal/ociproxy"
 )
 
 // newTestRegistry spins up a registry backed by a fresh on-disk filesystem CAS

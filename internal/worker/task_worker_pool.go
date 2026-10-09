@@ -12,8 +12,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fatih/color"
 
-	"grog/internal/config"
-	"grog/internal/console"
+	"github.com/chrismatix/grog/internal/config"
+	"github.com/chrismatix/grog/internal/console"
 )
 
 type StatusFunc func(StatusUpdate)

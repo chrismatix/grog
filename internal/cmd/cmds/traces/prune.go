@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"grog/internal/console"
+	"github.com/chrismatix/grog/internal/console"
 )
 
 var pruneOlderThan string
