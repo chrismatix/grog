@@ -1,4 +1,4 @@
-package loading
+package resolvers
 
 import (
 	"context"
@@ -37,8 +37,8 @@ type cargoManifest struct {
 	Target            map[string]cargoDependencyTables `toml:"target"`
 }
 
-func cargoDependencies(resolverContext context.Context, workspaceDirectory string) (resolverDocument, error) {
-	document := resolverDocument{Version: 1, Packages: make(map[string]resolverPackage)}
+func cargoDependencies(resolverContext context.Context, workspaceDirectory string) (Document, error) {
+	document := Document{Version: 1, Packages: make(map[string]Package)}
 	workspaceManifest, operationError := readCargoManifest(resolverContext, filepath.Join(workspaceDirectory, "Cargo.toml"))
 	if operationError != nil {
 		return document, operationError
@@ -82,7 +82,7 @@ func cargoDependencies(resolverContext context.Context, workspaceDirectory strin
 		if operationError != nil {
 			return document, operationError
 		}
-		reportedPackage := resolverPackage{Dependencies: []string{}, Inputs: cargoInputs(manifest), ExcludeInputs: cargoExcludeInputs}
+		reportedPackage := Package{Dependencies: []string{}, Inputs: cargoInputs(manifest), ExcludeInputs: cargoExcludeInputs}
 		dependencyTables := []map[string]any{manifest.Dependencies, manifest.BuildDependencies}
 		for _, conditional := range manifest.Target {
 			dependencyTables = append(dependencyTables, conditional.Dependencies, conditional.BuildDependencies)

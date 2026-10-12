@@ -15,6 +15,7 @@ import (
 	"github.com/chrismatix/grog/internal/config"
 	"github.com/chrismatix/grog/internal/label"
 	"github.com/chrismatix/grog/internal/model"
+	"github.com/chrismatix/grog/internal/resolvers"
 
 	"github.com/stretchr/testify/require"
 )
@@ -90,14 +91,14 @@ func TestDependencyInferencePaths(t *testing.T) {
 					continue
 				}
 				t.Run(position, func(t *testing.T) {
-					document := resolverDocument{Version: 1, Packages: map[string]resolverPackage{}}
+					document := resolvers.Document{Version: 1, Packages: map[string]resolvers.Package{}}
 					switch position {
 					case "key":
-						document.Packages[entry] = resolverPackage{}
+						document.Packages[entry] = resolvers.Package{}
 					case "dependency":
-						document.Packages["app"] = resolverPackage{Dependencies: []string{entry}}
+						document.Packages["app"] = resolvers.Package{Dependencies: []string{entry}}
 					default:
-						document.Packages["unused"] = resolverPackage{Dependencies: []string{entry}}
+						document.Packages["unused"] = resolvers.Package{Dependencies: []string{entry}}
 					}
 					output, operationError := json.Marshal(document)
 					require.NoError(t, operationError)

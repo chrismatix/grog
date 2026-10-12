@@ -1,4 +1,4 @@
-package loading
+package resolvers
 
 import (
 	"context"
@@ -75,8 +75,8 @@ type uvPyproject struct {
 	} `toml:"tool"`
 }
 
-func uvDependencies(resolverContext context.Context, workspaceDirectory string) (resolverDocument, error) {
-	document := resolverDocument{Version: 1, Packages: make(map[string]resolverPackage)}
+func uvDependencies(resolverContext context.Context, workspaceDirectory string) (Document, error) {
+	document := Document{Version: 1, Packages: make(map[string]Package)}
 	lock, operationError := readUvLock(workspaceDirectory)
 	if operationError != nil {
 		return document, operationError
@@ -96,7 +96,7 @@ func uvDependencies(resolverContext context.Context, workspaceDirectory string) 
 		for _, optional := range lockPackage.OptionalDependencies {
 			dependencies = append(dependencies, optional...)
 		}
-		reportedPackage := resolverPackage{Dependencies: []string{}, Inputs: uvInputs(filepath.Join(workspaceDirectory, directory)), ExcludeInputs: uvExcludeInputs}
+		reportedPackage := Package{Dependencies: []string{}, Inputs: uvInputs(filepath.Join(workspaceDirectory, directory)), ExcludeInputs: uvExcludeInputs}
 		for _, dependency := range dependencies {
 			if dependencyDirectory, isMember := directoryByName[dependency.Name]; isMember && dependencyDirectory != directory {
 				reportedPackage.Dependencies = append(reportedPackage.Dependencies, dependencyDirectory)

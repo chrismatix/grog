@@ -12,6 +12,7 @@ import (
 	"github.com/chrismatix/grog/internal/label"
 	"github.com/chrismatix/grog/internal/model"
 	"github.com/chrismatix/grog/internal/output"
+	"github.com/chrismatix/grog/internal/resolvers"
 
 	"github.com/bmatcuk/doublestar/v4"
 )
@@ -265,17 +266,8 @@ func enrichDependencyResolvers(
 		inputs, excludeInputs := resolver.Inputs, resolver.ExcludeInputs
 		if len(inputs) == 0 {
 			var defaultExcludeInputs []string
-			switch resolver.Command {
-			case "builtin::cargo":
-				inputs, defaultExcludeInputs = cargoDefaultInputs(absolutePackagePath)
-			case "builtin::npm", "builtin::yarn":
-				inputs, defaultExcludeInputs = npmPackageManager.defaultInputs(absolutePackagePath)
-			case "builtin::pnpm":
-				inputs, defaultExcludeInputs = pnpmPackageManager.defaultInputs(absolutePackagePath)
-			case "builtin::aube":
-				inputs, defaultExcludeInputs = aubePackageManager.defaultInputs(absolutePackagePath)
-			case "builtin::uv":
-				inputs, defaultExcludeInputs = uvDefaultInputs(absolutePackagePath)
+			if builtin, isBuiltin := resolvers.Builtins[resolver.Command]; isBuiltin {
+				inputs, defaultExcludeInputs = builtin.DefaultInputs(absolutePackagePath)
 			}
 			excludeInputs = slices.Concat(defaultExcludeInputs, excludeInputs)
 		}

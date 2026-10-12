@@ -20,41 +20,11 @@ import (
 	"github.com/chrismatix/grog/internal/hashing"
 	"github.com/chrismatix/grog/internal/label"
 	"github.com/chrismatix/grog/internal/model"
+	"github.com/chrismatix/grog/internal/resolvers"
 	"github.com/chrismatix/grog/internal/shell"
 
 	"golang.org/x/sync/errgroup"
 )
-
-type resolverDocument struct {
-	Version  int                        `json:"version"`
-	Packages map[string]resolverPackage `json:"packages"`
-}
-
-type resolverPackage struct {
-	Dependencies []string `json:"dependencies"`
-	// Inputs let the resolver stand in for a package that registers no target:
-	// grog synthesizes a filegroup from them. Ignored when a target registers.
-	Inputs        []string `json:"inputs"`
-	ExcludeInputs []string `json:"exclude_inputs"`
-}
-
-// UnmarshalJSON requires each package entry to be an object.
-func (reportedPackage *resolverPackage) UnmarshalJSON(contents []byte) error {
-	if bytes.Equal(bytes.TrimSpace(contents), []byte("null")) {
-		return fmt.Errorf("package must be an object")
-	}
-	type packageFields resolverPackage
-	return json.Unmarshal(contents, (*packageFields)(reportedPackage))
-}
-
-var builtinResolvers = map[string]func(context.Context, string) (resolverDocument, error){
-	"builtin::aube":  aubePackageManager.dependencies,
-	"builtin::cargo": cargoDependencies,
-	"builtin::npm":   npmPackageManager.dependencies,
-	"builtin::pnpm":  pnpmPackageManager.dependencies,
-	"builtin::uv":    uvDependencies,
-	"builtin::yarn":  npmPackageManager.dependencies,
-}
 
 // CasProvider is only called when the workspace declares resolvers, so a
 // broken cache setup cannot fail loads that never run one.
@@ -80,24 +50,24 @@ func (inferrer *DependencyInferrer) inferDependencies(loadContext context.Contex
 		packagesByPath[loadedPackage.Path] = loadedPackage
 		targets = append(targets, loadedPackage.GetTargets()...)
 	}
-	resolvers := slices.SortedFunc(maps.Values(declarations), func(first, second *model.DependencyResolver) int {
+	declaredResolvers := slices.SortedFunc(maps.Values(declarations), func(first, second *model.DependencyResolver) int {
 		return strings.Compare(first.Label.String(), second.Label.String())
 	})
-	registrations, operationError := registerTargets(resolvers, targets)
+	registrations, operationError := registerTargets(declaredResolvers, targets)
 	if operationError != nil {
 		return nil, operationError
 	}
 
 	var cas *caching.Cas
-	if len(resolvers) > 0 && inferrer.CasProvider != nil {
+	if len(declaredResolvers) > 0 && inferrer.CasProvider != nil {
 		cas, operationError = inferrer.CasProvider(loadContext)
 		if operationError != nil {
 			return nil, fmt.Errorf("could not instantiate cache for dependency resolvers: %w", operationError)
 		}
 	}
-	documents := make([]resolverDocument, len(resolvers))
+	documents := make([]resolvers.Document, len(declaredResolvers))
 	resolverGroup, resolverContext := errgroup.WithContext(loadContext)
-	for index, resolver := range resolvers {
+	for index, resolver := range declaredResolvers {
 		resolverGroup.Go(func() error {
 			var operationError error
 			documents[index], operationError = inferrer.runDependencyResolver(resolverContext, resolver, cas)
@@ -109,7 +79,7 @@ func (inferrer *DependencyInferrer) inferDependencies(loadContext context.Contex
 	}
 
 	// Synthesize before linking: a reported dependency may itself be synthesized.
-	for index, resolver := range resolvers {
+	for index, resolver := range declaredResolvers {
 		document := documents[index]
 		for _, packagePath := range slices.Sorted(maps.Keys(document.Packages)) {
 			key := registration{resolver.Label, path.Join(resolver.Label.Package, packagePath)}
@@ -127,7 +97,7 @@ func (inferrer *DependencyInferrer) inferDependencies(loadContext context.Contex
 			registrations[key] = synthesized
 		}
 	}
-	if operationError := linkDependencies(loadContext, resolvers, documents, registrations); operationError != nil {
+	if operationError := linkDependencies(loadContext, declaredResolvers, documents, registrations); operationError != nil {
 		return nil, operationError
 	}
 	return packages, nil
@@ -136,8 +106,8 @@ func (inferrer *DependencyInferrer) inferDependencies(loadContext context.Contex
 // linkDependencies appends every reported edge to the target registered for
 // the reported package. Path entries resolve through the registrations, label
 // entries are parsed as they are.
-func linkDependencies(loadContext context.Context, resolvers []*model.DependencyResolver, documents []resolverDocument, registrations map[registration]*model.Target) error {
-	for index, resolver := range resolvers {
+func linkDependencies(loadContext context.Context, declaredResolvers []*model.DependencyResolver, documents []resolvers.Document, registrations map[registration]*model.Target) error {
+	for index, resolver := range declaredResolvers {
 		document := documents[index]
 		for _, packagePath := range slices.Sorted(maps.Keys(document.Packages)) {
 			target := registrations[registration{resolver.Label, path.Join(resolver.Label.Package, packagePath)}]
@@ -180,10 +150,10 @@ type registration struct {
 
 // registerTargets finds the one target per package that lists each resolver
 // in dependency_resolvers.
-func registerTargets(resolvers []*model.DependencyResolver, targets []*model.Target) (map[registration]*model.Target, error) {
-	declared := make(map[label.TargetLabel]bool, len(resolvers))
-	declaredLabels := make([]string, 0, len(resolvers))
-	for _, resolver := range resolvers {
+func registerTargets(declaredResolvers []*model.DependencyResolver, targets []*model.Target) (map[registration]*model.Target, error) {
+	declared := make(map[label.TargetLabel]bool, len(declaredResolvers))
+	declaredLabels := make([]string, 0, len(declaredResolvers))
+	for _, resolver := range declaredResolvers {
 		declared[resolver.Label] = true
 		declaredLabels = append(declaredLabels, resolver.Label.String())
 	}
@@ -211,7 +181,7 @@ func registerTargets(resolvers []*model.DependencyResolver, targets []*model.Tar
 // recorded as the defining file so `grog changes` and duplicate-label errors
 // have one to point at. The second result is the package it had to create
 // because no BUILD file exists there, or nil.
-func synthesizeFilegroup(loadContext context.Context, resolver *model.DependencyResolver, packagePath string, reportedPackage resolverPackage, packagesByPath map[string]*model.Package) (*model.Target, *model.Package, error) {
+func synthesizeFilegroup(loadContext context.Context, resolver *model.DependencyResolver, packagePath string, reportedPackage resolvers.Package, packagesByPath map[string]*model.Package) (*model.Target, *model.Package, error) {
 	targetLabel := label.TargetLabel{Package: packagePath, Name: resolver.GeneratedTargetName}
 	var createdPackage *model.Package
 	owningPackage, exists := packagesByPath[packagePath]
@@ -254,11 +224,11 @@ func synthesizeFilegroup(loadContext context.Context, resolver *model.Dependency
 // against version 1 of the protocol. The document comes from the cache when
 // the resolver's inputs are unchanged, from Go for a builtin:: command and
 // otherwise from the JSON its shell command prints. Only valid output is cached.
-func (inferrer *DependencyInferrer) runDependencyResolver(loadContext context.Context, resolver *model.DependencyResolver, cas *caching.Cas) (resolverDocument, error) {
+func (inferrer *DependencyInferrer) runDependencyResolver(loadContext context.Context, resolver *model.DependencyResolver, cas *caching.Cas) (resolvers.Document, error) {
 	resolverContext, cancel := context.WithTimeout(loadContext, resolver.Timeout)
 	defer cancel()
 	logger := console.GetLogger(loadContext)
-	var document resolverDocument
+	var document resolvers.Document
 	cacheKey, operationError := resolverCacheKey(resolver, inferrer.GrogVersion)
 	if operationError != nil {
 		return document, fmt.Errorf("resolver %s failed: %w", resolver.Label, operationError)
@@ -271,8 +241,8 @@ func (inferrer *DependencyInferrer) runDependencyResolver(loadContext context.Co
 		cacheHit = operationError == nil
 	}
 	if !cacheHit {
-		if builtin, isBuiltin := builtinResolvers[resolver.Command]; isBuiltin {
-			document, operationError = builtin(resolverContext, config.GetPathAbsoluteToWorkspaceRoot(resolver.Label.Package))
+		if builtin, isBuiltin := resolvers.Builtins[resolver.Command]; isBuiltin {
+			document, operationError = builtin.Resolve(resolverContext, config.GetPathAbsoluteToWorkspaceRoot(resolver.Label.Package))
 			if operationError == nil {
 				output, operationError = json.Marshal(document)
 			}
@@ -309,7 +279,7 @@ func (inferrer *DependencyInferrer) runDependencyResolver(loadContext context.Co
 // validateResolverDocument checks a document against version 1 of the
 // protocol and returns how many edges it reports. Dependencies that are
 // labels are parsed when they are linked, so only path entries are checked.
-func validateResolverDocument(resolverLabel label.TargetLabel, document resolverDocument) (int, error) {
+func validateResolverDocument(resolverLabel label.TargetLabel, document resolvers.Document) (int, error) {
 	if document.Version > 1 {
 		return 0, fmt.Errorf("resolver %s returned unsupported version %d; upgrade grog", resolverLabel, document.Version)
 	}
@@ -322,7 +292,7 @@ func validateResolverDocument(resolverLabel label.TargetLabel, document resolver
 
 	edgeCount := 0
 	for _, packagePath := range slices.Sorted(maps.Keys(document.Packages)) {
-		if operationError := validateResolverPath(packagePath); operationError != nil {
+		if operationError := resolvers.ValidatePath(packagePath); operationError != nil {
 			return 0, fmt.Errorf("resolver %s: %w", resolverLabel, operationError)
 		}
 
@@ -333,13 +303,13 @@ func validateResolverDocument(resolverLabel label.TargetLabel, document resolver
 			if strings.HasPrefix(dependency, "//") {
 				continue
 			}
-			if operationError := validateResolverPath(dependency); operationError != nil {
+			if operationError := resolvers.ValidatePath(dependency); operationError != nil {
 				return 0, fmt.Errorf("resolver %s: %w", resolverLabel, operationError)
 			}
 		}
 
 		for _, input := range slices.Concat(reportedPackage.Inputs, reportedPackage.ExcludeInputs) {
-			if operationError := validateResolverPath(input); operationError != nil {
+			if operationError := resolvers.ValidatePath(input); operationError != nil {
 				return 0, fmt.Errorf("resolver %s: inputs of %s: %w", resolverLabel, packagePath, operationError)
 			}
 		}
@@ -411,11 +381,4 @@ func runResolverCommand(resolverContext context.Context, resolver *model.Depende
 	}
 	console.GetLogger(resolverContext).Debugf("resolver %s stderr: %s", resolver.Label, standardError.String())
 	return standardOutput.Bytes(), nil
-}
-
-func validateResolverPath(entry string) error {
-	if strings.HasPrefix(entry, "/") || strings.HasPrefix(entry, "./") || strings.HasSuffix(entry, "/") || strings.Contains(entry, "\\") || (len(entry) > 1 && entry[1] == ':') || slices.Contains(strings.Split(entry, "/"), "..") {
-		return fmt.Errorf("invalid path %q: paths must be relative, slash-separated, without a leading ./, trailing /, or .. segment", entry)
-	}
-	return nil
 }

@@ -1,4 +1,4 @@
-package loading
+package resolvers
 
 import (
 	"context"
@@ -14,7 +14,7 @@ func TestUvDependencies(t *testing.T) {
 	require.NoError(t, operationError)
 	require.Equal(t, 1, document.Version)
 	excludeInputs := []string{"**/.venv/**", "**/__pycache__/**"}
-	require.Equal(t, map[string]resolverPackage{
+	require.Equal(t, map[string]Package{
 		"lib/format":   {Dependencies: []string{}, Inputs: []string{"format/**/*", "pyproject.toml"}, ExcludeInputs: excludeInputs},
 		"lib/proto":    {Dependencies: []string{}, Inputs: []string{"**/*.py", "**/*.pyi", "pyproject.toml"}, ExcludeInputs: excludeInputs},
 		"server":       {Dependencies: []string{"lib/format", "lib/proto", "tools/deploy"}, Inputs: []string{"pyproject.toml", "src/server/**/*"}, ExcludeInputs: excludeInputs},
