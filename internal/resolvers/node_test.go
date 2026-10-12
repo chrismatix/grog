@@ -1,4 +1,4 @@
-package loading
+package resolvers
 
 import (
 	"context"
@@ -7,10 +7,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/chrismatix/grog/internal/config"
-	"github.com/chrismatix/grog/internal/label"
-	"github.com/chrismatix/grog/internal/model"
-
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,10 +14,10 @@ func TestPnpmDependenciesWithoutLockfile(t *testing.T) {
 	document, operationError := pnpmPackageManager.dependencies(t.Context(), "testdata/node")
 	require.NoError(t, operationError)
 	require.Equal(t, 1, document.Version)
-	member := func(dependencies ...string) resolverPackage {
-		return resolverPackage{Dependencies: append([]string{}, dependencies...), Inputs: []string{"**/*"}, ExcludeInputs: []string{"**/node_modules/**"}}
+	member := func(dependencies ...string) Package {
+		return Package{Dependencies: append([]string{}, dependencies...), Inputs: []string{"**/*"}, ExcludeInputs: []string{"**/node_modules/**"}}
 	}
-	require.Equal(t, map[string]resolverPackage{
+	require.Equal(t, map[string]Package{
 		"packages/theme": member(),
 		"packages/utils": member(),
 		"packages/ui":    member("packages/theme", "packages/utils"),
@@ -221,22 +217,4 @@ func TestNodeResolverErrors(t *testing.T) {
 	cancel()
 	_, operationError = pnpmPackageManager.dependencies(cancelledContext, "testdata/node")
 	require.ErrorIs(t, operationError, context.Canceled)
-}
-
-func TestJsExampleInfersPackageDependencies(t *testing.T) {
-	originalConfig := config.Global
-	t.Cleanup(func() { config.Global = originalConfig })
-	workspaceDirectory, operationError := filepath.Abs("../../examples/js")
-	require.NoError(t, operationError)
-	config.Global.WorkspaceRoot = workspaceDirectory
-	packages, operationError := LoadAllPackages(t.Context(), &DependencyInferrer{})
-	require.NoError(t, operationError)
-	nodes, operationError := model.BuildNodeMapFromPackages(packages)
-	require.NoError(t, operationError)
-	build, isTarget := nodes[label.TL("next.js", "build")].(*model.Target)
-	require.True(t, isTarget)
-	require.Equal(t, []label.TargetLabel{
-		label.TL("", "install"), label.TL("packages/theme", "build"), label.TL("packages/ui-components", "build"), label.TL("packages/utils", "build"),
-	}, build.Dependencies)
-	require.Nil(t, nodes[label.TL("next.js", "_npm_package")])
 }

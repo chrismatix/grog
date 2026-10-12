@@ -1,4 +1,4 @@
-package loading
+package resolvers
 
 import (
 	"context"
@@ -42,8 +42,8 @@ var (
 // dependencies maps the root and every workspace member to the members its
 // dependencies, devDependencies, peerDependencies and optionalDependencies
 // point at, plus the members the lockfile links it to.
-func (packageManager nodePackageManager) dependencies(resolverContext context.Context, workspaceDirectory string) (resolverDocument, error) {
-	document := resolverDocument{Version: 1, Packages: make(map[string]resolverPackage)}
+func (packageManager nodePackageManager) dependencies(resolverContext context.Context, workspaceDirectory string) (Document, error) {
+	document := Document{Version: 1, Packages: make(map[string]Package)}
 	directories, operationError := packageManager.memberDirectories(workspaceDirectory)
 	if operationError != nil {
 		return document, operationError
@@ -71,7 +71,7 @@ func (packageManager nodePackageManager) dependencies(resolverContext context.Co
 	}
 
 	for directory, manifest := range manifests {
-		reportedPackage := resolverPackage{Dependencies: []string{}, Inputs: []string{"**/*"}, ExcludeInputs: nodeExcludeInputs}
+		reportedPackage := Package{Dependencies: []string{}, Inputs: []string{"**/*"}, ExcludeInputs: nodeExcludeInputs}
 		if directory == "" {
 			// Everything else under the root belongs to a member or to another tool.
 			reportedPackage.Inputs = []string{"package.json"}
