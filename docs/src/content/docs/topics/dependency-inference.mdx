@@ -128,15 +128,16 @@ Grog ships these resolvers.
 Use one with `command = "builtin::<name>"` and omit `inputs` to get the defaults listed below.
 Every built-in declares inputs for the packages it reports, so workspace members don't need a BUILD file.
 
-| Name          | Reads                                                                                              | Needs a toolchain |
-| ------------- | -------------------------------------------------------------------------------------------------- | ----------------- |
-| `cargo`       | The workspace `Cargo.toml` members and each member's `[dependencies]` / `[build-dependencies]`     | no                |
-| `uv`          | `uv.lock` — packages with an `editable` or `directory` source are workspace members                | no                |
-| `pnpm`        | `pnpm-workspace.yaml`, each member's `package.json` and the links in `pnpm-lock.yaml`              | no                |
-| `aube`        | `aube-workspace.yaml`, each member's `package.json` and the links in `aube-lock.yaml`              | no                |
-| `npm`, `yarn` | `workspaces` in the root `package.json` and each member's `package.json`                           | no                |
-| `go`          | Every `go.mod` under the declaring package and the `import` declarations of every `.go` file       | no                |
-| `maven`       | The root `pom.xml`, its `<modules>` recursively, and each module's `<dependencies>` and `<parent>` | no                |
+| Name          | Reads                                                                                                                       | Needs a toolchain |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `cargo`       | The workspace `Cargo.toml` members and each member's `[dependencies]` / `[build-dependencies]`                              | no                |
+| `uv`          | `uv.lock` — packages with an `editable` or `directory` source are workspace members                                         | no                |
+| `pnpm`        | `pnpm-workspace.yaml`, each member's `package.json` and the links in `pnpm-lock.yaml`                                       | no                |
+| `aube`        | `aube-workspace.yaml`, each member's `package.json` and the links in `aube-lock.yaml`                                       | no                |
+| `npm`, `yarn` | `workspaces` in the root `package.json` and each member's `package.json`                                                    | no                |
+| `go`          | Every `go.mod` under the declaring package and the `import` declarations of every `.go` file                                | no                |
+| `maven`       | The root `pom.xml`, its `<modules>` recursively, and each module's `<dependencies>` and `<parent>`                          | no                |
+| `gradle`      | `settings.gradle(.kts)` for the project tree, then `project(":x")` and `projects.x` references in each project's build file | no                |
 
 All of them parse manifests, lockfiles and sources directly, so `grog changes` works on a CI image without Cargo, uv, Node or Go installed.
 
@@ -235,6 +236,23 @@ The resolver reads the poms as written, not the effective pom: a dependency only
 Each module's `:_maven_package` covers its POM file and `src/**/*`, minus `target/**`.
 
 Default `inputs`: `pom.xml` and every reachable module or local parent's `pom.xml`, plus `**/src/**/*` only when profile-cycle fingerprints are needed, with `target/**` excluded.
+
+### gradle
+
+Projects come from `include` statements in `settings.gradle.kts` or `settings.gradle`, with `projectDir` overrides honoured; `:a:b` is the directory `a/b`.
+Including `:a:b` also creates the parent project `:a`, as Gradle does; it is reported when the directory `a` exists on disk.
+Edges are found by scanning each project's `build.gradle(.kts)` for `project(":x")` references and type-safe accessors such as `projects.coreUtils`, whatever configuration they sit in.
+This is a text scan, not a Gradle evaluation: a reference in a comment or a disabled block still counts, which only ever adds edges.
+If that over-connects your graph, generate the exact mapping with a Gradle init script and use a [committed mapping](#using-a-committed-mapping) instead.
+
+Every project also depends on the root package `""`, which covers `settings.gradle*`, the root `build.gradle*`, `gradle.properties`, `gradle/**` and `buildSrc/**`, since version catalogs and convention plugins apply to every project.
+For the same reason the root build file's own `project()` references add no edges.
+Builds pulled in with `includeBuild` become packages of their own that the root depends on.
+A parent project such as `:a` is not an edge of `:a:b`.
+
+A synthesized project filegroup covers `build.gradle`, `build.gradle.kts`, `gradle.properties` and `src/**/*`, minus `build/**` and `.gradle/**`.
+
+Default `inputs`: `settings.gradle`, `settings.gradle.kts`, and every included project's `build.gradle` and `build.gradle.kts`.
 
 ## Fields reference
 

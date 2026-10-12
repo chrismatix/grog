@@ -1,0 +1,7 @@
+plugins { id 'java-library' }
+
+dependencies {
+    api project(':libs:api')
+    testImplementation project(path: ':libs:api', configuration: 'tests')
+    implementation project(':not-included')
+}
