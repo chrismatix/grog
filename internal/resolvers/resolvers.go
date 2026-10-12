@@ -48,6 +48,7 @@ type Builtin struct {
 var Builtins = map[string]Builtin{
 	"builtin::aube":   {aubePackageManager.dependencies, aubePackageManager.defaultInputs},
 	"builtin::cargo":  {cargoDependencies, cargoDefaultInputs},
+	"builtin::dotnet": {dotnetDependencies, dotnetDefaultInputs},
 	"builtin::go":     {goDependencies, goDefaultInputs},
 	"builtin::gradle": {gradleDependencies, gradleDefaultInputs},
 	"builtin::maven":  {mavenDependencies, mavenDefaultInputs},
