@@ -1,0 +1,20 @@
+name: builtin go resolver
+repo: go_builtin_resolver
+cases:
+  - name: go_builtin_initial
+    grog_args: [build, "//..."]
+  - name: go_builtin_cached
+    grog_args: [build, "//..."]
+  - name: go_builtin_add_import
+    setup_command: |
+      cp internal/greet/greet.go greet.go.backup
+      cp internal/format/templates/hello.txt hello.txt.backup
+      printf 'package greet\n\nimport "example.com/demo/internal/format"\n\nfunc Hello() string { return format.Render("world") }\n' > internal/greet/greet.go
+  - name: go_builtin_new_import_invalidates_dependants
+    grog_args: [build, "//..."]
+  - name: go_builtin_edit_template
+    setup_command: "printf 'hi,\n' > internal/format/templates/hello.txt"
+  - name: go_builtin_embedded_file_reaches_app
+    grog_args: [build, "//..."]
+  - name: go_builtin_restore
+    setup_command: "mv greet.go.backup internal/greet/greet.go; mv hello.txt.backup internal/format/templates/hello.txt"
