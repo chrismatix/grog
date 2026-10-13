@@ -22,4 +22,20 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.external</groupId>
+        <artifactId>exec-plugin</artifactId>
+        <dependencies>
+          <dependency>
+            <groupId>com.example</groupId>
+            <artifactId>bom</artifactId>
+            <version>1.0.0</version>
+          </dependency>
+        </dependencies>
+      </plugin>
+    </plugins>
+  </build>
 </project>
