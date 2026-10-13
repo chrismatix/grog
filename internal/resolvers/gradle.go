@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -20,6 +21,7 @@ var (
 	gradleIncludeBuildPattern     = regexp.MustCompile(`\bincludeBuild\s*\(?\s*["']([^"']+)["']`)
 	gradleProjectReferencePattern = regexp.MustCompile(`\bproject\(\s*(?:path\s*[:=]\s*)?["'](:[^"']*)["']`)
 	gradleAccessorPattern         = regexp.MustCompile(`\bprojects((?:\.[A-Za-z_][A-Za-z0-9_]*)+)`)
+	gradleBuildFileNamePattern    = regexp.MustCompile(`\b(?:project\(\s*["'](:[^"']*)["']\s*\)|(rootProject))\.buildFileName\s*=\s*["']([^"']+)["']`)
 )
 
 var gradleExcludeInputs = []string{"build/**", ".gradle/**"}
@@ -34,7 +36,14 @@ func gradleDependencies(resolverContext context.Context, workspaceDirectory stri
 		return document, operationError
 	}
 	if settings == "" {
-		return document, fmt.Errorf("no settings.gradle or settings.gradle.kts in %s", workspaceDirectory)
+		// Without a settings file Gradle runs a single-project build.
+		rootBuildFile, operationError := readGradleFiles(workspaceDirectory, gradleBuildFiles(settings, ":")...)
+		if operationError != nil {
+			return document, operationError
+		}
+		if rootBuildFile == "" {
+			return document, fmt.Errorf("no settings.gradle, settings.gradle.kts or build file in %s", workspaceDirectory)
+		}
 	}
 	directoryByProject := gradleProjectDirectories(workspaceDirectory, settings)
 	accessorByProject := make(map[string]string, len(directoryByProject))
@@ -44,7 +53,7 @@ func gradleDependencies(resolverContext context.Context, workspaceDirectory stri
 
 	root := Package{
 		Dependencies:  []string{},
-		Inputs:        []string{"settings.gradle", "settings.gradle.kts", "build.gradle", "build.gradle.kts", "gradle.properties", "gradle/**", "buildSrc/**"},
+		Inputs:        slices.Concat([]string{"settings.gradle", "settings.gradle.kts", "gradle.properties", "gradle/**", "buildSrc/**", "src/**/*"}, gradleBuildFiles(settings, ":")),
 		ExcludeInputs: []string{"build/**", ".gradle/**", "buildSrc/build/**", "buildSrc/.gradle/**"},
 	}
 	for _, match := range gradleIncludeBuildPattern.FindAllStringSubmatch(settings, -1) {
@@ -57,19 +66,20 @@ func gradleDependencies(resolverContext context.Context, workspaceDirectory stri
 	}
 	slices.Sort(root.Dependencies)
 	root.Dependencies = slices.Compact(root.Dependencies)
+	slices.Sort(root.Inputs)
 	document.Packages[""] = root
 
 	for projectPath, directory := range directoryByProject {
 		if operationError := resolverContext.Err(); operationError != nil {
 			return document, operationError
 		}
-		buildFile, operationError := readGradleFiles(filepath.Join(workspaceDirectory, directory), "build.gradle.kts", "build.gradle")
+		buildFile, operationError := readGradleFiles(filepath.Join(workspaceDirectory, directory), gradleBuildFiles(settings, projectPath)...)
 		if operationError != nil {
 			return document, operationError
 		}
 		reportedPackage := Package{
 			Dependencies:  []string{""},
-			Inputs:        []string{"build.gradle", "build.gradle.kts", "gradle.properties", "src/**/*"},
+			Inputs:        slices.Concat(gradleBuildFiles(settings, projectPath), []string{"gradle.properties", "src/**/*"}),
 			ExcludeInputs: gradleExcludeInputs,
 		}
 		for _, referenced := range gradleProjectReferences(buildFile, directoryByProject, accessorByProject) {
@@ -79,6 +89,7 @@ func gradleDependencies(resolverContext context.Context, workspaceDirectory stri
 		}
 		slices.Sort(reportedPackage.Dependencies)
 		reportedPackage.Dependencies = slices.Compact(reportedPackage.Dependencies)
+		slices.Sort(reportedPackage.Inputs)
 		document.Packages[directory] = reportedPackage
 	}
 	return document, nil
@@ -110,7 +121,8 @@ func gradleProjectDirectories(workspaceDirectory string, settings string) map[st
 		}
 	}
 	for _, match := range gradleProjectDirPattern.FindAllStringSubmatch(settings, -1) {
-		if _, included := directories[match[1]]; included {
+		isAncestor := slices.ContainsFunc(slices.Collect(maps.Keys(directories)), func(projectPath string) bool { return strings.HasPrefix(projectPath, match[1]+":") })
+		if _, included := directories[match[1]]; included || isAncestor {
 			directories[match[1]] = path.Clean(filepath.ToSlash(match[2]))
 		}
 	}
@@ -120,6 +132,18 @@ func gradleProjectDirectories(workspaceDirectory string, settings string) map[st
 		}
 	}
 	return directories
+}
+
+// gradleBuildFiles is the build file to read for a project, ":" for the
+// root: the last buildFileName settings assign to it, or the defaults.
+func gradleBuildFiles(settings string, projectPath string) []string {
+	buildFiles := []string{"build.gradle.kts", "build.gradle"}
+	for _, match := range gradleBuildFileNamePattern.FindAllStringSubmatch(settings, -1) {
+		if match[1] == projectPath || (match[2] != "" && projectPath == ":") {
+			buildFiles = []string{match[3]}
+		}
+	}
+	return buildFiles
 }
 
 // gradleProjectReferences lists the project paths a build file mentions,
@@ -192,9 +216,13 @@ func gradleDefaultInputs(workspaceDirectory string) (inputs []string, excludeInp
 	if operationError != nil {
 		return inputs, gradleExcludeInputs
 	}
-	for _, directory := range gradleProjectDirectories(workspaceDirectory, settings) {
-		inputs = append(inputs, path.Join(directory, "build.gradle"), path.Join(directory, "build.gradle.kts"))
+	inputs = append(inputs, gradleBuildFiles(settings, ":")...)
+	for projectPath, directory := range gradleProjectDirectories(workspaceDirectory, settings) {
+		for _, buildFile := range gradleBuildFiles(settings, projectPath) {
+			inputs = append(inputs, path.Join(directory, buildFile))
+		}
 	}
 	slices.Sort(inputs[2:])
+	inputs = slices.Compact(inputs)
 	return inputs, gradleExcludeInputs
 }

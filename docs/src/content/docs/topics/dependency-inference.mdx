@@ -237,19 +237,20 @@ Default `inputs`: `pom.xml` and every reachable module's `pom.xml`, with `target
 ### gradle
 
 Projects come from `include` statements in `settings.gradle.kts` or `settings.gradle`, with `projectDir` overrides honoured; `:a:b` is the directory `a/b`.
-Including `:a:b` also creates the parent project `:a`, as Gradle does; it is reported when the directory `a` exists on disk.
-Edges are found by scanning each project's `build.gradle(.kts)` for `project(":x")` references and type-safe accessors such as `projects.coreUtils`, whatever configuration they sit in.
+Including `:a:b` also creates the parent project `:a`, as Gradle does; it is reported when its directory, `a` or its `projectDir` override, exists on disk.
+Without a settings file Gradle runs a single-project build, and the resolver reports just the root.
+Edges are found by scanning each project's build file, `build.gradle(.kts)` or the `buildFileName` settings assign, for `project(":x")` references and type-safe accessors such as `projects.coreUtils`, whatever configuration they sit in.
 This is a text scan, not a Gradle evaluation: a reference in a comment or a disabled block still counts, which only ever adds edges.
 If that over-connects your graph, generate the exact mapping with a Gradle init script and use a [committed mapping](#using-a-committed-mapping) instead.
 
-Every project also depends on the root package `""`, which covers `settings.gradle*`, the root `build.gradle*`, `gradle.properties`, `gradle/**` and `buildSrc/**`, since version catalogs and convention plugins apply to every project.
+Every project also depends on the root package `""`, which covers `settings.gradle*`, the root build file, `gradle.properties`, `gradle/**`, `buildSrc/**` and the root's own `src/**/*`, since version catalogs and convention plugins apply to every project.
 For the same reason the root build file's own `project()` references add no edges.
 Builds pulled in with `includeBuild` become packages of their own that the root depends on.
 A parent project such as `:a` is not an edge of `:a:b`.
 
-A synthesized project filegroup covers `build.gradle`, `build.gradle.kts`, `gradle.properties` and `src/**/*`, minus `build/**` and `.gradle/**`.
+A synthesized project filegroup covers its build file, `gradle.properties` and `src/**/*`, minus `build/**` and `.gradle/**`.
 
-Default `inputs`: `settings.gradle`, `settings.gradle.kts`, and every included project's `build.gradle` and `build.gradle.kts`.
+Default `inputs`: `settings.gradle`, `settings.gradle.kts`, the root build file, and every included project's build file.
 
 ## Fields reference
 
