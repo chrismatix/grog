@@ -1,0 +1,6 @@
+targets:
+  # Import edges come from the Go sources, so none are listed here.
+  - name: sources
+    inputs: ["*.go"]
+    command: echo checking greet
+    dependency_resolvers: ["//:go"]

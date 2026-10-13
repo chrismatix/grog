@@ -11,7 +11,7 @@ buildGo127Module {
   inherit version;
   src = lib.cleanSource ./.;
 
-  vendorHash = "sha256-LQ0qZlAzmQCjqEmpE7+fG3DqCP9EcpTqgi1BYcxJQvo=";
+  vendorHash = "sha256-OyiBJ0b3hdBGOSizWbNgE+ngc2yD4Tm6O2k/SEwu+00=";
   subPackages = [ "." ];
   tags = lib.optional withDuckdb "duckdb";
   doCheck = false;
