@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -14,26 +15,76 @@ import (
 type mavenCoordinates struct {
 	GroupId    string `xml:"groupId"`
 	ArtifactId string `xml:"artifactId"`
+	Scope      string `xml:"scope"`
+}
+
+// mavenModel is the part of a pom a profile can override as well.
+type mavenModel struct {
+	Modules              []string           `xml:"modules>module"`
+	Dependencies         []mavenCoordinates `xml:"dependencies>dependency"`
+	DependencyManagement []mavenCoordinates `xml:"dependencyManagement>dependencies>dependency"`
+	Build                struct {
+		Plugins []struct {
+			mavenCoordinates
+
+			Dependencies []mavenCoordinates `xml:"dependencies>dependency"`
+		} `xml:"plugins>plugin"`
+		Extensions []mavenCoordinates `xml:"extensions>extension"`
+	} `xml:"build"`
+	Properties struct {
+		Entries []struct {
+			XMLName xml.Name
+			Value   string `xml:",chardata"`
+		} `xml:",any"`
+	} `xml:"properties"`
+}
+
+// references lists everything a module needs from other modules: its
+// dependencies, imported BOMs, build plugins with their dependencies, and
+// build extensions.
+func (model mavenModel) references() []mavenCoordinates {
+	references := slices.Clone(model.Dependencies)
+	for _, managed := range model.DependencyManagement {
+		if strings.TrimSpace(managed.Scope) == "import" {
+			references = append(references, managed)
+		}
+	}
+	for _, plugin := range model.Build.Plugins {
+		references = append(references, plugin.mavenCoordinates)
+		references = append(references, plugin.Dependencies...)
+	}
+	return append(references, model.Build.Extensions...)
 }
 
 type mavenProject struct {
 	mavenCoordinates
+	mavenModel
 
 	Parent struct {
 		mavenCoordinates
 
 		RelativePath *string `xml:"relativePath"`
 	} `xml:"parent"`
-	Modules  []string `xml:"modules>module"`
-	Profiles []struct {
-		Modules      []string           `xml:"modules>module"`
-		Dependencies []mavenCoordinates `xml:"dependencies>dependency"`
-	} `xml:"profiles>profile"`
-	Dependencies []mavenCoordinates `xml:"dependencies>dependency"`
+	Profiles []mavenModel `xml:"profiles>profile"`
+}
+
+// mavenMember is a module with the properties visible to it: its own,
+// its profiles', and those of the modules that aggregate it.
+type mavenMember struct {
+	project    mavenProject
+	properties map[string]string
+}
+
+func (member mavenMember) interpolate(value string) string {
+	value = strings.TrimSpace(value)
+	for name, propertyValue := range member.properties {
+		value = strings.ReplaceAll(value, "${"+name+"}", propertyValue)
+	}
+	return value
 }
 
 // mavenDependencies maps every module reachable from the root pom.xml to the
-// modules its dependencies, in any profile, and its parent name.
+// modules it references, in any profile, and to its parent.
 func mavenDependencies(resolverContext context.Context, workspaceDirectory string) (Document, error) {
 	document := Document{Version: 1, Packages: make(map[string]Package)}
 	if operationError := resolverContext.Err(); operationError != nil {
@@ -44,21 +95,22 @@ func mavenDependencies(resolverContext context.Context, workspaceDirectory strin
 		return document, operationError
 	}
 	directoryByCoordinates := make(map[string]string, len(members))
-	for directory, project := range members {
-		directoryByCoordinates[mavenEffectiveGroupId(project)+":"+project.ArtifactId] = directory
+	for directory, member := range members {
+		directoryByCoordinates[member.interpolate(mavenEffectiveGroupId(member.project))+":"+member.interpolate(member.project.ArtifactId)] = directory
 	}
-	for directory, project := range members {
+	for directory, member := range members {
+		project := member.project
 		reportedPackage := Package{Dependencies: []string{}, Inputs: []string{"pom.xml", "src/**/*"}, ExcludeInputs: mavenExcludeInputs}
 		if directory == "" {
 			reportedPackage.Inputs = []string{"pom.xml"}
 		}
-		dependencies := slices.Clone(project.Dependencies)
+		references := project.references()
 		for _, profile := range project.Profiles {
-			dependencies = append(dependencies, profile.Dependencies...)
+			references = append(references, profile.references()...)
 		}
-		candidates := []string{project.Parent.GroupId + ":" + project.Parent.ArtifactId}
-		for _, dependency := range dependencies {
-			candidates = append(candidates, interpolateMavenGroupId(dependency.GroupId, project)+":"+dependency.ArtifactId)
+		candidates := []string{member.interpolate(project.Parent.GroupId) + ":" + member.interpolate(project.Parent.ArtifactId)}
+		for _, reference := range references {
+			candidates = append(candidates, member.interpolate(reference.GroupId)+":"+member.interpolate(reference.ArtifactId))
 		}
 		for _, candidate := range candidates {
 			if dependencyDirectory, isMember := directoryByCoordinates[candidate]; isMember && dependencyDirectory != directory {
@@ -79,10 +131,10 @@ func mavenDependencies(resolverContext context.Context, workspaceDirectory strin
 
 // mavenMembers reads the root pom.xml and every module it lists, directly or
 // through a profile, recursively. Modules outside the workspace are skipped.
-func mavenMembers(workspaceDirectory string) (map[string]mavenProject, error) {
-	members := make(map[string]mavenProject)
-	var visit func(directory string) error
-	visit = func(directory string) error {
+func mavenMembers(workspaceDirectory string) (map[string]mavenMember, error) {
+	members := make(map[string]mavenMember)
+	var visit func(directory string, inherited map[string]string) error
+	visit = func(directory string, inherited map[string]string) error {
 		if _, visited := members[directory]; visited {
 			return nil
 		}
@@ -90,23 +142,34 @@ func mavenMembers(workspaceDirectory string) (map[string]mavenProject, error) {
 		if operationError != nil {
 			return operationError
 		}
-		members[directory] = project
+		member := mavenMember{project: project, properties: maps.Clone(inherited)}
+		for _, model := range append([]mavenModel{project.mavenModel}, project.Profiles...) {
+			for _, entry := range model.Properties.Entries {
+				member.properties[entry.XMLName.Local] = strings.TrimSpace(entry.Value)
+			}
+		}
+		effectiveGroupId := mavenEffectiveGroupId(project)
+		for _, name := range []string{"project.groupId", "pom.groupId", "groupId"} {
+			member.properties[name] = effectiveGroupId
+		}
+		member.properties["project.parent.groupId"] = project.Parent.GroupId
+		members[directory] = member
 		modules := slices.Clone(project.Modules)
 		for _, profile := range project.Profiles {
 			modules = append(modules, profile.Modules...)
 		}
 		for _, module := range modules {
-			moduleDirectory, inside := mavenRelativeDirectory(directory, module)
+			moduleDirectory, inside := mavenRelativeDirectory(directory, member.interpolate(module))
 			if !inside {
 				continue
 			}
-			if operationError := visit(moduleDirectory); operationError != nil {
+			if operationError := visit(moduleDirectory, member.properties); operationError != nil {
 				return operationError
 			}
 		}
 		return nil
 	}
-	return members, visit("")
+	return members, visit("", map[string]string{})
 }
 
 // mavenRelativeDirectory resolves a module or parent reference, which may
@@ -147,16 +210,6 @@ func mavenEffectiveGroupId(project mavenProject) string {
 		return project.GroupId
 	}
 	return project.Parent.GroupId
-}
-
-func interpolateMavenGroupId(value string, project mavenProject) string {
-	effectiveGroupId := mavenEffectiveGroupId(project)
-	return strings.NewReplacer(
-		"${project.groupId}", effectiveGroupId,
-		"${pom.groupId}", effectiveGroupId,
-		"${groupId}", effectiveGroupId,
-		"${project.parent.groupId}", project.Parent.GroupId,
-	).Replace(value)
 }
 
 // mavenExcludeInputs keeps the globs out of the module's build output.

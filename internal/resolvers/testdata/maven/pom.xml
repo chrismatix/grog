@@ -6,7 +6,14 @@
   <version>1.0.0</version>
   <packaging>pom</packaging>
 
+  <properties>
+    <tools.dir>build-tools</tools.dir>
+    <plugin.artifact>codegen-plugin</plugin.artifact>
+  </properties>
+
   <modules>
+    <module>bom</module>
+    <module>${tools.dir}/plugin</module>
     <module>core</module>
     <module>api</module>
     <module>services</module>

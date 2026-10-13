@@ -17,13 +17,15 @@ func TestMavenDependencies(t *testing.T) {
 		return Package{Dependencies: append([]string{}, dependencies...), Inputs: []string{"pom.xml", "src/**/*"}, ExcludeInputs: []string{"target/**"}}
 	}
 	require.Equal(t, map[string]Package{
-		"":                 {Dependencies: []string{}, Inputs: []string{"pom.xml"}, ExcludeInputs: []string{"target/**"}},
-		"core":             module(""),
-		"api":              module("", "core", "tools/release"),
-		"services":         module(""),
-		"services/payment": module("api", "core", "services"),
-		"services/billing": module("", "services/payment"),
-		"tools/release":    module(),
+		"":                   {Dependencies: []string{}, Inputs: []string{"pom.xml"}, ExcludeInputs: []string{"target/**"}},
+		"bom":                module(""),
+		"build-tools/plugin": module(""),
+		"core":               module("", "bom"),
+		"api":                module("", "build-tools/plugin", "core", "tools/release"),
+		"services":           module(""),
+		"services/payment":   module("api", "bom", "core", "services"),
+		"services/billing":   module("", "build-tools/plugin", "services/payment"),
+		"tools/release":      module(),
 	}, document.Packages)
 }
 
@@ -53,7 +55,7 @@ func TestMavenRelativeDirectory(t *testing.T) {
 
 func TestMavenDefaultInputs(t *testing.T) {
 	inputs, excludeInputs := mavenDefaultInputs("testdata/maven")
-	require.Equal(t, []string{"api/pom.xml", "core/pom.xml", "pom.xml", "services/billing/pom.xml", "services/payment/pom.xml", "services/pom.xml", "tools/release/pom.xml"}, inputs)
+	require.Equal(t, []string{"api/pom.xml", "bom/pom.xml", "build-tools/plugin/pom.xml", "core/pom.xml", "pom.xml", "services/billing/pom.xml", "services/payment/pom.xml", "services/pom.xml", "tools/release/pom.xml"}, inputs)
 	require.Equal(t, []string{"target/**"}, excludeInputs)
 	inputs, excludeInputs = mavenDefaultInputs(t.TempDir())
 	require.Equal(t, []string{"pom.xml"}, inputs)
