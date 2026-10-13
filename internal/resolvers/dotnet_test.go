@@ -96,10 +96,27 @@ func TestDotnetRootProject(t *testing.T) {
 	})
 	document, operationError := dotnetDependencies(t.Context(), directory)
 	require.NoError(t, operationError)
+	// lib/Lib's edge to the root configuration would close a cycle with the
+	// root project's reference, so it is dropped.
 	require.Equal(t, map[string]Package{
 		"":        {Dependencies: []string{"lib/Lib"}, Inputs: []string{"**/*"}, ExcludeInputs: dotnetExcludeInputs},
-		"lib/Lib": dotnetMember(),
+		"lib/Lib": {Dependencies: []string{}, Inputs: []string{"**/*"}, ExcludeInputs: dotnetExcludeInputs},
 	}, document.Packages)
+}
+
+func TestDotnetReferenceSources(t *testing.T) {
+	directory := writeDotnetFiles(t, map[string]string{
+		"src/Directory.Build.props":         `<Project><ItemGroup><ProjectReference Include="..\..\shared\Analyzers\Analyzers.csproj" /></ItemGroup></Project>`,
+		"src/App/App.csproj":                `<Project><ItemGroup><ProjectReference Include="../../libs/**/*.csproj" /><ProjectReference Include="..\Plugin\Plugin.csproj" Condition="Exists('..\Plugin\Plugin.csproj')" /></ItemGroup></Project>`,
+		"libs/One/One.csproj":               dotnetEmptyProject,
+		"libs/nested/Two/Two.csproj":        dotnetEmptyProject,
+		"shared/Analyzers/Analyzers.csproj": dotnetEmptyProject,
+	})
+	document, operationError := dotnetDependencies(t.Context(), directory)
+	require.NoError(t, operationError)
+	require.Equal(t, []string{"", "libs/One", "libs/nested/Two", "shared/Analyzers", "src"}, document.Packages["src/App"].Dependencies)
+	require.Contains(t, document.Packages, "libs/nested/Two")
+	require.NotContains(t, document.Packages, "src/Plugin")
 }
 
 func TestDotnetDefaultInputs(t *testing.T) {
@@ -115,11 +132,6 @@ func TestDotnetResolverErrors(t *testing.T) {
 		expectedError string
 	}{
 		{name: "invalid project xml", files: map[string]string{"src/A/A.csproj": "<Project>"}, expectedError: "parse"},
-		{
-			name:          "reference to a missing project",
-			files:         map[string]string{"src/A/A.csproj": `<Project><ItemGroup><ProjectReference Include="..\Gone\Gone.csproj" /></ItemGroup></Project>`},
-			expectedError: "read",
-		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			_, operationError := dotnetDependencies(t.Context(), writeDotnetFiles(t, testCase.files))

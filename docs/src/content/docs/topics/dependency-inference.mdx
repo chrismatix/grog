@@ -256,13 +256,18 @@ Default `inputs`: `settings.gradle`, `settings.gradle.kts`, the root build file,
 ### dotnet
 
 Projects come from every `*.sln` or `*.slnx` file in the declaring package, or, without one, from every `*.csproj`, `*.fsproj` and `*.vbproj` in the tree outside `bin/` and `obj/`.
-Edges are `<ProjectReference Include="..">` items, resolved relative to the project.
+Edges are `<ProjectReference Include="..">` items, resolved relative to the project, including those a `Directory.Build.props` or `Directory.Build.targets` above the project declares.
+Wildcards such as `../libs/**/*.csproj` are expanded; `Exclude` is ignored, which only adds edges.
 A referenced project the solution doesn't list is still reported, so it gets a synthesized filegroup; a reference outside the declaring package is skipped.
-`$(Property)` references can't be resolved without MSBuild and are skipped.
+A reference to a project that doesn't exist, typically one guarded by `Condition="Exists(...)"`, is skipped, and so are `$(Property)` references, which can't be resolved without MSBuild.
 
 MSBuild imports `Directory.Build.props`, `Directory.Build.targets`, `Directory.Packages.props`, `global.json` and `nuget.config` from every directory above a project, which a member's own inputs can't reach.
 Each directory holding one of them becomes a package covering exactly those files, and every project depends on each such package above it.
 The root package `""` always exists and also covers the solution files, so `src/Directory.Build.props` invalidates the projects under `src/` while the root files invalidate every project.
+
+A project that sits in such a directory shares the package with its configuration files, since packages are directories.
+If that project references one below it, the child's edge back to the configuration would close a cycle, so it is dropped: editing those configuration files then doesn't invalidate the child.
+Keep projects out of directories holding `Directory.Build.*` files, or register a target with explicit `inputs` for the child, to avoid that gap.
 
 A synthesized filegroup covers the whole project directory, `**/*`, minus `**/bin/**` and `**/obj/**`.
 

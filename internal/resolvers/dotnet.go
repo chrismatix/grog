@@ -60,6 +60,7 @@ func dotnetDependencies(resolverContext context.Context, workspaceDirectory stri
 		document.Packages[directory] = Package{Dependencies: []string{}, Inputs: files, ExcludeInputs: dotnetExcludeInputs}
 	}
 	visited := make(map[string]bool)
+	projectDirectories := make(map[string]bool)
 	for queue := projectFiles; len(queue) > 0; queue = queue[1:] {
 		projectFile := queue[0]
 		if visited[projectFile] {
@@ -78,26 +79,98 @@ func dotnetDependencies(resolverContext context.Context, workspaceDirectory stri
 		if _, isConfigurationDirectory := configurationDirectories[directory]; !exists || isConfigurationDirectory {
 			reportedPackage = Package{Dependencies: reportedPackage.Dependencies, Inputs: []string{"**/*"}, ExcludeInputs: dotnetExcludeInputs}
 		}
-		for configurationDirectory := range configurationDirectories {
-			if (configurationDirectory == "" && directory != "") || strings.HasPrefix(directory, configurationDirectory+"/") {
-				reportedPackage.Dependencies = append(reportedPackage.Dependencies, configurationDirectory)
-			}
+		projectDirectories[directory] = true
+		configurationDependencies, importedReferences, operationError := dotnetConfigurationReferences(workspaceDirectory, directory, configurationDirectories)
+		if operationError != nil {
+			return document, operationError
 		}
+		reportedPackage.Dependencies = append(reportedPackage.Dependencies, configurationDependencies...)
+		references = append(references, importedReferences...)
 		for _, reference := range references {
-			referencedFile := path.Clean(path.Join(path.Dir(projectFile), reference))
-			if referencedFile == ".." || strings.HasPrefix(referencedFile, "../") {
-				continue
-			}
-			queue = append(queue, referencedFile)
-			if referencedDirectory := dotnetPackagePath(path.Dir(referencedFile)); referencedDirectory != directory {
-				reportedPackage.Dependencies = append(reportedPackage.Dependencies, referencedDirectory)
+			for _, referencedFile := range dotnetReferencedFiles(workspaceDirectory, path.Join(path.Dir(projectFile), reference)) {
+				queue = append(queue, referencedFile)
+				if referencedDirectory := dotnetPackagePath(path.Dir(referencedFile)); referencedDirectory != directory {
+					reportedPackage.Dependencies = append(reportedPackage.Dependencies, referencedDirectory)
+				}
 			}
 		}
 		slices.Sort(reportedPackage.Dependencies)
 		reportedPackage.Dependencies = slices.Compact(reportedPackage.Dependencies)
 		document.Packages[directory] = reportedPackage
 	}
+	dotnetBreakConfigurationCycles(document, projectDirectories)
 	return document, nil
+}
+
+// dotnetConfigurationReferences returns the configuration directories above
+// a project's directory and the ProjectReference items their
+// Directory.Build.props and .targets add to it, relative to the project.
+func dotnetConfigurationReferences(workspaceDirectory string, directory string, configurationDirectories map[string][]string) (dependencies []string, references []string, operationError error) {
+	for configurationDirectory, files := range configurationDirectories {
+		if configurationDirectory != directory && configurationDirectory != "" && !strings.HasPrefix(directory, configurationDirectory+"/") {
+			continue
+		}
+		if configurationDirectory != directory {
+			dependencies = append(dependencies, configurationDirectory)
+		}
+		for _, file := range files {
+			if lowerName := strings.ToLower(file); lowerName == "directory.build.props" || lowerName == "directory.build.targets" {
+				imported, operationError := dotnetProjectReferences(filepath.Join(workspaceDirectory, filepath.FromSlash(configurationDirectory), file))
+				if operationError != nil {
+					return nil, nil, operationError
+				}
+				references = append(references, imported...)
+			}
+		}
+	}
+	return dependencies, references, nil
+}
+
+// dotnetBreakConfigurationCycles drops a project's edge to the configuration
+// in a directory whose own project reaches it, which would be a cycle: one
+// directory cannot hold both nodes. Configuration edits then miss that project.
+func dotnetBreakConfigurationCycles(document Document, projectDirectories map[string]bool) {
+	for directory, reportedPackage := range document.Packages {
+		reportedPackage.Dependencies = slices.DeleteFunc(reportedPackage.Dependencies, func(dependency string) bool {
+			isAncestor := dependency == "" || strings.HasPrefix(directory, dependency+"/")
+			return isAncestor && projectDirectories[dependency] && dotnetReaches(document, dependency, directory)
+		})
+		document.Packages[directory] = reportedPackage
+	}
+}
+
+func dotnetReaches(document Document, from string, to string) bool {
+	visited := map[string]bool{from: true}
+	for queue := []string{from}; len(queue) > 0; queue = queue[1:] {
+		for _, dependency := range document.Packages[queue[0]].Dependencies {
+			if dependency == to {
+				return true
+			}
+			if !visited[dependency] {
+				visited[dependency] = true
+				queue = append(queue, dependency)
+			}
+		}
+	}
+	return false
+}
+
+// dotnetReferencedFiles resolves one reference, which may be a glob, to the
+// project files it names inside the workspace. A reference to a project that
+// does not exist is dropped, as MSBuild's Condition="Exists(...)" would.
+func dotnetReferencedFiles(workspaceDirectory string, reference string) []string {
+	reference = path.Clean(reference)
+	if reference == ".." || strings.HasPrefix(reference, "../") {
+		return nil
+	}
+	if strings.ContainsAny(reference, "*?") {
+		matches, _ := doublestar.Glob(os.DirFS(workspaceDirectory), reference, doublestar.WithFilesOnly())
+		return matches
+	}
+	if _, operationError := os.Stat(filepath.Join(workspaceDirectory, filepath.FromSlash(reference))); operationError != nil {
+		return nil
+	}
+	return []string{reference}
 }
 
 func dotnetPackagePath(directory string) string {
