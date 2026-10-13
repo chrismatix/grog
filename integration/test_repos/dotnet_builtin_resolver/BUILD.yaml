@@ -1,0 +1,5 @@
+# builtin::dotnet reads Demo.sln and each project's ProjectReference items;
+# src/Utils has no BUILD file and is synthesized as :_dotnet_package.
+dependency_resolvers:
+  - name: dotnet
+    command: builtin::dotnet

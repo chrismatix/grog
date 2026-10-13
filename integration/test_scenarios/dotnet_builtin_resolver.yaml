@@ -1,0 +1,20 @@
+name: builtin dotnet resolver
+repo: dotnet_builtin_resolver
+cases:
+  - name: dotnet_builtin_initial
+    grog_args: [build, "//..."]
+  - name: dotnet_builtin_cached
+    grog_args: [build, "//..."]
+  - name: dotnet_builtin_add_project_reference
+    setup_command: |
+      cp src/Core/Core.csproj core.csproj.backup
+      cp src/Utils/Helpers.cs helpers.cs.backup
+      printf '<Project Sdk="Microsoft.NET.Sdk">\n  <PropertyGroup>\n    <TargetFramework>net9.0</TargetFramework>\n  </PropertyGroup>\n  <ItemGroup>\n    <ProjectReference Include="..\\Utils\\Utils.csproj" />\n  </ItemGroup>\n</Project>\n' > src/Core/Core.csproj
+  - name: dotnet_builtin_project_edit_invalidates_dependants
+    grog_args: [build, "//..."]
+  - name: dotnet_builtin_edit_synthesized_source
+    setup_command: "printf 'namespace Utils;\n\npublic static class Helpers\n{\n    public static string Shout(string text) => text.ToUpperInvariant() + \"!\";\n}\n' > src/Utils/Helpers.cs"
+  - name: dotnet_builtin_synthesized_filegroup_reaches_app
+    grog_args: [build, "//..."]
+  - name: dotnet_builtin_restore
+    setup_command: "mv core.csproj.backup src/Core/Core.csproj; mv helpers.cs.backup src/Utils/Helpers.cs"
