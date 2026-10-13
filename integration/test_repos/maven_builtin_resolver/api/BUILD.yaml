@@ -1,0 +1,6 @@
+targets:
+  # Module dependencies come from pom.xml, so none are listed here.
+  - name: sources
+    inputs: ["pom.xml", "src/**/*"]
+    command: echo checking api
+    dependency_resolvers: ["//:maven"]

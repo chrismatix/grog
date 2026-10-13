@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.example</groupId>
+  <artifactId>parent</artifactId>
+  <version>1.0.0</version>
+  <packaging>pom</packaging>
+
+  <properties>
+    <tools.dir>build-tools</tools.dir>
+    <plugin.artifact>codegen-plugin</plugin.artifact>
+  </properties>
+
+  <modules>
+    <module>bom</module>
+    <module>${tools.dir}/plugin</module>
+    <module>core</module>
+    <module>api</module>
+    <module>services</module>
+    <module>../outside</module>
+  </modules>
+
+  <profiles>
+    <profile>
+      <id>release</id>
+      <modules>
+        <module>tools/release/pom.xml</module>
+      </modules>
+    </profile>
+  </profiles>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.external</groupId>
+        <artifactId>lib</artifactId>
+        <version>2.0</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+</project>
