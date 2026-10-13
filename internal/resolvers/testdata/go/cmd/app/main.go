@@ -9,5 +9,5 @@ import (
 )
 
 func main() {
-	fmt.Println(greet.Hello(), gen.Version, lib.Name)
+	fmt.Println(greet.Hello(), gen.Version, lib.Name, shim.Name)
 }

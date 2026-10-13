@@ -14,13 +14,14 @@ func TestGoDependencies(t *testing.T) {
 	require.NoError(t, operationError)
 	require.Equal(t, 1, document.Version)
 	member := func(inputs []string, dependencies ...string) Package {
-		return Package{Dependencies: append([]string{}, dependencies...), Inputs: inputs, ExcludeInputs: []string{"vendor/**"}}
+		return Package{Dependencies: append([]string{}, dependencies...), Inputs: inputs}
 	}
 	plain := []string{"*", "testdata/**"}
 	require.Equal(t, map[string]Package{
-		"cmd/app":          member(plain, "internal/greet", "tools/gen"),
+		"cmd/app":          member(plain, "internal/_shim", "internal/greet", "tools/gen"),
+		"internal/_shim":   member(plain),
 		"internal/greet":   member(plain, "internal/format", "internal/winutil"),
-		"internal/format":  member([]string{"*", "banner.txt", "banner.txt/**", "static", "static/**", "templates/*.txt", "templates/*.txt/**", "testdata/**"}),
+		"internal/format":  member([]string{"*", "banner.txt", "banner.txt/**", "static", "static/**", "templates/*.txt", "templates/*.txt/**", "testdata/**", "vendor/assets/logo.txt", "vendor/assets/logo.txt/**"}),
 		"internal/winutil": member([]string{"*", "fixtures", "fixtures/**", "testdata/**"}),
 		"tools/gen":        member(plain),
 	}, document.Packages)
@@ -68,7 +69,7 @@ func TestGoEmbedPatterns(t *testing.T) {
 func TestGoDefaultInputs(t *testing.T) {
 	inputs, excludeInputs := goDefaultInputs("testdata/go")
 	require.Equal(t, []string{"go.work", "go.work.sum", "**/go.mod", "**/go.sum", "**/*.go"}, inputs)
-	require.Equal(t, []string{"**/vendor/**", "**/testdata/**", "**/node_modules/**", "**/.*/**", "**/_*/**"}, excludeInputs)
+	require.Equal(t, []string{"**/vendor/**", "**/node_modules/**", "**/.*/**"}, excludeInputs)
 }
 
 func TestGoResolverErrors(t *testing.T) {
