@@ -26,7 +26,7 @@ import (
 // counts. Test files are left out: Go allows import cycles through them.
 func goDependencies(resolverContext context.Context, workspaceDirectory string) (Document, error) {
 	document := Document{Version: 1, Packages: make(map[string]Package)}
-	modules, packageDirectories, operationError := goWorkspaceLayout(workspaceDirectory)
+	modules, pending, operationError := goWorkspaceLayout(resolverContext, workspaceDirectory)
 	if operationError != nil {
 		return document, operationError
 	}
@@ -34,38 +34,70 @@ func goDependencies(resolverContext context.Context, workspaceDirectory string) 
 		return document, fmt.Errorf("no go.mod under %s", workspaceDirectory)
 	}
 
-	isPackage := make(map[string]bool, len(packageDirectories))
-	for _, packageDirectory := range packageDirectories {
-		isPackage[packageDirectory] = true
-	}
-	var documentLock sync.Mutex
-	parseGroup, parseContext := errgroup.WithContext(resolverContext)
-	parseGroup.SetLimit(runtime.GOMAXPROCS(0))
-	for _, packageDirectory := range packageDirectories {
-		parseGroup.Go(func() error {
-			if operationError := parseContext.Err(); operationError != nil {
-				return operationError
-			}
-			imports, embedPatterns, operationError := goPackageSources(filepath.Join(workspaceDirectory, packageDirectory))
-			if operationError != nil {
-				return operationError
-			}
-			reportedPackage := Package{Dependencies: []string{}, Inputs: goInputs(embedPatterns), ExcludeInputs: goExcludeInputs}
-			for _, importPath := range imports {
-				dependencyDirectory, isLocal := goImportDirectory(importPath, modules)
-				if isLocal && dependencyDirectory != packageDirectory && isPackage[dependencyDirectory] {
-					reportedPackage.Dependencies = append(reportedPackage.Dependencies, dependencyDirectory)
+	// A directory the walk skips, such as _foo, is still a package once
+	// something imports it, so parsing repeats for newly imported directories.
+	localImports := make(map[string][]string)
+	for len(pending) > 0 {
+		var resultLock sync.Mutex
+		parseGroup, parseContext := errgroup.WithContext(resolverContext)
+		parseGroup.SetLimit(runtime.GOMAXPROCS(0))
+		for _, packageDirectory := range pending {
+			parseGroup.Go(func() error {
+				if operationError := parseContext.Err(); operationError != nil {
+					return operationError
+				}
+				imports, embedPatterns, operationError := goPackageSources(filepath.Join(workspaceDirectory, packageDirectory))
+				if operationError != nil {
+					return operationError
+				}
+				var dependencyDirectories []string
+				for _, importPath := range imports {
+					if dependencyDirectory, isLocal := goImportDirectory(importPath, modules); isLocal && dependencyDirectory != packageDirectory {
+						dependencyDirectories = append(dependencyDirectories, dependencyDirectory)
+					}
+				}
+				resultLock.Lock()
+				defer resultLock.Unlock()
+				localImports[packageDirectory] = dependencyDirectories
+				document.Packages[packageDirectory] = Package{Inputs: goInputs(embedPatterns)}
+				return nil
+			})
+		}
+		if operationError := parseGroup.Wait(); operationError != nil {
+			return document, operationError
+		}
+		pending = nil
+		for _, dependencyDirectories := range localImports {
+			for _, dependencyDirectory := range dependencyDirectories {
+				if _, isParsed := document.Packages[dependencyDirectory]; !isParsed && !slices.Contains(pending, dependencyDirectory) && goHasSources(filepath.Join(workspaceDirectory, dependencyDirectory)) {
+					pending = append(pending, dependencyDirectory)
 				}
 			}
-			slices.Sort(reportedPackage.Dependencies)
-			reportedPackage.Dependencies = slices.Compact(reportedPackage.Dependencies)
-			documentLock.Lock()
-			document.Packages[packageDirectory] = reportedPackage
-			documentLock.Unlock()
-			return nil
-		})
+		}
 	}
-	return document, parseGroup.Wait()
+
+	for packageDirectory, dependencyDirectories := range localImports {
+		reportedPackage := document.Packages[packageDirectory]
+		reportedPackage.Dependencies = []string{}
+		for _, dependencyDirectory := range dependencyDirectories {
+			if _, isPackage := document.Packages[dependencyDirectory]; isPackage {
+				reportedPackage.Dependencies = append(reportedPackage.Dependencies, dependencyDirectory)
+			}
+		}
+		slices.Sort(reportedPackage.Dependencies)
+		reportedPackage.Dependencies = slices.Compact(reportedPackage.Dependencies)
+		document.Packages[packageDirectory] = reportedPackage
+	}
+	return document, nil
+}
+
+// goHasSources reports whether a directory holds a Go file the go tool reads.
+func goHasSources(directory string) bool {
+	entries, operationError := os.ReadDir(directory)
+	if operationError != nil {
+		return false
+	}
+	return slices.ContainsFunc(entries, func(entry fs.DirEntry) bool { return !entry.IsDir() && isGoSourceFile(entry.Name()) })
 }
 
 type goModule struct {
@@ -76,12 +108,15 @@ type goModule struct {
 // goWorkspaceLayout walks the workspace the way the go tool does, skipping
 // vendor, testdata and hidden or underscore directories, and returns every
 // module and every directory holding Go files, both workspace-relative.
-func goWorkspaceLayout(workspaceDirectory string) ([]goModule, []string, error) {
+func goWorkspaceLayout(walkContext context.Context, workspaceDirectory string) ([]goModule, []string, error) {
 	var modules []goModule
 	packageDirectories := make(map[string]bool)
 	operationError := filepath.WalkDir(workspaceDirectory, func(currentPath string, entry fs.DirEntry, walkError error) error {
 		if walkError != nil {
 			return walkError
+		}
+		if operationError := walkContext.Err(); operationError != nil {
+			return operationError
 		}
 		relativePath, operationError := filepath.Rel(workspaceDirectory, currentPath)
 		if operationError != nil {
@@ -232,11 +267,8 @@ func goInputs(embedPatterns []string) []string {
 	return slices.Compact(inputs)
 }
 
-// goExcludeInputs keeps vendored modules out of an embed pattern's tree.
-var goExcludeInputs = []string{"vendor/**"}
-
 // goDefaultInputs are the files the built-in reads: every module file and
-// every Go source file outside vendor and testdata directories.
+// every Go source file an import path can reach.
 func goDefaultInputs(_ string) (inputs []string, excludeInputs []string) {
-	return []string{"go.work", "go.work.sum", "**/go.mod", "**/go.sum", "**/*.go"}, []string{"**/vendor/**", "**/testdata/**", "**/node_modules/**", "**/.*/**", "**/_*/**"}
+	return []string{"go.work", "go.work.sum", "**/go.mod", "**/go.sum", "**/*.go"}, []string{"**/vendor/**", "**/node_modules/**", "**/.*/**"}
 }
