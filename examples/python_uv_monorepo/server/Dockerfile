@@ -5,7 +5,7 @@
 #   2. internal workspace packages   — rebuilds on lib changes
 #   3. this service's own sources    — rebuilds every commit
 FROM python:3.12.11-slim AS builder
-RUN pip install --no-cache-dir uv==0.11.14
+RUN pip install --no-cache-dir uv==0.12.5
 RUN uv venv /app
 ENV VIRTUAL_ENV=/app
 
@@ -29,7 +29,7 @@ RUN uv pip install --python /app --no-deps --no-sources ./app
 FROM python:3.12.11-slim
 ENV PYTHONUNBUFFERED=1
 RUN useradd --system --create-home --shell /usr/sbin/nologin appuser
-COPY --link --from=builder --chown=appuser:appuser /app /app
+COPY --from=builder --chown=appuser:appuser /app /app
 USER appuser
 EXPOSE 8080
 ENTRYPOINT ["/app/bin/uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "8080"]

@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # uv 3-layer build (no pex round-trip). See server/Dockerfile for the rationale.
 FROM python:3.12.11-slim AS builder
-RUN pip install --no-cache-dir uv==0.11.14
+RUN pip install --no-cache-dir uv==0.12.5
 RUN uv venv /app
 ENV VIRTUAL_ENV=/app
 
@@ -20,6 +20,6 @@ RUN uv pip install --python /app --no-deps --no-sources ./app
 FROM python:3.12.11-slim
 ENV PYTHONUNBUFFERED=1
 RUN useradd --system --create-home --shell /usr/sbin/nologin appuser
-COPY --link --from=builder --chown=appuser:appuser /app /app
+COPY --from=builder --chown=appuser:appuser /app /app
 USER appuser
 ENTRYPOINT ["/app/bin/main"]

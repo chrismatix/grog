@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "resolvedDependencies": {
+    "package://grog.build/releases/v0.48.0/grog@0": {
+      "type": "remote",
+      "uri": "projectpackage://grog.build/releases/v0.48.0/grog@0.48.0",
+      "checksums": {
+        "sha256": "f1a9b7e59ec4361e7622aa02a568ae712ceb275ad2b7e4bfe3c2195184c3ff02"
+      }
+    }
+  }
+}
