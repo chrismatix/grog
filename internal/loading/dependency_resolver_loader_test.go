@@ -41,7 +41,7 @@ target(name="sources", dependency_resolvers=[":cargo"])`},
 		{"pkl", &PklLoader{}, fmt.Sprintf(`amends %q
 dependency_resolvers { new { name = "cargo"; command = "builtin::cargo"; inputs { "manifests/*.toml" }; exclude_inputs { "manifests/skip.toml" }; timeout = "2s"; generated_target_name = "python" } }
 targets { new { name = "sources"; dependency_resolvers { ":cargo" } } }
-`, packageModule)},
+`, pklFileSource(packageModule).Uri.String())},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
