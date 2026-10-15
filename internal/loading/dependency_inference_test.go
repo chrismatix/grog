@@ -191,7 +191,7 @@ func TestDependencyInferenceNestedRootAndEnvironment(t *testing.T) {
 	resolverLabel := label.TL("tools/rust", "custom")
 	require.NoError(t, os.MkdirAll(filepath.Join(config.Global.WorkspaceRoot, "tools/rust"), 0755))
 	packages[0].DependencyResolvers = map[label.TargetLabel]*model.DependencyResolver{resolverLabel: {Label: resolverLabel, Timeout: time.Second, Command: `
- test "$PWD" = "$GROG_WORKSPACE_ROOT/tools/rust"
+ test "$PWD" = "$(cd "$GROG_WORKSPACE_ROOT/tools/rust" && pwd)"
  test "$GROG_PACKAGE" = tools/rust
  test "$GROG_RESOLVER_LABEL" = //tools/rust:custom
  test "$GROG_TARGET" = //tools/rust:custom
