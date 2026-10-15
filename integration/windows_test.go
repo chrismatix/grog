@@ -61,7 +61,6 @@ func TestWindowsWorkflow(t *testing.T) {
 		t.Fatalf("script arguments: %s", output)
 	}
 	run("logs", "//nested/package:build")
-	run("traces", "list")
 	command := exec.Command(binaryPath, "build", "//:timeout")
 	command.Dir = workspace
 	command.Env = append(os.Environ(), "GROG_ROOT="+cacheRoot)

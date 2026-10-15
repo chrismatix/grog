@@ -16,7 +16,7 @@ func processRunning(processID int) bool {
 	if err != nil {
 		return false
 	}
-	defer process.Release()
+	defer func() { _ = process.Release() }()
 	err = process.Signal(syscall.Signal(0))
 	return err == nil || errors.Is(err, syscall.EPERM)
 }

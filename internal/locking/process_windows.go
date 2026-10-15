@@ -14,7 +14,7 @@ func processRunning(processID int) bool {
 	if err != nil {
 		return errors.Is(err, windows.ERROR_ACCESS_DENIED)
 	}
-	defer windows.CloseHandle(processHandle)
+	defer func() { _ = windows.CloseHandle(processHandle) }()
 	status, err := windows.WaitForSingleObject(processHandle, 0)
 	return err != nil || status == uint32(windows.WAIT_TIMEOUT)
 }

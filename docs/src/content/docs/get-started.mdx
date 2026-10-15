@@ -78,7 +78,7 @@ Invoke-WebRequest https://grog.build/latest/grog-windows-amd64.exe -OutFile grog
 
 Move `grog.exe` to a directory on `PATH`. Install [Git for Windows](https://gitforwindows.org/) with Git on `PATH`; Grog finds its bundled `sh.exe` automatically. Target commands and resource hooks use POSIX shell syntax. Native `.exe` binaries and shell scripts are supported by `grog run`.
 
-The default cache directory is `%USERPROFILE%\.grog`. Symlink outputs require Windows Developer Mode or administrator privileges. Windows releases support x64; ARM64 is not currently built.
+The default cache directory is `%USERPROFILE%\.grog`. Symlink outputs require Windows Developer Mode or administrator privileges. Windows releases support x64; ARM64 and `grog-full` (DuckDB, for `grog traces` queries) are not currently built.
 
   </TabItem>
 </Tabs>
