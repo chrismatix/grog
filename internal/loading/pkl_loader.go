@@ -19,10 +19,9 @@ import (
 
 // PklLoader implements the Loader interface for pkl files.
 type PklLoader struct {
-	evaluator       pkl.Evaluator
-	evaluatorErr    error
-	evaluatorOnce   sync.Once
-	evaluationMutex sync.Mutex
+	evaluator     pkl.Evaluator
+	evaluatorErr  error
+	evaluatorOnce sync.Once
 }
 
 func (pl *PklLoader) Matches(fileName string) bool {
@@ -68,11 +67,6 @@ func withEnv(envVars map[string]string) func(*pkl.EvaluatorOptions) {
 
 // Load reads the file at the specified filePath and unmarshals its content into a model.Package.
 func (pl *PklLoader) Load(ctx context.Context, filePath string) (PackageDTO, bool, error) {
-	// pkl-go's clock-seeded RNGs can generate duplicate concurrent request IDs on Windows.
-	if runtime.GOOS == "windows" {
-		pl.evaluationMutex.Lock()
-		defer pl.evaluationMutex.Unlock()
-	}
 	var pkg PackageDTO
 
 	evaluator, err := pl.getEvaluator(ctx)

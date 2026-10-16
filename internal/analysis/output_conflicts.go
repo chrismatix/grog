@@ -123,10 +123,17 @@ func sharedKeyConflicts(graph *dag.DirectedTargetGraph, recordsByKey map[string]
 
 func cleanOutputPath(target *model.Target, output string) string {
 	outputPath := filepath.ToSlash(filepath.Clean(filepath.Join(target.Label.Package, output)))
-	if runtime.GOOS == "windows" {
-		outputPath = strings.ToLower(outputPath)
+	if runtime.GOOS != "windows" {
+		return outputPath
 	}
-	return outputPath
+	// Win32 ignores letter case and trailing dots and spaces in path components.
+	components := strings.Split(strings.ToLower(outputPath), "/")
+	for index, component := range components {
+		if component != "." && component != ".." {
+			components[index] = strings.TrimRight(component, ". ")
+		}
+	}
+	return strings.Join(components, "/")
 }
 
 func pathWithin(path, dir string) bool {
