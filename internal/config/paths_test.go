@@ -6,6 +6,35 @@ import (
 	"testing"
 )
 
+func TestWorkspaceRelativePaths(t *testing.T) {
+	previous := Global
+	workspace := filepath.Join(t.TempDir(), "workspace")
+	Global.WorkspaceRoot = workspace
+	t.Cleanup(func() { Global = previous })
+	for _, testCase := range []struct {
+		name      string
+		path      string
+		want      string
+		wantError bool
+	}{
+		{name: "root", path: workspace, want: "."},
+		{name: "nested", path: filepath.Join(workspace, "some", "package", "BUILD.yaml"), want: "some/package/BUILD.yaml"},
+		{name: "sibling prefix", path: workspace + "-other/BUILD.yaml", wantError: true},
+		{name: "parent", path: filepath.Dir(workspace), wantError: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			actual, err := GetPathRelativeToWorkspaceRoot(testCase.path)
+			if (err != nil) != testCase.wantError || actual != testCase.want {
+				t.Fatalf("got %q, %v; want %q, error=%v", actual, err, testCase.want, testCase.wantError)
+			}
+		})
+	}
+	packagePath, err := GetPackagePath(filepath.Join(workspace, "some", "package", "BUILD.yaml"))
+	if err != nil || packagePath != "some/package" {
+		t.Fatalf("got package %q, %v", packagePath, err)
+	}
+}
+
 func TestGetWorkspaceCachePrefix_IsPathUnique(t *testing.T) {
 	// Logs and the workspace lock rely on this prefix staying unique per
 	// absolute path so that parallel grog invocations in different
