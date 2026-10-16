@@ -22,6 +22,7 @@ func TestBuildGraphOutputConflictCaseSensitivity(t *testing.T) {
 		{name: "files", firstOutput: "out/result.txt", secondOutput: "OUT/result.txt"},
 		{name: "directories", firstOutput: "dir::out", secondOutput: "dir::OUT/nested"},
 		{name: "directory and file", firstOutput: "dir::out", secondOutput: "OUT/result.txt"},
+		{name: "trailing dots and spaces", firstOutput: "out/result.txt", secondOutput: "out. /result.txt. "},
 		{name: "packages", firstPackage: "package", secondPackage: "PACKAGE", firstOutput: "result.txt", secondOutput: "result.txt"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
