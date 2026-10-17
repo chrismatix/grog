@@ -60,13 +60,7 @@ jobs:
 
       - name: Publish coverage report
         run: |
-          go tool cover -html=coverdata/coverage.out -o coverdata/coverage.html
-          coverage_percentage=$(awk 'END {print $NF}' coverdata/coverage_overview.out)
-          encoded_coverage_percentage=${coverage_percentage//%/%25}
-          curl --fail --location --silent --show-error \
-            "https://img.shields.io/badge/coverage-${encoded_coverage_percentage}-brightgreen.svg" \
-            --output coverdata/coverage.svg
           gcloud storage cp --cache-control=no-cache --content-type='text/html; charset=utf-8' \
-            coverdata/coverage.html gs://grog-assets/github/coverage.html
+            coverdata/coverage.html coverdata/coverage-details.html gs://grog-assets/github/
           gcloud storage cp --cache-control=no-cache --content-type=image/svg+xml \
             coverdata/coverage.svg gs://grog-assets/github/coverage.svg

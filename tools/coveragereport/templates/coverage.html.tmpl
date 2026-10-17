@@ -1,0 +1,182 @@
+{{define "bar"}}<span class="bar {{level .}}" role="presentation"><span style="width: {{printf "%.1f" .}}%"></span></span>{{end -}}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>grog coverage</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --background: #fafaf9;
+    --surface: #ffffff;
+    --text: #1c1917;
+    --muted: #78716c;
+    --border: #e7e5e4;
+    --track: #e7e5e4;
+    --good: #16a34a;
+    --fair: #ca8a04;
+    --poor: #dc2626;
+    --accent: #2563eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: #0c0a09;
+      --surface: #1c1917;
+      --text: #f5f5f4;
+      --muted: #a8a29e;
+      --border: #292524;
+      --track: #292524;
+      --good: #22c55e;
+      --fair: #eab308;
+      --poor: #f87171;
+      --accent: #60a5fa;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 960px; margin: 0 auto; padding: 32px 16px 64px; }
+  a { color: var(--accent); }
+  header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px; }
+  h1 { margin: 0; font-size: 20px; }
+  .muted { color: var(--muted); }
+  .numeric { font-variant-numeric: tabular-nums; }
+  .overview {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin: 24px 0;
+    padding: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  .total { font-size: 48px; font-weight: 700; line-height: 1; }
+  .total.good { color: var(--good); }
+  .total.fair { color: var(--fair); }
+  .total.poor { color: var(--poor); }
+  .stat strong { display: block; font-size: 22px; }
+  .overview .bar { grid-column: 1 / -1; height: 10px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-bottom: 12px; }
+  .controls input[type="search"] {
+    flex: 1 1 240px;
+    padding: 8px 12px;
+    font: inherit;
+    color: inherit;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .packages { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 120px 64px 72px;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 16px;
+  }
+  .heading { font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--border); }
+  details + details { border-top: 1px solid var(--border); }
+  summary { cursor: pointer; list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  summary .name::before { content: "▸"; display: inline-block; width: 1em; color: var(--muted); }
+  details[open] summary .name::before { content: "▾"; }
+  summary:hover { background: var(--background); }
+  .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .files .row { padding-left: 36px; font-size: 14px; }
+  .files { padding-bottom: 8px; }
+  .right { text-align: right; }
+  .bar { display: block; height: 6px; background: var(--track); border-radius: 999px; overflow: hidden; }
+  .bar span { display: block; height: 100%; border-radius: inherit; }
+  .bar.good span { background: var(--good); }
+  .bar.fair span { background: var(--fair); }
+  .bar.poor span { background: var(--poor); }
+  .empty { padding: 24px 16px; text-align: center; }
+  @media (max-width: 600px) {
+    .row { grid-template-columns: minmax(0, 1fr) 64px 56px; }
+    .row > :nth-child(2) { display: none; }
+    .name { white-space: normal; word-break: break-all; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>grog coverage</h1>
+    <span class="muted">Generated {{.GeneratedAt.Format "2006-01-02 15:04 MST"}} · <a href="coverage-details.html">Line-level report</a></span>
+  </header>
+
+  <section class="overview">
+    <div>
+      <div class="total numeric {{level .Percent}}">{{percent .Percent}}</div>
+      <div class="muted">total statement coverage</div>
+    </div>
+    <div class="stat numeric">
+      <strong>{{.Covered}} / {{.Total}}</strong>
+      <span class="muted">statements covered</span>
+    </div>
+    <div class="stat numeric">
+      <strong>{{.PackagesBelowThreshold}} / {{len .Packages}}</strong>
+      <span class="muted">packages below {{.ThresholdPercent}}%</span>
+    </div>
+    {{template "bar" .Percent}}
+  </section>
+
+  <div class="controls">
+    <input id="search" type="search" placeholder="Filter packages and files" aria-label="Filter packages and files">
+    <label><input id="below-threshold" type="checkbox"> Below {{.ThresholdPercent}}% only</label>
+  </div>
+
+  <section class="packages">
+    <div class="row heading">
+      <span>Package</span><span></span><span class="right">Coverage</span><span class="right">Missed</span>
+    </div>
+    {{- range .Packages}}
+    <details data-search="{{.Name}}{{range .Files}} {{.Name}}{{end}}" data-below-threshold="{{lt .Percent $.ThresholdPercent}}">
+      <summary class="row">
+        <span class="name">{{.Name}}</span>
+        {{template "bar" .Percent}}
+        <span class="right numeric">{{percent .Percent}}</span>
+        <span class="right numeric muted">{{.Missed}}</span>
+      </summary>
+      <div class="files">
+        {{- range .Files}}
+        <div class="row">
+          <a class="name" href="coverage-details.html#{{.DetailsAnchor}}">{{base .Name}}</a>
+          {{template "bar" .Percent}}
+          <span class="right numeric">{{percent .Percent}}</span>
+          <span class="right numeric muted">{{.Missed}}</span>
+        </div>
+        {{- end}}
+      </div>
+    </details>
+    {{- end}}
+    <p class="empty muted" hidden>No packages match.</p>
+  </section>
+</main>
+<script>
+  const search = document.getElementById("search");
+  const belowThreshold = document.getElementById("below-threshold");
+  const packages = document.querySelectorAll(".packages details");
+  const empty = document.querySelector(".packages .empty");
+  function filter() {
+    const query = search.value.trim().toLowerCase();
+    let visible = 0;
+    for (const packageRow of packages) {
+      const matches = packageRow.dataset.search.toLowerCase().includes(query)
+        && (!belowThreshold.checked || packageRow.dataset.belowThreshold === "true");
+      packageRow.hidden = !matches;
+      if (matches) visible++;
+    }
+    empty.hidden = visible > 0;
+  }
+  search.addEventListener("input", filter);
+  belowThreshold.addEventListener("change", filter);
+</script>
+</body>
+</html>

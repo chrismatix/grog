@@ -40,6 +40,7 @@ require (
 	go.starlark.net v0.0.0-20260102030733-3fee463870c9
 	go.uber.org/zap v1.27.1
 	golang.org/x/sync v0.22.0
+	golang.org/x/tools v0.48.0
 	google.golang.org/api v0.264.0
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1
@@ -172,7 +173,6 @@ require (
 	golang.org/x/telemetry v0.0.0-20260708182218-49f421fb7959 // indirect
 	golang.org/x/text v0.41.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
-	golang.org/x/tools v0.48.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	google.golang.org/genproto v0.0.0-20260128011058-8636f8732409 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa // indirect
