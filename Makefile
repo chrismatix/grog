@@ -34,11 +34,10 @@ test: build-with-coverage
 	@go tool covdata percent -i=$$(find coverdata -type d -mindepth 1 | paste -sd, -)
 	@go tool covdata textfmt -i=$$(find coverdata -type d -mindepth 1 | paste -sd, -) -o coverdata/coverage_all.out
 	@grep -v '/internal/proto/gen/' coverdata/coverage_all.out > coverdata/coverage.out
-	@go tool cover -func=coverdata/coverage.out -o=coverdata/coverage_overview.out
+	@go tool cover -html=coverdata/coverage.out -o=coverdata/coverage-details.html
 
 	@echo ""
-	@echo "Total Coverage:"
-	@echo "$$(awk 'END {print $$NF}' coverdata/coverage_overview.out)"
+	@go run ./tools/coveragereport coverdata/coverage.out coverdata
 
 
 check-coverage: test
