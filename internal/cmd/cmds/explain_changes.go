@@ -126,6 +126,16 @@ through the directly-affected targets to their transitive dependents.`,
 			}
 		}
 
+		for _, pkg := range packages {
+			for _, environment := range pkg.Environments {
+				for _, changedFile := range environmentChangedFiles(environment, changedFiles) {
+					for _, target := range environmentTargets(nodes, environment.Label) {
+						add(changedFile, target)
+					}
+				}
+			}
+		}
+
 		if len(fileToTargets) == 0 {
 			logger.Debug("No targets affected by the changed files")
 			return

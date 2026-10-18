@@ -106,6 +106,16 @@ Can optionally include transitive dependents of changed targets to find all affe
 			}
 		}
 
+		// A changed environment input or definition changes the identity of
+		// every target running in that environment.
+		for _, pkg := range packages {
+			for _, environment := range pkg.Environments {
+				if len(environmentChangedFiles(environment, changedFiles)) > 0 {
+					matchingTargets = append(matchingTargets, environmentTargets(nodes, environment.Label)...)
+				}
+			}
+		}
+
 		// Get dependents if requested
 		var resultTargets []*model.Target
 		if changesOptions.dependents.Value == "transitive" {
@@ -283,6 +293,33 @@ func resolverTargets(nodes model.BuildNodeMap, resolverLabel label.TargetLabel) 
 	var targets []*model.Target
 	for _, target := range nodes.GetTargets() {
 		if slices.Contains(target.DependencyResolvers, resolverLabel) {
+			targets = append(targets, target)
+		}
+	}
+	return targets
+}
+
+// environmentChangedFiles returns the changed files among the environment's
+// BUILD file and inputs.
+func environmentChangedFiles(environment *model.Environment, changedFiles []string) []string {
+	var environmentFiles []string
+	if containsFile(changedFiles, environment.SourceFilePath) {
+		environmentFiles = append(environmentFiles, environment.SourceFilePath)
+	}
+	for _, inputFile := range environment.Inputs {
+		absoluteInputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(environment.Label.Package, inputFile))
+		if containsFile(changedFiles, absoluteInputPath) {
+			environmentFiles = append(environmentFiles, absoluteInputPath)
+		}
+	}
+	return environmentFiles
+}
+
+// environmentTargets lists the targets that run in an environment.
+func environmentTargets(nodes model.BuildNodeMap, environmentLabel label.TargetLabel) []*model.Target {
+	var targets []*model.Target
+	for _, target := range nodes.GetTargets() {
+		if target.Environment != nil && *target.Environment == environmentLabel {
 			targets = append(targets, target)
 		}
 	}

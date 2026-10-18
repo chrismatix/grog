@@ -252,6 +252,8 @@ A target in an environment adds the environment's identity to its change hash. T
 - The contents of its `inputs`.
 - The output hashes of its `dependencies`: rebuilding `:builder-image` produces a new image id and re-runs every target in the environment.
 
+[`grog changes`](/reference/commands) follows the same rule: a changed input or definition of an environment counts as a change to every target in it.
+
 Values only known at runtime, like `GROG_INVOCATION_ID` or what `up` writes to the state file, are not part of it: restarting a VM does not invalidate anything.
 
 <Aside type="caution">
