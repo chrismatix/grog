@@ -97,3 +97,32 @@ func TestTargetHasherIncludesEnvironmentIdentity(t *testing.T) {
 		t.Errorf("changing the environment config must change the target hash")
 	}
 }
+
+func TestTargetHasherResolvesAliasDependencies(t *testing.T) {
+	hashEnvironment := func(imageOutputHash string) string {
+		t.Helper()
+		image := &model.Target{Label: label.TL("envs", "image"), OutputHash: imageOutputHash}
+		alias := &model.Alias{Label: label.TL("envs", "latest"), Actual: image.Label}
+		environment := &model.Environment{
+			Label:        label.TL("envs", "linux"),
+			Provider:     model.DockerProvider,
+			Dependencies: []label.TargetLabel{alias.Label},
+		}
+
+		graph := dag.NewDirectedGraphFromTargets(image, alias, environment)
+		if err := graph.AddEdge(image, alias); err != nil {
+			t.Fatalf("failed to add alias edge: %v", err)
+		}
+		if err := graph.AddEdge(alias, environment); err != nil {
+			t.Fatalf("failed to add environment edge: %v", err)
+		}
+		if err := NewTargetHasher(graph).SetEnvironmentIdentityHash(environment); err != nil {
+			t.Fatalf("failed to hash environment: %v", err)
+		}
+		return environment.IdentityHash
+	}
+
+	if hashEnvironment("image-v1") == hashEnvironment("image-v2") {
+		t.Errorf("rebuilding an image behind an alias must change the environment identity")
+	}
+}

@@ -82,6 +82,13 @@ func (t *TargetHasher) dependencyHashes(node model.BuildNode) ([]string, error) 
 			dependencyHash = typedDependency.OutputHash
 		case *model.Environment:
 			dependencyHash = typedDependency.IdentityHash
+		case *model.Alias:
+			aliasHashes, err := t.dependencyHashes(typedDependency)
+			if err != nil {
+				return nil, err
+			}
+			dependencyHashes = append(dependencyHashes, aliasHashes...)
+			continue
 		default:
 			continue
 		}
