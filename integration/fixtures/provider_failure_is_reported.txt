@@ -1,0 +1,8 @@
+INFO: 2 packages loaded, 4 targets configured.
+INFO: Selected 1 target.
+INFO: Environment //failing:full started.
+INFO: //failing:rejected FAILED
+INFO: Environment //failing:full stopped.
+ERROR: Build failed. 0 targets completed (0 cache hits), 1 failed:
+---------------------------------
+ERROR: Target //failing:rejected failed: environment //failing:full failed (exit code 125): no capacity left

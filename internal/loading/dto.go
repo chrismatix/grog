@@ -74,6 +74,7 @@ type TargetDTO struct {
 	Timeout              string            `json:"timeout,omitempty" yaml:"timeout,omitempty" pkl:"timeout" starlark:"timeout"`
 
 	ConcurrencyGroup string `json:"concurrency_group,omitempty" yaml:"concurrency_group,omitempty" pkl:"concurrency_group" starlark:"concurrency_group"`
+	Environment      string `json:"environment,omitempty" yaml:"environment,omitempty" pkl:"environment" starlark:"environment"`
 }
 
 type AliasDTO struct {
@@ -105,11 +106,16 @@ type DependencyResolverDTO struct {
 	GeneratedTargetName string `json:"generated_target_name,omitempty" yaml:"generated_target_name,omitempty" pkl:"generated_target_name" starlark:"generated_target_name"`
 }
 
+// EnvironmentDTO is used for deserializing an environment in a loader.
+// The environment used internally is model.Environment.
 type EnvironmentDTO struct {
-	Name         string   `json:"name" yaml:"name" pkl:"name" starlark:"name"`
-	Type         string   `json:"type" yaml:"type" pkl:"type" starlark:"type"`
-	Dependencies []string `json:"dependencies,omitempty" yaml:"dependencies,omitempty" pkl:"dependencies" starlark:"dependencies"`
-	OCIImage     string   `json:"oci_image" yaml:"oci_image" pkl:"oci_image" starlark:"oci_image"`
+	Name         string            `json:"name" yaml:"name" pkl:"name" starlark:"name"`
+	Provider     string            `json:"provider" yaml:"provider" pkl:"provider" starlark:"provider"`
+	Config       map[string]string `json:"config,omitempty" yaml:"config,omitempty" pkl:"config" starlark:"config"`
+	Inputs       []string          `json:"inputs,omitempty" yaml:"inputs,omitempty" pkl:"inputs" starlark:"inputs"`
+	Fingerprint  map[string]string `json:"fingerprint,omitempty" yaml:"fingerprint,omitempty" pkl:"fingerprint" starlark:"fingerprint"`
+	Timeout      string            `json:"timeout,omitempty" yaml:"timeout,omitempty" pkl:"timeout" starlark:"timeout"`
+	Dependencies []string          `json:"dependencies,omitempty" yaml:"dependencies,omitempty" pkl:"dependencies" starlark:"dependencies"`
 }
 
 // PackageDTO is used for deserializing a package in a loader.

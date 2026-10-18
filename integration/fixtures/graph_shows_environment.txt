@@ -1,0 +1,4 @@
+//sandboxed:second
+├── //sandboxed:first
+│   ╰── //sandboxed:local
+╰── //sandboxed:local

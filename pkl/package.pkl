@@ -1,6 +1,5 @@
 module package
 
-//import "environment.pkl"
 import "alias.pkl"
 import "output_check.pkl"
 
@@ -33,6 +32,9 @@ class Target {
   // group's capacity (default 1 = fully serialized). Group capacity can be
   // tuned in grog.toml [concurrency_groups].
   concurrency_group: String?
+
+  // Label of the environment the command runs in.
+  environment: String?
 }
 
 class DependencyResolver {
@@ -59,6 +61,18 @@ class Resource {
   dependencies: Listing<String>(isDistinct)
 }
 
+class Environment {
+  name: String
+  // provider is a shell command implementing the provider protocol, or builtin::docker.
+  provider: String
+  // config is passed to the provider as JSON. builtin::docker reads config.image.
+  config: Mapping<String, String>?
+  inputs: Listing<String>(isDistinct)
+  fingerprint: Mapping<String, String>?
+  timeout: String?
+  dependencies: Listing<String>(isDistinct)
+}
+
 default_platforms: Listing<String>(isDistinct)?
 
 targets: Listing<Target>(isDistinctBy((it) -> it.name))
@@ -69,4 +83,4 @@ resources: Listing<Resource>(isDistinctBy((it) -> it.name))?
 
 dependency_resolvers: Listing<DependencyResolver>(isDistinctBy((it) -> it.name))?
 
-environments: Listing<alias>(isDistinctBy((it) -> it.name))?
+environments: Listing<Environment>(isDistinctBy((it) -> it.name))?

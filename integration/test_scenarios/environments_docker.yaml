@@ -1,0 +1,8 @@
+name: docker execution environment
+repo: environments_docker
+cases:
+  # builtin::docker runs the command in a container that mounts the workspace
+  # at the same path and writes outputs as the host user.
+  - name: builtin_docker_runs_target_in_container
+    grog_args:
+      - build

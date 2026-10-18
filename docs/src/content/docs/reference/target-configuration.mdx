@@ -36,6 +36,7 @@ Grog uses this information to ensure incremental, cached, and parallel builds.
 | `timeout`               | `string`                 | Maximum time allowed for the target command to run                                                           |
 | `environment_variables` | `Record<string, string>` | Additional environment variables set when running the target                                                 |
 | `concurrency_group`     | `string`                 | Name of a concurrency group. Members compete for the group's capacity (default `1` = serialized)             |
+| `environment`           | `label`                  | Label of an [execution environment](/topics/execution-environments) the command runs in instead of the host  |
 
 <Aside type="note">
   Targets with names ending in `test` are automatically treated as test targets. They will be
@@ -358,3 +359,46 @@ targets {
 
   </TabItem>
 </Tabs>
+
+### environment
+
+Label of an [execution environment](/topics/execution-environments) that runs the target's command instead of the host — a Docker container, a VM or a remote machine, depending on the environment's provider. The environment becomes an implicit dependency: whatever it depends on, such as an image build, is built first.
+
+<Tabs syncKey="build-file-format">
+  <TabItem label="YAML">
+
+```yaml
+targets:
+  - name: app
+    command: go build -o dist/app ./cmd/app
+    environment: "//envs:linux"
+```
+
+  </TabItem>
+  <TabItem label="Starlark">
+
+```starlark
+target(
+    name = "app",
+    command = "go build -o dist/app ./cmd/app",
+    environment = "//envs:linux",
+)
+```
+
+  </TabItem>
+  <TabItem label="Pkl">
+
+```pkl
+targets {
+  new {
+    name = "app"
+    command = "go build -o dist/app ./cmd/app"
+    environment = "//envs:linux"
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
+
+The environment is part of the target's cache key: changing the environment's provider, config or image re-runs the target.
