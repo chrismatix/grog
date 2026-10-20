@@ -27,14 +27,15 @@ func TestGoDependencies(t *testing.T) {
 	}
 	plain := []string{"*", "testdata/**"}
 	require.Equal(t, map[string]Package{
-		".hidden/pkg":      member(plain, "internal/greet"),
-		"cmd/app":          member(plain, ".hidden/pkg", "_deps/local/pkg", "internal/_shim", "internal/greet", "tools/gen"),
-		"internal/_shim":   member(plain),
-		"internal/greet":   member(plain, "internal/format", "internal/winutil"),
-		"internal/format":  member([]string{"*", "banner.txt", "static/**", "templates/*.txt", "templates/*.txt/**", "testdata/**", "vendor/assets/logo.txt"}),
-		"internal/winutil": member([]string{"*", "fixtures/**", "testdata/**"}),
-		"_deps/local/pkg":  member(plain),
-		"tools/gen":        member(plain),
+		".hidden/pkg":               member(plain, "internal/greet"),
+		"cmd/app":                   member(plain, ".hidden/pkg", "_deps/local/pkg", "_deps/local/workspaceonly", "internal/_shim", "internal/greet", "tools/gen"),
+		"internal/_shim":            member(plain),
+		"internal/greet":            member(plain, "internal/format", "internal/winutil"),
+		"internal/format":           member([]string{"*", "banner.txt", "static/**", "templates/*.txt", "templates/*.txt/**", "testdata/**", "vendor/assets/logo.txt"}),
+		"internal/winutil":          member([]string{"*", "fixtures/**", "testdata/**"}),
+		"_deps/local/pkg":           member(plain),
+		"_deps/local/workspaceonly": member(plain),
+		"tools/gen":                 member(plain),
 	}, document.Packages)
 }
 

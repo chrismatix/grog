@@ -118,8 +118,7 @@ type goModule struct {
 // vendor, testdata and hidden or underscore directories, and returns every
 // module and every directory holding Go files, both workspace-relative.
 func goWorkspaceLayout(walkContext context.Context, workspaceDirectory string) ([]goModule, []string, error) {
-	var modules []goModule
-	replacements, operationError := goReadWorkspaceReplacements(workspaceDirectory)
+	modules, replacements, operationError := goReadWorkspaceModules(walkContext, workspaceDirectory)
 	if operationError != nil {
 		return nil, nil, operationError
 	}
@@ -191,20 +190,52 @@ func goFingerprintModules(workspaceDirectory string, modules []goModule) error {
 	return nil
 }
 
-func goReadWorkspaceReplacements(workspaceDirectory string) ([]goModule, error) {
+func goReadWorkspaceModules(resolverContext context.Context, workspaceDirectory string) ([]goModule, []goModule, error) {
+	if operationError := resolverContext.Err(); operationError != nil {
+		return nil, nil, operationError
+	}
 	workspaceFilePath := filepath.Join(workspaceDirectory, "go.work")
 	contents, operationError := os.ReadFile(workspaceFilePath)
 	if errors.Is(operationError, os.ErrNotExist) {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if operationError != nil {
-		return nil, fmt.Errorf("read %s: %w", workspaceFilePath, operationError)
+		return nil, nil, fmt.Errorf("read %s: %w", workspaceFilePath, operationError)
 	}
 	workspaceFile, operationError := modfile.ParseWork(workspaceFilePath, contents, nil)
 	if operationError != nil {
-		return nil, fmt.Errorf("parse %s: %w", workspaceFilePath, operationError)
+		return nil, nil, fmt.Errorf("parse %s: %w", workspaceFilePath, operationError)
 	}
-	return goLocalReplacements(workspaceDirectory, "", workspaceFile.Replace)
+	var modules []goModule
+	var replacements []goModule
+	for _, use := range workspaceFile.Use {
+		if operationError := resolverContext.Err(); operationError != nil {
+			return nil, nil, operationError
+		}
+		modulePath := filepath.FromSlash(use.Path)
+		if !filepath.IsAbs(modulePath) {
+			modulePath = filepath.Join(workspaceDirectory, modulePath)
+		}
+		moduleDirectory, operationError := filepath.Rel(workspaceDirectory, modulePath)
+		if operationError != nil {
+			return nil, nil, operationError
+		}
+		moduleDirectory = filepath.ToSlash(moduleDirectory)
+		if moduleDirectory == "." {
+			moduleDirectory = ""
+		}
+		if moduleDirectory == ".." || strings.HasPrefix(moduleDirectory, "../") {
+			continue
+		}
+		module, localReplacements, operationError := goReadModuleFile(workspaceDirectory, filepath.Join(workspaceDirectory, filepath.FromSlash(moduleDirectory), "go.mod"), moduleDirectory)
+		if operationError != nil {
+			return nil, nil, operationError
+		}
+		modules = append(modules, module)
+		replacements = append(replacements, localReplacements...)
+	}
+	workspaceReplacements, operationError := goLocalReplacements(workspaceDirectory, "", workspaceFile.Replace)
+	return modules, append(replacements, workspaceReplacements...), operationError
 }
 
 func goReadModuleFile(workspaceDirectory, moduleFilePath, moduleDirectory string) (goModule, []goModule, error) {
