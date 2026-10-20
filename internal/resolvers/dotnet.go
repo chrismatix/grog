@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -104,7 +105,11 @@ func dotnetDependencies(resolverContext context.Context, workspaceDirectory stri
 			reportedPackage.Fingerprint["imports:"+path.Base(projectFile)] = fingerprint
 		}
 		for _, reference := range references {
-			for _, referencedFile := range dotnetReferencedFiles(workspaceDirectory, path.Join(path.Dir(projectFile), reference)) {
+			referencedFiles, operationError := dotnetReferencedFiles(workspaceDirectory, path.Join(path.Dir(projectFile), reference))
+			if operationError != nil {
+				return document, operationError
+			}
+			for _, referencedFile := range referencedFiles {
 				queue = append(queue, referencedFile)
 				if referencedDirectory := dotnetPackagePath(path.Dir(referencedFile)); referencedDirectory != directory {
 					reportedPackage.Dependencies = append(reportedPackage.Dependencies, referencedDirectory)
@@ -177,19 +182,21 @@ func dotnetConfigurationCycle(document Document, projectDirectories map[string]b
 // dotnetReferencedFiles resolves one reference, which may be a glob, to the
 // project files it names inside the workspace. A reference to a project that
 // does not exist is dropped, as MSBuild's Condition="Exists(...)" would.
-func dotnetReferencedFiles(workspaceDirectory string, reference string) []string {
+func dotnetReferencedFiles(workspaceDirectory string, reference string) ([]string, error) {
 	reference = path.Clean(reference)
 	if reference == ".." || strings.HasPrefix(reference, "../") {
-		return nil
+		return nil, nil
 	}
 	if strings.ContainsAny(reference, "*?") {
-		matches, _ := doublestar.Glob(os.DirFS(workspaceDirectory), reference, doublestar.WithFilesOnly())
-		return matches
+		return doublestar.Glob(os.DirFS(workspaceDirectory), reference, doublestar.WithFilesOnly())
 	}
 	if _, operationError := os.Stat(filepath.Join(workspaceDirectory, filepath.FromSlash(reference))); operationError != nil {
-		return nil
+		if errors.Is(operationError, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("stat project reference %s: %w", reference, operationError)
 	}
-	return []string{reference}
+	return []string{reference}, nil
 }
 
 func dotnetPackagePath(directory string) string {

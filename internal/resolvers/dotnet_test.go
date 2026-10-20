@@ -186,9 +186,15 @@ func TestDotnetResolverErrors(t *testing.T) {
 			require.ErrorContains(t, operationError, testCase.expectedError)
 		})
 	}
+	directory := writeDotnetFiles(t, map[string]string{
+		"App.csproj": `<Project><ItemGroup><ProjectReference Include="loop/Bad.csproj" /></ItemGroup></Project>`,
+	})
+	require.NoError(t, os.Symlink("loop", filepath.Join(directory, "loop")))
+	_, operationError := dotnetDependencies(t.Context(), directory)
+	require.ErrorContains(t, operationError, "stat project reference")
 	cancelledContext, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, operationError := dotnetDependencies(cancelledContext, "testdata/dotnet")
+	_, operationError = dotnetDependencies(cancelledContext, "testdata/dotnet")
 	require.ErrorIs(t, operationError, context.Canceled)
 	_, operationError = dotnetProjectFiles(cancelledContext, "testdata/dotnet")
 	require.ErrorIs(t, operationError, context.Canceled)
