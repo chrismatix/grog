@@ -114,6 +114,8 @@ type WorkspaceConfig struct {
 	Tags        []string `mapstructure:"tag"`
 	ExcludeTags []string `mapstructure:"exclude_tag"`
 
+	TraceTags []string `mapstructure:"trace_tag"`
+
 	// Internal configs
 	// Used for integration testing:
 	// Due to the concurrent nature of grog's execution we don't want to include

@@ -2,6 +2,9 @@ package tracing
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -536,5 +539,79 @@ func TestTraceStore_Pull(t *testing.T) {
 	}
 	if len(entries) != 2 {
 		t.Fatalf("expected both traces locally after pull, got %d", len(entries))
+	}
+}
+
+// legacyBuildRow is the builds schema before critical_path and tags existed.
+type legacyBuildRow struct {
+	TraceID                 string `parquet:"trace_id"`
+	Workspace               string `parquet:"workspace"`
+	GitCommit               string `parquet:"git_commit"`
+	GitBranch               string `parquet:"git_branch"`
+	GrogVersion             string `parquet:"grog_version"`
+	Platform                string `parquet:"platform"`
+	Command                 string `parquet:"command"`
+	StartTimeUnixMillis     int64  `parquet:"start_time_unix_millis"`
+	TotalDurationMillis     int64  `parquet:"total_duration_millis"`
+	TotalTargets            int32  `parquet:"total_targets"`
+	SuccessCount            int32  `parquet:"success_count"`
+	FailureCount            int32  `parquet:"failure_count"`
+	CacheHitCount           int32  `parquet:"cache_hit_count"`
+	CriticalPathExecMillis  int64  `parquet:"critical_path_exec_millis"`
+	CriticalPathCacheMillis int64  `parquet:"critical_path_cache_millis"`
+	AsyncCacheWaitMillis    int64  `parquet:"async_cache_wait_millis"`
+	IsCI                    bool   `parquet:"is_ci"`
+	RequestedPatterns       string `parquet:"requested_patterns"`
+}
+
+func TestTraceStore_ListReadsLegacyBuildFiles(t *testing.T) {
+	for _, withNewTrace := range []bool{false, true} {
+		t.Run(fmt.Sprintf("with new trace %v", withNewTrace), func(t *testing.T) {
+			dir := t.TempDir()
+			fs := backends.NewFileSystemCacheForTest(dir, t.TempDir())
+			ctx := context.Background()
+			now := time.Now()
+
+			legacyDirectory := filepath.Join(dir, "traces", "builds", now.UTC().Format("2006-01-02"))
+			if err := os.MkdirAll(legacyDirectory, 0o755); err != nil {
+				t.Fatalf("mkdir: %v", err)
+			}
+			legacyRows := []legacyBuildRow{{TraceID: "trace-legacy", Command: "build", StartTimeUnixMillis: now.UnixMilli()}}
+			if err := parquet.WriteFile(filepath.Join(legacyDirectory, "trace-legacy.parquet"), legacyRows); err != nil {
+				t.Fatalf("write legacy parquet: %v", err)
+			}
+
+			if withNewTrace {
+				trace := makeTestTrace("trace-new", now.Add(time.Minute).UnixMilli(), "build")
+				trace.Build.Tags = `{"shard":"2"}`
+				if err := NewTraceWriter(fs).Write(ctx, trace); err != nil {
+					t.Fatalf("Write failed: %v", err)
+				}
+			}
+
+			store, err := NewTraceStore(fs, &PathResolver{
+				buildsBase: dir + "/traces/builds",
+				spansBase:  dir + "/traces/spans",
+			})
+			if err != nil {
+				t.Fatalf("NewTraceStore failed: %v", err)
+			}
+			defer store.Close()
+
+			entries, err := store.List(ctx, ListOptions{})
+			if err != nil {
+				t.Fatalf("List failed: %v", err)
+			}
+			tagsByTrace := map[string]string{}
+			for _, entry := range entries {
+				tagsByTrace[entry.TraceID] = entry.Tags
+			}
+			if tags, ok := tagsByTrace["trace-legacy"]; !ok || tags != "" {
+				t.Errorf("expected legacy trace with empty tags, got %v", tagsByTrace)
+			}
+			if withNewTrace && tagsByTrace["trace-new"] != `{"shard":"2"}` {
+				t.Errorf("expected new trace tags, got %v", tagsByTrace)
+			}
+		})
 	}
 }
