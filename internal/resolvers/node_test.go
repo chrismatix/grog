@@ -189,13 +189,13 @@ func TestNodeMemberPatterns(t *testing.T) {
 }
 
 func TestNodeDefaultInputs(t *testing.T) {
-	inputs, excludeInputs := pnpmPackageManager.defaultInputs("testdata/node")
+	inputs, excludeInputs := pnpmPackageManager.defaultInputs(t.Context(), "testdata/node")
 	require.Equal(t, []string{"package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml", "packages/*/package.json", "apps/**/package.json"}, inputs)
 	require.Equal(t, []string{"**/node_modules/**", "**/excluded/**"}, excludeInputs)
-	inputs, excludeInputs = pnpmPackageManager.defaultInputs(t.TempDir())
+	inputs, excludeInputs = pnpmPackageManager.defaultInputs(t.Context(), t.TempDir())
 	require.Equal(t, []string{"package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml"}, inputs)
 	require.Equal(t, []string{"**/node_modules/**"}, excludeInputs)
-	inputs, _ = npmPackageManager.defaultInputs(writeNodeWorkspace(t, map[string]string{"package.json": `{"workspaces": ["packages/*"]}`}))
+	inputs, _ = npmPackageManager.defaultInputs(t.Context(), writeNodeWorkspace(t, map[string]string{"package.json": `{"workspaces": ["packages/*"]}`}))
 	require.Equal(t, []string{"package.json", "packages/*/package.json"}, inputs)
 }
 

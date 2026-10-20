@@ -33,7 +33,7 @@ func TestGetEnrichedPackage_DefaultPlatforms(t *testing.T) {
 		},
 	}
 
-	enrichedPkg, err := getEnrichedPackage(logger, packagePath, pkgDTO)
+	enrichedPkg, err := getEnrichedPackage(t.Context(), logger, packagePath, pkgDTO)
 	if err != nil {
 		t.Fatalf("Failed to enrich package: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestGetEnrichedPackage_FingerprintCopied(t *testing.T) {
 		},
 	}
 
-	enrichedPkg, err := getEnrichedPackage(logger, packagePath, pkgDTO)
+	enrichedPkg, err := getEnrichedPackage(t.Context(), logger, packagePath, pkgDTO)
 	if err != nil {
 		t.Fatalf("failed to enrich package: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestGetEnrichedPackage_Resources(t *testing.T) {
 		},
 	}
 
-	enrichedPkg, err := getEnrichedPackage(logger, packagePath, pkgDTO)
+	enrichedPkg, err := getEnrichedPackage(t.Context(), logger, packagePath, pkgDTO)
 	if err != nil {
 		t.Fatalf("Failed to enrich package: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestGetEnrichedPackage_ResourceRequiresUp(t *testing.T) {
 		Resources:      []*ResourceDTO{{Name: "postgres"}},
 	}
 
-	if _, err := getEnrichedPackage(logger, "test/package", pkgDTO); err == nil {
+	if _, err := getEnrichedPackage(t.Context(), logger, "test/package", pkgDTO); err == nil {
 		t.Fatal("expected error for resource without up command")
 	}
 }
@@ -170,7 +170,7 @@ func TestGetEnrichedPackage_ResourceDuplicateLabel(t *testing.T) {
 		Resources:      []*ResourceDTO{{Name: "postgres", Up: "true"}},
 	}
 
-	if _, err := getEnrichedPackage(logger, "test/package", pkgDTO); err == nil {
+	if _, err := getEnrichedPackage(t.Context(), logger, "test/package", pkgDTO); err == nil {
 		t.Fatal("expected duplicate label error")
 	}
 }

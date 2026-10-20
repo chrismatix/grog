@@ -1,6 +1,7 @@
 package loading
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"slices"
@@ -22,7 +23,7 @@ import (
 // - resolves the globs in the inputs
 // - applies any defaults
 // - parses the deps into target labels.
-func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageDTO) (*model.Package, error) {
+func getEnrichedPackage(loadContext context.Context, logger *console.Logger, packagePath string, pkg PackageDTO) (*model.Package, error) {
 	targets := make(map[label.TargetLabel]*model.Target)
 	aliases := make(map[label.TargetLabel]*model.Alias)
 	absolutePackagePath := config.GetPathAbsoluteToWorkspaceRoot(packagePath)
@@ -63,7 +64,7 @@ func getEnrichedPackage(logger *console.Logger, packagePath string, pkg PackageD
 		}
 	}
 
-	dependencyResolvers, err := enrichDependencyResolvers(logger, packagePath, absolutePackagePath, pkg, targets, aliases, resources)
+	dependencyResolvers, err := enrichDependencyResolvers(loadContext, logger, packagePath, absolutePackagePath, pkg, targets, aliases, resources)
 	if err != nil {
 		return nil, err
 	}
@@ -233,6 +234,7 @@ func enrichResources(
 
 // enrichDependencyResolvers converts the package's dependency resolver dtos into model dependency resolvers.
 func enrichDependencyResolvers(
+	loadContext context.Context,
 	logger *console.Logger,
 	packagePath string,
 	absolutePackagePath string,
@@ -267,9 +269,12 @@ func enrichDependencyResolvers(
 		if len(inputs) == 0 {
 			var defaultExcludeInputs []string
 			if builtin, isBuiltin := resolvers.Builtins[resolver.Command]; isBuiltin {
-				inputs, defaultExcludeInputs = builtin.DefaultInputs(absolutePackagePath)
+				inputs, defaultExcludeInputs = builtin.DefaultInputs(loadContext, absolutePackagePath)
 			}
 			excludeInputs = slices.Concat(defaultExcludeInputs, excludeInputs)
+		}
+		if enrichmentError := loadContext.Err(); enrichmentError != nil {
+			return nil, enrichmentError
 		}
 		resolvedInputs, enrichmentError := resolveInputs(logger, absolutePackagePath, inputs, excludeInputs)
 		if enrichmentError != nil {

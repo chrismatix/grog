@@ -130,7 +130,7 @@ func cargoDependencyDirectory(dependencyName string, dependency any, memberDirec
 
 // cargoDefaultInputs are the files the built-in reads: the root manifest and
 // lockfile plus a manifest under every member pattern, however deep it is.
-func cargoDefaultInputs(workspaceDirectory string) (inputs []string, excludeInputs []string) {
+func cargoDefaultInputs(_ context.Context, workspaceDirectory string) (inputs []string, excludeInputs []string) {
 	inputs = []string{"Cargo.toml", "Cargo.lock"}
 	contents, operationError := os.ReadFile(filepath.Join(workspaceDirectory, "Cargo.toml"))
 	if operationError != nil {

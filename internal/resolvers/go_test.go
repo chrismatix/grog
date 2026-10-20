@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/stretchr/testify/require"
 )
 
@@ -76,15 +77,27 @@ func TestGoEmbedPatterns(t *testing.T) {
 	}
 }
 
+func TestGoInputsPreserveLiteralBraces(t *testing.T) {
+	directory := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(directory, "assets"), 0755))
+	for _, name := range []string{"{a,b}.txt", "a.txt", "b.txt"} {
+		require.NoError(t, os.WriteFile(filepath.Join(directory, "assets", name), nil, 0644))
+	}
+	inputs := goInputs("", []string{"assets/{a,b}.txt"})
+	matches, operationError := doublestar.Glob(os.DirFS(directory), inputs[1], doublestar.WithFilesOnly())
+	require.NoError(t, operationError)
+	require.Equal(t, []string{"assets/{a,b}.txt"}, matches)
+}
+
 func TestGoDefaultInputs(t *testing.T) {
-	inputs, excludeInputs := goDefaultInputs("testdata/go")
+	inputs, excludeInputs := goDefaultInputs(t.Context(), "testdata/go")
 	require.Equal(t, []string{"go.work", "go.work.sum", "**/go.mod", "**/go.sum", "**/*.go"}, inputs)
 	require.Equal(t, []string{"**/vendor/**", "**/node_modules/**"}, excludeInputs)
 	directory := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(directory, "go.mod"), []byte("module example.com/root\n\nreplace example.com/local => ./vendor/local\n"), 0644))
 	require.NoError(t, os.MkdirAll(filepath.Join(directory, "vendor/local"), 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(directory, "vendor/local/go.mod"), []byte("module example.com/local\n"), 0644))
-	_, excludeInputs = goDefaultInputs(directory)
+	_, excludeInputs = goDefaultInputs(t.Context(), directory)
 	require.Equal(t, []string{"**/node_modules/**"}, excludeInputs)
 }
 

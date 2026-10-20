@@ -170,7 +170,7 @@ func LoadScriptTarget(ctx context.Context, logger *console.Logger, filePath stri
 		return nil, fmt.Errorf("%s does not contain a # @grog annotation", filePath)
 	}
 
-	pkg, err := getEnrichedPackage(logger, packagePath, pkgDto)
+	pkg, err := getEnrichedPackage(ctx, logger, packagePath, pkgDto)
 	if err != nil {
 		return nil, err
 	}

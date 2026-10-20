@@ -39,10 +39,10 @@ func TestCargoDependencies(t *testing.T) {
 }
 
 func TestCargoDefaultInputs(t *testing.T) {
-	inputs, excludeInputs := cargoDefaultInputs("testdata/cargo")
+	inputs, excludeInputs := cargoDefaultInputs(t.Context(), "testdata/cargo")
 	require.Equal(t, []string{"Cargo.toml", "Cargo.lock", "crates/*/Cargo.toml"}, inputs)
 	require.Equal(t, []string{"target/**"}, excludeInputs)
-	inputs, _ = cargoDefaultInputs(t.TempDir())
+	inputs, _ = cargoDefaultInputs(t.Context(), t.TempDir())
 	require.Equal(t, []string{"Cargo.toml", "Cargo.lock"}, inputs)
 }
 

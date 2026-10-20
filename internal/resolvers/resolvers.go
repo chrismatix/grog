@@ -41,7 +41,7 @@ func (reportedPackage *Package) UnmarshalJSON(contents []byte) error {
 type Builtin struct {
 	Resolve func(resolverContext context.Context, workspaceDirectory string) (Document, error)
 	// DefaultInputs are used when a declaration lists no inputs of its own.
-	DefaultInputs func(workspaceDirectory string) (inputs []string, excludeInputs []string)
+	DefaultInputs func(resolverContext context.Context, workspaceDirectory string) (inputs []string, excludeInputs []string)
 }
 
 // Builtins maps each builtin:: command to its resolver.

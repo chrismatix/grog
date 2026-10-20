@@ -421,11 +421,12 @@ func goEmbedPatterns(comment string) []string {
 func goInputs(_ string, embedPatterns []string) []string {
 	inputs := []string{"*", "testdata/**"}
 	for _, pattern := range embedPatterns {
-		if strings.ContainsAny(pattern, "*?[{") {
-			inputs = append(inputs, pattern, path.Join(pattern, "**"))
+		globPattern := strings.NewReplacer("{", `\{`, "}", `\}`).Replace(pattern)
+		if strings.ContainsAny(pattern, "*?[") {
+			inputs = append(inputs, globPattern, path.Join(globPattern, "**"))
 			continue
 		}
-		inputs = append(inputs, pattern+"{,/**}")
+		inputs = append(inputs, globPattern+"{,/**}")
 	}
 	slices.Sort(inputs)
 	return slices.Compact(inputs)
@@ -433,10 +434,10 @@ func goInputs(_ string, embedPatterns []string) []string {
 
 // goDefaultInputs are the files the built-in reads: every module file and
 // every Go source file an import path can reach.
-func goDefaultInputs(workspaceDirectory string) (inputs []string, excludeInputs []string) {
+func goDefaultInputs(resolverContext context.Context, workspaceDirectory string) (inputs []string, excludeInputs []string) {
 	inputs = []string{"go.work", "go.work.sum", "**/go.mod", "**/go.sum", "**/*.go"}
 	excludeInputs = []string{"**/vendor/**", "**/node_modules/**"}
-	modules, _, operationError := goWorkspaceLayout(context.Background(), workspaceDirectory)
+	modules, _, operationError := goWorkspaceLayout(resolverContext, workspaceDirectory)
 	if operationError != nil {
 		return inputs, excludeInputs
 	}

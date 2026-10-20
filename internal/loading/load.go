@@ -88,7 +88,7 @@ func LoadPackages(ctx context.Context, startDir string) ([]*model.Package, error
 					continue
 				}
 
-				packageModel, err := getEnrichedPackage(logger, packagePath, packageDTO)
+				packageModel, err := getEnrichedPackage(loadContext, logger, packagePath, packageDTO)
 				if err != nil {
 					setError(err)
 					continue
