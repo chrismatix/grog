@@ -269,8 +269,8 @@ Each directory holding one of them becomes a package covering exactly those file
 The root package `""` always exists and also covers the solution files, so `src/Directory.Build.props` invalidates the projects under `src/` while the root files invalidate every project.
 
 A project that sits in such a directory shares the package with its configuration files, since packages are directories.
-If that project references one below it, the child's edge back to the configuration would close a cycle, so it is dropped: editing those configuration files then doesn't invalidate the child.
-Keep projects out of directories holding `Directory.Build.*` files, or register a target with explicit `inputs` for the child, to avoid that gap.
+If that project references one below it, the child's edge back to the configuration would close a cycle, so the resolver fails with an explanation instead of omitting an invalidation edge.
+Move the project or the shared configuration into its own directory to make that layout representable.
 
 A synthesized filegroup covers the whole project directory, `**/*`, minus `**/bin/**` and `**/obj/**`.
 

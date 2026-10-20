@@ -61,6 +61,7 @@ func dotnetDependencies(resolverContext context.Context, workspaceDirectory stri
 	}
 	visited := make(map[string]bool)
 	projectDirectories := make(map[string]bool)
+	configurationDependenciesByProject := make(map[string][]string)
 	for queue := projectFiles; len(queue) > 0; queue = queue[1:] {
 		projectFile := queue[0]
 		if visited[projectFile] {
@@ -84,6 +85,7 @@ func dotnetDependencies(resolverContext context.Context, workspaceDirectory stri
 		if operationError != nil {
 			return document, operationError
 		}
+		configurationDependenciesByProject[directory] = configurationDependencies
 		reportedPackage.Dependencies = append(reportedPackage.Dependencies, configurationDependencies...)
 		references = append(references, importedReferences...)
 		for _, reference := range references {
@@ -98,7 +100,18 @@ func dotnetDependencies(resolverContext context.Context, workspaceDirectory stri
 		reportedPackage.Dependencies = slices.Compact(reportedPackage.Dependencies)
 		document.Packages[directory] = reportedPackage
 	}
-	dotnetBreakConfigurationCycles(document, projectDirectories)
+	directories := make([]string, 0, len(document.Packages))
+	for directory := range document.Packages {
+		directories = append(directories, directory)
+	}
+	slices.Sort(directories)
+	for _, directory := range directories {
+		for _, dependency := range configurationDependenciesByProject[directory] {
+			if projectDirectories[dependency] && dotnetReaches(document, dependency, directory) {
+				return document, fmt.Errorf("dotnet project package %q references descendant package %q, creating a cycle through shared configuration", dependency, directory)
+			}
+		}
+	}
 	return document, nil
 }
 
@@ -124,19 +137,6 @@ func dotnetConfigurationReferences(workspaceDirectory string, directory string, 
 		}
 	}
 	return dependencies, references, nil
-}
-
-// dotnetBreakConfigurationCycles drops a project's edge to the configuration
-// in a directory whose own project reaches it, which would be a cycle: one
-// directory cannot hold both nodes. Configuration edits then miss that project.
-func dotnetBreakConfigurationCycles(document Document, projectDirectories map[string]bool) {
-	for directory, reportedPackage := range document.Packages {
-		reportedPackage.Dependencies = slices.DeleteFunc(reportedPackage.Dependencies, func(dependency string) bool {
-			isAncestor := dependency == "" || strings.HasPrefix(directory, dependency+"/")
-			return isAncestor && projectDirectories[dependency] && dotnetReaches(document, dependency, directory)
-		})
-		document.Packages[directory] = reportedPackage
-	}
 }
 
 func dotnetReaches(document Document, from string, to string) bool {

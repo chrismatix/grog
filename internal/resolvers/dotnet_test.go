@@ -89,21 +89,6 @@ func TestDotnetProjectFiles(t *testing.T) {
 	}
 }
 
-func TestDotnetRootProject(t *testing.T) {
-	directory := writeDotnetFiles(t, map[string]string{
-		"App.csproj":         `<Project><ItemGroup><ProjectReference Include="lib\Lib\Lib.csproj" /></ItemGroup></Project>`,
-		"lib/Lib/Lib.csproj": dotnetEmptyProject,
-	})
-	document, operationError := dotnetDependencies(t.Context(), directory)
-	require.NoError(t, operationError)
-	// lib/Lib's edge to the root configuration would close a cycle with the
-	// root project's reference, so it is dropped.
-	require.Equal(t, map[string]Package{
-		"":        {Dependencies: []string{"lib/Lib"}, Inputs: []string{"**/*"}, ExcludeInputs: dotnetExcludeInputs},
-		"lib/Lib": {Dependencies: []string{}, Inputs: []string{"**/*"}, ExcludeInputs: dotnetExcludeInputs},
-	}, document.Packages)
-}
-
 func TestDotnetReferenceSources(t *testing.T) {
 	directory := writeDotnetFiles(t, map[string]string{
 		"src/Directory.Build.props":         `<Project><ItemGroup><ProjectReference Include="..\..\shared\Analyzers\Analyzers.csproj" /></ItemGroup></Project>`,
@@ -132,6 +117,14 @@ func TestDotnetResolverErrors(t *testing.T) {
 		expectedError string
 	}{
 		{name: "invalid project xml", files: map[string]string{"src/A/A.csproj": "<Project>"}, expectedError: "parse"},
+		{
+			name: "project shares a directory with ancestor configuration",
+			files: map[string]string{
+				"App.csproj":         `<Project><ItemGroup><ProjectReference Include="lib\Lib\Lib.csproj" /></ItemGroup></Project>`,
+				"lib/Lib/Lib.csproj": dotnetEmptyProject,
+			},
+			expectedError: `project package "" references descendant package "lib/Lib", creating a cycle through shared configuration`,
+		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			_, operationError := dotnetDependencies(t.Context(), writeDotnetFiles(t, testCase.files))
