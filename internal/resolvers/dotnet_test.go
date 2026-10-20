@@ -108,6 +108,18 @@ func TestDotnetCoLocatedProjectFingerprints(t *testing.T) {
 	require.NotEmpty(t, document.Packages["src"].Fingerprint["imports:A.csproj"])
 }
 
+func TestDotnetNestedProjectElements(t *testing.T) {
+	directory := writeDotnetFiles(t, map[string]string{
+		"src/App/App.csproj":   `<Project><Choose><When Condition="true"><Import Project="../../eng/common.props" /><ItemGroup><ProjectReference Include="../Core/Core.csproj" /></ItemGroup></When></Choose></Project>`,
+		"src/Core/Core.csproj": dotnetEmptyProject,
+		"eng/common.props":     `<Project />`,
+	})
+	document, operationError := dotnetDependencies(t.Context(), directory)
+	require.NoError(t, operationError)
+	require.Equal(t, []string{"src/Core"}, document.Packages["src/App"].Dependencies)
+	require.NotEmpty(t, document.Packages["src/App"].Fingerprint["imports:App.csproj"])
+}
+
 func TestDotnetReferenceSources(t *testing.T) {
 	directory := writeDotnetFiles(t, map[string]string{
 		"src/Directory.Build.props":         `<Project><ItemGroup><ProjectReference Include="..\..\shared\Analyzers\Analyzers.csproj" /></ItemGroup></Project>`,
@@ -140,6 +152,9 @@ func TestDotnetDefaultInputs(t *testing.T) {
 	inputs, excludeInputs := dotnetDefaultInputs("testdata/dotnet")
 	require.Equal(t, []string{"*.sln", "*.slnx", "**/*.csproj", "**/*.fsproj", "**/*.vbproj", "**/Directory.Build.props", "**/Directory.Build.targets", "**/Directory.Packages.props", "**/global.json", "**/nuget.config", "**/NuGet.Config", "eng/common.props", "eng/more.xml"}, inputs)
 	require.Equal(t, []string{"**/bin/**", "**/obj/**"}, excludeInputs)
+	directory := writeDotnetFiles(t, map[string]string{"App.csproj": dotnetEmptyProject, "DIRECTORY.BUILD.PROPS": `<Project />`})
+	inputs, _ = dotnetDefaultInputs(directory)
+	require.NotContains(t, inputs, "DIRECTORY.BUILD.PROPS")
 }
 
 func TestDotnetResolverErrors(t *testing.T) {

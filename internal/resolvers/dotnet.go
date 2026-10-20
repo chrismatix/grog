@@ -19,15 +19,8 @@ import (
 )
 
 type dotnetProjectFile struct {
-	Imports      []dotnetImport `xml:"Import"`
-	ImportGroups []struct {
-		Imports []dotnetImport `xml:"Import"`
-	} `xml:"ImportGroup"`
-	ItemGroups []struct {
-		ProjectReferences []struct {
-			Include string `xml:"Include,attr"`
-		} `xml:"ProjectReference"`
-	} `xml:"ItemGroup"`
+	Imports           []dotnetImport
+	ProjectReferences []string
 }
 
 type dotnetImport struct {
@@ -48,6 +41,8 @@ var dotnetProjectExtensions = []string{".csproj", ".fsproj", ".vbproj"}
 // dotnetConfigurationFiles are imported by every project below their
 // directory, which a member's own inputs cannot reach.
 var dotnetConfigurationFiles = []string{"directory.build.props", "directory.build.targets", "directory.packages.props", "global.json", "nuget.config"}
+
+var dotnetConfigurationFileNames = []string{"Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props", "global.json", "nuget.config", "NuGet.Config"}
 
 // dotnetExcludeInputs keeps every glob out of build outputs.
 var dotnetExcludeInputs = []string{"**/bin/**", "**/obj/**"}
@@ -215,7 +210,7 @@ func dotnetConfigurationDirectories(resolverContext context.Context, workspaceDi
 		if entry.IsDir() && (entry.Name() == "bin" || entry.Name() == "obj") {
 			return filepath.SkipDir
 		}
-		if entry.IsDir() || !slices.Contains(dotnetConfigurationFiles, strings.ToLower(entry.Name())) {
+		if entry.IsDir() || !slices.Contains(dotnetConfigurationFileNames, entry.Name()) {
 			return nil
 		}
 		relativePath, operationError := filepath.Rel(workspaceDirectory, filePath)
@@ -244,6 +239,30 @@ func readDotnetProjectFile(projectPath string) (dotnetProjectFile, error) {
 	return project, nil
 }
 
+func (project *dotnetProjectFile) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) error {
+	for {
+		token, operationError := decoder.Token()
+		if operationError != nil {
+			return operationError
+		}
+		switch element := token.(type) {
+		case xml.StartElement:
+			for _, attribute := range element.Attr {
+				switch {
+				case element.Name.Local == "Import" && attribute.Name.Local == "Project":
+					project.Imports = append(project.Imports, dotnetImport{Project: attribute.Value})
+				case element.Name.Local == "ProjectReference" && attribute.Name.Local == "Include":
+					project.ProjectReferences = append(project.ProjectReferences, attribute.Value)
+				}
+			}
+		case xml.EndElement:
+			if element.Name == start.Name {
+				return nil
+			}
+		}
+	}
+}
+
 func dotnetImportedFiles(workspaceDirectory string, sourceFiles []string) ([]string, []string, error) {
 	visited := make(map[string]bool, len(sourceFiles))
 	queue := slices.Clone(sourceFiles)
@@ -259,21 +278,15 @@ func dotnetImportedFiles(workspaceDirectory string, sourceFiles []string) ([]str
 		if operationError != nil {
 			return nil, nil, operationError
 		}
-		for _, itemGroup := range project.ItemGroups {
-			for _, projectReference := range itemGroup.ProjectReferences {
-				for include := range strings.SplitSeq(projectReference.Include, ";") {
-					include = strings.TrimSpace(strings.ReplaceAll(include, "\\", "/"))
-					if include != "" && !strings.Contains(include, "$(") {
-						references = append(references, include)
-					}
+		for _, projectReference := range project.ProjectReferences {
+			for include := range strings.SplitSeq(projectReference, ";") {
+				include = strings.TrimSpace(strings.ReplaceAll(include, "\\", "/"))
+				if include != "" && !strings.Contains(include, "$(") {
+					references = append(references, include)
 				}
 			}
 		}
-		imports := slices.Clone(project.Imports)
-		for _, group := range project.ImportGroups {
-			imports = append(imports, group.Imports...)
-		}
-		for _, imported := range imports {
+		for _, imported := range project.Imports {
 			importPath := strings.TrimSpace(strings.ReplaceAll(imported.Project, "\\", "/"))
 			if importPath == "" || strings.ContainsAny(importPath, "$(*?[") {
 				continue
