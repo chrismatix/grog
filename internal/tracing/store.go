@@ -203,10 +203,10 @@ func (s *TraceStore) List(ctx context.Context, opts ListOptions) ([]BuildRow, er
 		command, start_time_unix_millis, total_duration_millis, total_targets,
 		success_count, failure_count, cache_hit_count,
 		critical_path_exec_millis, critical_path_cache_millis, async_cache_wait_millis,
-		is_ci, requested_patterns
-		FROM read_parquet('%s', union_by_name=true)
+		is_ci, requested_patterns, COALESCE(critical_path, ''), COALESCE(tags, '')
+		FROM %s
 		%s ORDER BY start_time_unix_millis DESC %s`,
-		s.resolver.BuildsGlob(), where, limitClause)
+		s.buildsSource(), where, limitClause)
 
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
@@ -218,6 +218,14 @@ func (s *TraceStore) List(ctx context.Context, opts ListOptions) ([]BuildRow, er
 	defer rows.Close()
 
 	return scanBuildRows(rows)
+}
+
+// buildsSource reads the builds table, adding the columns that traces written
+// by older grog versions lack so that List and LoadBuild can select them.
+func (s *TraceStore) buildsSource() string {
+	return fmt.Sprintf(`(SELECT * FROM read_parquet('%s', union_by_name=true)
+		UNION ALL BY NAME SELECT NULL::VARCHAR AS critical_path, NULL::VARCHAR AS tags WHERE false)`,
+		s.resolver.BuildsGlob())
 }
 
 // ListOptions controls filtering for List.
@@ -234,10 +242,10 @@ func (s *TraceStore) LoadBuild(ctx context.Context, traceIDPrefix string) (*Buil
 		command, start_time_unix_millis, total_duration_millis, total_targets,
 		success_count, failure_count, cache_hit_count,
 		critical_path_exec_millis, critical_path_cache_millis, async_cache_wait_millis,
-		is_ci, requested_patterns
-		FROM read_parquet('%s', union_by_name=true)
+		is_ci, requested_patterns, COALESCE(critical_path, ''), COALESCE(tags, '')
+		FROM %s
 		WHERE starts_with(trace_id, '%s')`,
-		s.resolver.BuildsGlob(), sanitize(traceIDPrefix))
+		s.buildsSource(), sanitize(traceIDPrefix))
 
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
@@ -625,7 +633,7 @@ func scanBuildRows(rows *sql.Rows) ([]BuildRow, error) {
 			&b.Command, &b.StartTimeUnixMillis, &b.TotalDurationMillis, &b.TotalTargets,
 			&b.SuccessCount, &b.FailureCount, &b.CacheHitCount,
 			&b.CriticalPathExecMillis, &b.CriticalPathCacheMillis, &b.AsyncCacheWaitMillis,
-			&b.IsCI, &b.RequestedPatterns,
+			&b.IsCI, &b.RequestedPatterns, &b.CriticalPath, &b.Tags,
 		); err != nil {
 			return nil, err
 		}

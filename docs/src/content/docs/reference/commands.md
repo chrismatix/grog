@@ -60,6 +60,7 @@ Reference for the `grog` CLI.
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 
@@ -135,6 +136,7 @@ grog build [flags]
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 
@@ -193,6 +195,7 @@ grog build-and-test [flags]
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 
@@ -255,6 +258,7 @@ grog changes [flags]
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 
@@ -311,6 +315,7 @@ grog check [flags]
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 
@@ -373,6 +378,7 @@ grog clean [flags]
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 
@@ -435,6 +441,7 @@ grog deps [flags]
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 
@@ -509,6 +516,7 @@ grog explain-changes [flags]
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 
@@ -572,6 +580,7 @@ grog graph [flags]
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 
@@ -629,6 +638,7 @@ grog info [flags]
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 
@@ -689,6 +699,7 @@ grog list [flags]
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 
@@ -748,6 +759,7 @@ grog logs [flags]
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 
@@ -806,6 +818,7 @@ grog owners [flags]
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 
@@ -868,6 +881,7 @@ grog rdeps [flags]
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 
@@ -928,6 +942,7 @@ grog run [flags]
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 
@@ -988,6 +1003,7 @@ grog taint [flags]
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 
@@ -1049,6 +1065,7 @@ grog test [flags]
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 
@@ -1095,6 +1112,7 @@ View, analyze, and export build execution traces for performance analysis and da
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 
@@ -1158,6 +1176,7 @@ grog traces export [flags]
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 
@@ -1217,6 +1236,7 @@ grog traces list [flags]
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 
@@ -1271,6 +1291,7 @@ grog traces prune [flags]
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 
@@ -1323,6 +1344,7 @@ grog traces pull [flags]
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 
@@ -1378,6 +1400,7 @@ grog traces show <trace-id> [flags]
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 
@@ -1437,6 +1460,7 @@ grog traces stats [flags]
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 
@@ -1493,6 +1517,7 @@ grog version [flags]
       --skip-workspace-lock           Skip the workspace level lock (DANGEROUS: may corrupt the cache)
       --stream-logs                   Forward all target build/test logs to stdout/-err
       --tag strings                   Filter targets by tag. Can be used multiple times. Example: --tag=foo --tag=bar
+      --trace-tag strings             Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint
   -v, --verbose count                 Set verbosity level (-v, -vv)
 ```
 

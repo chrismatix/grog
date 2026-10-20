@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chrismatix/grog/internal/config"
 	"github.com/chrismatix/grog/internal/dag"
 	"github.com/chrismatix/grog/internal/label"
 	"github.com/chrismatix/grog/internal/model"
@@ -165,5 +166,80 @@ func TestTraceCollector_FailedTarget(t *testing.T) {
 	}
 	if trace.Spans[0].Status != "FAILURE" {
 		t.Errorf("expected FAILURE status, got %s", trace.Spans[0].Status)
+	}
+}
+
+func TestCollectBuildTags(t *testing.T) {
+	tests := []struct {
+		name        string
+		environment map[string]string
+		traceTags   []string
+		expected    string
+	}{
+		{
+			name:     "no context",
+			expected: "",
+		},
+		{
+			name: "github context",
+			environment: map[string]string{
+				"GITHUB_RUN_ID":   "123",
+				"GITHUB_JOB":      "test",
+				"GITHUB_HEAD_REF": "feature-branch",
+			},
+			expected: `{"github.head_ref":"feature-branch","github.job":"test","github.run_id":"123"}`,
+		},
+		{
+			name:        "trace tags override github context",
+			environment: map[string]string{"GITHUB_JOB": "test"},
+			traceTags:   []string{"github.job=lint", "shard=2", "nightly"},
+			expected:    `{"github.job":"lint","nightly":"","shard":"2"}`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			for _, variable := range githubContextVariables {
+				t.Setenv(variable, test.environment[variable])
+			}
+			previousTraceTags := config.Global.TraceTags
+			config.Global.TraceTags = test.traceTags
+			t.Cleanup(func() { config.Global.TraceTags = previousTraceTags })
+
+			if actual := collectBuildTags(); actual != test.expected {
+				t.Errorf("expected %s, got %s", test.expected, actual)
+			}
+		})
+	}
+}
+
+func TestTraceCollector_FinalizeRecordsCriticalPath(t *testing.T) {
+	collector := NewTraceCollector("build", nil, "0.1.0")
+
+	library := &model.Target{
+		Label:         label.TargetLabel{Package: "pkg", Name: "library"},
+		IsSelected:    true,
+		ExecutionTime: time.Second,
+	}
+	binary := &model.Target{
+		Label:         label.TargetLabel{Package: "pkg", Name: "binary"},
+		IsSelected:    true,
+		Dependencies:  []label.TargetLabel{library.Label},
+		ExecutionTime: time.Second,
+	}
+	graph := dag.NewDirectedGraphFromTargets(library, binary)
+	if err := graph.AddEdge(library, binary); err != nil {
+		t.Fatalf("failed to add edge: %v", err)
+	}
+
+	completionMap := dag.CompletionMap{
+		library.Label: dag.Completion{IsSuccess: true, NodeType: model.TargetNode},
+		binary.Label:  dag.Completion{IsSuccess: true, NodeType: model.TargetNode},
+	}
+
+	trace := collector.Finalize(completionMap, graph, 0)
+
+	if trace.Build.CriticalPath != "//pkg:library,//pkg:binary" {
+		t.Errorf("expected critical path //pkg:library,//pkg:binary, got %q", trace.Build.CriticalPath)
 	}
 }

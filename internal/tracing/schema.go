@@ -17,9 +17,11 @@ type BuildRow struct {
 	CacheHitCount           int32  `parquet:"cache_hit_count" json:"cache_hit_count"`
 	CriticalPathExecMillis  int64  `parquet:"critical_path_exec_millis" json:"critical_path_exec_millis"`
 	CriticalPathCacheMillis int64  `parquet:"critical_path_cache_millis" json:"critical_path_cache_millis"`
+	CriticalPath            string `parquet:"critical_path" json:"critical_path"`
 	AsyncCacheWaitMillis    int64  `parquet:"async_cache_wait_millis" json:"async_cache_wait_millis"`
 	IsCI                    bool   `parquet:"is_ci" json:"is_ci"`
 	RequestedPatterns       string `parquet:"requested_patterns" json:"requested_patterns"`
+	Tags                    string `parquet:"tags" json:"tags"` // JSON object of build tags
 }
 
 // SpanRow represents one row in the spans Parquet table.

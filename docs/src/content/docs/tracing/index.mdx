@@ -53,12 +53,24 @@ Each trace records a complete picture of a single build invocation:
 - Grog version and platform
 - Target patterns requested
 - Aggregate counts (targets, cache hits, failures)
-- Critical path timing
+- Critical path timing and the targets on it
+- Build tags (see [Tagging builds](#tagging-builds))
 
 **Per-target span data:**
 
 - Label, status (success/failure/cancelled), and cache result (hit/miss/skip)
 - 8 phase-level timing breakdowns for bottleneck analysis
+- Direct dependencies, so the build graph can be rebuilt from the trace
+
+### Tagging builds
+
+Attach `key=value` tags to a build with `--trace-tag` (or the `GROG_TRACE_TAG` environment variable):
+
+```bash
+grog build //... --trace-tag=job=lint --trace-tag=shard=2
+```
+
+On GitHub Actions, grog also records the run context as `github.*` tags: `repository`, `workflow`, `job`, `run_id`, `run_attempt`, `event_name`, `ref_name` and `head_ref`. A `--trace-tag` with the same key wins.
 
 ### Phase timing
 
@@ -181,7 +193,7 @@ grog traces export --format=otel > traces-otel.json
 grog traces export --format=otel --output traces-otel.json
 ```
 
-This maps each build to an OTLP trace with the build as the root span and each target as a child span, including all phase timing as span attributes. Compatible with:
+This maps each build to an OTLP trace with the build as the root span and each target as a child span, including all phase timing as span attributes. Target spans carry `grog.dependencies`, the root span carries `grog.critical_path`, and each build tag becomes a `grog.tag.<key>` attribute. Compatible with:
 
 - **Grafana Tempo** — Waterfall visualization of parallel target execution
 - **Jaeger** — Trace search and comparison

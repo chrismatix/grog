@@ -1,6 +1,7 @@
 package tracing
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -37,6 +38,39 @@ func NewTraceCollector(
 		requestedPatterns: patterns,
 		grogVersion:       grogVersion,
 	}
+}
+
+// githubContextVariables are recorded as github.* build tags so a trace can be
+// joined back to the Actions run and job that produced it.
+var githubContextVariables = []string{
+	"GITHUB_REPOSITORY",
+	"GITHUB_WORKFLOW",
+	"GITHUB_JOB",
+	"GITHUB_RUN_ID",
+	"GITHUB_RUN_ATTEMPT",
+	"GITHUB_EVENT_NAME",
+	"GITHUB_REF_NAME",
+	"GITHUB_HEAD_REF",
+}
+
+// collectBuildTags merges the GitHub Actions context with --trace-tag values
+// (which win on conflict) into a JSON object, or "" when there are none.
+func collectBuildTags() string {
+	tags := map[string]string{}
+	for _, variable := range githubContextVariables {
+		if value := os.Getenv(variable); value != "" {
+			tags["github."+strings.ToLower(strings.TrimPrefix(variable, "GITHUB_"))] = value
+		}
+	}
+	for _, tag := range config.Global.TraceTags {
+		key, value, _ := strings.Cut(tag, "=")
+		tags[key] = value
+	}
+	if len(tags) == 0 {
+		return ""
+	}
+	encoded, _ := json.Marshal(tags)
+	return string(encoded)
 }
 
 const maxCommandLen = 1024
@@ -82,6 +116,7 @@ func (c *TraceCollector) Finalize(
 			RequestedPatterns:    strings.Join(patterns, ","),
 			IsCI:                 isCI,
 			AsyncCacheWaitMillis: asyncWaitTime.Milliseconds(),
+			Tags:                 collectBuildTags(),
 		},
 	}
 
@@ -89,6 +124,11 @@ func (c *TraceCollector) Finalize(
 	if criticalPath, ok := graph.GetSelectedSubgraph().FindCriticalPath(); ok && len(criticalPath.Nodes) > 0 {
 		trace.Build.CriticalPathExecMillis = criticalPath.ExecutionDuration.Milliseconds()
 		trace.Build.CriticalPathCacheMillis = criticalPath.CacheDuration.Milliseconds()
+		var labels []string
+		for _, node := range criticalPath.Nodes {
+			labels = append(labels, node.GetLabel().String())
+		}
+		trace.Build.CriticalPath = strings.Join(labels, ",")
 	}
 
 	// Build spans from completion map

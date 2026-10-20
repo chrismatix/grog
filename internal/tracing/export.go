@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 )
@@ -173,14 +175,30 @@ type otlpKeyValue struct {
 }
 
 type otlpValue struct {
-	StringValue *string `json:"stringValue,omitempty"`
-	IntValue    *string `json:"intValue,omitempty"`
-	BoolValue   *bool   `json:"boolValue,omitempty"`
+	StringValue *string         `json:"stringValue,omitempty"`
+	IntValue    *string         `json:"intValue,omitempty"`
+	BoolValue   *bool           `json:"boolValue,omitempty"`
+	ArrayValue  *otlpArrayValue `json:"arrayValue,omitempty"`
+}
+
+type otlpArrayValue struct {
+	Values []otlpValue `json:"values"`
 }
 
 func stringVal(s string) otlpValue { return otlpValue{StringValue: &s} }
 func intVal(i int64) otlpValue     { s := fmt.Sprintf("%d", i); return otlpValue{IntValue: &s} }
 func boolVal(b bool) otlpValue     { return otlpValue{BoolValue: &b} }
+
+// stringListVal turns a comma-joined list (labels, tags) into an OTLP array.
+func stringListVal(joined string) otlpValue {
+	values := []otlpValue{}
+	if joined != "" {
+		for _, item := range strings.Split(joined, ",") {
+			values = append(values, stringVal(item))
+		}
+	}
+	return otlpValue{ArrayValue: &otlpArrayValue{Values: values}}
+}
 
 func buildOTLPResourceSpans(trace *BuildTrace) otlpResourceSpans {
 	traceIDBytes := uuidToBytes(trace.Build.TraceID)
@@ -206,8 +224,21 @@ func buildOTLPResourceSpans(trace *BuildTrace) otlpResourceSpans {
 			{Key: "grog.failure_count", Value: intVal(int64(trace.Build.FailureCount))},
 			{Key: "grog.is_ci", Value: boolVal(trace.Build.IsCI)},
 			{Key: "grog.requested_patterns", Value: stringVal(trace.Build.RequestedPatterns)},
+			{Key: "grog.command", Value: stringVal(trace.Build.Command)},
+			{Key: "grog.success_count", Value: intVal(int64(trace.Build.SuccessCount))},
+			{Key: "grog.critical_path_exec_ms", Value: intVal(trace.Build.CriticalPathExecMillis)},
+			{Key: "grog.critical_path_cache_ms", Value: intVal(trace.Build.CriticalPathCacheMillis)},
+			{Key: "grog.critical_path", Value: stringListVal(trace.Build.CriticalPath)},
+			{Key: "grog.async_cache_wait_ms", Value: intVal(trace.Build.AsyncCacheWaitMillis)},
 		},
 		Status: &otlpStatus{Code: 1},
+	}
+
+	var tags map[string]string
+	if err := json.Unmarshal([]byte(trace.Build.Tags), &tags); err == nil {
+		for _, key := range slices.Sorted(maps.Keys(tags)) {
+			rootSpan.Attributes = append(rootSpan.Attributes, otlpKeyValue{Key: "grog.tag." + key, Value: stringVal(tags[key])})
+		}
 	}
 
 	if trace.Build.FailureCount > 0 {
@@ -244,6 +275,13 @@ func buildOTLPResourceSpans(trace *BuildTrace) otlpResourceSpans {
 				{Key: "grog.output_write_ms", Value: intVal(s.OutputWriteMillis)},
 				{Key: "grog.output_load_ms", Value: intVal(s.OutputLoadMillis)},
 				{Key: "grog.cache_write_ms", Value: intVal(s.CacheWriteMillis)},
+				{Key: "grog.cache_check_ms", Value: intVal(s.CacheCheckMillis)},
+				{Key: "grog.dep_load_ms", Value: intVal(s.DepLoadMillis)},
+				{Key: "grog.package", Value: stringVal(s.Package)},
+				{Key: "grog.output_hash", Value: stringVal(s.OutputHash)},
+				{Key: "grog.exit_code", Value: intVal(int64(s.ExitCode))},
+				{Key: "grog.tags", Value: stringListVal(s.Tags)},
+				{Key: "grog.dependencies", Value: stringListVal(s.Dependencies)},
 			},
 			Status: status,
 		}

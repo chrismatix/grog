@@ -169,6 +169,10 @@ func configureRoot() bool {
 	RootCmd.PersistentFlags().StringSlice("exclude-tag", []string{}, "Exclude targets by tag. Can be used multiple times. Example: --exclude-tag=foo --exclude-tag=bar")
 	_ = viper.BindPFlag("exclude_tag", RootCmd.PersistentFlags().Lookup("exclude-tag"))
 
+	// trace_tag
+	RootCmd.PersistentFlags().StringSlice("trace-tag", []string{}, "Attach a key=value tag to this build's trace. Can be used multiple times. Example: --trace-tag=job=lint")
+	_ = viper.BindPFlag("trace_tag", RootCmd.PersistentFlags().Lookup("trace-tag"))
+
 	// enable_caching
 	RootCmd.PersistentFlags().Bool("enable-cache", true, "Enable cache")
 	_ = viper.BindPFlag("enable_cache", RootCmd.PersistentFlags().Lookup("enable-cache"))
