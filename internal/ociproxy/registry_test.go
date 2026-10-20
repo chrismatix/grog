@@ -6,11 +6,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -518,4 +520,200 @@ func TestConcurrentChunkedUploadsAreIsolated(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, payloads[i], got, "session %d", i)
 	}
+}
+
+func sendRequest(t *testing.T, method, url string, body []byte) *http.Response {
+	t.Helper()
+	request, err := http.NewRequest(method, url, bytes.NewReader(body))
+	require.NoError(t, err)
+	response, err := http.DefaultClient.Do(request)
+	require.NoError(t, err)
+	response.Body.Close()
+	return response
+}
+
+func startUploadSession(t *testing.T, registry *ociproxy.Registry) string {
+	t.Helper()
+	response := sendRequest(t, http.MethodPost, urlFor(registry, "/v2/repo/blobs/uploads/"), nil)
+	require.Equal(t, http.StatusAccepted, response.StatusCode)
+	return response.Header.Get("Location")
+}
+
+func TestRequestErrors(t *testing.T) {
+	registry, _ := newTestRegistry(t)
+	payload := []byte("payload")
+	digest := digestOf(payload)
+
+	testCases := []struct {
+		name           string
+		method         string
+		path           string
+		body           []byte
+		expectedStatus int
+	}{
+		{"get missing blob", http.MethodGet, "/v2/repo/blobs/" + digest, nil, http.StatusNotFound},
+		{"monolithic digest mismatch", http.MethodPost, "/v2/repo/blobs/uploads/?digest=" + digestOf([]byte("other")), payload, http.StatusInternalServerError},
+		{"patch without upload id", http.MethodPatch, "/v2/repo/blobs/uploads/", payload, http.StatusBadRequest},
+		{"patch unknown upload id", http.MethodPatch, "/v2/repo/blobs/uploads/unknown", payload, http.StatusNotFound},
+		{"put without upload id", http.MethodPut, "/v2/repo/blobs/uploads/?digest=" + digest, nil, http.StatusBadRequest},
+		{"put invalid digest", http.MethodPut, "/v2/repo/blobs/uploads/unknown?digest=garbage", nil, http.StatusBadRequest},
+		{"put unknown upload id", http.MethodPut, "/v2/repo/blobs/uploads/unknown?digest=" + digest, nil, http.StatusNotFound},
+		{"delete blob not allowed", http.MethodDelete, "/v2/repo/blobs/" + digest, nil, http.StatusMethodNotAllowed},
+		{"delete upload not allowed", http.MethodDelete, "/v2/repo/blobs/uploads/unknown", nil, http.StatusMethodNotAllowed},
+		{"delete manifest not allowed", http.MethodDelete, "/v2/repo/manifests/" + digest, nil, http.StatusMethodNotAllowed},
+		{"get missing manifest", http.MethodGet, "/v2/repo/manifests/" + digest, nil, http.StatusNotFound},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			response := sendRequest(t, testCase.method, urlFor(registry, testCase.path), testCase.body)
+			assert.Equal(t, testCase.expectedStatus, response.StatusCode)
+		})
+	}
+}
+
+var errInjected = errors.New("injected failure")
+
+// faultyBackend fails the configured operations and records staged-writer cancellations.
+type faultyBackend struct {
+	backends.CacheBackend
+
+	existsError     error
+	sizeError       error
+	getError        error
+	beginWriteError error
+	writeError      error
+	commitError     error
+	cancelCount     atomic.Int32
+}
+
+func (backend *faultyBackend) Exists(ctx context.Context, path, key string) (bool, error) {
+	if backend.existsError != nil {
+		return false, backend.existsError
+	}
+	return backend.CacheBackend.Exists(ctx, path, key)
+}
+
+func (backend *faultyBackend) Size(ctx context.Context, path, key string) (int64, error) {
+	if backend.sizeError != nil {
+		return 0, backend.sizeError
+	}
+	return backend.CacheBackend.Size(ctx, path, key)
+}
+
+func (backend *faultyBackend) Get(ctx context.Context, path, key string) (io.ReadCloser, error) {
+	if backend.getError != nil {
+		return nil, backend.getError
+	}
+	return backend.CacheBackend.Get(ctx, path, key)
+}
+
+func (backend *faultyBackend) BeginWrite(ctx context.Context) (backends.StagedWriter, error) {
+	if backend.beginWriteError != nil {
+		return nil, backend.beginWriteError
+	}
+	inner, err := backend.CacheBackend.BeginWrite(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &faultyStagedWriter{backend: backend, inner: inner}, nil
+}
+
+type faultyStagedWriter struct {
+	backend *faultyBackend
+	inner   backends.StagedWriter
+}
+
+func (writer *faultyStagedWriter) Write(content []byte) (int, error) {
+	if writer.backend.writeError != nil {
+		return 0, writer.backend.writeError
+	}
+	return writer.inner.Write(content)
+}
+
+func (writer *faultyStagedWriter) Commit(ctx context.Context, path, key string) error {
+	if writer.backend.commitError != nil {
+		return writer.backend.commitError
+	}
+	return writer.inner.Commit(ctx, path, key)
+}
+
+func (writer *faultyStagedWriter) Cancel(ctx context.Context) error {
+	writer.backend.cancelCount.Add(1)
+	return writer.inner.Cancel(ctx)
+}
+
+func newFaultyRegistry(t *testing.T, backend *faultyBackend) *ociproxy.Registry {
+	t.Helper()
+	backend.CacheBackend = backends.NewFileSystemCacheForTest(t.TempDir(), t.TempDir())
+	registry, err := ociproxy.New(context.Background(), caching.NewCas(backend))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = registry.Close() })
+	return registry
+}
+
+func TestBackendFailures(t *testing.T) {
+	payload := []byte("payload")
+	digest := digestOf(payload)
+
+	testCases := []struct {
+		name           string
+		backend        *faultyBackend
+		storeBlob      bool
+		startSession   bool
+		method         string
+		path           string
+		expectedStatus int
+	}{
+		{name: "head exists error", backend: &faultyBackend{existsError: errInjected}, method: http.MethodHead, path: "/v2/repo/blobs/" + digest, expectedStatus: http.StatusInternalServerError},
+		{name: "head size error", backend: &faultyBackend{sizeError: errInjected}, storeBlob: true, method: http.MethodHead, path: "/v2/repo/blobs/" + digest, expectedStatus: http.StatusInternalServerError},
+		{name: "get load error", backend: &faultyBackend{getError: errInjected}, storeBlob: true, method: http.MethodGet, path: "/v2/repo/blobs/" + digest, expectedStatus: http.StatusNotFound},
+		{name: "manifest exists error", backend: &faultyBackend{existsError: errInjected}, method: http.MethodGet, path: "/v2/repo/manifests/" + digest, expectedStatus: http.StatusInternalServerError},
+		{name: "manifest load error", backend: &faultyBackend{getError: errInjected}, storeBlob: true, method: http.MethodGet, path: "/v2/repo/manifests/" + digest, expectedStatus: http.StatusInternalServerError},
+		{name: "monolithic begin write error", backend: &faultyBackend{beginWriteError: errInjected}, method: http.MethodPost, path: "/v2/repo/blobs/uploads/?digest=" + digest, expectedStatus: http.StatusInternalServerError},
+		{name: "monolithic write error", backend: &faultyBackend{writeError: errInjected}, method: http.MethodPost, path: "/v2/repo/blobs/uploads/?digest=" + digest, expectedStatus: http.StatusInternalServerError},
+		{name: "monolithic commit error", backend: &faultyBackend{commitError: errInjected}, method: http.MethodPost, path: "/v2/repo/blobs/uploads/?digest=" + digest, expectedStatus: http.StatusInternalServerError},
+		{name: "chunked begin write error", backend: &faultyBackend{beginWriteError: errInjected}, method: http.MethodPost, path: "/v2/repo/blobs/uploads/", expectedStatus: http.StatusInternalServerError},
+		{name: "chunked patch write error", backend: &faultyBackend{writeError: errInjected}, startSession: true, method: http.MethodPatch, expectedStatus: http.StatusInternalServerError},
+		{name: "chunked trailing write error", backend: &faultyBackend{writeError: errInjected}, startSession: true, method: http.MethodPut, path: "?digest=" + digest, expectedStatus: http.StatusInternalServerError},
+		{name: "chunked commit error", backend: &faultyBackend{commitError: errInjected}, startSession: true, method: http.MethodPut, path: "?digest=" + digest, expectedStatus: http.StatusInternalServerError},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			registry := newFaultyRegistry(t, testCase.backend)
+			if testCase.storeBlob {
+				require.NoError(t, testCase.backend.Set(context.Background(), "cas", digest, bytes.NewReader(payload)))
+			}
+			path := testCase.path
+			if testCase.startSession {
+				path = startUploadSession(t, registry) + path
+			}
+			response := sendRequest(t, testCase.method, urlFor(registry, path), payload)
+			assert.Equal(t, testCase.expectedStatus, response.StatusCode)
+		})
+	}
+}
+
+func TestFailedPatchCancelsSession(t *testing.T) {
+	backend := &faultyBackend{writeError: errInjected}
+	registry := newFaultyRegistry(t, backend)
+	location := startUploadSession(t, registry)
+
+	response := sendRequest(t, http.MethodPatch, urlFor(registry, location), []byte("chunk"))
+	assert.Equal(t, http.StatusInternalServerError, response.StatusCode)
+	assert.Equal(t, int32(1), backend.cancelCount.Load())
+
+	response = sendRequest(t, http.MethodPatch, urlFor(registry, location), []byte("chunk"))
+	assert.Equal(t, http.StatusNotFound, response.StatusCode)
+}
+
+func TestCloseCancelsPendingUploads(t *testing.T) {
+	backend := &faultyBackend{}
+	registry := newFaultyRegistry(t, backend)
+	startUploadSession(t, registry)
+	startUploadSession(t, registry)
+
+	require.NoError(t, registry.Close())
+	assert.Equal(t, int32(2), backend.cancelCount.Load())
+	require.NoError(t, registry.Close())
+	assert.Equal(t, int32(2), backend.cancelCount.Load())
 }

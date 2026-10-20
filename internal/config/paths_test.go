@@ -75,3 +75,19 @@ func TestGetWorkspaceRootDir_StaysPathIsolated(t *testing.T) {
 		t.Fatalf("expected workspace root dir to differ between checkouts, got %q twice", a)
 	}
 }
+
+func TestWorkspaceRelativePaths(t *testing.T) {
+	previousConfig := Global
+	Global = WorkspaceConfig{WorkspaceRoot: "/repo"}
+	t.Cleanup(func() { Global = previousConfig })
+
+	if absolutePath := GetPathAbsoluteToWorkspaceRoot("foo/BUILD.pkl"); absolutePath != "/repo/foo/BUILD.pkl" {
+		t.Fatalf("expected /repo/foo/BUILD.pkl, got %q", absolutePath)
+	}
+	if packagePath, err := GetPackagePath("/repo/foo/bar/BUILD.pkl"); err != nil || packagePath != "foo/bar" {
+		t.Fatalf("expected foo/bar, got %q (err: %v)", packagePath, err)
+	}
+	if _, err := GetPackagePath("/elsewhere/BUILD.pkl"); err == nil {
+		t.Fatal("expected an error for a path outside the workspace root")
+	}
+}
