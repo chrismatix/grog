@@ -2,6 +2,7 @@ package resolvers
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -73,6 +74,7 @@ type mavenProject struct {
 type mavenResolvedModel struct {
 	model      mavenModel
 	properties map[string]string
+	profile    bool
 }
 
 type mavenMember struct {
@@ -149,9 +151,6 @@ func mavenParentMatches(project, parent mavenProject) bool {
 // modules it references, in any profile, and to its parent.
 func mavenDependencies(resolverContext context.Context, workspaceDirectory string) (Document, error) {
 	document := Document{Version: 1, Packages: make(map[string]Package)}
-	if operationError := resolverContext.Err(); operationError != nil {
-		return document, operationError
-	}
 	members, operationError := mavenMembers(resolverContext, workspaceDirectory)
 	if operationError != nil {
 		return document, operationError
@@ -175,6 +174,7 @@ func mavenDependencies(resolverContext context.Context, workspaceDirectory strin
 		slices.Sort(directories)
 		directoriesByCoordinates[key] = slices.Compact(directories)
 	}
+	profileDependencies := make(map[string][]string)
 	for directory, member := range members {
 		project := member.project
 		reportedPackage := Package{Dependencies: []string{}, Inputs: []string{"pom.xml", "src/**/*"}, ExcludeInputs: mavenExcludeInputs}
@@ -192,7 +192,11 @@ func mavenDependencies(resolverContext context.Context, workspaceDirectory strin
 				}
 				for _, dependencyDirectory := range directoriesByCoordinates[mavenReferenceKey(groupId, artifactId, version)] {
 					if dependencyDirectory != directory {
-						reportedPackage.Dependencies = append(reportedPackage.Dependencies, dependencyDirectory)
+						if resolvedModel.profile {
+							profileDependencies[directory] = append(profileDependencies[directory], dependencyDirectory)
+						} else {
+							reportedPackage.Dependencies = append(reportedPackage.Dependencies, dependencyDirectory)
+						}
 					}
 				}
 			}
@@ -206,7 +210,100 @@ func mavenDependencies(resolverContext context.Context, workspaceDirectory strin
 		reportedPackage.Dependencies = slices.Compact(reportedPackage.Dependencies)
 		document.Packages[directory] = reportedPackage
 	}
+	if operationError := mavenApplyProfileDependencies(resolverContext, workspaceDirectory, members, profileDependencies, &document); operationError != nil {
+		return document, operationError
+	}
 	return document, nil
+}
+
+func mavenApplyProfileDependencies(resolverContext context.Context, workspaceDirectory string, members map[string]mavenMember, profileDependencies map[string][]string, document *Document) error {
+	profileCycleFingerprint := ""
+	for _, directory := range slices.Sorted(maps.Keys(profileDependencies)) {
+		dependencies := profileDependencies[directory]
+		slices.Sort(dependencies)
+		for _, dependencyDirectory := range slices.Compact(dependencies) {
+			if mavenAddsCycle(*document, directory, dependencyDirectory) {
+				if profileCycleFingerprint == "" {
+					fingerprint, operationError := mavenInputsFingerprint(resolverContext, workspaceDirectory, members)
+					if operationError != nil {
+						return operationError
+					}
+					profileCycleFingerprint = fingerprint
+				}
+				reportedPackage := document.Packages[directory]
+				if reportedPackage.Fingerprint == nil {
+					reportedPackage.Fingerprint = make(map[string]string)
+				}
+				reportedPackage.Fingerprint["profile-cycle"] = profileCycleFingerprint
+				document.Packages[directory] = reportedPackage
+				continue
+			}
+			reportedPackage := document.Packages[directory]
+			reportedPackage.Dependencies = append(reportedPackage.Dependencies, dependencyDirectory)
+			slices.Sort(reportedPackage.Dependencies)
+			reportedPackage.Dependencies = slices.Compact(reportedPackage.Dependencies)
+			document.Packages[directory] = reportedPackage
+		}
+	}
+	return nil
+}
+
+func mavenAddsCycle(document Document, directory, dependencyDirectory string) bool {
+	visited := map[string]bool{dependencyDirectory: true}
+	for queue := []string{dependencyDirectory}; len(queue) > 0; queue = queue[1:] {
+		if queue[0] == directory {
+			return true
+		}
+		for _, dependency := range document.Packages[queue[0]].Dependencies {
+			if !visited[dependency] {
+				visited[dependency] = true
+				queue = append(queue, dependency)
+			}
+		}
+	}
+	return false
+}
+
+func mavenInputsFingerprint(resolverContext context.Context, workspaceDirectory string, members map[string]mavenMember) (string, error) {
+	var files []string
+	for directory := range members {
+		files = append(files, path.Join(directory, "pom.xml"))
+		sourceDirectory := filepath.Join(workspaceDirectory, filepath.FromSlash(directory), "src")
+		operationError := filepath.WalkDir(sourceDirectory, func(filePath string, entry os.DirEntry, walkError error) error {
+			if errors.Is(walkError, os.ErrNotExist) {
+				return nil
+			}
+			if walkError != nil {
+				return walkError
+			}
+			if operationError := resolverContext.Err(); operationError != nil {
+				return operationError
+			}
+			if entry.IsDir() {
+				return nil
+			}
+			relativePath, operationError := filepath.Rel(workspaceDirectory, filePath)
+			if operationError != nil {
+				return operationError
+			}
+			files = append(files, filepath.ToSlash(relativePath))
+			return nil
+		})
+		if operationError != nil {
+			return "", operationError
+		}
+	}
+	slices.Sort(files)
+	hasher := sha256.New()
+	for _, file := range files {
+		contents, operationError := os.ReadFile(filepath.Join(workspaceDirectory, filepath.FromSlash(file)))
+		if operationError != nil {
+			return "", operationError
+		}
+		_, _ = fmt.Fprintf(hasher, "%s\x00%d\x00", file, len(contents))
+		_, _ = hasher.Write(contents)
+	}
+	return fmt.Sprintf("%x", hasher.Sum(nil)), nil
 }
 
 // mavenMembers reads the root pom.xml and every module it lists, directly or
@@ -248,28 +345,53 @@ func (workspace *mavenWorkspace) modelsFor(directory string) ([]mavenResolvedMod
 		return nil, operationError
 	}
 	inheritedModels := []mavenResolvedModel{{properties: map[string]string{}}}
-	if parentDirectory, inside := mavenParentDirectory(directory, project); inside && parentDirectory != directory {
-		parentProject, operationError := workspace.readProject(parentDirectory)
+	parentDirectory := ""
+	hasParent := false
+	if relativeParentDirectory, inside := mavenParentDirectory(directory, project); inside && relativeParentDirectory != directory {
+		parentProject, operationError := workspace.readProject(relativeParentDirectory)
 		if operationError == nil && mavenParentMatches(project, parentProject) {
-			inheritedModels, operationError = workspace.modelsFor(parentDirectory)
-			if operationError != nil {
-				return nil, operationError
-			}
-			workspace.parentDirectory[directory] = parentDirectory
+			parentDirectory = relativeParentDirectory
+			hasParent = true
 		} else if operationError != nil && !errors.Is(operationError, os.ErrNotExist) {
 			return nil, operationError
 		}
 	}
+	if !hasParent {
+		parentDirectory, hasParent = workspace.coordinateParentDirectory(directory, project)
+	}
+	if hasParent {
+		inheritedModels, operationError = workspace.modelsFor(parentDirectory)
+		if operationError != nil {
+			return nil, operationError
+		}
+		workspace.parentDirectory[directory] = parentDirectory
+	}
 	var models []mavenResolvedModel
 	for _, inheritedModel := range inheritedModels {
 		baseProperties := mavenModelProperties(project, project.mavenModel, inheritedModel.properties)
-		models = append(models, mavenResolvedModel{model: project.mavenModel, properties: baseProperties})
+		models = append(models, mavenResolvedModel{model: project.mavenModel, properties: baseProperties, profile: inheritedModel.profile})
 		for _, profile := range project.Profiles {
-			models = append(models, mavenResolvedModel{model: profile, properties: mavenModelProperties(project, profile, baseProperties)})
+			profileProperties := mavenModelProperties(project, profile, baseProperties)
+			models = append(models,
+				mavenResolvedModel{model: project.mavenModel, properties: profileProperties, profile: true},
+				mavenResolvedModel{model: profile, properties: profileProperties, profile: true},
+			)
 		}
 	}
 	workspace.models[directory] = models
 	return models, nil
+}
+
+func (workspace *mavenWorkspace) coordinateParentDirectory(directory string, project mavenProject) (string, bool) {
+	if project.Parent.ArtifactId == "" {
+		return "", false
+	}
+	for _, candidateDirectory := range slices.Sorted(maps.Keys(workspace.projects)) {
+		if candidateDirectory != directory && mavenParentMatches(project, workspace.projects[candidateDirectory]) {
+			return candidateDirectory, true
+		}
+	}
+	return "", false
 }
 
 func mavenMembers(resolverContext context.Context, workspaceDirectory string) (map[string]mavenMember, error) {
@@ -306,15 +428,26 @@ func mavenMembers(resolverContext context.Context, workspaceDirectory string) (m
 				return operationError
 			}
 		}
+		var moduleDirectories []string
 		for _, resolvedModel := range member.models {
 			for _, module := range resolvedModel.model.Modules {
 				moduleDirectory, inside := mavenRelativeDirectory(directory, mavenInterpolate(module, resolvedModel.properties))
 				if !inside {
 					continue
 				}
-				if operationError := visit(moduleDirectory); operationError != nil {
-					return operationError
-				}
+				moduleDirectories = append(moduleDirectories, moduleDirectory)
+			}
+		}
+		slices.Sort(moduleDirectories)
+		moduleDirectories = slices.Compact(moduleDirectories)
+		for _, moduleDirectory := range moduleDirectories {
+			if _, operationError := workspace.readProject(moduleDirectory); operationError != nil {
+				return operationError
+			}
+		}
+		for _, moduleDirectory := range moduleDirectories {
+			if operationError := visit(moduleDirectory); operationError != nil {
+				return operationError
 			}
 		}
 		return nil
@@ -383,6 +516,14 @@ func mavenDefaultInputs(workspaceDirectory string) (inputs []string, excludeInpu
 	for directory := range members {
 		if directory != "" {
 			inputs = append(inputs, path.Join(directory, "pom.xml"))
+		}
+	}
+	if document, operationError := mavenDependencies(context.Background(), workspaceDirectory); operationError == nil {
+		for _, reportedPackage := range document.Packages {
+			if reportedPackage.Fingerprint["profile-cycle"] != "" {
+				inputs = append(inputs, "**/src/**/*")
+				break
+			}
 		}
 	}
 	slices.Sort(inputs)

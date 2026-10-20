@@ -31,6 +31,17 @@ func TestMavenDependencies(t *testing.T) {
 	}, document.Packages)
 }
 
+func writeMavenFiles(t *testing.T, files map[string]string) string {
+	t.Helper()
+	directory := t.TempDir()
+	for name, contents := range files {
+		filePath := filepath.Join(directory, name)
+		require.NoError(t, os.MkdirAll(filepath.Dir(filePath), 0755))
+		require.NoError(t, os.WriteFile(filePath, []byte(contents), 0644))
+	}
+	return directory
+}
+
 func TestMavenResolutionSemantics(t *testing.T) {
 	for _, testCase := range []struct {
 		name                 string
@@ -109,6 +120,26 @@ func TestMavenResolutionSemantics(t *testing.T) {
 			expectedDependencies: map[string][]string{"app": {"lib-a", "lib-b"}},
 		},
 		{
+			name: "profile properties apply to base dependencies",
+			files: map[string]string{
+				"pom.xml":       `<project><modules><module>lib-a</module><module>lib-b</module><module>app</module></modules></project>`,
+				"lib-a/pom.xml": `<project><groupId>com.example</groupId><artifactId>lib-a</artifactId><version>1</version></project>`,
+				"lib-b/pom.xml": `<project><groupId>com.example</groupId><artifactId>lib-b</artifactId><version>1</version></project>`,
+				"app/pom.xml":   `<project><groupId>com.example</groupId><artifactId>app</artifactId><version>1</version><properties><target.artifact>lib-a</target.artifact></properties><dependencies><dependency><groupId>com.example</groupId><artifactId>${target.artifact}</artifactId><version>1</version></dependency></dependencies><profiles><profile><properties><target.artifact>lib-b</target.artifact></properties></profile></profiles></project>`,
+			},
+			expectedDependencies: map[string][]string{"app": {"lib-a", "lib-b"}},
+		},
+		{
+			name: "coordinate parent properties reach children",
+			files: map[string]string{
+				"pom.xml":        `<project><modules><module>child</module><module>parent</module><module>core</module></modules></project>`,
+				"parent/pom.xml": `<project><groupId>com.example</groupId><artifactId>parent</artifactId><version>1</version><properties><target.artifact>core</target.artifact></properties></project>`,
+				"core/pom.xml":   `<project><groupId>com.example</groupId><artifactId>core</artifactId><version>1</version></project>`,
+				"child/pom.xml":  `<project><parent><groupId>com.example</groupId><artifactId>parent</artifactId><version>1</version><relativePath /></parent><artifactId>child</artifactId><dependencies><dependency><groupId>com.example</groupId><artifactId>${target.artifact}</artifactId><version>1</version></dependency></dependencies></project>`,
+			},
+			expectedDependencies: map[string][]string{"child": {"core", "parent"}},
+		},
+		{
 			name: "chained properties resolve module paths",
 			files: map[string]string{
 				"pom.xml":             `<project><properties><base.dir>modules</base.dir><child.dir>${base.dir}/lib</child.dir></properties><modules><module>${child.dir}</module></modules></project>`,
@@ -118,12 +149,7 @@ func TestMavenResolutionSemantics(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			directory := t.TempDir()
-			for name, contents := range testCase.files {
-				filePath := filepath.Join(directory, name)
-				require.NoError(t, os.MkdirAll(filepath.Dir(filePath), 0755))
-				require.NoError(t, os.WriteFile(filePath, []byte(contents), 0644))
-			}
+			directory := writeMavenFiles(t, testCase.files)
 			document, operationError := mavenDependencies(t.Context(), directory)
 			require.NoError(t, operationError)
 			for packageDirectory, dependencies := range testCase.expectedDependencies {
@@ -134,6 +160,28 @@ func TestMavenResolutionSemantics(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMavenProfileCycleFallback(t *testing.T) {
+	directory := writeMavenFiles(t, map[string]string{
+		"pom.xml":      `<project><modules><module>a</module><module>b</module></modules></project>`,
+		"a/pom.xml":    `<project><groupId>com.example</groupId><artifactId>a</artifactId><version>1</version><profiles><profile><dependencies><dependency><groupId>com.example</groupId><artifactId>b</artifactId><version>1</version></dependency></dependencies></profile></profiles></project>`,
+		"b/pom.xml":    `<project><groupId>com.example</groupId><artifactId>b</artifactId><version>1</version><profiles><profile><dependencies><dependency><groupId>com.example</groupId><artifactId>a</artifactId><version>1</version></dependency></dependencies></profile></profiles></project>`,
+		"a/src/A.java": "class A {}",
+		"b/src/B.java": "class B {}",
+	})
+	document, operationError := mavenDependencies(t.Context(), directory)
+	require.NoError(t, operationError)
+	require.Equal(t, []string{"b"}, document.Packages["a"].Dependencies)
+	require.Empty(t, document.Packages["b"].Dependencies)
+	fingerprint := document.Packages["b"].Fingerprint["profile-cycle"]
+	require.NotEmpty(t, fingerprint)
+	require.NoError(t, os.WriteFile(filepath.Join(directory, "a/src/A.java"), []byte("class A2 {}"), 0644))
+	changedDocument, operationError := mavenDependencies(t.Context(), directory)
+	require.NoError(t, operationError)
+	require.NotEqual(t, fingerprint, changedDocument.Packages["b"].Fingerprint["profile-cycle"])
+	inputs, _ := mavenDefaultInputs(directory)
+	require.Contains(t, inputs, "**/src/**/*")
 }
 
 func TestMavenRelativeDirectory(t *testing.T) {

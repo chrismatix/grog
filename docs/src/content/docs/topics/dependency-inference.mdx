@@ -224,16 +224,17 @@ Edges are references that name another member, in the pom or any of its `<profil
 The `<parent>` is an edge too when its `<relativePath>` (default `../pom.xml`) or coordinates point at a member.
 `<properties>` are interpolated into module paths and coordinates, together with the `project.*`, `pom.*` and `project.parent.*` coordinate properties; a module inherits properties from its actual parent chain, and each profile keeps its own property scope.
 
-A module depends on its parent pom, and that one on its own parent, up to the root: managed versions, properties and plugin configuration are inherited along that chain.
+A module depends on its locally resolved parent pom, even when that parent is not listed as a reactor module, and that one on its own parent, up to the root: managed versions, properties and plugin configuration are inherited along that chain.
 The root's synthesized `//:_maven_package` covers just the root `pom.xml`, so editing it rebuilds every module that inherits from it, while a module with an external parent is unaffected.
 
 `<scope>test</scope>` dependencies are included.
 Maven forbids cycles between modules, so unlike Cargo's `[dev-dependencies]` they can't produce one, and leaving them out would under-invalidate the module's tests.
+If combining mutually exclusive profile edges would create a cycle, the closing edge becomes a fingerprint over all Maven package inputs instead.
 The resolver reads the poms as written, not the effective pom: a dependency only declared through a parent outside the workspace isn't seen.
 
 Each module's `:_maven_package` covers `pom.xml` and `src/**/*`, minus `target/**`.
 
-Default `inputs`: `pom.xml` and every reachable module's `pom.xml`, with `target/**` excluded.
+Default `inputs`: `pom.xml` and every reachable module or local parent's `pom.xml`, plus `**/src/**/*` only when profile-cycle fingerprints are needed, with `target/**` excluded.
 
 ## Fields reference
 
