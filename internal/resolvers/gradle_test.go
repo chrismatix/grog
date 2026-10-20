@@ -75,7 +75,7 @@ func TestGradleCustomBuildFileName(t *testing.T) {
 	require.Equal(t, []string{"", "lib"}, document.Packages["app"].Dependencies)
 	require.Contains(t, document.Packages["app"].Inputs, "app.gradle.kts")
 	require.Contains(t, document.Packages[""].Inputs, "root.gradle.kts")
-	inputs, _ := gradleDefaultInputs(directory)
+	inputs, _ := gradleDefaultInputs(t.Context(), directory)
 	require.Subset(t, inputs, []string{"root.gradle.kts", "app/app.gradle.kts", "lib/build.gradle.kts"})
 }
 
@@ -92,6 +92,7 @@ func TestGradleProjectDirectories(t *testing.T) {
 		{name: "kotlin multiline", settings: "include(\n  \":a\",\n  \":b\"\n)", expected: map[string]string{":a": "a", ":b": "b"}},
 		{name: "project dir override", settings: "include ':a'\nproject(':a').projectDir = new File(rootDir, 'lib/a')", expected: map[string]string{":a": "lib/a"}},
 		{name: "root project dir override", settings: "include ':app'\nproject(':app').projectDir = new File(rootProject.projectDir, 'modules/app')", expected: map[string]string{":app": "modules/app"}},
+		{name: "renamed project keeps its directory", settings: "include ':foo'\nproject(':foo').name = 'bar'", expected: map[string]string{":bar": "foo"}},
 		{name: "commented project dir override", settings: "include ':app'\n// project(':app').projectDir = file('old-app')\n/* project(':app').projectDir = file('also-old') */", expected: map[string]string{":app": "app"}},
 		{name: "override outside the workspace is dropped", settings: "include(\":a\")\nproject(\":a\").projectDir = file(\"../a\")", expected: map[string]string{}},
 		{name: "includeBuild is not an include", settings: "includeBuild(\"logic\")", expected: map[string]string{}},
@@ -115,18 +116,48 @@ func TestGradleAccessor(t *testing.T) {
 }
 
 func TestGradleProjectReferencesIgnoreCommentsAndTests(t *testing.T) {
-	directories := map[string]string{":app": "app", ":lib": "lib", ":other": "other"}
-	accessors := map[string]string{"app": ":app", "lib": ":lib", "other": ":other"}
+	directories := map[string]string{":app": "app", ":lib": "lib", ":other": "other", ":test-api": "test-api"}
+	accessors := map[string]string{"app": ":app", "lib": ":lib", "other": ":other", "testApi": ":test-api"}
 	buildFile := `implementation(project(":lib"))
+implementation(projects.testApi)
 // implementation(project(":other"))
 /* implementation(projects.other) */
 testImplementation(project(":app"))
 testImplementation project(":other")`
-	require.Equal(t, []string{":lib"}, gradleProjectReferences(buildFile, directories, accessors))
+	require.Equal(t, []string{":lib", ":test-api"}, gradleProjectReferences(buildFile, directories, accessors))
+}
+
+func TestGradleSelectsOneScript(t *testing.T) {
+	directory := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(directory, "settings.gradle"), []byte("include ':app', ':lib'\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(directory, "settings.gradle.kts"), []byte("include(\":stale\")\n"), 0644))
+	require.NoError(t, os.Mkdir(filepath.Join(directory, "app"), 0755))
+	require.NoError(t, os.Mkdir(filepath.Join(directory, "lib"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(directory, "app", "build.gradle"), []byte("dependencies { implementation(project(':lib')) }\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(directory, "app", "build.gradle.kts"), []byte("dependencies { implementation(project(\":stale\")) }\n"), 0644))
+	document, operationError := gradleDependencies(t.Context(), directory)
+	require.NoError(t, operationError)
+	require.NotContains(t, document.Packages, "stale")
+	require.Equal(t, []string{"", "lib"}, document.Packages["app"].Dependencies)
+}
+
+func TestGradleRenamedProject(t *testing.T) {
+	directory := t.TempDir()
+	for name, contents := range map[string]string{
+		"settings.gradle":  "include ':app', ':foo'\nproject(':foo').name = 'bar'\n",
+		"app/build.gradle": "dependencies { implementation(project(':bar')); implementation(projects.bar) }\n",
+		"foo/build.gradle": "",
+	} {
+		require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(directory, name)), 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(directory, name), []byte(contents), 0644))
+	}
+	document, operationError := gradleDependencies(t.Context(), directory)
+	require.NoError(t, operationError)
+	require.Equal(t, []string{"", "foo"}, document.Packages["app"].Dependencies)
 }
 
 func TestGradleDefaultInputs(t *testing.T) {
-	inputs, excludeInputs := gradleDefaultInputs("testdata/gradle")
+	inputs, excludeInputs := gradleDefaultInputs(t.Context(), "testdata/gradle")
 	require.Equal(t, []string{
 		"settings.gradle", "settings.gradle.kts",
 		"app/build.gradle", "app/build.gradle.kts",
@@ -141,7 +172,7 @@ func TestGradleDefaultInputs(t *testing.T) {
 		"unused/build.gradle", "unused/build.gradle.kts",
 	}, inputs)
 	require.Equal(t, []string{"build/**", ".gradle/**"}, excludeInputs)
-	inputs, _ = gradleDefaultInputs(t.TempDir())
+	inputs, _ = gradleDefaultInputs(t.Context(), t.TempDir())
 	require.Equal(t, []string{"settings.gradle", "settings.gradle.kts", "build.gradle", "build.gradle.kts"}, inputs)
 }
 

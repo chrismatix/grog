@@ -22,6 +22,7 @@ var (
 	gradleProjectReferencePattern = regexp.MustCompile(`\bproject\(\s*(?:path\s*[:=]\s*)?["'](:[^"']*)["']`)
 	gradleAccessorPattern         = regexp.MustCompile(`\bprojects((?:\.[A-Za-z_][A-Za-z0-9_]*)+)`)
 	gradleBuildFileNamePattern    = regexp.MustCompile(`\b(?:project\(\s*["'](:[^"']*)["']\s*\)|(rootProject))\.buildFileName\s*=\s*["']([^"']+)["']`)
+	gradleProjectNamePattern      = regexp.MustCompile(`\bproject\(\s*["'](:[^"']*)["']\s*\)\.name\s*=\s*["']([^:"'/]+)["']`)
 )
 
 var gradleExcludeInputs = []string{"build/**", ".gradle/**"}
@@ -31,13 +32,13 @@ var gradleExcludeInputs = []string{"build/**", ".gradle/**"}
 // project depends on the root, which owns the version catalogs and buildSrc.
 func gradleDependencies(resolverContext context.Context, workspaceDirectory string) (Document, error) {
 	document := Document{Version: 1, Packages: make(map[string]Package)}
-	settings, operationError := readGradleFiles(workspaceDirectory, "settings.gradle.kts", "settings.gradle")
+	settings, operationError := readGradleFile(workspaceDirectory, "settings.gradle", "settings.gradle.kts")
 	if operationError != nil {
 		return document, operationError
 	}
 	if settings == "" {
 		// Without a settings file Gradle runs a single-project build.
-		rootBuildFile, operationError := readGradleFiles(workspaceDirectory, gradleBuildFiles(settings, ":")...)
+		rootBuildFile, operationError := readGradleFile(workspaceDirectory, gradleBuildFiles(settings, ":")...)
 		if operationError != nil {
 			return document, operationError
 		}
@@ -74,7 +75,7 @@ func gradleDependencies(resolverContext context.Context, workspaceDirectory stri
 		if operationError := resolverContext.Err(); operationError != nil {
 			return document, operationError
 		}
-		buildFile, operationError := readGradleFiles(filepath.Join(workspaceDirectory, directory), gradleBuildFiles(settings, projectPath)...)
+		buildFile, operationError := readGradleFile(filepath.Join(workspaceDirectory, directory), gradleBuildFiles(settings, projectPath)...)
 		if operationError != nil {
 			return document, operationError
 		}
@@ -120,6 +121,20 @@ func gradleProjectDirectories(settings string) map[string]string {
 		isAncestor := slices.ContainsFunc(slices.Collect(maps.Keys(directories)), func(projectPath string) bool { return strings.HasPrefix(projectPath, match[1]+":") })
 		if _, included := directories[match[1]]; included || isAncestor {
 			directories[match[1]] = path.Clean(filepath.ToSlash(match[2]))
+		}
+	}
+	for _, match := range gradleProjectNamePattern.FindAllStringSubmatch(settings, -1) {
+		if _, included := directories[match[1]]; !included {
+			continue
+		}
+		parentPath := match[1][:strings.LastIndex(match[1], ":")]
+		newPrefix := parentPath + ":" + match[2]
+		for _, projectPath := range slices.Sorted(maps.Keys(directories)) {
+			if projectPath != match[1] && !strings.HasPrefix(projectPath, match[1]+":") {
+				continue
+			}
+			directories[newPrefix+strings.TrimPrefix(projectPath, match[1])] = directories[projectPath]
+			delete(directories, projectPath)
 		}
 	}
 	for projectPath, directory := range directories {
@@ -198,7 +213,7 @@ func gradleWithoutComments(contents string) string {
 // gradleBuildFiles is the build file to read for a project, ":" for the
 // root: the last buildFileName settings assign to it, or the defaults.
 func gradleBuildFiles(settings string, projectPath string) []string {
-	buildFiles := []string{"build.gradle.kts", "build.gradle"}
+	buildFiles := []string{"build.gradle", "build.gradle.kts"}
 	for _, match := range gradleBuildFileNamePattern.FindAllStringSubmatch(settings, -1) {
 		if match[1] == projectPath || (match[2] != "" && projectPath == ":") {
 			buildFiles = []string{match[3]}
@@ -247,6 +262,10 @@ func gradleWithoutTestDependencies(contents string) string {
 		}
 		for index < len(contents) && (contents[index] == ' ' || contents[index] == '\t') {
 			index++
+		}
+		if index >= len(contents) || (contents[index] != '(' && !strings.HasPrefix(contents[index:], "project")) {
+			index--
+			continue
 		}
 		var end int
 		if index < len(contents) && contents[index] == '(' {
@@ -332,9 +351,8 @@ func gradleAccessor(projectPath string) string {
 	return strings.Join(segments, ".")
 }
 
-// readGradleFiles concatenates the named files that exist in the directory.
-func readGradleFiles(directory string, names ...string) (string, error) {
-	var contents strings.Builder
+// readGradleFile reads the first named script that exists.
+func readGradleFile(directory string, names ...string) (string, error) {
 	for _, name := range names {
 		fileContents, operationError := os.ReadFile(filepath.Join(directory, name))
 		if errors.Is(operationError, os.ErrNotExist) {
@@ -343,17 +361,16 @@ func readGradleFiles(directory string, names ...string) (string, error) {
 		if operationError != nil {
 			return "", fmt.Errorf("read %s: %w", filepath.Join(directory, name), operationError)
 		}
-		contents.Write(fileContents)
-		contents.WriteString("\n")
+		return string(fileContents), nil
 	}
-	return contents.String(), nil
+	return "", nil
 }
 
 // gradleDefaultInputs are the files the built-in reads: the settings file
 // and every included project's build file.
-func gradleDefaultInputs(workspaceDirectory string) (inputs []string, excludeInputs []string) {
+func gradleDefaultInputs(_ context.Context, workspaceDirectory string) (inputs []string, excludeInputs []string) {
 	inputs = []string{"settings.gradle", "settings.gradle.kts"}
-	settings, operationError := readGradleFiles(workspaceDirectory, "settings.gradle.kts", "settings.gradle")
+	settings, operationError := readGradleFile(workspaceDirectory, "settings.gradle", "settings.gradle.kts")
 	if operationError != nil {
 		return inputs, gradleExcludeInputs
 	}
