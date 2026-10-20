@@ -240,7 +240,7 @@ Default `inputs`: `pom.xml` and every reachable module or local parent's `pom.xm
 ### gradle
 
 Projects come from `include` statements in `settings.gradle.kts` or `settings.gradle`, with `projectDir` overrides honoured; `:a:b` is the directory `a/b`.
-Including `:a:b` also creates the parent project `:a`, as Gradle does; it is reported when its directory, `a` or its `projectDir` override, exists on disk.
+Including `:a:b` also creates and reports the parent project `:a`, as Gradle does, whether or not its default directory exists yet.
 Without a settings file Gradle runs a single-project build, and the resolver reports just the root.
 Edges are found by scanning each project's build file, `build.gradle(.kts)` or the `buildFileName` settings assign, for `project(":x")` references and type-safe accessors such as `projects.coreUtils`, whatever configuration they sit in.
 This is a text scan, not a Gradle evaluation: a reference in a comment or a disabled block still counts, which only ever adds edges.
