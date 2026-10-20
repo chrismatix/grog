@@ -2,8 +2,10 @@ package resolvers
 
 import (
 	"context"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -27,6 +29,71 @@ func TestMavenDependencies(t *testing.T) {
 		"services/billing":   module("", "build-tools/plugin", "services/payment"),
 		"tools/release":      module(),
 	}, document.Packages)
+}
+
+func TestMavenResolutionSemantics(t *testing.T) {
+	for _, testCase := range []struct {
+		name                 string
+		files                map[string]string
+		expectedDependencies map[string][]string
+		expectedPackages     []string
+	}{
+		{
+			name: "version selects one of duplicate coordinates",
+			files: map[string]string{
+				"pom.xml":     `<project><modules><module>v1</module><module>v2</module><module>app</module></modules></project>`,
+				"v1/pom.xml":  `<project><groupId>com.example</groupId><artifactId>library</artifactId><version>1</version></project>`,
+				"v2/pom.xml":  `<project><groupId>com.example</groupId><artifactId>library</artifactId><version>2</version></project>`,
+				"app/pom.xml": `<project><groupId>com.example</groupId><artifactId>app</artifactId><version>1</version><dependencies><dependency><groupId>com.example</groupId><artifactId>library</artifactId><version>1</version></dependency></dependencies></project>`,
+			},
+			expectedDependencies: map[string][]string{"app": {"v1"}},
+		},
+		{
+			name: "properties come from the actual parent",
+			files: map[string]string{
+				"pom.xml":               `<project><groupId>com.example</groupId><artifactId>aggregator</artifactId><version>1</version><modules><module>actual-parent</module><module>core</module><module>apps/child</module></modules></project>`,
+				"actual-parent/pom.xml": `<project><groupId>com.example</groupId><artifactId>parent</artifactId><version>1</version><properties><core.artifact>core</core.artifact></properties></project>`,
+				"core/pom.xml":          `<project><groupId>com.example</groupId><artifactId>core</artifactId><version>1</version></project>`,
+				"apps/child/pom.xml":    `<project><parent><groupId>com.example</groupId><artifactId>parent</artifactId><version>1</version><relativePath>../../actual-parent/pom.xml</relativePath></parent><artifactId>child</artifactId><dependencies><dependency><groupId>com.example</groupId><artifactId>${core.artifact}</artifactId><version>1</version></dependency></dependencies></project>`,
+			},
+			expectedDependencies: map[string][]string{"apps/child": {"actual-parent", "core"}},
+		},
+		{
+			name: "profiles keep separate property scopes",
+			files: map[string]string{
+				"pom.xml":       `<project><modules><module>lib-a</module><module>lib-b</module><module>app</module></modules></project>`,
+				"lib-a/pom.xml": `<project><groupId>com.example</groupId><artifactId>lib-a</artifactId><version>1</version></project>`,
+				"lib-b/pom.xml": `<project><groupId>com.example</groupId><artifactId>lib-b</artifactId><version>1</version></project>`,
+				"app/pom.xml":   `<project><groupId>com.example</groupId><artifactId>app</artifactId><version>1</version><profiles><profile><properties><target.artifact>lib-a</target.artifact></properties><dependencies><dependency><groupId>com.example</groupId><artifactId>${target.artifact}</artifactId><version>1</version></dependency></dependencies></profile><profile><properties><target.artifact>lib-b</target.artifact></properties><dependencies><dependency><groupId>com.example</groupId><artifactId>${target.artifact}</artifactId><version>1</version></dependency></dependencies></profile></profiles></project>`,
+			},
+			expectedDependencies: map[string][]string{"app": {"lib-a", "lib-b"}},
+		},
+		{
+			name: "chained properties resolve module paths",
+			files: map[string]string{
+				"pom.xml":             `<project><properties><base.dir>modules</base.dir><child.dir>${base.dir}/lib</child.dir></properties><modules><module>${child.dir}</module></modules></project>`,
+				"modules/lib/pom.xml": `<project><groupId>com.example</groupId><artifactId>lib</artifactId><version>1</version></project>`,
+			},
+			expectedPackages: []string{"", "modules/lib"},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			directory := t.TempDir()
+			for name, contents := range testCase.files {
+				filePath := filepath.Join(directory, name)
+				require.NoError(t, os.MkdirAll(filepath.Dir(filePath), 0755))
+				require.NoError(t, os.WriteFile(filePath, []byte(contents), 0644))
+			}
+			document, operationError := mavenDependencies(t.Context(), directory)
+			require.NoError(t, operationError)
+			for packageDirectory, dependencies := range testCase.expectedDependencies {
+				require.Equal(t, dependencies, document.Packages[packageDirectory].Dependencies)
+			}
+			if testCase.expectedPackages != nil {
+				require.ElementsMatch(t, testCase.expectedPackages, slices.Collect(maps.Keys(document.Packages)))
+			}
+		})
+	}
 }
 
 func TestMavenRelativeDirectory(t *testing.T) {

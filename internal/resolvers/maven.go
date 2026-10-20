@@ -3,6 +3,7 @@ package resolvers
 import (
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -15,6 +16,7 @@ import (
 type mavenCoordinates struct {
 	GroupId    string `xml:"groupId"`
 	ArtifactId string `xml:"artifactId"`
+	Version    string `xml:"version"`
 	Scope      string `xml:"scope"`
 }
 
@@ -68,19 +70,61 @@ type mavenProject struct {
 	Profiles []mavenModel `xml:"profiles>profile"`
 }
 
-// mavenMember is a module with the properties visible to it: its own,
-// its profiles', and those of the modules that aggregate it.
-type mavenMember struct {
-	project    mavenProject
+type mavenResolvedModel struct {
+	model      mavenModel
 	properties map[string]string
 }
 
-func (member mavenMember) interpolate(value string) string {
+type mavenMember struct {
+	project mavenProject
+	models  []mavenResolvedModel
+}
+
+func mavenInterpolate(value string, properties map[string]string) string {
 	value = strings.TrimSpace(value)
-	for name, propertyValue := range member.properties {
-		value = strings.ReplaceAll(value, "${"+name+"}", propertyValue)
+	names := slices.Sorted(maps.Keys(properties))
+	for range len(names) + 1 {
+		previous := value
+		for _, name := range names {
+			value = strings.ReplaceAll(value, "${"+name+"}", properties[name])
+		}
+		if value == previous {
+			break
+		}
 	}
 	return value
+}
+
+func mavenModelProperties(project mavenProject, model mavenModel, inherited map[string]string) map[string]string {
+	properties := make(map[string]string, len(inherited)+len(model.Properties.Entries)+9)
+	maps.Copy(properties, inherited)
+	for _, entry := range model.Properties.Entries {
+		properties[entry.XMLName.Local] = strings.TrimSpace(entry.Value)
+	}
+	groupId := mavenInterpolate(mavenEffectiveGroupId(project), properties)
+	artifactId := mavenInterpolate(project.ArtifactId, properties)
+	version := mavenInterpolate(mavenEffectiveVersion(project), properties)
+	for _, name := range []string{"project.groupId", "pom.groupId", "groupId"} {
+		properties[name] = groupId
+	}
+	for _, name := range []string{"project.artifactId", "pom.artifactId", "artifactId"} {
+		properties[name] = artifactId
+	}
+	for _, name := range []string{"project.version", "pom.version", "version"} {
+		properties[name] = version
+	}
+	properties["project.parent.groupId"] = mavenInterpolate(project.Parent.GroupId, properties)
+	properties["project.parent.artifactId"] = mavenInterpolate(project.Parent.ArtifactId, properties)
+	properties["project.parent.version"] = mavenInterpolate(project.Parent.Version, properties)
+	return properties
+}
+
+func mavenCoordinateKey(groupId, artifactId, version string) string {
+	key := groupId + ":" + artifactId
+	if version != "" {
+		key += ":" + version
+	}
+	return key
 }
 
 // mavenDependencies maps every module reachable from the root pom.xml to the
@@ -94,9 +138,24 @@ func mavenDependencies(resolverContext context.Context, workspaceDirectory strin
 	if operationError != nil {
 		return document, operationError
 	}
-	directoryByCoordinates := make(map[string]string, len(members))
+	directoriesByCoordinates := make(map[string][]string, len(members))
 	for directory, member := range members {
-		directoryByCoordinates[member.interpolate(mavenEffectiveGroupId(member.project))+":"+member.interpolate(member.project.ArtifactId)] = directory
+		for _, resolvedModel := range member.models {
+			groupId := mavenInterpolate(mavenEffectiveGroupId(member.project), resolvedModel.properties)
+			artifactId := mavenInterpolate(member.project.ArtifactId, resolvedModel.properties)
+			version := mavenInterpolate(mavenEffectiveVersion(member.project), resolvedModel.properties)
+			keys := []string{mavenCoordinateKey(groupId, artifactId, "")}
+			if version != "" {
+				keys = append(keys, mavenCoordinateKey(groupId, artifactId, version))
+			}
+			for _, key := range keys {
+				directoriesByCoordinates[key] = append(directoriesByCoordinates[key], directory)
+			}
+		}
+	}
+	for key, directories := range directoriesByCoordinates {
+		slices.Sort(directories)
+		directoriesByCoordinates[key] = slices.Compact(directories)
 	}
 	for directory, member := range members {
 		project := member.project
@@ -104,17 +163,20 @@ func mavenDependencies(resolverContext context.Context, workspaceDirectory strin
 		if directory == "" {
 			reportedPackage.Inputs = []string{"pom.xml"}
 		}
-		references := project.references()
-		for _, profile := range project.Profiles {
-			references = append(references, profile.references()...)
-		}
-		candidates := []string{member.interpolate(project.Parent.GroupId) + ":" + member.interpolate(project.Parent.ArtifactId)}
-		for _, reference := range references {
-			candidates = append(candidates, member.interpolate(reference.GroupId)+":"+member.interpolate(reference.ArtifactId))
-		}
-		for _, candidate := range candidates {
-			if dependencyDirectory, isMember := directoryByCoordinates[candidate]; isMember && dependencyDirectory != directory {
-				reportedPackage.Dependencies = append(reportedPackage.Dependencies, dependencyDirectory)
+		for _, resolvedModel := range member.models {
+			references := append([]mavenCoordinates{project.Parent.mavenCoordinates}, resolvedModel.model.references()...)
+			for _, reference := range references {
+				groupId := mavenInterpolate(reference.GroupId, resolvedModel.properties)
+				artifactId := mavenInterpolate(reference.ArtifactId, resolvedModel.properties)
+				version := mavenInterpolate(reference.Version, resolvedModel.properties)
+				if groupId == "" || artifactId == "" {
+					continue
+				}
+				for _, dependencyDirectory := range directoriesByCoordinates[mavenCoordinateKey(groupId, artifactId, version)] {
+					if dependencyDirectory != directory {
+						reportedPackage.Dependencies = append(reportedPackage.Dependencies, dependencyDirectory)
+					}
+				}
 			}
 		}
 		if parentDirectory, hasParent := mavenParentDirectory(directory, project); hasParent && parentDirectory != directory {
@@ -133,43 +195,80 @@ func mavenDependencies(resolverContext context.Context, workspaceDirectory strin
 // through a profile, recursively. Modules outside the workspace are skipped.
 func mavenMembers(workspaceDirectory string) (map[string]mavenMember, error) {
 	members := make(map[string]mavenMember)
-	var visit func(directory string, inherited map[string]string) error
-	visit = func(directory string, inherited map[string]string) error {
+	projects := make(map[string]mavenProject)
+	propertiesByDirectory := make(map[string]map[string]string)
+	resolvingProperties := make(map[string]bool)
+	readProject := func(directory string) (mavenProject, error) {
+		if project, exists := projects[directory]; exists {
+			return project, nil
+		}
+		project, operationError := readMavenProject(filepath.Join(workspaceDirectory, directory, "pom.xml"))
+		if operationError == nil {
+			projects[directory] = project
+		}
+		return project, operationError
+	}
+	var propertiesFor func(directory string) (map[string]string, error)
+	propertiesFor = func(directory string) (map[string]string, error) {
+		if properties, exists := propertiesByDirectory[directory]; exists {
+			return maps.Clone(properties), nil
+		}
+		if resolvingProperties[directory] {
+			return nil, fmt.Errorf("maven parent cycle at %q", directory)
+		}
+		resolvingProperties[directory] = true
+		defer delete(resolvingProperties, directory)
+		project, operationError := readProject(directory)
+		if operationError != nil {
+			return nil, operationError
+		}
+		inherited := make(map[string]string)
+		if parentDirectory, inside := mavenParentDirectory(directory, project); inside && parentDirectory != directory {
+			if _, operationError := readProject(parentDirectory); operationError == nil {
+				inherited, operationError = propertiesFor(parentDirectory)
+				if operationError != nil {
+					return nil, operationError
+				}
+			} else if !errors.Is(operationError, os.ErrNotExist) {
+				return nil, operationError
+			}
+		}
+		properties := mavenModelProperties(project, project.mavenModel, inherited)
+		propertiesByDirectory[directory] = properties
+		return maps.Clone(properties), nil
+	}
+	var visit func(directory string) error
+	visit = func(directory string) error {
 		if _, visited := members[directory]; visited {
 			return nil
 		}
-		project, operationError := readMavenProject(filepath.Join(workspaceDirectory, directory, "pom.xml"))
+		project, operationError := readProject(directory)
 		if operationError != nil {
 			return operationError
 		}
-		member := mavenMember{project: project, properties: maps.Clone(inherited)}
-		for _, model := range append([]mavenModel{project.mavenModel}, project.Profiles...) {
-			for _, entry := range model.Properties.Entries {
-				member.properties[entry.XMLName.Local] = strings.TrimSpace(entry.Value)
-			}
+		baseProperties, operationError := propertiesFor(directory)
+		if operationError != nil {
+			return operationError
 		}
-		effectiveGroupId := mavenEffectiveGroupId(project)
-		for _, name := range []string{"project.groupId", "pom.groupId", "groupId"} {
-			member.properties[name] = effectiveGroupId
-		}
-		member.properties["project.parent.groupId"] = project.Parent.GroupId
-		members[directory] = member
-		modules := slices.Clone(project.Modules)
+		member := mavenMember{project: project, models: []mavenResolvedModel{{model: project.mavenModel, properties: baseProperties}}}
 		for _, profile := range project.Profiles {
-			modules = append(modules, profile.Modules...)
+			member.models = append(member.models, mavenResolvedModel{model: profile, properties: mavenModelProperties(project, profile, baseProperties)})
 		}
-		for _, module := range modules {
-			moduleDirectory, inside := mavenRelativeDirectory(directory, member.interpolate(module))
-			if !inside {
-				continue
-			}
-			if operationError := visit(moduleDirectory, member.properties); operationError != nil {
-				return operationError
+		members[directory] = member
+		for _, resolvedModel := range member.models {
+			for _, module := range resolvedModel.model.Modules {
+				moduleDirectory, inside := mavenRelativeDirectory(directory, mavenInterpolate(module, resolvedModel.properties))
+				if !inside {
+					continue
+				}
+				if operationError := visit(moduleDirectory); operationError != nil {
+					return operationError
+				}
 			}
 		}
 		return nil
 	}
-	return members, visit("", map[string]string{})
+	return members, visit("")
 }
 
 // mavenRelativeDirectory resolves a module or parent reference, which may
@@ -210,6 +309,13 @@ func mavenEffectiveGroupId(project mavenProject) string {
 		return project.GroupId
 	}
 	return project.Parent.GroupId
+}
+
+func mavenEffectiveVersion(project mavenProject) string {
+	if project.Version != "" {
+		return project.Version
+	}
+	return project.Parent.Version
 }
 
 // mavenExcludeInputs keeps the globs out of the module's build output.
