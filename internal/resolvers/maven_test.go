@@ -49,6 +49,16 @@ func TestMavenResolutionSemantics(t *testing.T) {
 			expectedDependencies: map[string][]string{"app": {"v1"}},
 		},
 		{
+			name: "version range conservatively selects duplicate coordinates",
+			files: map[string]string{
+				"pom.xml":     `<project><modules><module>v1</module><module>v2</module><module>app</module></modules></project>`,
+				"v1/pom.xml":  `<project><groupId>com.example</groupId><artifactId>library</artifactId><version>1</version></project>`,
+				"v2/pom.xml":  `<project><groupId>com.example</groupId><artifactId>library</artifactId><version>2</version></project>`,
+				"app/pom.xml": `<project><groupId>com.example</groupId><artifactId>app</artifactId><version>1</version><dependencies><dependency><groupId>com.example</groupId><artifactId>library</artifactId><version>[1,3)</version></dependency></dependencies></project>`,
+			},
+			expectedDependencies: map[string][]string{"app": {"v1", "v2"}},
+		},
+		{
 			name: "properties come from the actual parent",
 			files: map[string]string{
 				"pom.xml":               `<project><groupId>com.example</groupId><artifactId>aggregator</artifactId><version>1</version><modules><module>actual-parent</module><module>core</module><module>apps/child</module></modules></project>`,
@@ -57,6 +67,26 @@ func TestMavenResolutionSemantics(t *testing.T) {
 				"apps/child/pom.xml":    `<project><parent><groupId>com.example</groupId><artifactId>parent</artifactId><version>1</version><relativePath>../../actual-parent/pom.xml</relativePath></parent><artifactId>child</artifactId><dependencies><dependency><groupId>com.example</groupId><artifactId>${core.artifact}</artifactId><version>1</version></dependency></dependencies></project>`,
 			},
 			expectedDependencies: map[string][]string{"apps/child": {"actual-parent", "core"}},
+		},
+		{
+			name: "relative parent must match declared coordinates",
+			files: map[string]string{
+				"pom.xml":            `<project><modules><module>apps</module><module>core</module></modules></project>`,
+				"apps/pom.xml":       `<project><groupId>com.example</groupId><artifactId>aggregator</artifactId><version>1</version><properties><target.artifact>core</target.artifact></properties><modules><module>child</module></modules></project>`,
+				"apps/child/pom.xml": `<project><parent><groupId>external.example</groupId><artifactId>parent</artifactId><version>1</version></parent><artifactId>child</artifactId><dependencies><dependency><groupId>com.example</groupId><artifactId>${target.artifact}</artifactId><version>1</version></dependency></dependencies></project>`,
+				"core/pom.xml":       `<project><groupId>com.example</groupId><artifactId>core</artifactId><version>1</version></project>`,
+			},
+			expectedDependencies: map[string][]string{"apps/child": {}},
+		},
+		{
+			name: "parent profile properties reach children",
+			files: map[string]string{
+				"pom.xml":        `<project><modules><module>parent</module><module>core</module><module>child</module></modules></project>`,
+				"parent/pom.xml": `<project><groupId>com.example</groupId><artifactId>parent</artifactId><version>1</version><profiles><profile><properties><target.artifact>core</target.artifact></properties></profile></profiles></project>`,
+				"core/pom.xml":   `<project><groupId>com.example</groupId><artifactId>core</artifactId><version>1</version></project>`,
+				"child/pom.xml":  `<project><parent><groupId>com.example</groupId><artifactId>parent</artifactId><version>1</version><relativePath>../parent/pom.xml</relativePath></parent><artifactId>child</artifactId><dependencies><dependency><groupId>com.example</groupId><artifactId>${target.artifact}</artifactId><version>1</version></dependency></dependencies></project>`,
+			},
+			expectedDependencies: map[string][]string{"child": {"core", "parent"}},
 		},
 		{
 			name: "profiles keep separate property scopes",
