@@ -139,6 +139,15 @@ func TestMavenResolutionSemantics(t *testing.T) {
 			expectedDependencies: map[string][]string{"app": {"lib-a", "lib-b"}},
 		},
 		{
+			name: "simultaneous profiles combine properties",
+			files: map[string]string{
+				"pom.xml":     `<project><modules><module>lib</module><module>app</module></modules></project>`,
+				"lib/pom.xml": `<project><groupId>com.example</groupId><artifactId>lib</artifactId><version>1</version></project>`,
+				"app/pom.xml": `<project><groupId>com.example</groupId><artifactId>app</artifactId><version>1</version><dependencies><dependency><groupId>${target.group}</groupId><artifactId>${target.artifact}</artifactId><version>1</version></dependency></dependencies><profiles><profile><properties><target.group>com.example</target.group></properties></profile><profile><properties><target.artifact>lib</target.artifact></properties></profile></profiles></project>`,
+			},
+			expectedDependencies: map[string][]string{"app": {"lib"}},
+		},
+		{
 			name: "coordinate parent properties reach children",
 			files: map[string]string{
 				"pom.xml":        `<project><modules><module>child</module><module>parent</module><module>core</module></modules></project>`,
@@ -173,16 +182,30 @@ func TestMavenResolutionSemantics(t *testing.T) {
 
 func TestMavenCustomParentInput(t *testing.T) {
 	directory := writeMavenFiles(t, map[string]string{
-		"pom.xml":          `<project><modules><module>child</module></modules></project>`,
-		"parents/base.xml": `<project><groupId>com.example</groupId><artifactId>parent</artifactId><version>1</version></project>`,
-		"child/pom.xml":    `<project><parent><groupId>com.example</groupId><artifactId>parent</artifactId><version>1</version><relativePath>../parents/base.xml</relativePath></parent><artifactId>child</artifactId></project>`,
+		"pom.xml":         `<project><modules><module>child-a</module><module>child-b</module><module>core-a</module><module>core-b</module></modules></project>`,
+		"parents/a.xml":   `<project><groupId>com.example</groupId><artifactId>parent-a</artifactId><version>1</version><properties><target>core-a</target></properties></project>`,
+		"parents/b.xml":   `<project><groupId>com.example</groupId><artifactId>parent-b</artifactId><version>1</version><properties><target>core-b</target></properties></project>`,
+		"child-a/pom.xml": `<project><parent><groupId>com.example</groupId><artifactId>parent-a</artifactId><version>1</version><relativePath>../parents/a.xml</relativePath></parent><artifactId>child-a</artifactId><dependencies><dependency><groupId>com.example</groupId><artifactId>${target}</artifactId><version>1</version></dependency></dependencies></project>`,
+		"child-b/pom.xml": `<project><parent><groupId>com.example</groupId><artifactId>parent-b</artifactId><version>1</version><relativePath>../parents/b.xml</relativePath></parent><artifactId>child-b</artifactId><dependencies><dependency><groupId>com.example</groupId><artifactId>${target}</artifactId><version>1</version></dependency></dependencies></project>`,
+		"core-a/pom.xml":  `<project><groupId>com.example</groupId><artifactId>core-a</artifactId><version>1</version></project>`,
+		"core-b/pom.xml":  `<project><groupId>com.example</groupId><artifactId>core-b</artifactId><version>1</version></project>`,
 	})
 	document, operationError := mavenDependencies(t.Context(), directory)
 	require.NoError(t, operationError)
-	require.Equal(t, []string{"parents"}, document.Packages["child"].Dependencies)
-	require.Equal(t, []string{"base.xml", "src/**/*"}, document.Packages["parents"].Inputs)
+	require.Equal(t, []string{"core-a", "parents"}, document.Packages["child-a"].Dependencies)
+	require.Equal(t, []string{"core-b", "parents"}, document.Packages["child-b"].Dependencies)
+	require.Equal(t, []string{"a.xml", "b.xml", "src/**/*"}, document.Packages["parents"].Inputs)
 	inputs, _ := mavenDefaultInputs(directory)
-	require.Contains(t, inputs, "parents/base.xml")
+	require.Subset(t, inputs, []string{"parents/a.xml", "parents/b.xml"})
+}
+
+func TestMavenMissingProfileModule(t *testing.T) {
+	directory := writeMavenFiles(t, map[string]string{
+		"pom.xml": `<project><profiles><profile><modules><module>missing</module></modules></profile></profiles></project>`,
+	})
+	document, operationError := mavenDependencies(t.Context(), directory)
+	require.NoError(t, operationError)
+	require.Equal(t, []string{""}, slices.Collect(maps.Keys(document.Packages)))
 }
 
 func TestMavenProfileCycleFallback(t *testing.T) {
