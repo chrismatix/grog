@@ -211,6 +211,7 @@ func gradleBuildFiles(settings string, projectPath string) []string {
 // through project(":x") or the type-safe accessor projects.x. An accessor
 // chain may continue into a property, so its longest known prefix wins.
 func gradleProjectReferences(buildFile string, directoryByProject map[string]string, accessorByProject map[string]string) []string {
+	buildFile = gradleWithoutTestDependencies(gradleWithoutComments(buildFile))
 	var references []string
 	for _, match := range gradleProjectReferencePattern.FindAllStringSubmatch(buildFile, -1) {
 		if _, included := directoryByProject[match[1]]; included {
@@ -227,6 +228,85 @@ func gradleProjectReferences(buildFile string, directoryByProject map[string]str
 		}
 	}
 	return references
+}
+
+func gradleWithoutTestDependencies(contents string) string {
+	result := []byte(contents)
+	for index := 0; index < len(contents); index++ {
+		if !unicode.IsLetter(rune(contents[index])) && contents[index] != '_' {
+			continue
+		}
+		start := index
+		for index < len(contents) && (unicode.IsLetter(rune(contents[index])) || unicode.IsDigit(rune(contents[index])) || contents[index] == '_') {
+			index++
+		}
+		name := contents[start:index]
+		if !gradleTestConfiguration(name) {
+			index--
+			continue
+		}
+		for index < len(contents) && (contents[index] == ' ' || contents[index] == '\t') {
+			index++
+		}
+		var end int
+		if index < len(contents) && contents[index] == '(' {
+			end = gradleCallEnd(contents, index)
+		} else if newline := strings.IndexByte(contents[index:], '\n'); newline >= 0 {
+			end = index + newline
+		} else {
+			end = len(contents)
+		}
+		for position := start; position < end; position++ {
+			if result[position] != '\n' {
+				result[position] = ' '
+			}
+		}
+		index = end - 1
+	}
+	return string(result)
+}
+
+func gradleTestConfiguration(name string) bool {
+	lowerName := strings.ToLower(name)
+	if !strings.Contains(lowerName, "test") {
+		return false
+	}
+	return slices.ContainsFunc([]string{"implementation", "api", "compileonly", "runtimeonly", "annotationprocessor"}, func(suffix string) bool {
+		return strings.HasSuffix(lowerName, suffix)
+	})
+}
+
+func gradleCallEnd(contents string, openParenthesis int) int {
+	depth := 0
+	var quote byte
+	escaped := false
+	for index := openParenthesis; index < len(contents); index++ {
+		character := contents[index]
+		if quote != 0 {
+			if escaped {
+				escaped = false
+			} else if character == '\\' {
+				escaped = true
+			} else if character == quote {
+				quote = 0
+			}
+			continue
+		}
+		if character == '\'' || character == '"' {
+			quote = character
+			continue
+		}
+		switch character {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return index + 1
+			}
+		}
+	}
+	return len(contents)
 }
 
 // gradleAccessor is the type-safe accessor for a project path: each segment

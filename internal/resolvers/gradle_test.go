@@ -29,7 +29,7 @@ func TestGradleDependencies(t *testing.T) {
 			ExcludeInputs: []string{"build/**", ".gradle/**", "buildSrc/build/**", "buildSrc/.gradle/**"},
 		},
 		"build-logic":       {Dependencies: []string{}, Inputs: []string{"**/*"}, ExcludeInputs: []string{"**/build/**", "**/.gradle/**"}},
-		"app":               project("core-utils", "feature/moved-dir", "libs/api"),
+		"app":               project("core-utils", "libs/api"),
 		"core-utils":        project("libs/api"),
 		"libs":              project(),
 		"libs/api":          project(),
@@ -112,6 +112,17 @@ func TestGradleAccessor(t *testing.T) {
 	} {
 		require.Equal(t, expected, gradleAccessor(projectPath))
 	}
+}
+
+func TestGradleProjectReferencesIgnoreCommentsAndTests(t *testing.T) {
+	directories := map[string]string{":app": "app", ":lib": "lib", ":other": "other"}
+	accessors := map[string]string{"app": ":app", "lib": ":lib", "other": ":other"}
+	buildFile := `implementation(project(":lib"))
+// implementation(project(":other"))
+/* implementation(projects.other) */
+testImplementation(project(":app"))
+testImplementation project(":other")`
+	require.Equal(t, []string{":lib"}, gradleProjectReferences(buildFile, directories, accessors))
 }
 
 func TestGradleDefaultInputs(t *testing.T) {
