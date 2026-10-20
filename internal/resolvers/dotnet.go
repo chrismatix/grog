@@ -58,7 +58,7 @@ var dotnetExcludeInputs = []string{"**/bin/**", "**/obj/**"}
 // files MSBuild imports from above the project, the root included.
 func dotnetDependencies(resolverContext context.Context, workspaceDirectory string) (Document, error) {
 	document := Document{Version: 1, Packages: make(map[string]Package)}
-	projectFiles, operationError := dotnetProjectFiles(workspaceDirectory)
+	projectFiles, operationError := dotnetProjectFiles(resolverContext, workspaceDirectory)
 	if operationError != nil {
 		return document, operationError
 	}
@@ -84,7 +84,7 @@ func dotnetDependencies(resolverContext context.Context, workspaceDirectory stri
 		directory := dotnetPackagePath(path.Dir(projectFile))
 		reportedPackage, exists := document.Packages[directory]
 		if _, isConfigurationDirectory := configurationDirectories[directory]; !exists || isConfigurationDirectory {
-			reportedPackage = Package{Dependencies: reportedPackage.Dependencies, Inputs: []string{"**/*"}, ExcludeInputs: dotnetExcludeInputs}
+			reportedPackage = Package{Dependencies: reportedPackage.Dependencies, Inputs: []string{"**/*"}, ExcludeInputs: dotnetExcludeInputs, Fingerprint: reportedPackage.Fingerprint}
 		}
 		projectDirectories[directory] = true
 		configurationDependencies, configurationFiles := dotnetConfigurationReferences(directory, configurationDirectories)
@@ -310,7 +310,10 @@ func dotnetFilesFingerprint(workspaceDirectory string, files []string) (string, 
 
 // dotnetProjectFiles lists the projects every solution file in the workspace
 // root names, or, without one, every project file in the tree.
-func dotnetProjectFiles(workspaceDirectory string) ([]string, error) {
+func dotnetProjectFiles(resolverContext context.Context, workspaceDirectory string) ([]string, error) {
+	if operationError := resolverContext.Err(); operationError != nil {
+		return nil, operationError
+	}
 	fileSystem := os.DirFS(workspaceDirectory)
 	solutions, operationError := doublestar.Glob(fileSystem, "*.{sln,slnx}")
 	if operationError != nil {
@@ -318,6 +321,9 @@ func dotnetProjectFiles(workspaceDirectory string) ([]string, error) {
 	}
 	var projectFiles []string
 	for _, solution := range solutions {
+		if operationError := resolverContext.Err(); operationError != nil {
+			return nil, operationError
+		}
 		contents, operationError := os.ReadFile(filepath.Join(workspaceDirectory, solution))
 		if operationError != nil {
 			return nil, fmt.Errorf("read %s: %w", solution, operationError)
@@ -340,19 +346,38 @@ func dotnetProjectFiles(workspaceDirectory string) ([]string, error) {
 		}
 	}
 	if len(solutions) == 0 {
-		matches, operationError := doublestar.Glob(fileSystem, "**/*.{csproj,fsproj,vbproj}")
+		projectFiles, operationError = dotnetProjectFilesInTree(resolverContext, workspaceDirectory)
 		if operationError != nil {
 			return nil, operationError
-		}
-		for _, match := range matches {
-			segments := strings.Split(path.Dir(match), "/")
-			if !slices.Contains(segments, "bin") && !slices.Contains(segments, "obj") {
-				projectFiles = append(projectFiles, match)
-			}
 		}
 	}
 	slices.Sort(projectFiles)
 	return slices.Compact(projectFiles), nil
+}
+
+func dotnetProjectFilesInTree(resolverContext context.Context, workspaceDirectory string) ([]string, error) {
+	var projectFiles []string
+	operationError := filepath.WalkDir(workspaceDirectory, func(filePath string, entry os.DirEntry, walkError error) error {
+		if walkError != nil {
+			return walkError
+		}
+		if operationError := resolverContext.Err(); operationError != nil {
+			return operationError
+		}
+		if entry.IsDir() && (entry.Name() == "bin" || entry.Name() == "obj") {
+			return filepath.SkipDir
+		}
+		if entry.IsDir() || !slices.Contains(dotnetProjectExtensions, filepath.Ext(entry.Name())) {
+			return nil
+		}
+		relativePath, operationError := filepath.Rel(workspaceDirectory, filePath)
+		if operationError != nil {
+			return operationError
+		}
+		projectFiles = append(projectFiles, filepath.ToSlash(relativePath))
+		return nil
+	})
+	return projectFiles, operationError
 }
 
 func dotnetSlnProjects(contents []byte) ([]string, error) {

@@ -85,7 +85,7 @@ func TestDotnetProjectFiles(t *testing.T) {
 		{name: "invalid slnx", files: map[string]string{"Demo.slnx": "<Solution>"}, expectedError: "parse"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			projectFiles, operationError := dotnetProjectFiles(writeDotnetFiles(t, testCase.files))
+			projectFiles, operationError := dotnetProjectFiles(t.Context(), writeDotnetFiles(t, testCase.files))
 			if testCase.expectedError != "" {
 				require.ErrorContains(t, operationError, testCase.expectedError)
 				return
@@ -94,6 +94,18 @@ func TestDotnetProjectFiles(t *testing.T) {
 			require.Equal(t, testCase.expected, projectFiles)
 		})
 	}
+}
+
+func TestDotnetCoLocatedProjectFingerprints(t *testing.T) {
+	directory := writeDotnetFiles(t, map[string]string{
+		"src/Directory.Build.props": `<Project />`,
+		"src/A.csproj":              `<Project><Import Project="../eng/a.props" /></Project>`,
+		"src/B.csproj":              dotnetEmptyProject,
+		"eng/a.props":               `<Project />`,
+	})
+	document, operationError := dotnetDependencies(t.Context(), directory)
+	require.NoError(t, operationError)
+	require.NotEmpty(t, document.Packages["src"].Fingerprint["imports:A.csproj"])
 }
 
 func TestDotnetReferenceSources(t *testing.T) {
@@ -155,5 +167,7 @@ func TestDotnetResolverErrors(t *testing.T) {
 	cancelledContext, cancel := context.WithCancel(t.Context())
 	cancel()
 	_, operationError := dotnetDependencies(cancelledContext, "testdata/dotnet")
+	require.ErrorIs(t, operationError, context.Canceled)
+	_, operationError = dotnetProjectFiles(cancelledContext, "testdata/dotnet")
 	require.ErrorIs(t, operationError, context.Canceled)
 }
