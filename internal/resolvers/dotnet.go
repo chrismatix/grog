@@ -81,24 +81,16 @@ func dotnetDependencies(resolverContext context.Context, workspaceDirectory stri
 		if operationError := resolverContext.Err(); operationError != nil {
 			return document, operationError
 		}
-		references, operationError := dotnetProjectReferences(filepath.Join(workspaceDirectory, filepath.FromSlash(projectFile)))
-		if operationError != nil {
-			return document, operationError
-		}
 		directory := dotnetPackagePath(path.Dir(projectFile))
 		reportedPackage, exists := document.Packages[directory]
 		if _, isConfigurationDirectory := configurationDirectories[directory]; !exists || isConfigurationDirectory {
 			reportedPackage = Package{Dependencies: reportedPackage.Dependencies, Inputs: []string{"**/*"}, ExcludeInputs: dotnetExcludeInputs}
 		}
 		projectDirectories[directory] = true
-		configurationDependencies, importedReferences, configurationFiles, operationError := dotnetConfigurationReferences(workspaceDirectory, directory, configurationDirectories)
-		if operationError != nil {
-			return document, operationError
-		}
+		configurationDependencies, configurationFiles := dotnetConfigurationReferences(directory, configurationDirectories)
 		configurationDependenciesByProject[directory] = configurationDependencies
 		reportedPackage.Dependencies = append(reportedPackage.Dependencies, configurationDependencies...)
-		references = append(references, importedReferences...)
-		importedFiles, operationError := dotnetImportedFiles(workspaceDirectory, append([]string{projectFile}, configurationFiles...))
+		importedFiles, references, operationError := dotnetImportedFiles(workspaceDirectory, append([]string{projectFile}, configurationFiles...))
 		if operationError != nil {
 			return document, operationError
 		}
@@ -130,10 +122,9 @@ func dotnetDependencies(resolverContext context.Context, workspaceDirectory stri
 	return document, nil
 }
 
-// dotnetConfigurationReferences returns the configuration directories above
-// a project's directory and the ProjectReference items their
-// Directory.Build.props and .targets add to it, relative to the project.
-func dotnetConfigurationReferences(workspaceDirectory string, directory string, configurationDirectories map[string][]string) (dependencies []string, references []string, sources []string, operationError error) {
+// dotnetConfigurationReferences returns effective configuration directories
+// and source files above a project directory.
+func dotnetConfigurationReferences(directory string, configurationDirectories map[string][]string) (dependencies []string, sources []string) {
 	directories := slices.Collect(maps.Keys(configurationDirectories))
 	slices.SortFunc(directories, func(first, second string) int { return len(second) - len(first) })
 	selected := make(map[string]bool)
@@ -152,20 +143,13 @@ func dotnetConfigurationReferences(workspaceDirectory string, directory string, 
 			if lowerName == "directory.build.props" || lowerName == "directory.build.targets" || lowerName == "directory.packages.props" {
 				sources = append(sources, path.Join(configurationDirectory, file))
 			}
-			if lowerName == "directory.build.props" || lowerName == "directory.build.targets" {
-				imported, operationError := dotnetProjectReferences(filepath.Join(workspaceDirectory, filepath.FromSlash(configurationDirectory), file))
-				if operationError != nil {
-					return nil, nil, nil, operationError
-				}
-				references = append(references, imported...)
-			}
 		}
 		if usesDirectory && configurationDirectory != directory {
 			dependencies = append(dependencies, configurationDirectory)
 		}
 	}
 	slices.Sort(dependencies)
-	return slices.Compact(dependencies), references, sources, nil
+	return slices.Compact(dependencies), sources
 }
 
 func dotnetConfigurationCycle(document Document, projectDirectories map[string]bool, configurationDependenciesByProject map[string][]string) (string, string, bool) {
@@ -260,42 +244,30 @@ func readDotnetProjectFile(projectPath string) (dotnetProjectFile, error) {
 	return project, nil
 }
 
-// dotnetProjectReferences returns the slash-separated, project-relative paths
-// a project file references. MSBuild property references cannot be resolved
-// without MSBuild and are skipped.
-func dotnetProjectReferences(projectPath string) ([]string, error) {
-	project, operationError := readDotnetProjectFile(projectPath)
-	if operationError != nil {
-		return nil, operationError
-	}
-	var references []string
-	for _, itemGroup := range project.ItemGroups {
-		for _, projectReference := range itemGroup.ProjectReferences {
-			for include := range strings.SplitSeq(projectReference.Include, ";") {
-				include = strings.TrimSpace(strings.ReplaceAll(include, "\\", "/"))
-				if include == "" || strings.Contains(include, "$(") {
-					continue
-				}
-				references = append(references, include)
-			}
-		}
-	}
-	return references, nil
-}
-
-func dotnetImportedFiles(workspaceDirectory string, sourceFiles []string) ([]string, error) {
+func dotnetImportedFiles(workspaceDirectory string, sourceFiles []string) ([]string, []string, error) {
 	visited := make(map[string]bool, len(sourceFiles))
 	queue := slices.Clone(sourceFiles)
 	for _, sourceFile := range sourceFiles {
 		visited[sourceFile] = true
 	}
 	var importedFiles []string
+	var references []string
 	for len(queue) > 0 {
 		sourceFile := queue[0]
 		queue = queue[1:]
 		project, operationError := readDotnetProjectFile(filepath.Join(workspaceDirectory, filepath.FromSlash(sourceFile)))
 		if operationError != nil {
-			return nil, operationError
+			return nil, nil, operationError
+		}
+		for _, itemGroup := range project.ItemGroups {
+			for _, projectReference := range itemGroup.ProjectReferences {
+				for include := range strings.SplitSeq(projectReference.Include, ";") {
+					include = strings.TrimSpace(strings.ReplaceAll(include, "\\", "/"))
+					if include != "" && !strings.Contains(include, "$(") {
+						references = append(references, include)
+					}
+				}
+			}
 		}
 		imports := slices.Clone(project.Imports)
 		for _, group := range project.ImportGroups {
@@ -320,7 +292,7 @@ func dotnetImportedFiles(workspaceDirectory string, sourceFiles []string) ([]str
 		}
 	}
 	slices.Sort(importedFiles)
-	return importedFiles, nil
+	return importedFiles, references, nil
 }
 
 func dotnetFilesFingerprint(workspaceDirectory string, files []string) (string, error) {
@@ -428,7 +400,7 @@ func dotnetDefaultInputs(workspaceDirectory string) (inputs []string, excludeInp
 		if slices.Contains(segments, "bin") || slices.Contains(segments, "obj") {
 			continue
 		}
-		imports, operationError := dotnetImportedFiles(workspaceDirectory, []string{source})
+		imports, _, operationError := dotnetImportedFiles(workspaceDirectory, []string{source})
 		if operationError == nil {
 			importedFiles = append(importedFiles, imports...)
 		}

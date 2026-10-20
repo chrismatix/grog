@@ -31,9 +31,9 @@ func TestDotnetDependencies(t *testing.T) {
 		"":                configuration("*.sln", "*.slnx", "Directory.Build.props"),
 		"src":             configuration("Directory.Build.props"),
 		"tests":           configuration("NuGet.Config"),
-		"src/App":         dotnetMember("src", "src/Core", "src/Fs"),
+		"src/App":         dotnetMember("lib/Shared", "src", "src/Core", "src/Fs"),
 		"src/Core":        dotnetMember("lib/Shared", "src"),
-		"src/Fs":          dotnetMember("src"),
+		"src/Fs":          dotnetMember("lib/Shared", "src"),
 		"lib/Shared":      dotnetMember(""),
 		"tests/App.Tests": dotnetMember("", "src/App", "tests"),
 	}, document.Packages)
