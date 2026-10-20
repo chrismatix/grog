@@ -53,6 +53,9 @@ func (model mavenModel) references() []mavenCoordinates {
 		}
 	}
 	for _, plugin := range model.Build.Plugins {
+		if strings.TrimSpace(plugin.GroupId) == "" {
+			plugin.GroupId = "org.apache.maven.plugins"
+		}
 		references = append(references, plugin.mavenCoordinates)
 		references = append(references, plugin.Dependencies...)
 	}
@@ -80,6 +83,7 @@ type mavenResolvedModel struct {
 type mavenMember struct {
 	project         mavenProject
 	models          []mavenResolvedModel
+	pomFile         string
 	parentDirectory string
 	hasParent       bool
 }
@@ -177,9 +181,9 @@ func mavenDependencies(resolverContext context.Context, workspaceDirectory strin
 	profileDependencies := make(map[string][]string)
 	for directory, member := range members {
 		project := member.project
-		reportedPackage := Package{Dependencies: []string{}, Inputs: []string{"pom.xml", "src/**/*"}, ExcludeInputs: mavenExcludeInputs}
+		reportedPackage := Package{Dependencies: []string{}, Inputs: []string{member.pomFile, "src/**/*"}, ExcludeInputs: mavenExcludeInputs}
 		if directory == "" {
-			reportedPackage.Inputs = []string{"pom.xml"}
+			reportedPackage.Inputs = []string{member.pomFile}
 		}
 		for _, resolvedModel := range member.models {
 			references := append([]mavenCoordinates{project.Parent.mavenCoordinates}, resolvedModel.model.references()...)
@@ -266,8 +270,8 @@ func mavenAddsCycle(document Document, directory, dependencyDirectory string) bo
 
 func mavenInputsFingerprint(resolverContext context.Context, workspaceDirectory string, members map[string]mavenMember) (string, error) {
 	var files []string
-	for directory := range members {
-		files = append(files, path.Join(directory, "pom.xml"))
+	for directory, member := range members {
+		files = append(files, path.Join(directory, member.pomFile))
 		sourceDirectory := filepath.Join(workspaceDirectory, filepath.FromSlash(directory), "src")
 		operationError := filepath.WalkDir(sourceDirectory, func(filePath string, entry os.DirEntry, walkError error) error {
 			if errors.Is(walkError, os.ErrNotExist) {
@@ -312,21 +316,31 @@ type mavenWorkspace struct {
 	context         context.Context
 	directory       string
 	projects        map[string]mavenProject
+	projectFiles    map[string]string
 	models          map[string][]mavenResolvedModel
 	parentDirectory map[string]string
 	resolving       map[string]bool
 }
 
 func (workspace *mavenWorkspace) readProject(directory string) (mavenProject, error) {
+	projectFile := workspace.projectFiles[directory]
+	if projectFile == "" {
+		projectFile = "pom.xml"
+	}
+	return workspace.readProjectFile(directory, projectFile)
+}
+
+func (workspace *mavenWorkspace) readProjectFile(directory, projectFile string) (mavenProject, error) {
 	if operationError := workspace.context.Err(); operationError != nil {
 		return mavenProject{}, operationError
 	}
 	if project, exists := workspace.projects[directory]; exists {
 		return project, nil
 	}
-	project, operationError := readMavenProject(filepath.Join(workspace.directory, directory, "pom.xml"))
+	project, operationError := readMavenProject(filepath.Join(workspace.directory, filepath.FromSlash(directory), filepath.FromSlash(projectFile)))
 	if operationError == nil {
 		workspace.projects[directory] = project
+		workspace.projectFiles[directory] = projectFile
 	}
 	return project, operationError
 }
@@ -347,8 +361,8 @@ func (workspace *mavenWorkspace) modelsFor(directory string) ([]mavenResolvedMod
 	inheritedModels := []mavenResolvedModel{{properties: map[string]string{}}}
 	parentDirectory := ""
 	hasParent := false
-	if relativeParentDirectory, inside := mavenParentDirectory(directory, project); inside && relativeParentDirectory != directory {
-		parentProject, operationError := workspace.readProject(relativeParentDirectory)
+	if relativeParentDirectory, relativeParentFile, inside := mavenParentLocation(directory, project); inside && relativeParentDirectory != directory {
+		parentProject, operationError := workspace.readProjectFile(relativeParentDirectory, relativeParentFile)
 		if operationError == nil && mavenParentMatches(project, parentProject) {
 			parentDirectory = relativeParentDirectory
 			hasParent = true
@@ -400,16 +414,14 @@ func mavenMembers(resolverContext context.Context, workspaceDirectory string) (m
 		context:         resolverContext,
 		directory:       workspaceDirectory,
 		projects:        make(map[string]mavenProject),
+		projectFiles:    make(map[string]string),
 		models:          make(map[string][]mavenResolvedModel),
 		parentDirectory: make(map[string]string),
 		resolving:       make(map[string]bool),
 	}
-	var visit func(directory string) error
-	visit = func(directory string) error {
-		if operationError := resolverContext.Err(); operationError != nil {
-			return operationError
-		}
-		if _, visited := members[directory]; visited {
+	var addParent func(directory string) error
+	addParent = func(directory string) error {
+		if _, exists := members[directory]; exists {
 			return nil
 		}
 		project, operationError := workspace.readProject(directory)
@@ -421,10 +433,35 @@ func mavenMembers(resolverContext context.Context, workspaceDirectory string) (m
 			return operationError
 		}
 		parentDirectory, hasParent := workspace.parentDirectory[directory]
-		member := mavenMember{project: project, models: models, parentDirectory: parentDirectory, hasParent: hasParent}
-		members[directory] = member
+		members[directory] = mavenMember{project: project, models: models, pomFile: workspace.projectFiles[directory], parentDirectory: parentDirectory, hasParent: hasParent}
 		if hasParent {
-			if operationError := visit(parentDirectory); operationError != nil {
+			return addParent(parentDirectory)
+		}
+		return nil
+	}
+	reactorVisited := make(map[string]bool)
+	var visit func(directory string) error
+	visit = func(directory string) error {
+		if operationError := resolverContext.Err(); operationError != nil {
+			return operationError
+		}
+		if reactorVisited[directory] {
+			return nil
+		}
+		project, operationError := workspace.readProject(directory)
+		if operationError != nil {
+			return operationError
+		}
+		models, operationError := workspace.modelsFor(directory)
+		if operationError != nil {
+			return operationError
+		}
+		parentDirectory, hasParent := workspace.parentDirectory[directory]
+		member := mavenMember{project: project, models: models, pomFile: workspace.projectFiles[directory], parentDirectory: parentDirectory, hasParent: hasParent}
+		members[directory] = member
+		reactorVisited[directory] = true
+		if hasParent {
+			if operationError := addParent(parentDirectory); operationError != nil {
 				return operationError
 			}
 		}
@@ -472,20 +509,26 @@ func mavenRelativeDirectory(fromDirectory, reference string) (string, bool) {
 	return directory, true
 }
 
-// mavenParentDirectory follows <relativePath>, which defaults to ../pom.xml.
-// An empty element tells maven to skip the lookup, so it yields nothing.
-func mavenParentDirectory(directory string, project mavenProject) (string, bool) {
+func mavenParentLocation(directory string, project mavenProject) (string, string, bool) {
 	if project.Parent.ArtifactId == "" {
-		return "", false
+		return "", "", false
 	}
 	relativePath := "../pom.xml"
 	if project.Parent.RelativePath != nil {
 		relativePath = *project.Parent.RelativePath
 	}
 	if strings.TrimSpace(relativePath) == "" {
-		return "", false
+		return "", "", false
 	}
-	return mavenRelativeDirectory(directory, relativePath)
+	projectPath := path.Join(directory, filepath.ToSlash(strings.TrimSpace(relativePath)))
+	if projectPath == ".." || strings.HasPrefix(projectPath, "../") {
+		return "", "", false
+	}
+	parentDirectory := path.Dir(projectPath)
+	if parentDirectory == "." {
+		parentDirectory = ""
+	}
+	return parentDirectory, path.Base(projectPath), true
 }
 
 func mavenEffectiveGroupId(project mavenProject) string {
@@ -513,9 +556,10 @@ func mavenDefaultInputs(workspaceDirectory string) (inputs []string, excludeInpu
 	if operationError != nil {
 		return inputs, mavenExcludeInputs
 	}
-	for directory := range members {
-		if directory != "" {
-			inputs = append(inputs, path.Join(directory, "pom.xml"))
+	for directory, member := range members {
+		input := path.Join(directory, member.pomFile)
+		if input != "pom.xml" {
+			inputs = append(inputs, input)
 		}
 	}
 	if document, operationError := mavenDependencies(context.Background(), workspaceDirectory); operationError == nil {

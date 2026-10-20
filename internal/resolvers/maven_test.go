@@ -103,11 +103,20 @@ func TestMavenResolutionSemantics(t *testing.T) {
 			name: "local parent outside reactor remains a package",
 			files: map[string]string{
 				"pom.xml":              `<project><modules><module>child</module></modules></project>`,
-				"parents/base/pom.xml": `<project><groupId>com.example</groupId><artifactId>parent</artifactId><version>1</version></project>`,
+				"parents/base/pom.xml": `<project><groupId>com.example</groupId><artifactId>parent</artifactId><version>1</version><modules><module>not-in-reactor</module></modules></project>`,
 				"child/pom.xml":        `<project><parent><groupId>com.example</groupId><artifactId>parent</artifactId><version>1</version><relativePath>../parents/base/pom.xml</relativePath></parent><artifactId>child</artifactId></project>`,
 			},
 			expectedDependencies: map[string][]string{"child": {"parents/base"}},
 			expectedPackages:     []string{"", "child", "parents/base"},
+		},
+		{
+			name: "build plugins default to the Maven plugin group",
+			files: map[string]string{
+				"pom.xml":        `<project><modules><module>plugin</module><module>app</module></modules></project>`,
+				"plugin/pom.xml": `<project><groupId>org.apache.maven.plugins</groupId><artifactId>demo-plugin</artifactId><version>1</version></project>`,
+				"app/pom.xml":    `<project><groupId>com.example</groupId><artifactId>app</artifactId><version>1</version><build><plugins><plugin><artifactId>demo-plugin</artifactId><version>1</version></plugin></plugins></build></project>`,
+			},
+			expectedDependencies: map[string][]string{"app": {"plugin"}},
 		},
 		{
 			name: "profiles keep separate property scopes",
@@ -160,6 +169,20 @@ func TestMavenResolutionSemantics(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMavenCustomParentInput(t *testing.T) {
+	directory := writeMavenFiles(t, map[string]string{
+		"pom.xml":          `<project><modules><module>child</module></modules></project>`,
+		"parents/base.xml": `<project><groupId>com.example</groupId><artifactId>parent</artifactId><version>1</version></project>`,
+		"child/pom.xml":    `<project><parent><groupId>com.example</groupId><artifactId>parent</artifactId><version>1</version><relativePath>../parents/base.xml</relativePath></parent><artifactId>child</artifactId></project>`,
+	})
+	document, operationError := mavenDependencies(t.Context(), directory)
+	require.NoError(t, operationError)
+	require.Equal(t, []string{"parents"}, document.Packages["child"].Dependencies)
+	require.Equal(t, []string{"base.xml", "src/**/*"}, document.Packages["parents"].Inputs)
+	inputs, _ := mavenDefaultInputs(directory)
+	require.Contains(t, inputs, "parents/base.xml")
 }
 
 func TestMavenProfileCycleFallback(t *testing.T) {
