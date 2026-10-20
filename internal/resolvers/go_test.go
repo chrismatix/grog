@@ -13,37 +13,46 @@ func TestGoDependencies(t *testing.T) {
 	document, operationError := goDependencies(t.Context(), "testdata/go")
 	require.NoError(t, operationError)
 	require.Equal(t, 1, document.Version)
+	rootFingerprint := document.Packages["cmd/app"].Fingerprint["module"]
+	require.NotEmpty(t, rootFingerprint)
+	require.Equal(t, rootFingerprint, document.Packages[".hidden/pkg"].Fingerprint["module"])
+	require.NotEqual(t, rootFingerprint, document.Packages["local/pkg"].Fingerprint["module"])
+	require.NotEqual(t, rootFingerprint, document.Packages["tools/gen"].Fingerprint["module"])
+	for directory, reportedPackage := range document.Packages {
+		reportedPackage.Fingerprint = nil
+		document.Packages[directory] = reportedPackage
+	}
 	member := func(inputs []string, dependencies ...string) Package {
 		return Package{Dependencies: append([]string{}, dependencies...), Inputs: inputs}
 	}
 	plain := []string{"*", "testdata/**"}
 	require.Equal(t, map[string]Package{
-		"cmd/app":          member(plain, "internal/_shim", "internal/greet", "tools/gen"),
+		".hidden/pkg":      member(plain, "internal/greet"),
+		"cmd/app":          member(plain, ".hidden/pkg", "internal/_shim", "internal/greet", "local/pkg", "tools/gen"),
 		"internal/_shim":   member(plain),
 		"internal/greet":   member(plain, "internal/format", "internal/winutil"),
-		"internal/format":  member([]string{"*", "banner.txt", "banner.txt/**", "static", "static/**", "templates/*.txt", "templates/*.txt/**", "testdata/**", "vendor/assets/logo.txt", "vendor/assets/logo.txt/**"}),
-		"internal/winutil": member([]string{"*", "fixtures", "fixtures/**", "testdata/**"}),
+		"internal/format":  member([]string{"*", "banner.txt", "static/**", "templates/*.txt", "templates/*.txt/**", "testdata/**", "vendor/assets/logo.txt"}),
+		"internal/winutil": member([]string{"*", "fixtures/**", "testdata/**"}),
+		"local/pkg":        member(plain),
 		"tools/gen":        member(plain),
 	}, document.Packages)
 }
 
-func TestGoImportDirectory(t *testing.T) {
-	modules := []goModule{{Path: "example.com/mono/tools/gen", Directory: "tools/gen"}, {Path: "example.com/mono", Directory: ""}}
+func TestGoImportDirectories(t *testing.T) {
+	modules := []goModule{{Path: "example.com/mono/tools/gen", Directory: "tools/gen"}, {Path: "example.com/mono", Directory: ""}, {Path: "old.example/lib", Directory: "local"}}
 	for _, testCase := range []struct {
-		importPath string
-		directory  string
-		isLocal    bool
+		importPath  string
+		directories []string
 	}{
-		{importPath: "example.com/mono", directory: "", isLocal: true},
-		{importPath: "example.com/mono/internal/greet", directory: "internal/greet", isLocal: true},
-		{importPath: "example.com/mono/tools/gen/cmd", directory: "tools/gen/cmd", isLocal: true},
-		{importPath: "example.com/monorepo/x", isLocal: false},
-		{importPath: "fmt", isLocal: false},
+		{importPath: "example.com/mono", directories: []string{""}},
+		{importPath: "example.com/mono/internal/greet", directories: []string{"internal/greet"}},
+		{importPath: "example.com/mono/tools/gen/cmd", directories: []string{"tools/gen/cmd"}},
+		{importPath: "old.example/lib/pkg", directories: []string{"local/pkg"}},
+		{importPath: "example.com/monorepo/x"},
+		{importPath: "fmt"},
 	} {
 		t.Run(testCase.importPath, func(t *testing.T) {
-			directory, isLocal := goImportDirectory(testCase.importPath, modules)
-			require.Equal(t, testCase.isLocal, isLocal)
-			require.Equal(t, testCase.directory, directory)
+			require.Equal(t, testCase.directories, goImportDirectories(testCase.importPath, modules))
 		})
 	}
 }
@@ -69,7 +78,7 @@ func TestGoEmbedPatterns(t *testing.T) {
 func TestGoDefaultInputs(t *testing.T) {
 	inputs, excludeInputs := goDefaultInputs("testdata/go")
 	require.Equal(t, []string{"go.work", "go.work.sum", "**/go.mod", "**/go.sum", "**/*.go"}, inputs)
-	require.Equal(t, []string{"**/vendor/**", "**/node_modules/**", "**/.*/**"}, excludeInputs)
+	require.Equal(t, []string{"**/vendor/**", "**/node_modules/**"}, excludeInputs)
 }
 
 func TestGoResolverErrors(t *testing.T) {

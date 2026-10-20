@@ -24,6 +24,8 @@ type Package struct {
 	// grog synthesizes a filegroup from them. Ignored when a target registers.
 	Inputs        []string `json:"inputs"`
 	ExcludeInputs []string `json:"exclude_inputs"`
+	// Fingerprint values become part of a registered or synthesized target's hash.
+	Fingerprint map[string]string `json:"fingerprint,omitempty"`
 }
 
 // UnmarshalJSON requires each package entry to be an object.

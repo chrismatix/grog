@@ -115,8 +115,15 @@ func linkDependencies(loadContext context.Context, declaredResolvers []*model.De
 				console.GetLogger(loadContext).Debugf("resolver %s reports unregistered package %s; ignoring", resolver.Label, packagePath)
 				continue
 			}
+			reportedPackage := document.Packages[packagePath]
+			if len(reportedPackage.Fingerprint) > 0 && target.Fingerprint == nil {
+				target.Fingerprint = make(map[string]string, len(reportedPackage.Fingerprint))
+			}
+			for name, value := range reportedPackage.Fingerprint {
+				target.Fingerprint[resolver.Label.String()+"#"+name] = value
+			}
 
-			for _, dependency := range document.Packages[packagePath].Dependencies {
+			for _, dependency := range reportedPackage.Dependencies {
 				var dependencyLabel label.TargetLabel
 				if strings.HasPrefix(dependency, "//") {
 					parsedLabel, operationError := label.ParseTargetLabel("", dependency)

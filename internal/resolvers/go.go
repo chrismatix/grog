@@ -2,6 +2,8 @@ package resolvers
 
 import (
 	"context"
+	"crypto/sha256"
+	"errors"
 	"fmt"
 	"go/parser"
 	"go/token"
@@ -52,14 +54,20 @@ func goDependencies(resolverContext context.Context, workspaceDirectory string) 
 				}
 				var dependencyDirectories []string
 				for _, importPath := range imports {
-					if dependencyDirectory, isLocal := goImportDirectory(importPath, modules); isLocal && dependencyDirectory != packageDirectory {
-						dependencyDirectories = append(dependencyDirectories, dependencyDirectory)
+					for _, dependencyDirectory := range goImportDirectories(importPath, modules) {
+						if dependencyDirectory != packageDirectory {
+							dependencyDirectories = append(dependencyDirectories, dependencyDirectory)
+						}
 					}
 				}
 				resultLock.Lock()
 				defer resultLock.Unlock()
 				localImports[packageDirectory] = dependencyDirectories
-				document.Packages[packageDirectory] = Package{Inputs: goInputs(embedPatterns)}
+				reportedPackage := Package{Inputs: goInputs(filepath.Join(workspaceDirectory, packageDirectory), embedPatterns)}
+				if fingerprint := goModuleFingerprint(packageDirectory, modules); fingerprint != "" {
+					reportedPackage.Fingerprint = map[string]string{"module": fingerprint}
+				}
+				document.Packages[packageDirectory] = reportedPackage
 				return nil
 			})
 		}
@@ -101,8 +109,9 @@ func goHasSources(directory string) bool {
 }
 
 type goModule struct {
-	Path      string
-	Directory string
+	Path        string
+	Directory   string
+	Fingerprint string
 }
 
 // goWorkspaceLayout walks the workspace the way the go tool does, skipping
@@ -110,6 +119,7 @@ type goModule struct {
 // module and every directory holding Go files, both workspace-relative.
 func goWorkspaceLayout(walkContext context.Context, workspaceDirectory string) ([]goModule, []string, error) {
 	var modules []goModule
+	var replacements []goModule
 	packageDirectories := make(map[string]bool)
 	operationError := filepath.WalkDir(workspaceDirectory, func(currentPath string, entry fs.DirEntry, walkError error) error {
 		if walkError != nil {
@@ -139,15 +149,12 @@ func goWorkspaceLayout(walkContext context.Context, workspaceDirectory string) (
 		}
 		switch {
 		case entry.Name() == "go.mod":
-			contents, operationError := os.ReadFile(currentPath)
+			module, localReplacements, operationError := goReadModuleFile(workspaceDirectory, currentPath, directory)
 			if operationError != nil {
-				return fmt.Errorf("read %s: %w", currentPath, operationError)
+				return operationError
 			}
-			modulePath := modfile.ModulePath(contents)
-			if modulePath == "" {
-				return fmt.Errorf("parse %s: no module directive", currentPath)
-			}
-			modules = append(modules, goModule{Path: modulePath, Directory: directory})
+			modules = append(modules, module)
+			replacements = append(replacements, localReplacements...)
 		case isGoSourceFile(entry.Name()):
 			packageDirectories[directory] = true
 		}
@@ -156,23 +163,114 @@ func goWorkspaceLayout(walkContext context.Context, workspaceDirectory string) (
 	if operationError != nil {
 		return nil, nil, operationError
 	}
+	for index := range modules {
+		fingerprint, operationError := goModuleMetadataFingerprint(workspaceDirectory, modules[index].Directory)
+		if operationError != nil {
+			return nil, nil, operationError
+		}
+		modules[index].Fingerprint = fingerprint
+	}
+	modules = append(modules, replacements...)
 	// Longest module path first, so a nested module wins over its parent.
-	slices.SortFunc(modules, func(first, second goModule) int { return len(second.Path) - len(first.Path) })
+	slices.SortFunc(modules, func(first, second goModule) int {
+		if difference := len(second.Path) - len(first.Path); difference != 0 {
+			return difference
+		}
+		return strings.Compare(first.Directory, second.Directory)
+	})
 	return modules, slices.Sorted(maps.Keys(packageDirectories)), nil
 }
 
-// goImportDirectory maps an import path to a workspace directory through the
-// module whose path prefixes it, or reports false for an external import.
-func goImportDirectory(importPath string, modules []goModule) (string, bool) {
-	for _, module := range modules {
-		if importPath == module.Path {
-			return module.Directory, true
+func goReadModuleFile(workspaceDirectory, moduleFilePath, moduleDirectory string) (goModule, []goModule, error) {
+	contents, operationError := os.ReadFile(moduleFilePath)
+	if operationError != nil {
+		return goModule{}, nil, fmt.Errorf("read %s: %w", moduleFilePath, operationError)
+	}
+	moduleFile, operationError := modfile.Parse(moduleFilePath, contents, nil)
+	if operationError != nil {
+		return goModule{}, nil, fmt.Errorf("parse %s: %w", moduleFilePath, operationError)
+	}
+	if moduleFile.Module == nil || moduleFile.Module.Mod.Path == "" {
+		return goModule{}, nil, fmt.Errorf("parse %s: no module directive", moduleFilePath)
+	}
+	var replacements []goModule
+	for _, replacement := range moduleFile.Replace {
+		if replacement.New.Version != "" {
+			continue
 		}
-		if suffix, isPrefixed := strings.CutPrefix(importPath, module.Path+"/"); isPrefixed {
-			return path.Join(module.Directory, suffix), true
+		replacementPath := filepath.FromSlash(replacement.New.Path)
+		if !filepath.IsAbs(replacementPath) {
+			replacementPath = filepath.Join(workspaceDirectory, filepath.FromSlash(moduleDirectory), replacementPath)
+		}
+		replacementDirectory, operationError := filepath.Rel(workspaceDirectory, replacementPath)
+		if operationError != nil {
+			return goModule{}, nil, operationError
+		}
+		replacementDirectory = filepath.ToSlash(replacementDirectory)
+		if replacementDirectory == "." {
+			replacementDirectory = ""
+		}
+		if replacementDirectory != ".." && !strings.HasPrefix(replacementDirectory, "../") {
+			replacements = append(replacements, goModule{Path: replacement.Old.Path, Directory: replacementDirectory})
 		}
 	}
-	return "", false
+	return goModule{Path: moduleFile.Module.Mod.Path, Directory: moduleDirectory}, replacements, nil
+}
+
+func goModuleMetadataFingerprint(workspaceDirectory, moduleDirectory string) (string, error) {
+	hasher := sha256.New()
+	for _, metadataPath := range []string{"go.work", "go.work.sum", path.Join(moduleDirectory, "go.mod"), path.Join(moduleDirectory, "go.sum")} {
+		contents, operationError := os.ReadFile(filepath.Join(workspaceDirectory, filepath.FromSlash(metadataPath)))
+		if errors.Is(operationError, os.ErrNotExist) {
+			continue
+		}
+		if operationError != nil {
+			return "", fmt.Errorf("read %s: %w", metadataPath, operationError)
+		}
+		_, _ = fmt.Fprintf(hasher, "%s\x00%d\x00", metadataPath, len(contents))
+		_, _ = hasher.Write(contents)
+	}
+	return fmt.Sprintf("%x", hasher.Sum(nil)), nil
+}
+
+func goModuleFingerprint(packageDirectory string, modules []goModule) string {
+	fingerprint := ""
+	matchedLength := -1
+	for _, module := range modules {
+		isWithin := module.Directory == "" || packageDirectory == module.Directory || strings.HasPrefix(packageDirectory, module.Directory+"/")
+		if module.Fingerprint != "" && isWithin && len(module.Directory) > matchedLength {
+			fingerprint = module.Fingerprint
+			matchedLength = len(module.Directory)
+		}
+	}
+	return fingerprint
+}
+
+// goImportDirectories maps an import path through the longest matching module
+// path. Multiple results conservatively cover version-specific replacements.
+func goImportDirectories(importPath string, modules []goModule) []string {
+	matchedLength := -1
+	var directories []string
+	for _, module := range modules {
+		var directory string
+		matches := false
+		if importPath == module.Path {
+			directory, matches = module.Directory, true
+		}
+		if suffix, isPrefixed := strings.CutPrefix(importPath, module.Path+"/"); isPrefixed {
+			directory, matches = path.Join(module.Directory, suffix), true
+		}
+		if !matches || len(module.Path) < matchedLength {
+			continue
+		}
+		if len(module.Path) > matchedLength {
+			directories = nil
+			matchedLength = len(module.Path)
+		}
+		directories = append(directories, directory)
+	}
+	slices.Sort(directories)
+	return slices.Compact(directories)
 }
 
 // goPackageSources returns the imports of the non-test Go files in a directory
@@ -255,13 +353,22 @@ func goEmbedPatterns(comment string) []string {
 	return patterns
 }
 
-// goInputs covers the package directory itself, its testdata, and every
-// embedded file. An embed pattern may name a directory, which embeds its
-// whole tree, so each pattern is listed with and without a trailing /**.
-func goInputs(embedPatterns []string) []string {
+func goInputs(packageDirectory string, embedPatterns []string) []string {
 	inputs := []string{"*", "testdata/**"}
 	for _, pattern := range embedPatterns {
-		inputs = append(inputs, pattern, path.Join(pattern, "**"))
+		if strings.ContainsAny(pattern, "*?[{") {
+			inputs = append(inputs, pattern, path.Join(pattern, "**"))
+			continue
+		}
+		fileInfo, operationError := os.Stat(filepath.Join(packageDirectory, filepath.FromSlash(pattern)))
+		if operationError != nil {
+			continue
+		}
+		if fileInfo.IsDir() {
+			inputs = append(inputs, path.Join(pattern, "**"))
+		} else {
+			inputs = append(inputs, pattern)
+		}
 	}
 	slices.Sort(inputs)
 	return slices.Compact(inputs)
@@ -270,5 +377,5 @@ func goInputs(embedPatterns []string) []string {
 // goDefaultInputs are the files the built-in reads: every module file and
 // every Go source file an import path can reach.
 func goDefaultInputs(_ string) (inputs []string, excludeInputs []string) {
-	return []string{"go.work", "go.work.sum", "**/go.mod", "**/go.sum", "**/*.go"}, []string{"**/vendor/**", "**/node_modules/**", "**/.*/**"}
+	return []string{"go.work", "go.work.sum", "**/go.mod", "**/go.sum", "**/*.go"}, []string{"**/vendor/**", "**/node_modules/**"}
 }
