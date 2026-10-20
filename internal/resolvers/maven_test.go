@@ -195,7 +195,7 @@ func TestMavenCustomParentInput(t *testing.T) {
 	require.Equal(t, []string{"core-a", "parents"}, document.Packages["child-a"].Dependencies)
 	require.Equal(t, []string{"core-b", "parents"}, document.Packages["child-b"].Dependencies)
 	require.Equal(t, []string{"a.xml", "b.xml", "src/**/*"}, document.Packages["parents"].Inputs)
-	inputs, _ := mavenDefaultInputs(directory)
+	inputs, _ := mavenDefaultInputs(t.Context(), directory)
 	require.Subset(t, inputs, []string{"parents/a.xml", "parents/b.xml"})
 }
 
@@ -226,7 +226,7 @@ func TestMavenProfileCycleFallback(t *testing.T) {
 	changedDocument, operationError := mavenDependencies(t.Context(), directory)
 	require.NoError(t, operationError)
 	require.NotEqual(t, fingerprint, changedDocument.Packages["b"].Fingerprint["profile-cycle"])
-	inputs, _ := mavenDefaultInputs(directory)
+	inputs, _ := mavenDefaultInputs(t.Context(), directory)
 	require.Contains(t, inputs, "**/src/**/*")
 }
 
@@ -255,10 +255,10 @@ func TestMavenRelativeDirectory(t *testing.T) {
 }
 
 func TestMavenDefaultInputs(t *testing.T) {
-	inputs, excludeInputs := mavenDefaultInputs("testdata/maven")
+	inputs, excludeInputs := mavenDefaultInputs(t.Context(), "testdata/maven")
 	require.Equal(t, []string{"api/pom.xml", "bom/pom.xml", "build-tools/plugin/pom.xml", "core/pom.xml", "pom.xml", "services/billing/pom.xml", "services/payment/pom.xml", "services/pom.xml", "tools/release/pom.xml"}, inputs)
 	require.Equal(t, []string{"target/**"}, excludeInputs)
-	inputs, excludeInputs = mavenDefaultInputs(t.TempDir())
+	inputs, excludeInputs = mavenDefaultInputs(t.Context(), t.TempDir())
 	require.Equal(t, []string{"pom.xml"}, inputs)
 	require.Equal(t, []string{"target/**"}, excludeInputs)
 }

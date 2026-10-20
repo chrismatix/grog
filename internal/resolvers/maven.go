@@ -617,9 +617,9 @@ var mavenExcludeInputs = []string{"target/**"}
 
 // mavenDefaultInputs are the files the built-in reads: the root pom and the
 // pom of every module reachable from it.
-func mavenDefaultInputs(workspaceDirectory string) (inputs []string, excludeInputs []string) {
+func mavenDefaultInputs(resolverContext context.Context, workspaceDirectory string) (inputs []string, excludeInputs []string) {
 	inputs = []string{"pom.xml"}
-	members, operationError := mavenMembers(context.Background(), workspaceDirectory)
+	members, operationError := mavenMembers(resolverContext, workspaceDirectory)
 	if operationError != nil {
 		return inputs, mavenExcludeInputs
 	}
@@ -631,7 +631,7 @@ func mavenDefaultInputs(workspaceDirectory string) (inputs []string, excludeInpu
 			}
 		}
 	}
-	if document, operationError := mavenDependencies(context.Background(), workspaceDirectory); operationError == nil {
+	if document, operationError := mavenDependencies(resolverContext, workspaceDirectory); operationError == nil {
 		for _, reportedPackage := range document.Packages {
 			if reportedPackage.Fingerprint["profile-cycle"] != "" {
 				inputs = append(inputs, "**/src/**/*")
