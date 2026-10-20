@@ -19,7 +19,7 @@ func TestDotnetDependencies(t *testing.T) {
 	require.Equal(t, 1, document.Version)
 	importFingerprint := document.Packages["src/App"].Fingerprint["imports:App.csproj"]
 	require.NotEmpty(t, importFingerprint)
-	require.Equal(t, importFingerprint, document.Packages["src/Core"].Fingerprint["imports:Core.csproj"])
+	require.NotEqual(t, importFingerprint, document.Packages["src/Core"].Fingerprint["imports:Core.csproj"])
 	for directory, reportedPackage := range document.Packages {
 		reportedPackage.Fingerprint = nil
 		document.Packages[directory] = reportedPackage
@@ -105,12 +105,17 @@ func TestDotnetCoLocatedProjectFingerprints(t *testing.T) {
 	})
 	document, operationError := dotnetDependencies(t.Context(), directory)
 	require.NoError(t, operationError)
-	require.NotEmpty(t, document.Packages["src"].Fingerprint["imports:A.csproj"])
+	fingerprint := document.Packages["src"].Fingerprint["imports:A.csproj"]
+	require.NotEmpty(t, fingerprint)
+	require.NoError(t, os.WriteFile(filepath.Join(directory, "src/Directory.Build.props"), []byte(`<Project><PropertyGroup /></Project>`), 0644))
+	changedDocument, operationError := dotnetDependencies(t.Context(), directory)
+	require.NoError(t, operationError)
+	require.NotEqual(t, fingerprint, changedDocument.Packages["src"].Fingerprint["imports:A.csproj"])
 }
 
 func TestDotnetNestedProjectElements(t *testing.T) {
 	directory := writeDotnetFiles(t, map[string]string{
-		"src/App/App.csproj":   `<Project><Choose><When Condition="true"><Import Project="../../eng/common.props" /><ItemGroup><ProjectReference Include="../Core/Core.csproj" /></ItemGroup></When></Choose></Project>`,
+		"src/App/App.csproj":   `<Project><Choose><When Condition="true"><Import Project="../../eng/*.props" /><ItemGroup><ProjectReference Include="../Core/Core.csproj" /></ItemGroup></When></Choose></Project>`,
 		"src/Core/Core.csproj": dotnetEmptyProject,
 		"eng/common.props":     `<Project />`,
 	})
@@ -118,6 +123,8 @@ func TestDotnetNestedProjectElements(t *testing.T) {
 	require.NoError(t, operationError)
 	require.Equal(t, []string{"src/Core"}, document.Packages["src/App"].Dependencies)
 	require.NotEmpty(t, document.Packages["src/App"].Fingerprint["imports:App.csproj"])
+	inputs, _ := dotnetDefaultInputs(directory)
+	require.Contains(t, inputs, "eng/*.props")
 }
 
 func TestDotnetReferenceSources(t *testing.T) {

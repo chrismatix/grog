@@ -85,12 +85,16 @@ func dotnetDependencies(resolverContext context.Context, workspaceDirectory stri
 		configurationDependencies, configurationFiles := dotnetConfigurationReferences(directory, configurationDirectories)
 		configurationDependenciesByProject[directory] = configurationDependencies
 		reportedPackage.Dependencies = append(reportedPackage.Dependencies, configurationDependencies...)
-		importedFiles, references, operationError := dotnetImportedFiles(workspaceDirectory, append([]string{projectFile}, configurationFiles...))
+		importedFiles, references, _, operationError := dotnetImportedFiles(resolverContext, workspaceDirectory, append([]string{projectFile}, configurationFiles...))
 		if operationError != nil {
 			return document, operationError
 		}
-		if len(importedFiles) > 0 {
-			fingerprint, operationError := dotnetFilesFingerprint(workspaceDirectory, importedFiles)
+		fingerprintFiles := append([]string{projectFile}, configurationFiles...)
+		fingerprintFiles = append(fingerprintFiles, importedFiles...)
+		slices.Sort(fingerprintFiles)
+		fingerprintFiles = slices.Compact(fingerprintFiles)
+		if len(fingerprintFiles) > 0 {
+			fingerprint, operationError := dotnetFilesFingerprint(workspaceDirectory, fingerprintFiles)
 			if operationError != nil {
 				return document, operationError
 			}
@@ -263,7 +267,7 @@ func (project *dotnetProjectFile) UnmarshalXML(decoder *xml.Decoder, start xml.S
 	}
 }
 
-func dotnetImportedFiles(workspaceDirectory string, sourceFiles []string) ([]string, []string, error) {
+func dotnetImportedFiles(resolverContext context.Context, workspaceDirectory string, sourceFiles []string) ([]string, []string, []string, error) {
 	visited := make(map[string]bool, len(sourceFiles))
 	queue := slices.Clone(sourceFiles)
 	for _, sourceFile := range sourceFiles {
@@ -271,12 +275,16 @@ func dotnetImportedFiles(workspaceDirectory string, sourceFiles []string) ([]str
 	}
 	var importedFiles []string
 	var references []string
+	var importPatterns []string
 	for len(queue) > 0 {
+		if operationError := resolverContext.Err(); operationError != nil {
+			return nil, nil, nil, operationError
+		}
 		sourceFile := queue[0]
 		queue = queue[1:]
 		project, operationError := readDotnetProjectFile(filepath.Join(workspaceDirectory, filepath.FromSlash(sourceFile)))
 		if operationError != nil {
-			return nil, nil, operationError
+			return nil, nil, nil, operationError
 		}
 		for _, projectReference := range project.ProjectReferences {
 			for include := range strings.SplitSeq(projectReference, ";") {
@@ -287,25 +295,50 @@ func dotnetImportedFiles(workspaceDirectory string, sourceFiles []string) ([]str
 			}
 		}
 		for _, imported := range project.Imports {
-			importPath := strings.TrimSpace(strings.ReplaceAll(imported.Project, "\\", "/"))
-			if importPath == "" || strings.ContainsAny(importPath, "$(*?[") {
-				continue
+			matches, importPattern := dotnetImportFiles(workspaceDirectory, sourceFile, imported.Project)
+			if importPattern != "" {
+				importPatterns = append(importPatterns, importPattern)
 			}
-			importPath = path.Clean(path.Join(path.Dir(sourceFile), importPath))
-			if ValidatePath(importPath) != nil || visited[importPath] {
-				continue
+			for _, match := range matches {
+				if operationError := resolverContext.Err(); operationError != nil {
+					return nil, nil, nil, operationError
+				}
+				if visited[match] {
+					continue
+				}
+				visited[match] = true
+				importedFiles = append(importedFiles, match)
+				queue = append(queue, match)
 			}
-			fileInfo, operationError := os.Stat(filepath.Join(workspaceDirectory, filepath.FromSlash(importPath)))
-			if operationError != nil || fileInfo.IsDir() {
-				continue
-			}
-			visited[importPath] = true
-			importedFiles = append(importedFiles, importPath)
-			queue = append(queue, importPath)
 		}
 	}
 	slices.Sort(importedFiles)
-	return importedFiles, references, nil
+	slices.Sort(importPatterns)
+	return importedFiles, references, slices.Compact(importPatterns), nil
+}
+
+func dotnetImportFiles(workspaceDirectory, sourceFile, projectValue string) ([]string, string) {
+	importPath := strings.TrimSpace(strings.ReplaceAll(projectValue, "\\", "/"))
+	if importPath == "" || strings.Contains(importPath, "$(") {
+		return nil, ""
+	}
+	importPath = path.Clean(path.Join(path.Dir(sourceFile), importPath))
+	if importPath == ".." || strings.HasPrefix(importPath, "../") {
+		return nil, ""
+	}
+	matches := []string{importPath}
+	importPattern := ""
+	if strings.ContainsAny(importPath, "*?[") {
+		importPattern = importPath
+		matches, _ = doublestar.Glob(os.DirFS(workspaceDirectory), importPath, doublestar.WithFilesOnly())
+	}
+	return slices.DeleteFunc(matches, func(match string) bool {
+		if ValidatePath(match) != nil {
+			return true
+		}
+		fileInfo, operationError := os.Stat(filepath.Join(workspaceDirectory, filepath.FromSlash(match)))
+		return operationError != nil || fileInfo.IsDir()
+	}), importPattern
 }
 
 func dotnetFilesFingerprint(workspaceDirectory string, files []string) (string, error) {
@@ -438,9 +471,10 @@ func dotnetDefaultInputs(workspaceDirectory string) (inputs []string, excludeInp
 		if slices.Contains(segments, "bin") || slices.Contains(segments, "obj") {
 			continue
 		}
-		imports, _, operationError := dotnetImportedFiles(workspaceDirectory, []string{source})
+		imports, _, importPatterns, operationError := dotnetImportedFiles(context.Background(), workspaceDirectory, []string{source})
 		if operationError == nil {
 			importedFiles = append(importedFiles, imports...)
+			importedFiles = append(importedFiles, importPatterns...)
 		}
 	}
 	slices.Sort(importedFiles)
