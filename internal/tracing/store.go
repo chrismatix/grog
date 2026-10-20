@@ -223,7 +223,7 @@ func (s *TraceStore) List(ctx context.Context, opts ListOptions) ([]BuildRow, er
 // buildsSource reads the builds table, adding the columns that traces written
 // by older grog versions lack so that List and LoadBuild can select them.
 func (s *TraceStore) buildsSource() string {
-	return fmt.Sprintf(`(SELECT * FROM read_parquet('%s', union_by_name=true)
+	return fmt.Sprintf(`(FROM read_parquet('%s', union_by_name=true)
 		UNION ALL BY NAME SELECT NULL::VARCHAR AS critical_path, NULL::VARCHAR AS tags WHERE false)`,
 		s.resolver.BuildsGlob())
 }

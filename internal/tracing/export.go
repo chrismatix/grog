@@ -193,7 +193,7 @@ func boolVal(b bool) otlpValue     { return otlpValue{BoolValue: &b} }
 func stringListVal(joined string) otlpValue {
 	values := []otlpValue{}
 	if joined != "" {
-		for _, item := range strings.Split(joined, ",") {
+		for item := range strings.SplitSeq(joined, ",") {
 			values = append(values, stringVal(item))
 		}
 	}
