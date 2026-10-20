@@ -242,8 +242,8 @@ Default `inputs`: `pom.xml` and every reachable module or local parent's `pom.xm
 Projects come from `include` statements in `settings.gradle.kts` or `settings.gradle`, with `projectDir` overrides honoured; `:a:b` is the directory `a/b`.
 Including `:a:b` also creates and reports the parent project `:a`, as Gradle does, whether or not its default directory exists yet.
 Without a settings file Gradle runs a single-project build, and the resolver reports just the root.
-Edges are found by scanning each project's build file, `build.gradle(.kts)` or the `buildFileName` settings assign, for `project(":x")` references and type-safe accessors such as `projects.coreUtils`, whatever configuration they sit in.
-This is a text scan, not a Gradle evaluation: a reference in a comment or a disabled block still counts, which only ever adds edges.
+Edges are found by scanning each project's build file, `build.gradle(.kts)` or the `buildFileName` settings assign, for `project(":x")` references and type-safe accessors such as `projects.coreUtils`; comments and test-only configurations are ignored to avoid false cycles.
+This is a text scan, not a Gradle evaluation: a reference in a disabled block still counts, which only ever adds edges.
 If that over-connects your graph, generate the exact mapping with a Gradle init script and use a [committed mapping](#using-a-committed-mapping) instead.
 
 Every project also depends on the root package `""`, which covers `settings.gradle*`, the root build file, `gradle.properties`, `gradle/**`, `buildSrc/**` and the root's own `src/**/*`, since version catalogs and convention plugins apply to every project.
