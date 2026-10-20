@@ -119,9 +119,12 @@ type goModule struct {
 // module and every directory holding Go files, both workspace-relative.
 func goWorkspaceLayout(walkContext context.Context, workspaceDirectory string) ([]goModule, []string, error) {
 	var modules []goModule
-	var replacements []goModule
+	replacements, operationError := goReadWorkspaceReplacements(workspaceDirectory)
+	if operationError != nil {
+		return nil, nil, operationError
+	}
 	packageDirectories := make(map[string]bool)
-	operationError := filepath.WalkDir(workspaceDirectory, func(currentPath string, entry fs.DirEntry, walkError error) error {
+	operationError = filepath.WalkDir(workspaceDirectory, func(currentPath string, entry fs.DirEntry, walkError error) error {
 		if walkError != nil {
 			return walkError
 		}
@@ -163,14 +166,10 @@ func goWorkspaceLayout(walkContext context.Context, workspaceDirectory string) (
 	if operationError != nil {
 		return nil, nil, operationError
 	}
-	for index := range modules {
-		fingerprint, operationError := goModuleMetadataFingerprint(workspaceDirectory, modules[index].Directory)
-		if operationError != nil {
-			return nil, nil, operationError
-		}
-		modules[index].Fingerprint = fingerprint
-	}
 	modules = append(modules, replacements...)
+	if operationError := goFingerprintModules(workspaceDirectory, modules); operationError != nil {
+		return nil, nil, operationError
+	}
 	// Longest module path first, so a nested module wins over its parent.
 	slices.SortFunc(modules, func(first, second goModule) int {
 		if difference := len(second.Path) - len(first.Path); difference != 0 {
@@ -179,6 +178,33 @@ func goWorkspaceLayout(walkContext context.Context, workspaceDirectory string) (
 		return strings.Compare(first.Directory, second.Directory)
 	})
 	return modules, slices.Sorted(maps.Keys(packageDirectories)), nil
+}
+
+func goFingerprintModules(workspaceDirectory string, modules []goModule) error {
+	for index := range modules {
+		fingerprint, operationError := goModuleMetadataFingerprint(workspaceDirectory, modules[index].Directory)
+		if operationError != nil {
+			return operationError
+		}
+		modules[index].Fingerprint = fingerprint
+	}
+	return nil
+}
+
+func goReadWorkspaceReplacements(workspaceDirectory string) ([]goModule, error) {
+	workspaceFilePath := filepath.Join(workspaceDirectory, "go.work")
+	contents, operationError := os.ReadFile(workspaceFilePath)
+	if errors.Is(operationError, os.ErrNotExist) {
+		return nil, nil
+	}
+	if operationError != nil {
+		return nil, fmt.Errorf("read %s: %w", workspaceFilePath, operationError)
+	}
+	workspaceFile, operationError := modfile.ParseWork(workspaceFilePath, contents, nil)
+	if operationError != nil {
+		return nil, fmt.Errorf("parse %s: %w", workspaceFilePath, operationError)
+	}
+	return goLocalReplacements(workspaceDirectory, "", workspaceFile.Replace)
 }
 
 func goReadModuleFile(workspaceDirectory, moduleFilePath, moduleDirectory string) (goModule, []goModule, error) {
@@ -193,28 +219,36 @@ func goReadModuleFile(workspaceDirectory, moduleFilePath, moduleDirectory string
 	if moduleFile.Module == nil || moduleFile.Module.Mod.Path == "" {
 		return goModule{}, nil, fmt.Errorf("parse %s: no module directive", moduleFilePath)
 	}
-	var replacements []goModule
-	for _, replacement := range moduleFile.Replace {
+	replacements, operationError := goLocalReplacements(workspaceDirectory, moduleDirectory, moduleFile.Replace)
+	if operationError != nil {
+		return goModule{}, nil, operationError
+	}
+	return goModule{Path: moduleFile.Module.Mod.Path, Directory: moduleDirectory}, replacements, nil
+}
+
+func goLocalReplacements(workspaceDirectory, baseDirectory string, replacements []*modfile.Replace) ([]goModule, error) {
+	var localReplacements []goModule
+	for _, replacement := range replacements {
 		if replacement.New.Version != "" {
 			continue
 		}
 		replacementPath := filepath.FromSlash(replacement.New.Path)
 		if !filepath.IsAbs(replacementPath) {
-			replacementPath = filepath.Join(workspaceDirectory, filepath.FromSlash(moduleDirectory), replacementPath)
+			replacementPath = filepath.Join(workspaceDirectory, filepath.FromSlash(baseDirectory), replacementPath)
 		}
 		replacementDirectory, operationError := filepath.Rel(workspaceDirectory, replacementPath)
 		if operationError != nil {
-			return goModule{}, nil, operationError
+			return nil, operationError
 		}
 		replacementDirectory = filepath.ToSlash(replacementDirectory)
 		if replacementDirectory == "." {
 			replacementDirectory = ""
 		}
 		if replacementDirectory != ".." && !strings.HasPrefix(replacementDirectory, "../") {
-			replacements = append(replacements, goModule{Path: replacement.Old.Path, Directory: replacementDirectory})
+			localReplacements = append(localReplacements, goModule{Path: replacement.Old.Path, Directory: replacementDirectory})
 		}
 	}
-	return goModule{Path: moduleFile.Module.Mod.Path, Directory: moduleDirectory}, replacements, nil
+	return localReplacements, nil
 }
 
 func goModuleMetadataFingerprint(workspaceDirectory, moduleDirectory string) (string, error) {

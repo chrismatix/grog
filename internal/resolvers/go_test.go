@@ -16,7 +16,7 @@ func TestGoDependencies(t *testing.T) {
 	rootFingerprint := document.Packages["cmd/app"].Fingerprint["module"]
 	require.NotEmpty(t, rootFingerprint)
 	require.Equal(t, rootFingerprint, document.Packages[".hidden/pkg"].Fingerprint["module"])
-	require.NotEqual(t, rootFingerprint, document.Packages["local/pkg"].Fingerprint["module"])
+	require.NotEqual(t, rootFingerprint, document.Packages["_deps/local/pkg"].Fingerprint["module"])
 	require.NotEqual(t, rootFingerprint, document.Packages["tools/gen"].Fingerprint["module"])
 	for directory, reportedPackage := range document.Packages {
 		reportedPackage.Fingerprint = nil
@@ -28,12 +28,12 @@ func TestGoDependencies(t *testing.T) {
 	plain := []string{"*", "testdata/**"}
 	require.Equal(t, map[string]Package{
 		".hidden/pkg":      member(plain, "internal/greet"),
-		"cmd/app":          member(plain, ".hidden/pkg", "internal/_shim", "internal/greet", "local/pkg", "tools/gen"),
+		"cmd/app":          member(plain, ".hidden/pkg", "_deps/local/pkg", "internal/_shim", "internal/greet", "tools/gen"),
 		"internal/_shim":   member(plain),
 		"internal/greet":   member(plain, "internal/format", "internal/winutil"),
 		"internal/format":  member([]string{"*", "banner.txt", "static/**", "templates/*.txt", "templates/*.txt/**", "testdata/**", "vendor/assets/logo.txt"}),
 		"internal/winutil": member([]string{"*", "fixtures/**", "testdata/**"}),
-		"local/pkg":        member(plain),
+		"_deps/local/pkg":  member(plain),
 		"tools/gen":        member(plain),
 	}, document.Packages)
 }

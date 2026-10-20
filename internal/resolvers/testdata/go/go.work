@@ -1,0 +1,8 @@
+go 1.24
+
+use (
+	.
+	./tools/gen
+)
+
+replace old.example/lib => ./_deps/local
