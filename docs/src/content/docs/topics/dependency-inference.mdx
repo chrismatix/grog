@@ -266,7 +266,7 @@ A reference to a project that doesn't exist, typically one guarded by `Condition
 
 MSBuild searches upward for the nearest `Directory.Build.props`, `Directory.Build.targets`, `Directory.Packages.props` and `global.json`; NuGet configuration remains cumulative.
 Each directory holding one of them becomes a package covering exactly those files, and each project depends on the packages holding its effective configuration.
-The root package `""` always exists and also covers the solution files, while literal repo-local `<Import>` files contribute a content fingerprint to every affected project, transitively.
+The root package `""` always exists and also covers the solution files, while repo-local `<Import>` files and wildcard matches contribute a content fingerprint to every affected project, transitively.
 
 A project that sits in such a directory shares the package with its configuration files, since packages are directories.
 If that project references one below it, the child's edge back to the configuration would close a cycle, so the resolver fails with an explanation instead of omitting an invalidation edge.
