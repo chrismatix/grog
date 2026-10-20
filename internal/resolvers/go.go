@@ -418,22 +418,14 @@ func goEmbedPatterns(comment string) []string {
 	return patterns
 }
 
-func goInputs(packageDirectory string, embedPatterns []string) []string {
+func goInputs(_ string, embedPatterns []string) []string {
 	inputs := []string{"*", "testdata/**"}
 	for _, pattern := range embedPatterns {
 		if strings.ContainsAny(pattern, "*?[{") {
 			inputs = append(inputs, pattern, path.Join(pattern, "**"))
 			continue
 		}
-		fileInfo, operationError := os.Stat(filepath.Join(packageDirectory, filepath.FromSlash(pattern)))
-		if operationError != nil {
-			continue
-		}
-		if fileInfo.IsDir() {
-			inputs = append(inputs, path.Join(pattern, "**"))
-		} else {
-			inputs = append(inputs, pattern)
-		}
+		inputs = append(inputs, pattern+"{,/**}")
 	}
 	slices.Sort(inputs)
 	return slices.Compact(inputs)
@@ -441,6 +433,21 @@ func goInputs(packageDirectory string, embedPatterns []string) []string {
 
 // goDefaultInputs are the files the built-in reads: every module file and
 // every Go source file an import path can reach.
-func goDefaultInputs(_ string) (inputs []string, excludeInputs []string) {
-	return []string{"go.work", "go.work.sum", "**/go.mod", "**/go.sum", "**/*.go"}, []string{"**/vendor/**", "**/node_modules/**"}
+func goDefaultInputs(workspaceDirectory string) (inputs []string, excludeInputs []string) {
+	inputs = []string{"go.work", "go.work.sum", "**/go.mod", "**/go.sum", "**/*.go"}
+	excludeInputs = []string{"**/vendor/**", "**/node_modules/**"}
+	modules, _, operationError := goWorkspaceLayout(context.Background(), workspaceDirectory)
+	if operationError != nil {
+		return inputs, excludeInputs
+	}
+	for _, module := range modules {
+		segments := strings.Split(module.Directory, "/")
+		if slices.Contains(segments, "vendor") {
+			excludeInputs = slices.DeleteFunc(excludeInputs, func(pattern string) bool { return pattern == "**/vendor/**" })
+		}
+		if slices.Contains(segments, "node_modules") {
+			excludeInputs = slices.DeleteFunc(excludeInputs, func(pattern string) bool { return pattern == "**/node_modules/**" })
+		}
+	}
+	return inputs, excludeInputs
 }
