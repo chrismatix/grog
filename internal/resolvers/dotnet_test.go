@@ -10,13 +10,20 @@ import (
 )
 
 func dotnetMember(dependencies ...string) Package {
-	return Package{Dependencies: append([]string{""}, dependencies...), Inputs: []string{"**/*"}, ExcludeInputs: dotnetExcludeInputs}
+	return Package{Dependencies: append([]string{}, dependencies...), Inputs: []string{"**/*"}, ExcludeInputs: dotnetExcludeInputs}
 }
 
 func TestDotnetDependencies(t *testing.T) {
 	document, operationError := dotnetDependencies(t.Context(), "testdata/dotnet")
 	require.NoError(t, operationError)
 	require.Equal(t, 1, document.Version)
+	importFingerprint := document.Packages["src/App"].Fingerprint["imports:App.csproj"]
+	require.NotEmpty(t, importFingerprint)
+	require.Equal(t, importFingerprint, document.Packages["src/Core"].Fingerprint["imports:Core.csproj"])
+	for directory, reportedPackage := range document.Packages {
+		reportedPackage.Fingerprint = nil
+		document.Packages[directory] = reportedPackage
+	}
 	configuration := func(files ...string) Package {
 		return Package{Dependencies: []string{}, Inputs: files, ExcludeInputs: dotnetExcludeInputs}
 	}
@@ -27,8 +34,8 @@ func TestDotnetDependencies(t *testing.T) {
 		"src/App":         dotnetMember("src", "src/Core", "src/Fs"),
 		"src/Core":        dotnetMember("lib/Shared", "src"),
 		"src/Fs":          dotnetMember("src"),
-		"lib/Shared":      dotnetMember(),
-		"tests/App.Tests": dotnetMember("src/App", "tests"),
+		"lib/Shared":      dotnetMember(""),
+		"tests/App.Tests": dotnetMember("", "src/App", "tests"),
 	}, document.Packages)
 }
 
@@ -99,14 +106,27 @@ func TestDotnetReferenceSources(t *testing.T) {
 	})
 	document, operationError := dotnetDependencies(t.Context(), directory)
 	require.NoError(t, operationError)
-	require.Equal(t, []string{"", "libs/One", "libs/nested/Two", "shared/Analyzers", "src"}, document.Packages["src/App"].Dependencies)
+	require.Equal(t, []string{"libs/One", "libs/nested/Two", "shared/Analyzers", "src"}, document.Packages["src/App"].Dependencies)
 	require.Contains(t, document.Packages, "libs/nested/Two")
 	require.NotContains(t, document.Packages, "src/Plugin")
 }
 
+func TestDotnetNearestConfiguration(t *testing.T) {
+	directory := writeDotnetFiles(t, map[string]string{
+		"Directory.Build.props":     `<Project />`,
+		"App.csproj":                `<Project><ItemGroup><ProjectReference Include="src\Lib\Lib.csproj" /></ItemGroup></Project>`,
+		"src/Directory.Build.props": `<Project />`,
+		"src/Lib/Lib.csproj":        dotnetEmptyProject,
+	})
+	document, operationError := dotnetDependencies(t.Context(), directory)
+	require.NoError(t, operationError)
+	require.Equal(t, []string{"src/Lib"}, document.Packages[""].Dependencies)
+	require.Equal(t, []string{"src"}, document.Packages["src/Lib"].Dependencies)
+}
+
 func TestDotnetDefaultInputs(t *testing.T) {
 	inputs, excludeInputs := dotnetDefaultInputs("testdata/dotnet")
-	require.Equal(t, []string{"*.sln", "*.slnx", "**/*.csproj", "**/*.fsproj", "**/*.vbproj", "**/Directory.Build.props", "**/Directory.Build.targets", "**/Directory.Packages.props", "**/global.json", "**/nuget.config", "**/NuGet.Config"}, inputs)
+	require.Equal(t, []string{"*.sln", "*.slnx", "**/*.csproj", "**/*.fsproj", "**/*.vbproj", "**/Directory.Build.props", "**/Directory.Build.targets", "**/Directory.Packages.props", "**/global.json", "**/nuget.config", "**/NuGet.Config", "eng/common.props", "eng/more.xml"}, inputs)
 	require.Equal(t, []string{"**/bin/**", "**/obj/**"}, excludeInputs)
 }
 
@@ -120,8 +140,9 @@ func TestDotnetResolverErrors(t *testing.T) {
 		{
 			name: "project shares a directory with ancestor configuration",
 			files: map[string]string{
-				"App.csproj":         `<Project><ItemGroup><ProjectReference Include="lib\Lib\Lib.csproj" /></ItemGroup></Project>`,
-				"lib/Lib/Lib.csproj": dotnetEmptyProject,
+				"Directory.Build.props": `<Project />`,
+				"App.csproj":            `<Project><ItemGroup><ProjectReference Include="lib\Lib\Lib.csproj" /></ItemGroup></Project>`,
+				"lib/Lib/Lib.csproj":    dotnetEmptyProject,
 			},
 			expectedError: `project package "" references descendant package "lib/Lib", creating a cycle through shared configuration`,
 		},
