@@ -7,6 +7,7 @@ import (
 
 	"github.com/chrismatix/grog/internal/config"
 	"github.com/chrismatix/grog/internal/dag"
+	"github.com/chrismatix/grog/internal/execution"
 	"github.com/chrismatix/grog/internal/label"
 	"github.com/chrismatix/grog/internal/model"
 )
@@ -149,7 +150,7 @@ func TestTraceCollector_FailedTarget(t *testing.T) {
 			IsSuccess:   false,
 			NodeType:    model.TargetNode,
 			CacheResult: dag.CacheMiss,
-			Err:         fmt.Errorf("exit code 1"),
+			Err:         fmt.Errorf("target failed: %w", &execution.CommandError{TargetLabel: target.Label, ExitCode: 3}),
 		},
 	}
 
@@ -166,6 +167,9 @@ func TestTraceCollector_FailedTarget(t *testing.T) {
 	}
 	if trace.Spans[0].Status != "FAILURE" {
 		t.Errorf("expected FAILURE status, got %s", trace.Spans[0].Status)
+	}
+	if trace.Spans[0].ExitCode != 3 {
+		t.Errorf("expected exit code 3, got %d", trace.Spans[0].ExitCode)
 	}
 }
 

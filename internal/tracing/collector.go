@@ -2,6 +2,7 @@ package tracing
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/chrismatix/grog/internal/config"
 	"github.com/chrismatix/grog/internal/dag"
+	"github.com/chrismatix/grog/internal/execution"
 	"github.com/chrismatix/grog/internal/label"
 	"github.com/chrismatix/grog/internal/model"
 )
@@ -181,6 +183,9 @@ func (c *TraceCollector) buildSpan(target *model.Target, completion *dag.Complet
 		span.Status = "SUCCESS"
 	} else if completion.Err != nil {
 		span.Status = "FAILURE"
+		if commandError, isCommandError := errors.AsType[*execution.CommandError](completion.Err); isCommandError {
+			span.ExitCode = int32(commandError.ExitCode)
+		}
 	} else {
 		span.Status = "CANCELLED"
 	}
