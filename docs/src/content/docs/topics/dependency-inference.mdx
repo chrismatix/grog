@@ -232,7 +232,7 @@ Maven forbids cycles between modules, so unlike Cargo's `[dev-dependencies]` the
 If combining mutually exclusive profile edges would create a cycle, the closing edge becomes a fingerprint over all Maven package inputs instead.
 The resolver reads the poms as written, not the effective pom: a dependency only declared through a parent outside the workspace isn't seen.
 
-Each module's `:_maven_package` covers `pom.xml` and `src/**/*`, minus `target/**`.
+Each module's `:_maven_package` covers its POM file and `src/**/*`, minus `target/**`.
 
 Default `inputs`: `pom.xml` and every reachable module or local parent's `pom.xml`, plus `**/src/**/*` only when profile-cycle fingerprints are needed, with `target/**` excluded.
 
