@@ -213,7 +213,7 @@ Each package's synthesized `:_go_package` covers every file directly in the dire
 The governing `go.mod`, `go.sum`, `go.work` and `go.work.sum` contents are added to every package's fingerprint.
 Subdirectories are packages of their own and are reached through import edges, not inputs.
 
-Default `inputs`: `go.work`, `go.work.sum`, `**/go.mod`, `**/go.sum`, `**/*.go`, with `**/vendor/**` and `**/node_modules/**` excluded.
+Default `inputs`: `go.work`, `go.work.sum`, `**/go.mod`, `**/go.sum`, `**/*.go`, with `**/vendor/**` and `**/node_modules/**` excluded unless a workspace module or local replacement lives there.
 
 ## Fields reference
 
