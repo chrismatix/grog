@@ -17,7 +17,7 @@ import (
 var (
 	gradleIncludePattern          = regexp.MustCompile(`\binclude\s*(?:\(([^)]*)\)|((?:["'][^"']*["']\s*,?\s*)+))`)
 	gradleQuotedPattern           = regexp.MustCompile(`["']([^"']*)["']`)
-	gradleProjectDirPattern       = regexp.MustCompile(`\bproject\(\s*["'](:[^"']*)["']\s*\)\.projectDir\s*=\s*(?:new\s+)?[fF]ile\(\s*(?:(?:rootDir|settingsDir)\s*,\s*)?["']([^"']+)["']`)
+	gradleProjectDirPattern       = regexp.MustCompile(`\bproject\(\s*["'](:[^"']*)["']\s*\)\.projectDir\s*=\s*(?:new\s+)?[fF]ile\(\s*(?:(?:rootDir|settingsDir|rootProject\.projectDir)\s*,\s*)?["']([^"']+)["']`)
 	gradleIncludeBuildPattern     = regexp.MustCompile(`\bincludeBuild\s*\(?\s*["']([^"']+)["']`)
 	gradleProjectReferencePattern = regexp.MustCompile(`\bproject\(\s*(?:path\s*[:=]\s*)?["'](:[^"']*)["']`)
 	gradleAccessorPattern         = regexp.MustCompile(`\bprojects((?:\.[A-Za-z_][A-Za-z0-9_]*)+)`)

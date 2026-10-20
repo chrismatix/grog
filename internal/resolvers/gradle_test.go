@@ -92,6 +92,7 @@ func TestGradleProjectDirectories(t *testing.T) {
 		{name: "virtual parent is skipped", settings: "include(\":b:c\")\nproject(\":b:c\").projectDir = file(\"c\")", directories: []string{"c"}, expected: map[string]string{":b:c": "c"}},
 		{name: "kotlin multiline", settings: "include(\n  \":a\",\n  \":b\"\n)", expected: map[string]string{":a": "a", ":b": "b"}},
 		{name: "project dir override", settings: "include ':a'\nproject(':a').projectDir = new File(rootDir, 'lib/a')", expected: map[string]string{":a": "lib/a"}},
+		{name: "root project dir override", settings: "include ':app'\nproject(':app').projectDir = new File(rootProject.projectDir, 'modules/app')", expected: map[string]string{":app": "modules/app"}},
 		{name: "override outside the workspace is dropped", settings: "include(\":a\")\nproject(\":a\").projectDir = file(\"../a\")", expected: map[string]string{}},
 		{name: "includeBuild is not an include", settings: "includeBuild(\"logic\")", expected: map[string]string{}},
 		{name: "root path is skipped", settings: "include(\":\")", expected: map[string]string{}},
