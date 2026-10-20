@@ -123,7 +123,7 @@ func TestDotnetNestedProjectElements(t *testing.T) {
 	require.NoError(t, operationError)
 	require.Equal(t, []string{"src/Core"}, document.Packages["src/App"].Dependencies)
 	require.NotEmpty(t, document.Packages["src/App"].Fingerprint["imports:App.csproj"])
-	inputs, _ := dotnetDefaultInputs(directory)
+	inputs, _ := dotnetDefaultInputs(t.Context(), directory)
 	require.Contains(t, inputs, "eng/*.props")
 }
 
@@ -156,12 +156,20 @@ func TestDotnetNearestConfiguration(t *testing.T) {
 }
 
 func TestDotnetDefaultInputs(t *testing.T) {
-	inputs, excludeInputs := dotnetDefaultInputs("testdata/dotnet")
+	inputs, excludeInputs := dotnetDefaultInputs(t.Context(), "testdata/dotnet")
 	require.Equal(t, []string{"*.sln", "*.slnx", "**/*.csproj", "**/*.fsproj", "**/*.vbproj", "**/Directory.Build.props", "**/Directory.Build.targets", "**/Directory.Packages.props", "**/global.json", "**/nuget.config", "**/NuGet.Config", "eng/common.props", "eng/more.xml"}, inputs)
 	require.Equal(t, []string{"**/bin/**", "**/obj/**"}, excludeInputs)
 	directory := writeDotnetFiles(t, map[string]string{"App.csproj": dotnetEmptyProject, "DIRECTORY.BUILD.PROPS": `<Project />`})
-	inputs, _ = dotnetDefaultInputs(directory)
+	inputs, _ = dotnetDefaultInputs(t.Context(), directory)
 	require.NotContains(t, inputs, "DIRECTORY.BUILD.PROPS")
+	directory = writeDotnetFiles(t, map[string]string{
+		"App.csproj":            `<Project><ItemGroup><ProjectReference Include="native/Native.vcxproj" /></ItemGroup></Project>`,
+		"native/Native.vcxproj": `<Project><Import Project="../eng/native.props" /></Project>`,
+		"eng/native.props":      `<Project />`,
+	})
+	inputs, _ = dotnetDefaultInputs(t.Context(), directory)
+	require.Contains(t, inputs, "native/Native.vcxproj")
+	require.Contains(t, inputs, "eng/native.props")
 }
 
 func TestDotnetResolverErrors(t *testing.T) {

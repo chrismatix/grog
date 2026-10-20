@@ -466,25 +466,66 @@ func dotnetSlnxProjects(contents []byte) ([]string, error) {
 // dotnetDefaultInputs are the files the built-in reads: the solution files,
 // every project file, since references lead to projects outside the
 // solution, and every configuration file, since each creates a package.
-func dotnetDefaultInputs(workspaceDirectory string) (inputs []string, excludeInputs []string) {
+func dotnetDefaultInputs(resolverContext context.Context, workspaceDirectory string) (inputs []string, excludeInputs []string) {
 	inputs = []string{"*.sln", "*.slnx", "**/*.csproj", "**/*.fsproj", "**/*.vbproj", "**/Directory.Build.props", "**/Directory.Build.targets", "**/Directory.Packages.props", "**/global.json", "**/nuget.config", "**/NuGet.Config"}
-	sources, operationError := doublestar.Glob(os.DirFS(workspaceDirectory), "**/*.{csproj,fsproj,vbproj,props,targets}", doublestar.WithFilesOnly())
+	var sources []string
+	operationError := filepath.WalkDir(workspaceDirectory, func(filePath string, entry os.DirEntry, walkError error) error {
+		if walkError != nil {
+			return walkError
+		}
+		if operationError := resolverContext.Err(); operationError != nil {
+			return operationError
+		}
+		if entry.IsDir() && (entry.Name() == "bin" || entry.Name() == "obj") {
+			return filepath.SkipDir
+		}
+		extension := strings.ToLower(filepath.Ext(entry.Name()))
+		if entry.IsDir() || (!slices.Contains(dotnetProjectExtensions, extension) && extension != ".props" && extension != ".targets") {
+			return nil
+		}
+		relativePath, operationError := filepath.Rel(workspaceDirectory, filePath)
+		if operationError != nil {
+			return operationError
+		}
+		sources = append(sources, filepath.ToSlash(relativePath))
+		return nil
+	})
 	if operationError != nil {
 		return inputs, dotnetExcludeInputs
 	}
 	var importedFiles []string
-	for _, source := range sources {
-		segments := strings.Split(path.Dir(source), "/")
-		if slices.Contains(segments, "bin") || slices.Contains(segments, "obj") {
+	var followedFiles []string
+	visited := make(map[string]bool)
+	for len(sources) > 0 {
+		source := sources[0]
+		sources = sources[1:]
+		if visited[source] {
 			continue
 		}
-		imports, _, importPatterns, operationError := dotnetImportedFiles(context.Background(), workspaceDirectory, []string{source})
+		visited[source] = true
+		if resolverContext.Err() != nil {
+			return inputs, dotnetExcludeInputs
+		}
+		imports, references, importPatterns, operationError := dotnetImportedFiles(resolverContext, workspaceDirectory, []string{source})
 		if operationError == nil {
 			importedFiles = append(importedFiles, imports...)
 			importedFiles = append(importedFiles, importPatterns...)
 		}
+		for _, reference := range references {
+			referencedFiles, operationError := dotnetReferencedFiles(workspaceDirectory, path.Join(path.Dir(source), reference))
+			if operationError != nil {
+				continue
+			}
+			for _, referencedFile := range referencedFiles {
+				if !slices.Contains(dotnetProjectExtensions, strings.ToLower(path.Ext(referencedFile))) {
+					followedFiles = append(followedFiles, referencedFile)
+				}
+			}
+			sources = append(sources, referencedFiles...)
+		}
 	}
-	slices.Sort(importedFiles)
-	inputs = append(inputs, slices.Compact(importedFiles)...)
+	additionalInputs := append(importedFiles, followedFiles...)
+	slices.Sort(additionalInputs)
+	inputs = append(inputs, slices.Compact(additionalInputs)...)
 	return inputs, dotnetExcludeInputs
 }
