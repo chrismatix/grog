@@ -45,7 +45,8 @@ func gradleDependencies(resolverContext context.Context, workspaceDirectory stri
 			return document, fmt.Errorf("no settings.gradle, settings.gradle.kts or build file in %s", workspaceDirectory)
 		}
 	}
-	directoryByProject := gradleProjectDirectories(workspaceDirectory, settings)
+	settings = gradleWithoutComments(settings)
+	directoryByProject := gradleProjectDirectories(settings)
 	accessorByProject := make(map[string]string, len(directoryByProject))
 	for projectPath := range directoryByProject {
 		accessorByProject[gradleAccessor(projectPath)] = projectPath
@@ -98,7 +99,8 @@ func gradleDependencies(resolverContext context.Context, workspaceDirectory stri
 // gradleProjectDirectories maps every included project path (":a:b") to its
 // directory, honouring projectDir overrides. The root project is left out.
 // Including ":a:b" also creates ":a"; it is kept when its directory exists.
-func gradleProjectDirectories(workspaceDirectory string, settings string) map[string]string {
+func gradleProjectDirectories(settings string) map[string]string {
+	settings = gradleWithoutComments(settings)
 	directories := make(map[string]string)
 	for _, match := range gradleIncludePattern.FindAllStringSubmatch(settings, -1) {
 		for _, quoted := range gradleQuotedPattern.FindAllStringSubmatch(match[1]+match[2], -1) {
@@ -111,13 +113,7 @@ func gradleProjectDirectories(workspaceDirectory string, settings string) map[st
 	}
 	for projectPath := range directories {
 		for parent := projectPath[:strings.LastIndex(projectPath, ":")]; parent != ""; parent = parent[:strings.LastIndex(parent, ":")] {
-			if _, included := directories[parent]; included {
-				continue
-			}
-			directory := strings.ReplaceAll(strings.TrimPrefix(parent, ":"), ":", "/")
-			if info, statError := os.Stat(filepath.Join(workspaceDirectory, filepath.FromSlash(directory))); statError == nil && info.IsDir() {
-				directories[parent] = directory
-			}
+			directories[parent] = strings.ReplaceAll(strings.TrimPrefix(parent, ":"), ":", "/")
 		}
 	}
 	for _, match := range gradleProjectDirPattern.FindAllStringSubmatch(settings, -1) {
@@ -132,6 +128,71 @@ func gradleProjectDirectories(workspaceDirectory string, settings string) map[st
 		}
 	}
 	return directories
+}
+
+func gradleWithoutComments(contents string) string {
+	var result strings.Builder
+	result.Grow(len(contents))
+	var quote byte
+	lineComment := false
+	blockComment := false
+	escaped := false
+	for index := 0; index < len(contents); index++ {
+		character := contents[index]
+		if lineComment {
+			if character == '\n' {
+				lineComment = false
+				result.WriteByte(character)
+			} else {
+				result.WriteByte(' ')
+			}
+			continue
+		}
+		if blockComment {
+			if character == '*' && index+1 < len(contents) && contents[index+1] == '/' {
+				result.WriteString("  ")
+				index++
+				blockComment = false
+			} else if character == '\n' {
+				result.WriteByte(character)
+			} else {
+				result.WriteByte(' ')
+			}
+			continue
+		}
+		if quote != 0 {
+			result.WriteByte(character)
+			if escaped {
+				escaped = false
+			} else if character == '\\' {
+				escaped = true
+			} else if character == quote {
+				quote = 0
+			}
+			continue
+		}
+		if character == '\'' || character == '"' {
+			quote = character
+			result.WriteByte(character)
+			continue
+		}
+		if character == '/' && index+1 < len(contents) {
+			switch contents[index+1] {
+			case '/':
+				result.WriteString("  ")
+				index++
+				lineComment = true
+				continue
+			case '*':
+				result.WriteString("  ")
+				index++
+				blockComment = true
+				continue
+			}
+		}
+		result.WriteByte(character)
+	}
+	return result.String()
 }
 
 // gradleBuildFiles is the build file to read for a project, ":" for the
@@ -216,8 +277,9 @@ func gradleDefaultInputs(workspaceDirectory string) (inputs []string, excludeInp
 	if operationError != nil {
 		return inputs, gradleExcludeInputs
 	}
+	settings = gradleWithoutComments(settings)
 	inputs = append(inputs, gradleBuildFiles(settings, ":")...)
-	for projectPath, directory := range gradleProjectDirectories(workspaceDirectory, settings) {
+	for projectPath, directory := range gradleProjectDirectories(settings) {
 		for _, buildFile := range gradleBuildFiles(settings, projectPath) {
 			inputs = append(inputs, path.Join(directory, buildFile))
 		}

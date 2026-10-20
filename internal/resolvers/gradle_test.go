@@ -81,28 +81,24 @@ func TestGradleCustomBuildFileName(t *testing.T) {
 
 func TestGradleProjectDirectories(t *testing.T) {
 	for _, testCase := range []struct {
-		name        string
-		settings    string
-		directories []string
-		expected    map[string]string
+		name     string
+		settings string
+		expected map[string]string
 	}{
-		{name: "groovy without parentheses", settings: "include ':a', ':b:c'\ninclude 'd'", expected: map[string]string{":a": "a", ":b:c": "b/c", ":d": "d"}},
-		{name: "parent on disk is a project", settings: "include(\":b:c\")", directories: []string{"b/c"}, expected: map[string]string{":b": "b", ":b:c": "b/c"}},
-		{name: "relocated parent keeps its override", settings: "include(\":services:api\")\nproject(\":services\").projectDir = file(\"modules/services\")\nproject(\":services:api\").projectDir = file(\"modules/services/api\")", directories: []string{"modules/services/api"}, expected: map[string]string{":services": "modules/services", ":services:api": "modules/services/api"}},
-		{name: "virtual parent is skipped", settings: "include(\":b:c\")\nproject(\":b:c\").projectDir = file(\"c\")", directories: []string{"c"}, expected: map[string]string{":b:c": "c"}},
+		{name: "groovy without parentheses", settings: "include ':a', ':b:c'\ninclude 'd'", expected: map[string]string{":a": "a", ":b": "b", ":b:c": "b/c", ":d": "d"}},
+		{name: "implicit parent is a project", settings: "include(\":b:c\")", expected: map[string]string{":b": "b", ":b:c": "b/c"}},
+		{name: "relocated parent keeps its override", settings: "include(\":services:api\")\nproject(\":services\").projectDir = file(\"modules/services\")\nproject(\":services:api\").projectDir = file(\"modules/services/api\")", expected: map[string]string{":services": "modules/services", ":services:api": "modules/services/api"}},
+		{name: "virtual parent is retained", settings: "include(\":b:c\")\nproject(\":b:c\").projectDir = file(\"c\")", expected: map[string]string{":b": "b", ":b:c": "c"}},
 		{name: "kotlin multiline", settings: "include(\n  \":a\",\n  \":b\"\n)", expected: map[string]string{":a": "a", ":b": "b"}},
 		{name: "project dir override", settings: "include ':a'\nproject(':a').projectDir = new File(rootDir, 'lib/a')", expected: map[string]string{":a": "lib/a"}},
 		{name: "root project dir override", settings: "include ':app'\nproject(':app').projectDir = new File(rootProject.projectDir, 'modules/app')", expected: map[string]string{":app": "modules/app"}},
+		{name: "commented project dir override", settings: "include ':app'\n// project(':app').projectDir = file('old-app')\n/* project(':app').projectDir = file('also-old') */", expected: map[string]string{":app": "app"}},
 		{name: "override outside the workspace is dropped", settings: "include(\":a\")\nproject(\":a\").projectDir = file(\"../a\")", expected: map[string]string{}},
 		{name: "includeBuild is not an include", settings: "includeBuild(\"logic\")", expected: map[string]string{}},
 		{name: "root path is skipped", settings: "include(\":\")", expected: map[string]string{}},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			workspaceDirectory := t.TempDir()
-			for _, directory := range testCase.directories {
-				require.NoError(t, os.MkdirAll(filepath.Join(workspaceDirectory, directory), 0755))
-			}
-			require.Equal(t, testCase.expected, gradleProjectDirectories(workspaceDirectory, testCase.settings))
+			require.Equal(t, testCase.expected, gradleProjectDirectories(testCase.settings))
 		})
 	}
 }
