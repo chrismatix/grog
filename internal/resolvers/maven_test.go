@@ -89,6 +89,16 @@ func TestMavenResolutionSemantics(t *testing.T) {
 			expectedDependencies: map[string][]string{"child": {"core", "parent"}},
 		},
 		{
+			name: "local parent outside reactor remains a package",
+			files: map[string]string{
+				"pom.xml":              `<project><modules><module>child</module></modules></project>`,
+				"parents/base/pom.xml": `<project><groupId>com.example</groupId><artifactId>parent</artifactId><version>1</version></project>`,
+				"child/pom.xml":        `<project><parent><groupId>com.example</groupId><artifactId>parent</artifactId><version>1</version><relativePath>../parents/base/pom.xml</relativePath></parent><artifactId>child</artifactId></project>`,
+			},
+			expectedDependencies: map[string][]string{"child": {"parents/base"}},
+			expectedPackages:     []string{"", "child", "parents/base"},
+		},
+		{
 			name: "profiles keep separate property scopes",
 			files: map[string]string{
 				"pom.xml":       `<project><modules><module>lib-a</module><module>lib-b</module><module>app</module></modules></project>`,
@@ -173,5 +183,7 @@ func TestMavenResolverErrors(t *testing.T) {
 	cancelledContext, cancel := context.WithCancel(t.Context())
 	cancel()
 	_, operationError = mavenDependencies(cancelledContext, "testdata/maven")
+	require.ErrorIs(t, operationError, context.Canceled)
+	_, operationError = mavenMembers(cancelledContext, "testdata/maven")
 	require.ErrorIs(t, operationError, context.Canceled)
 }

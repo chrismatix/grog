@@ -152,7 +152,7 @@ func mavenDependencies(resolverContext context.Context, workspaceDirectory strin
 	if operationError := resolverContext.Err(); operationError != nil {
 		return document, operationError
 	}
-	members, operationError := mavenMembers(workspaceDirectory)
+	members, operationError := mavenMembers(resolverContext, workspaceDirectory)
 	if operationError != nil {
 		return document, operationError
 	}
@@ -212,6 +212,7 @@ func mavenDependencies(resolverContext context.Context, workspaceDirectory strin
 // mavenMembers reads the root pom.xml and every module it lists, directly or
 // through a profile, recursively. Modules outside the workspace are skipped.
 type mavenWorkspace struct {
+	context         context.Context
 	directory       string
 	projects        map[string]mavenProject
 	models          map[string][]mavenResolvedModel
@@ -220,6 +221,9 @@ type mavenWorkspace struct {
 }
 
 func (workspace *mavenWorkspace) readProject(directory string) (mavenProject, error) {
+	if operationError := workspace.context.Err(); operationError != nil {
+		return mavenProject{}, operationError
+	}
 	if project, exists := workspace.projects[directory]; exists {
 		return project, nil
 	}
@@ -268,9 +272,10 @@ func (workspace *mavenWorkspace) modelsFor(directory string) ([]mavenResolvedMod
 	return models, nil
 }
 
-func mavenMembers(workspaceDirectory string) (map[string]mavenMember, error) {
+func mavenMembers(resolverContext context.Context, workspaceDirectory string) (map[string]mavenMember, error) {
 	members := make(map[string]mavenMember)
 	workspace := mavenWorkspace{
+		context:         resolverContext,
 		directory:       workspaceDirectory,
 		projects:        make(map[string]mavenProject),
 		models:          make(map[string][]mavenResolvedModel),
@@ -279,6 +284,9 @@ func mavenMembers(workspaceDirectory string) (map[string]mavenMember, error) {
 	}
 	var visit func(directory string) error
 	visit = func(directory string) error {
+		if operationError := resolverContext.Err(); operationError != nil {
+			return operationError
+		}
 		if _, visited := members[directory]; visited {
 			return nil
 		}
@@ -293,6 +301,11 @@ func mavenMembers(workspaceDirectory string) (map[string]mavenMember, error) {
 		parentDirectory, hasParent := workspace.parentDirectory[directory]
 		member := mavenMember{project: project, models: models, parentDirectory: parentDirectory, hasParent: hasParent}
 		members[directory] = member
+		if hasParent {
+			if operationError := visit(parentDirectory); operationError != nil {
+				return operationError
+			}
+		}
 		for _, resolvedModel := range member.models {
 			for _, module := range resolvedModel.model.Modules {
 				moduleDirectory, inside := mavenRelativeDirectory(directory, mavenInterpolate(module, resolvedModel.properties))
@@ -363,7 +376,7 @@ var mavenExcludeInputs = []string{"target/**"}
 // pom of every module reachable from it.
 func mavenDefaultInputs(workspaceDirectory string) (inputs []string, excludeInputs []string) {
 	inputs = []string{"pom.xml"}
-	members, operationError := mavenMembers(workspaceDirectory)
+	members, operationError := mavenMembers(context.Background(), workspaceDirectory)
 	if operationError != nil {
 		return inputs, mavenExcludeInputs
 	}
