@@ -1,0 +1,5 @@
+# builtin::gradle reads settings.gradle.kts and each project's build file;
+# util has no BUILD file and is synthesized as :_gradle_package.
+dependency_resolvers:
+  - name: gradle
+    command: builtin::gradle
