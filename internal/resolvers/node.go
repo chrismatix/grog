@@ -258,7 +258,7 @@ var nodeExcludeInputs = []string{"**/node_modules/**"}
 // manager's workspace file and lockfile, and a package.json under every
 // member glob, so a new member is seen without a re-declaration. Negated
 // member globs become exclusions.
-func (packageManager nodePackageManager) defaultInputs(workspaceDirectory string) (inputs []string, excludeInputs []string) {
+func (packageManager nodePackageManager) defaultInputs(_ context.Context, workspaceDirectory string) (inputs []string, excludeInputs []string) {
 	inputs = []string{"package.json"}
 	for _, fileName := range []string{packageManager.workspaceFile, packageManager.lockfile} {
 		if fileName != "" {

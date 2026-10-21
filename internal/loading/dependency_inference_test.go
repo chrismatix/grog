@@ -83,6 +83,12 @@ func TestDependencyInferenceProtocol(t *testing.T) {
 	}
 }
 
+func TestDependencyInferenceFingerprint(t *testing.T) {
+	packages := inferenceTestPackages(t, `printf '%s' '{"version":1,"packages":{"app":{"fingerprint":{"module":"abc"}}}}'`)
+	require.NoError(t, inferDependenciesError(t.Context(), packages))
+	require.Equal(t, map[string]string{"//:custom#module": "abc"}, packages[1].Targets[label.TL("app", "sources")].Fingerprint)
+}
+
 func TestDependencyInferencePaths(t *testing.T) {
 	for _, entry := range []string{"/absolute", "./leading", "trailing/", "../escape", "nested/../escape", "nested/..", `windows\path`, "C:/absolute", "//label:key"} {
 		t.Run(entry, func(t *testing.T) {

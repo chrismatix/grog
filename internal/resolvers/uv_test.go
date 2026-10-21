@@ -26,13 +26,13 @@ func TestUvDependencies(t *testing.T) {
 }
 
 func TestUvDefaultInputs(t *testing.T) {
-	inputs, excludeInputs := uvDefaultInputs("testdata/uv")
+	inputs, excludeInputs := uvDefaultInputs(t.Context(), "testdata/uv")
 	require.Equal(t, []string{
 		"cli/pyproject.toml", "lib/format/pyproject.toml", "lib/multi/pyproject.toml", "lib/proto/pyproject.toml",
 		"pyproject.toml", "server/pyproject.toml", "tools/deploy/pyproject.toml", "uv.lock",
 	}, inputs)
 	require.Equal(t, []string{"**/.venv/**", "**/__pycache__/**"}, excludeInputs)
-	inputs, _ = uvDefaultInputs(t.TempDir())
+	inputs, _ = uvDefaultInputs(t.Context(), t.TempDir())
 	require.Equal(t, []string{"uv.lock", "pyproject.toml"}, inputs)
 }
 

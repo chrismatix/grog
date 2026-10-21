@@ -60,7 +60,7 @@ targets { new { name = "sources"; dependency_resolvers { ":cargo" } } }
 			require.Len(t, packageDTO.DependencyResolvers, 1)
 			require.Equal(t, &DependencyResolverDTO{Name: "cargo", Command: "builtin::cargo", Inputs: []string{"manifests/*.toml"}, ExcludeInputs: []string{"manifests/skip.toml"}, Timeout: "2s", GeneratedTargetName: "python"}, packageDTO.DependencyResolvers[0])
 			require.Equal(t, []string{":cargo"}, packageDTO.Targets[0].DependencyResolvers)
-			enrichedPackage, operationError := getEnrichedPackage(console.GetLogger(t.Context()), ".", packageDTO)
+			enrichedPackage, operationError := getEnrichedPackage(t.Context(), console.GetLogger(t.Context()), ".", packageDTO)
 			require.NoError(t, operationError)
 			require.Equal(t, []string{"manifests/member.toml"}, enrichedPackage.DependencyResolvers[label.TL("", "cargo")].Inputs)
 			require.Equal(t, 2*time.Second, enrichedPackage.DependencyResolvers[label.TL("", "cargo")].Timeout)
@@ -103,7 +103,7 @@ func TestDependencyResolverEnrichment(t *testing.T) {
 		{"invalid glob", DependencyResolverDTO{Name: "cargo", Command: "true", Inputs: []string{"["}}, "failed to resolve inputs"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			enrichedPackage, operationError := getEnrichedPackage(console.GetLogger(t.Context()), "", PackageDTO{DependencyResolvers: []*DependencyResolverDTO{&testCase.resolver}})
+			enrichedPackage, operationError := getEnrichedPackage(t.Context(), console.GetLogger(t.Context()), "", PackageDTO{DependencyResolvers: []*DependencyResolverDTO{&testCase.resolver}})
 			if testCase.expectedError != "" {
 				require.ErrorContains(t, operationError, testCase.expectedError)
 				return
@@ -131,13 +131,13 @@ func TestDependencyResolverDuplicateLabels(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			combined := testCase.other
 			combined.DependencyResolvers = append(append([]*DependencyResolverDTO{}, combined.DependencyResolvers...), resolverPackage.DependencyResolvers...)
-			_, operationError := getEnrichedPackage(console.GetLogger(t.Context()), "", combined)
+			_, operationError := getEnrichedPackage(t.Context(), console.GetLogger(t.Context()), "", combined)
 			require.ErrorContains(t, operationError, "duplicate target label: same")
 			for _, reverse := range []bool{false, true} {
 				t.Run(fmt.Sprint(reverse), func(t *testing.T) {
-					resolver, operationError := getEnrichedPackage(console.GetLogger(t.Context()), "", resolverPackage)
+					resolver, operationError := getEnrichedPackage(t.Context(), console.GetLogger(t.Context()), "", resolverPackage)
 					require.NoError(t, operationError)
-					other, operationError := getEnrichedPackage(console.GetLogger(t.Context()), "", testCase.other)
+					other, operationError := getEnrichedPackage(t.Context(), console.GetLogger(t.Context()), "", testCase.other)
 					require.NoError(t, operationError)
 					if reverse {
 						operationError = mergePackages(resolver, other)

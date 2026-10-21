@@ -172,7 +172,7 @@ var uvExcludeInputs = []string{"**/.venv/**", "**/__pycache__/**"}
 
 // uvDefaultInputs are the files the built-in reads: the lock, the root
 // manifest, and every member's manifest, which decides its module layout.
-func uvDefaultInputs(workspaceDirectory string) (inputs []string, excludeInputs []string) {
+func uvDefaultInputs(_ context.Context, workspaceDirectory string) (inputs []string, excludeInputs []string) {
 	inputs = []string{"uv.lock", "pyproject.toml"}
 	lock, operationError := readUvLock(workspaceDirectory)
 	if operationError != nil {

@@ -24,6 +24,8 @@ type Package struct {
 	// grog synthesizes a filegroup from them. Ignored when a target registers.
 	Inputs        []string `json:"inputs"`
 	ExcludeInputs []string `json:"exclude_inputs"`
+	// Fingerprint values become part of a registered or synthesized target's hash.
+	Fingerprint map[string]string `json:"fingerprint,omitempty"`
 }
 
 // UnmarshalJSON requires each package entry to be an object.
@@ -39,13 +41,14 @@ func (reportedPackage *Package) UnmarshalJSON(contents []byte) error {
 type Builtin struct {
 	Resolve func(resolverContext context.Context, workspaceDirectory string) (Document, error)
 	// DefaultInputs are used when a declaration lists no inputs of its own.
-	DefaultInputs func(workspaceDirectory string) (inputs []string, excludeInputs []string)
+	DefaultInputs func(resolverContext context.Context, workspaceDirectory string) (inputs []string, excludeInputs []string)
 }
 
 // Builtins maps each builtin:: command to its resolver.
 var Builtins = map[string]Builtin{
 	"builtin::aube":  {aubePackageManager.dependencies, aubePackageManager.defaultInputs},
 	"builtin::cargo": {cargoDependencies, cargoDefaultInputs},
+	"builtin::go":    {goDependencies, goDefaultInputs},
 	"builtin::npm":   {npmPackageManager.dependencies, npmPackageManager.defaultInputs},
 	"builtin::pnpm":  {pnpmPackageManager.dependencies, pnpmPackageManager.defaultInputs},
 	"builtin::uv":    {uvDependencies, uvDefaultInputs},
