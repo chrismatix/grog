@@ -128,14 +128,15 @@ Grog ships these resolvers.
 Use one with `command = "builtin::<name>"` and omit `inputs` to get the defaults listed below.
 Every built-in declares inputs for the packages it reports, so workspace members don't need a BUILD file.
 
-| Name          | Reads                                                                                          | Needs a toolchain |
-| ------------- | ---------------------------------------------------------------------------------------------- | ----------------- |
-| `cargo`       | The workspace `Cargo.toml` members and each member's `[dependencies]` / `[build-dependencies]` | no                |
-| `uv`          | `uv.lock` — packages with an `editable` or `directory` source are workspace members            | no                |
-| `pnpm`        | `pnpm-workspace.yaml`, each member's `package.json` and the links in `pnpm-lock.yaml`          | no                |
-| `aube`        | `aube-workspace.yaml`, each member's `package.json` and the links in `aube-lock.yaml`          | no                |
-| `npm`, `yarn` | `workspaces` in the root `package.json` and each member's `package.json`                       | no                |
-| `go`          | Every `go.mod` under the declaring package and the `import` declarations of every `.go` file   | no                |
+| Name          | Reads                                                                                              | Needs a toolchain |
+| ------------- | -------------------------------------------------------------------------------------------------- | ----------------- |
+| `cargo`       | The workspace `Cargo.toml` members and each member's `[dependencies]` / `[build-dependencies]`     | no                |
+| `uv`          | `uv.lock` — packages with an `editable` or `directory` source are workspace members                | no                |
+| `pnpm`        | `pnpm-workspace.yaml`, each member's `package.json` and the links in `pnpm-lock.yaml`              | no                |
+| `aube`        | `aube-workspace.yaml`, each member's `package.json` and the links in `aube-lock.yaml`              | no                |
+| `npm`, `yarn` | `workspaces` in the root `package.json` and each member's `package.json`                           | no                |
+| `go`          | Every `go.mod` under the declaring package and the `import` declarations of every `.go` file       | no                |
+| `maven`       | The root `pom.xml`, its `<modules>` recursively, and each module's `<dependencies>` and `<parent>` | no                |
 
 All of them parse manifests, lockfiles and sources directly, so `grog changes` works on a CI image without Cargo, uv, Node or Go installed.
 
@@ -214,6 +215,26 @@ The governing `go.mod`, `go.sum`, `go.work` and `go.work.sum` contents are added
 Subdirectories are packages of their own and are reached through import edges, not inputs.
 
 Default `inputs`: `go.work`, `go.work.sum`, `**/go.mod`, `**/go.sum`, `**/*.go`, with `**/vendor/**` and `**/node_modules/**` excluded unless a workspace module or local replacement lives there.
+
+### maven
+
+Members are the modules reachable from the root `pom.xml` through `<modules>`, recursively and including modules listed under `<profiles>`.
+A module is identified by `groupId:artifactId:version`, with the `groupId` and `version` inherited from `<parent>` when the module doesn't set them; a versionless reference conservatively matches every member with the same `groupId:artifactId`.
+Edges are references that name another member, in the pom or any of its `<profiles>`: `<dependencies>`, BOMs imported through `<dependencyManagement>` with `<scope>import</scope>`, build `<plugins>` and their dependencies, and build `<extensions>`.
+The `<parent>` is an edge too when its `<relativePath>` (default `../pom.xml`) or coordinates point at a member.
+`<properties>` are interpolated into module paths and coordinates, together with the `project.*`, `pom.*` and `project.parent.*` coordinate properties; a module inherits properties from its actual parent chain, and each profile keeps its own property scope.
+
+A module depends on its locally resolved parent pom, even when that parent is not listed as a reactor module, and that one on its own parent, up to the root: managed versions, properties and plugin configuration are inherited along that chain.
+The root's synthesized `//:_maven_package` covers just the root `pom.xml`, so editing it rebuilds every module that inherits from it, while a module with an external parent is unaffected.
+
+`<scope>test</scope>` dependencies are included.
+Maven forbids cycles between modules, so unlike Cargo's `[dev-dependencies]` they can't produce one, and leaving them out would under-invalidate the module's tests.
+If combining mutually exclusive profile edges would create a cycle, the closing edge becomes a fingerprint over all Maven package inputs instead.
+The resolver reads the poms as written, not the effective pom: a dependency only declared through a parent outside the workspace isn't seen.
+
+Each module's `:_maven_package` covers its POM file and `src/**/*`, minus `target/**`.
+
+Default `inputs`: `pom.xml` and every reachable module or local parent's `pom.xml`, plus `**/src/**/*` only when profile-cycle fingerprints are needed, with `target/**` excluded.
 
 ## Fields reference
 

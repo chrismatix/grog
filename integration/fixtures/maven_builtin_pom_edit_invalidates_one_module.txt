@@ -1,0 +1,7 @@
+INFO: 4 packages loaded, 4 targets configured.
+INFO: Selected 4 targets.
+INFO: //:_maven_package     DONE (cached)
+INFO: //api:sources         DONE (cached)
+INFO: //app:sources         DONE
+INFO: //core:_maven_package DONE (cached)
+INFO: Build completed successfully. 4 targets completed (3 cache hits).
