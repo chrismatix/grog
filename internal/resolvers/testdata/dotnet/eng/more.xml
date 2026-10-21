@@ -1,0 +1,8 @@
+<Project>
+  <ItemGroup>
+    <ProjectReference Include="../../lib/Shared/Shared.csproj" />
+  </ItemGroup>
+  <PropertyGroup>
+    <WarningsAsErrors>true</WarningsAsErrors>
+  </PropertyGroup>
+</Project>

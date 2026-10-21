@@ -1,0 +1,6 @@
+targets:
+  # Project references come from Core.csproj, so none are listed here.
+  - name: sources
+    inputs: ["Core.csproj", "**/*.cs"]
+    command: echo checking core
+    dependency_resolvers: ["//:dotnet"]

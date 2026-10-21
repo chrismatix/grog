@@ -138,6 +138,7 @@ Every built-in declares inputs for the packages it reports, so workspace members
 | `go`          | Every `go.mod` under the declaring package and the `import` declarations of every `.go` file                                | no                |
 | `maven`       | The root `pom.xml`, its `<modules>` recursively, and each module's `<dependencies>` and `<parent>`                          | no                |
 | `gradle`      | `settings.gradle(.kts)` for the project tree, then `project(":x")` and `projects.x` references in each project's build file | no                |
+| `dotnet`      | `*.sln` / `*.slnx` in the declaring package, else every project file, plus each project's `ProjectReference` items          | no                |
 
 All of them parse manifests, lockfiles and sources directly, so `grog changes` works on a CI image without Cargo, uv, Node or Go installed.
 
@@ -254,6 +255,26 @@ A parent project such as `:a` is not an edge of `:a:b`.
 A synthesized project filegroup covers its build file, `gradle.properties` and `src/**/*`, minus `build/**` and `.gradle/**`.
 
 Default `inputs`: `settings.gradle`, `settings.gradle.kts`, the root build file, and every included project's build file.
+
+### dotnet
+
+Projects come from every `*.sln` or `*.slnx` file in the declaring package, or, without one, from every `*.csproj`, `*.fsproj` and `*.vbproj` in the tree outside `bin/` and `obj/`.
+Edges are `<ProjectReference Include="..">` items, resolved relative to the project, including those a `Directory.Build.props` or `Directory.Build.targets` above the project declares.
+Wildcards such as `../libs/**/*.csproj` are expanded; `Exclude` is ignored, which only adds edges.
+A referenced project the solution doesn't list is still reported, so it gets a synthesized filegroup; a reference outside the declaring package is skipped.
+A reference to a project that doesn't exist, typically one guarded by `Condition="Exists(...)"`, is skipped, and so are `$(Property)` references, which can't be resolved without MSBuild.
+
+MSBuild searches upward for the nearest `Directory.Build.props`, `Directory.Build.targets`, `Directory.Packages.props` and `global.json`; NuGet configuration remains cumulative.
+Each directory holding one of them becomes a package covering exactly those files, and each project depends on the packages holding its effective configuration.
+The root package `""` always exists and also covers the solution files, while repo-local `<Import>` files and wildcard matches contribute a content fingerprint to every affected project, transitively.
+
+A project that sits in such a directory shares the package with its configuration files, since packages are directories.
+If that project references one below it, the child's edge back to the configuration would close a cycle, so the resolver fails with an explanation instead of omitting an invalidation edge.
+Move the project or the shared configuration into its own directory to make that layout representable.
+
+A synthesized filegroup covers the whole project directory, `**/*`, minus `**/bin/**` and `**/obj/**`.
+
+Default `inputs`: `*.sln`, `*.slnx`, every project file and every configuration file listed above, with `**/bin/**` and `**/obj/**` excluded.
 
 ## Fields reference
 
