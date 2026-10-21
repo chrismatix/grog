@@ -1,0 +1,7 @@
+amends "pkl:Project"
+
+dependencies {
+  ["grog"] {
+    uri = "package://grog.build/releases/v0.48.0/grog@0.48.0"
+  }
+}

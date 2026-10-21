@@ -1,0 +1,9 @@
+amends "@grog/package.pkl"
+
+import ".../tools/grog/rust.pkl"
+
+targets {
+  ...new rust.Crate {
+    name = "format"
+  }.targets
+}
