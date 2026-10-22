@@ -533,7 +533,9 @@ func TestRemoteWrapper_BeginWriteFansOut(t *testing.T) {
 	}
 
 	// fs side: the bytes should be at the final cache key.
-	gotFS, err := io.ReadAll(must(fs.Get(ctx, "cas", "sha256:cafe")))
+	reader := must(fs.Get(ctx, "cas", "sha256:cafe"))
+	defer reader.Close()
+	gotFS, err := io.ReadAll(reader)
 	if err != nil {
 		t.Fatalf("read fs: %v", err)
 	}

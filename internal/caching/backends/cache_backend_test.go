@@ -5,6 +5,8 @@ import (
 	"errors"
 	"io"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -76,7 +78,9 @@ func TestGetCacheBackend(t *testing.T) {
 
 func TestGetCacheBackend_FileSystemCacheFailsOnUnwritableRoot(t *testing.T) {
 	withTestGlobalConfig(t)
-	config.Global.Root = "/dev/null/grog"
+	blockingFile := filepath.Join(t.TempDir(), "file")
+	require.NoError(t, os.WriteFile(blockingFile, nil, 0o644))
+	config.Global.Root = filepath.Join(blockingFile, "grog")
 	_, err := GetCacheBackend(context.Background(), config.CacheConfig{})
 	assert.Error(t, err)
 }
