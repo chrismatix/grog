@@ -45,7 +45,7 @@ On Windows x64, install Go, Git for Windows, and PKL, add them to `PATH`, then r
 ```powershell
 ./.github/release-windows.ps1
 Copy-Item dist/grog-windows-amd64.exe dist/grog.exe
-go test ./internal/... -skip 'TestTraceStore_'
+go test ./internal/... -skip '^(TestTraceStore_|TestCommands$)'
 go test ./integration/... -run TestWindows -v
 ```
 

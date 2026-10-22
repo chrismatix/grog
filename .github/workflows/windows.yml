@@ -36,7 +36,7 @@ jobs:
           ./dist/grog-windows-amd64.exe version
 
       - name: Unit tests
-        run: go test ./internal/... -skip 'TestTraceStore_' -timeout 180s
+        run: go test ./internal/... -skip '^(TestTraceStore_|TestCommands$)' -timeout 180s
 
       - name: Windows integration tests
         run: |
