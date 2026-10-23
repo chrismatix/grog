@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "alwaysStrict": true,
+    "declaration": false,
+    "rootDir": "../src",
+    "baseUrl": "../src",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "typeRoots": ["../node_modules/@types"],
+    "resolveJsonModule": true
+  },
+  "include": ["../src"],
+  "extends": "@grafana/tsconfig"
+}
