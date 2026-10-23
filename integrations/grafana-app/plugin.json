@@ -1,0 +1,35 @@
+{
+  "$schema": "https://grafana.com/schemas/plugin/v2.json",
+  "type": "app",
+  "name": "Grog CI",
+  "id": "chrismatix-grog-app",
+  "info": {
+    "description": "Grog CI health: regressions, cache waste, flaky targets, job timings, dependency graphs and per-target history.",
+    "author": {
+      "name": "Christoph Proeschel",
+      "url": "https://github.com/chrismatix/grog"
+    },
+    "keywords": ["grafana", "grog", "ci", "build", "clickhouse"],
+    "logos": {
+      "small": "img/logo.svg",
+      "large": "img/logo.svg"
+    },
+    "screenshots": [],
+    "version": "0.3.0",
+    "updated": "2026-10-23"
+  },
+  "includes": [
+    {
+      "type": "page",
+      "name": "Builds",
+      "path": "/a/chrismatix-grog-app",
+      "role": "Viewer",
+      "addToNav": true,
+      "defaultNav": true
+    }
+  ],
+  "dependencies": {
+    "grafanaDependency": ">=12.0.0",
+    "plugins": []
+  }
+}
