@@ -123,6 +123,37 @@ func TestUvThirdPartyFingerprint(t *testing.T) {
 	}
 }
 
+func TestUvFingerprintThroughDevGroups(t *testing.T) {
+	for _, testCase := range []struct {
+		name     string
+		old      string
+		new      string
+		expected []string
+	}{
+		{"dev group dependency on a member reaches its closure", `dev = [{ name = "pytest" }]`, `dev = [{ name = "pytest" }, { name = "b" }]`, []string{"b", "c"}},
+		{"regular dependency on a member leaves it to the edge", `dependencies = [{ name = "a" }]`, `dependencies = [{ name = "a" }, { name = "b" }]`, []string{"b"}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			lock := strings.Replace(uvFingerprintLock, testCase.old, testCase.new, 1)
+			bumped := strings.Replace(lock, `version = "1.26.0"`, `version = "1.26.1"`, 1)
+			before, after := t.TempDir(), t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(before, "uv.lock"), []byte(lock), 0644))
+			require.NoError(t, os.WriteFile(filepath.Join(after, "uv.lock"), []byte(bumped), 0644))
+			beforeDocument, operationError := uvDependencies(t.Context(), before)
+			require.NoError(t, operationError)
+			afterDocument, operationError := uvDependencies(t.Context(), after)
+			require.NoError(t, operationError)
+			var changed []string
+			for _, member := range []string{"a", "b", "c"} {
+				if beforeDocument.Packages[member].Fingerprint["lock"] != afterDocument.Packages[member].Fingerprint["lock"] {
+					changed = append(changed, member)
+				}
+			}
+			require.Equal(t, testCase.expected, changed)
+		})
+	}
+}
+
 func TestUvDefaultInputs(t *testing.T) {
 	inputs, excludeInputs := uvDefaultInputs(t.Context(), "testdata/uv")
 	require.Equal(t, []string{

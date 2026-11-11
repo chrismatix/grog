@@ -172,7 +172,7 @@ outside that tree is not covered — register a filegroup with your own `inputs`
 Each member's fingerprint hashes the third-party packages it reaches in `uv.lock` — name, version, source and
 artifact hashes — through `dependencies`, `optional-dependencies` and every dev group. The walk stops at other
 members, which their own fingerprint and the inferred edge cover, so bumping `numpy` changes only the members
-whose closure contains it. Markers are not evaluated: every locked version of a reached package counts.
+whose closure contains it. A member named in a dev group has no edge, so the walk continues through it. Markers are not evaluated: every locked version of a reached package counts.
 
 Default `inputs`: `uv.lock`, `pyproject.toml`, and every member's `pyproject.toml`, which decides its layout, with `**/.venv/**` and `**/__pycache__/**` excluded.
 

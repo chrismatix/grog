@@ -127,29 +127,49 @@ func uvDependencies(resolverContext context.Context, workspaceDirectory string) 
 }
 
 // uvThirdPartyFingerprint hashes every non-member package the member reaches
-// in the lock, dev groups included. The walk stops at members: their own
-// fingerprints and grog's edges cover them. A name locked more than once (a
-// resolution fork) contributes every entry, since markers are not evaluated.
+// in the lock, dev groups included. A name locked more than once (a resolution
+// fork) contributes every entry, since markers are not evaluated.
 func uvThirdPartyFingerprint(lock uvLock, member uvLockPackage) string {
 	entriesByName := make(map[string][]uvLockPackage)
 	for _, lockPackage := range lock.Packages {
 		entriesByName[lockPackage.Name] = append(entriesByName[lockPackage.Name], lockPackage)
 	}
-	reached := make(map[string]bool)
-	pending := []uvLockPackage{member}
-	for len(pending) > 0 {
-		current := pending[len(pending)-1]
-		pending = pending[:len(pending)-1]
-		dependencies := slices.Clone(current.Dependencies)
-		for _, group := range slices.Concat(slices.Collect(maps.Values(current.OptionalDependencies)), slices.Collect(maps.Values(current.DevDependencies))) {
-			dependencies = append(dependencies, group...)
-		}
+	// Regular dependencies stop at members, whose fingerprints and grog edges
+	// cover them. Dev groups have no edges, so the walk goes through members
+	// reached from one, keyed apart so stopping at a member never blocks that.
+	type walkStep struct {
+		name           string
+		throughMembers bool
+	}
+	visited := make(map[walkStep]bool)
+	var pending []walkStep
+	visit := func(dependencies []uvLockDependency, throughMembers bool) {
 		for _, dependency := range dependencies {
-			if reached[dependency.Name] || slices.Contains(lock.Manifest.Members, dependency.Name) {
-				continue
+			step := walkStep{dependency.Name, throughMembers}
+			if !visited[step] {
+				visited[step] = true
+				pending = append(pending, step)
 			}
-			reached[dependency.Name] = true
-			pending = append(pending, entriesByName[dependency.Name]...)
+		}
+	}
+	regularDependencies := func(entry uvLockPackage) []uvLockDependency {
+		return slices.Concat(append([][]uvLockDependency{entry.Dependencies}, slices.Collect(maps.Values(entry.OptionalDependencies))...)...)
+	}
+	visit(regularDependencies(member), false)
+	visit(slices.Concat(slices.Collect(maps.Values(member.DevDependencies))...), true)
+	reached := make(map[string]bool)
+	for len(pending) > 0 {
+		step := pending[len(pending)-1]
+		pending = pending[:len(pending)-1]
+		isMember := slices.Contains(lock.Manifest.Members, step.name)
+		if isMember && !step.throughMembers {
+			continue
+		}
+		if !isMember {
+			reached[step.name] = true
+		}
+		for _, entry := range entriesByName[step.name] {
+			visit(regularDependencies(entry), step.throughMembers)
 		}
 	}
 	if len(reached) == 0 {
