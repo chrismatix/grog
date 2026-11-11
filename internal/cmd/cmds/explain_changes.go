@@ -112,15 +112,17 @@ through the directly-affected targets to their transitive dependents.`,
 				}
 			}
 		}
+		// The reason rides on the file leaf, e.g. "uv.lock (fingerprint changed)".
 		for _, pkg := range packages {
 			for _, resolver := range pkg.DependencyResolvers {
+				reasons := resolverChanges(ctx, nodes, resolver, changedFiles, explainChangesOptions.since)
 				for _, inputFile := range resolver.Inputs {
 					absInputPath := config.GetPathAbsoluteToWorkspaceRoot(filepath.Join(resolver.Label.Package, inputFile))
 					if !containsFile(changedFiles, absInputPath) {
 						continue
 					}
-					for _, target := range resolverTargets(nodes, resolver.Label) {
-						add(absInputPath, target)
+					for target, reason := range reasons {
+						add(absInputPath+" ("+reason+")", target)
 					}
 				}
 			}

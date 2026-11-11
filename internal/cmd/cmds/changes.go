@@ -1,10 +1,19 @@
 package cmds
 
 import (
+	"bufio"
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"maps"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/chrismatix/grog/internal/analysis"
@@ -14,6 +23,7 @@ import (
 	"github.com/chrismatix/grog/internal/label"
 	"github.com/chrismatix/grog/internal/loading"
 	"github.com/chrismatix/grog/internal/model"
+	"github.com/chrismatix/grog/internal/resolvers"
 	"github.com/chrismatix/grog/internal/selection"
 
 	"github.com/spf13/cobra"
@@ -96,12 +106,10 @@ Can optionally include transitive dependents of changed targets to find all affe
 			}
 		}
 
-		// A changed resolver input can change the inferred graph, so every
-		// target the resolver stands behind counts as changed.
 		for _, pkg := range packages {
 			for _, resolver := range pkg.DependencyResolvers {
-				if resolverInputChanged(resolver, changedFiles) {
-					matchingTargets = append(matchingTargets, resolverTargets(nodes, resolver.Label)...)
+				for target := range resolverChanges(ctx, nodes, resolver, changedFiles, changesOptions.since) {
+					matchingTargets = append(matchingTargets, target)
 				}
 			}
 		}
@@ -287,6 +295,184 @@ func resolverTargets(nodes model.BuildNodeMap, resolverLabel label.TargetLabel) 
 		}
 	}
 	return targets
+}
+
+// resolverChanges maps each target a changed resolver input affects to the
+// reason. A builtin is resolved at both revisions and only packages whose
+// report differs count; a command resolver cannot be rerun at the old
+// revision, so every target behind it counts.
+func resolverChanges(changesContext context.Context, nodes model.BuildNodeMap, resolver *model.DependencyResolver, changedFiles []string, revision string) map[*model.Target]string {
+	if !resolverInputChanged(resolver, changedFiles) {
+		return nil
+	}
+	targets := resolverTargets(nodes, resolver.Label)
+	reasons := make(map[*model.Target]string, len(targets))
+	builtin, isBuiltin := resolvers.Builtins[resolver.Command]
+	var current, previous resolvers.Document
+	var operationError error
+	if isBuiltin {
+		current, operationError = builtin.Resolve(changesContext, config.GetPathAbsoluteToWorkspaceRoot(resolver.Label.Package))
+		if operationError == nil {
+			previous, operationError = resolveAtRevision(changesContext, builtin, resolver, changedFiles, revision)
+		}
+	}
+	if !isBuiltin || operationError != nil {
+		if operationError != nil {
+			console.GetLogger(changesContext).Debugf("resolver %s: could not compare against %s, so all its targets count as changed: %v", resolver.Label, revision, operationError)
+		}
+		for _, target := range targets {
+			reasons[target] = "resolver input changed"
+		}
+		return reasons
+	}
+
+	registered := make(map[string]*model.Target, len(targets))
+	for _, target := range targets {
+		registered[target.Label.Package] = target
+	}
+	for _, packagePath := range slices.Concat(slices.Collect(maps.Keys(current.Packages)), slices.Collect(maps.Keys(previous.Packages))) {
+		target := registered[path.Join(resolver.Label.Package, packagePath)]
+		currentPackage, isReported := current.Packages[packagePath]
+		previousPackage, wasReported := previous.Packages[packagePath]
+		slices.Sort(currentPackage.Dependencies)
+		slices.Sort(previousPackage.Dependencies)
+		switch {
+		case target == nil:
+		case !wasReported:
+			reasons[target] = "new package"
+		case !isReported:
+			reasons[target] = "no longer reported"
+		case !slices.Equal(currentPackage.Dependencies, previousPackage.Dependencies):
+			reasons[target] = "edges changed"
+		case !slices.Equal(currentPackage.Inputs, previousPackage.Inputs) || !slices.Equal(currentPackage.ExcludeInputs, previousPackage.ExcludeInputs):
+			reasons[target] = "inputs changed"
+		case !maps.Equal(currentPackage.Fingerprint, previousPackage.Fingerprint):
+			reasons[target] = "fingerprint changed"
+		}
+	}
+	return reasons
+}
+
+// resolveAtRevision runs a builtin against its package as of a revision. Only
+// the declared inputs and the changed files are laid out: unchanged inputs are
+// copied from the working tree, changed files are read from version control.
+func resolveAtRevision(resolveContext context.Context, builtin resolvers.Builtin, resolver *model.DependencyResolver, changedFiles []string, revision string) (resolvers.Document, error) {
+	packageDirectory := config.GetPathAbsoluteToWorkspaceRoot(resolver.Label.Package)
+	temporaryDirectory, operationError := os.MkdirTemp("", "grog-resolver-")
+	if operationError != nil {
+		return resolvers.Document{}, operationError
+	}
+	defer func() { _ = os.RemoveAll(temporaryDirectory) }()
+	writeFile := func(absolutePath string, contents []byte) error {
+		relativePath, operationError := filepath.Rel(packageDirectory, absolutePath)
+		if operationError != nil {
+			return operationError
+		}
+		destination := filepath.Join(temporaryDirectory, relativePath)
+		if operationError := os.MkdirAll(filepath.Dir(destination), 0755); operationError != nil {
+			return operationError
+		}
+		return os.WriteFile(destination, contents, 0644)
+	}
+
+	for _, input := range resolver.Inputs {
+		inputPath := filepath.Join(packageDirectory, input)
+		if containsFile(changedFiles, inputPath) {
+			continue
+		}
+		contents, operationError := os.ReadFile(inputPath)
+		if errors.Is(operationError, os.ErrNotExist) {
+			continue
+		}
+		if operationError == nil {
+			operationError = writeFile(inputPath, contents)
+		}
+		if operationError != nil {
+			return resolvers.Document{}, operationError
+		}
+	}
+	// Changed files beyond the inputs cover those deleted since the revision,
+	// which were inputs then but are not listed now.
+	var packageChangedFiles []string
+	for _, changedFile := range changedFiles {
+		if strings.HasPrefix(changedFile, packageDirectory+string(filepath.Separator)) {
+			packageChangedFiles = append(packageChangedFiles, changedFile)
+		}
+	}
+	contentsByFile, operationError := filesAtRevision(revision, packageChangedFiles)
+	if operationError != nil {
+		return resolvers.Document{}, operationError
+	}
+	for file, contents := range contentsByFile {
+		if operationError := writeFile(file, contents); operationError != nil {
+			return resolvers.Document{}, operationError
+		}
+	}
+	return builtin.Resolve(resolveContext, temporaryDirectory)
+}
+
+// filesAtRevision reads absolute paths as of a revision in one git call and
+// leaves out those that did not exist then. A Jujutsu revision is first
+// mapped to its git commit, which requires a colocated repository.
+func filesAtRevision(revision string, files []string) (map[string][]byte, error) {
+	gitRoot, operationError := getGitRoot()
+	if operationError != nil {
+		return nil, operationError
+	}
+	if vcsIsJJ(gitRoot) {
+		jujutsuLogCommand := exec.Command("jj", "--no-pager", "--color", "never", "log", "--no-graph", "-r", revision, "-T", "commit_id")
+		jujutsuLogCommand.Dir = gitRoot
+		commitOutput, operationError := jujutsuLogCommand.Output()
+		if operationError != nil {
+			return nil, fmt.Errorf("resolve jj revision %s: %w", revision, operationError)
+		}
+		revision = strings.TrimSpace(string(commitOutput))
+	}
+	var request strings.Builder
+	for _, file := range files {
+		relativePath, operationError := filepath.Rel(gitRoot, file)
+		if operationError != nil {
+			return nil, operationError
+		}
+		fmt.Fprintf(&request, "%s:%s\n", revision, filepath.ToSlash(relativePath))
+	}
+	catFileCommand := exec.Command("git", "cat-file", "--batch")
+	catFileCommand.Dir = gitRoot
+	catFileCommand.Stdin = strings.NewReader(request.String())
+	output, operationError := catFileCommand.Output()
+	if operationError != nil {
+		return nil, fmt.Errorf("git cat-file: %w", operationError)
+	}
+
+	// Each answer is "<object> missing" or "<oid> <type> <size>", the
+	// contents and a newline.
+	reader := bufio.NewReader(bytes.NewReader(output))
+	contentsByFile := make(map[string][]byte)
+	for _, file := range files {
+		header, operationError := reader.ReadString('\n')
+		if operationError != nil {
+			return nil, fmt.Errorf("git cat-file: %w", operationError)
+		}
+		if strings.HasSuffix(header, " missing\n") {
+			continue
+		}
+		fields := strings.Fields(header)
+		if len(fields) != 3 {
+			return nil, fmt.Errorf("git cat-file: unexpected answer %q", header)
+		}
+		size, operationError := strconv.Atoi(fields[2])
+		if operationError != nil {
+			return nil, fmt.Errorf("git cat-file: unexpected answer %q", header)
+		}
+		contents := make([]byte, size+1)
+		if _, operationError := io.ReadFull(reader, contents); operationError != nil {
+			return nil, fmt.Errorf("git cat-file: %w", operationError)
+		}
+		if fields[1] == "blob" {
+			contentsByFile[file] = contents[:size]
+		}
+	}
+	return contentsByFile, nil
 }
 
 func AddChangesCmd(rootCmd *cobra.Command) {
