@@ -297,26 +297,30 @@ func resolverTargets(nodes model.BuildNodeMap, resolverLabel label.TargetLabel) 
 	return targets
 }
 
+// comparableBuiltins fingerprint external dependencies. A lock bump changes no
+// report of the other builtins, so they keep the blanket rule until they do.
+var comparableBuiltins = []string{"builtin::go", "builtin::uv"}
+
 // resolverChanges maps each target a changed resolver input affects to the
-// reason. A builtin is resolved at both revisions and only packages whose
-// report differs count; a command resolver cannot be rerun at the old
-// revision, so every target behind it counts.
+// reason. A comparable builtin is resolved at both revisions and only packages
+// whose report differs count; any other resolver marks every target behind it.
 func resolverChanges(changesContext context.Context, nodes model.BuildNodeMap, resolver *model.DependencyResolver, changedFiles []string, revision string) map[*model.Target]string {
 	if !resolverInputChanged(resolver, changedFiles) {
 		return nil
 	}
 	targets := resolverTargets(nodes, resolver.Label)
 	reasons := make(map[*model.Target]string, len(targets))
-	builtin, isBuiltin := resolvers.Builtins[resolver.Command]
+	builtin := resolvers.Builtins[resolver.Command]
+	isComparable := slices.Contains(comparableBuiltins, resolver.Command)
 	var current, previous resolvers.Document
 	var operationError error
-	if isBuiltin {
+	if isComparable {
 		current, operationError = builtin.Resolve(changesContext, config.GetPathAbsoluteToWorkspaceRoot(resolver.Label.Package))
 		if operationError == nil {
 			previous, operationError = resolveAtRevision(changesContext, builtin, resolver, changedFiles, revision)
 		}
 	}
-	if !isBuiltin || operationError != nil {
+	if !isComparable || operationError != nil {
 		if operationError != nil {
 			console.GetLogger(changesContext).Debugf("resolver %s: could not compare against %s, so all its targets count as changed: %v", resolver.Label, revision, operationError)
 		}

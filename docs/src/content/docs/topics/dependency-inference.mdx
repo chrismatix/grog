@@ -658,10 +658,11 @@ It's only an error once something depends on it.
 [`grog changes`](/reference/commands) loads the graph at the current revision, so inferred edges are always current.
 
 Adding a dependency usually edits a manifest that's already an input of the dependant target, so the change is detected normally and `--dependents=transitive` propagates it.
-When a file matched by a resolver's `inputs` changed, a built-in resolver runs twice: on the working tree, and on its inputs as they were at `--since`.
+When a file matched by a resolver's `inputs` changed, `builtin::go` and `builtin::uv` run twice: on the working tree, and on their inputs as they were at `--since`.
 Only packages that are new, or whose reported edges, inputs or fingerprint differ, count as changed, so a `uv.lock` edit that adds a dependency to one member marks that member alone.
 `grog explain-changes` names the reason next to the input, e.g. `uv.lock (fingerprint changed)`.
-A command resolver can't be rerun at an old revision, so if one of its inputs changed, every target registered with it counts as changed; built-ins fall back to the same rule when the old revision can't be resolved.
+Every other resolver marks all targets registered with it when one of its inputs changed: a command resolver can't be rerun at an old revision, and the other built-ins don't fingerprint external dependencies yet, so a lockfile-only bump would change none of their reports.
+`builtin::go` and `builtin::uv` fall back to the same rule when the old revision can't be resolved.
 
 ## Limitations
 

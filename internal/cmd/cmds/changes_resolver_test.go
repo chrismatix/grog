@@ -150,6 +150,22 @@ func TestResolverChanges(t *testing.T) {
 		})
 	}
 
+	t.Run("builtin without external fingerprints keeps the blanket rule", func(t *testing.T) {
+		repository := newUvChangesRepository(t)
+		lockPath := filepath.Join(repository, "Cargo.lock")
+		require.NoError(t, os.WriteFile(lockPath, []byte("version = 4\n\n[[package]]\nname = \"serde\"\nversion = \"1.0.0\"\n"), 0644))
+		runGit(t, repository, "add", "Cargo.lock")
+		runGit(t, repository, "commit", "--quiet", "-m", "lock")
+		require.NoError(t, os.WriteFile(lockPath, []byte("version = 4\n\n[[package]]\nname = \"serde\"\nversion = \"1.0.1\"\n"), 0644))
+		changedFiles, operationError := getChangedFiles("HEAD")
+		require.NoError(t, operationError)
+		resolverLabel := label.TL("", "cargo")
+		resolver := &model.DependencyResolver{Label: resolverLabel, Command: "builtin::cargo", Inputs: []string{"Cargo.lock"}}
+		target := &model.Target{Label: label.TL("a", "_cargo_package"), DependencyResolvers: []label.TargetLabel{resolverLabel}}
+		reasons := resolverChanges(t.Context(), model.BuildNodeMapFromNodes(target), resolver, changedFiles, "HEAD")
+		require.Equal(t, map[*model.Target]string{target: "resolver input changed"}, reasons)
+	})
+
 	t.Run("lock missing at the revision falls back to the blanket rule", func(t *testing.T) {
 		repository := newUvChangesRepository(t)
 		runGit(t, repository, "rm", "--quiet", "--cached", "uv.lock")
@@ -188,7 +204,7 @@ func newUvChangesRepository(t *testing.T) string {
 
 func runGit(t *testing.T, directory string, arguments ...string) {
 	t.Helper()
-	command := exec.Command("git", append([]string{"-c", "user.name=grog", "-c", "user.email=grog@example.com"}, arguments...)...)
+	command := exec.Command("git", append([]string{"-c", "user.name=grog", "-c", "user.email=grog@example.com", "-c", "commit.gpgsign=false"}, arguments...)...)
 	command.Dir = directory
 	output, operationError := command.CombinedOutput()
 	require.NoError(t, operationError, string(output))
