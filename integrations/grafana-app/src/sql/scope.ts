@@ -5,6 +5,9 @@ import { quote, settings } from "./client";
 // Checkouts are detached, so git_branch is often HEAD; prefer GitHub's PR head and ref names.
 export const branchExpression = `multiIf(SpanAttributes['grog.tag.github.head_ref'] != '', SpanAttributes['grog.tag.github.head_ref'], SpanAttributes['grog.tag.github.ref_name'] != '', SpanAttributes['grog.tag.github.ref_name'], SpanAttributes['grog.git_branch'])`;
 
+// grog records host.arch as an OCI platform; the linux/ prefix is dropped for display.
+export const archExpression = `replaceOne(ResourceAttributes['host.arch'], 'linux/', '')`;
+
 export const mergeQueuePrefix = "gh-readonly-queue/";
 
 // "current" is the selected range; "previous" is the equally long range before it.
@@ -50,7 +53,7 @@ export function rootConditions(filters: Filters, period: Period = "current"): st
     );
   }
   if (filters.arch) {
-    conditions.push(`ResourceAttributes['host.arch'] = ${quote(`linux/${filters.arch}`)}`);
+    conditions.push(`${archExpression} = ${quote(filters.arch)}`);
   }
   const [tagKey, ...tagValue] = filters.tag.split("=");
   if (tagKey) {
@@ -70,7 +73,7 @@ export function rootsCte(filters: Filters, period: Period): string {
     intDiv(Duration, 1000000) AS build_duration_ms,
     SpanAttributes['grog.tag.github.job'] AS job,
     ${branchExpression} AS branch,
-    replaceOne(ResourceAttributes['host.arch'], 'linux/', '') AS arch,
+    ${archExpression} AS arch,
     JSONExtract(SpanAttributes['grog.critical_path'], 'Array(String)') AS critical_path,
     mapContains(SpanAttributes, 'grog.critical_path') AS has_critical_path
   FROM ${settings.tracesTable}

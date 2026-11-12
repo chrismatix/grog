@@ -25,10 +25,12 @@ export function ConfigPage({ plugin }: PluginConfigPageProps<AppPluginMeta<AppSe
     <>
       <Field
         label="ClickHouse datasource"
+        htmlFor="grog-datasource"
         description="The datasource that holds the OpenTelemetry traces grog exports."
       >
         <DataSourcePicker
-          type="grafana-clickhouse-datasource"
+          filter={(datasource) => datasource.type === "grafana-clickhouse-datasource"}
+          inputId="grog-datasource"
           current={datasourceUid || null}
           onChange={(datasource) => setDatasourceUid(datasource.uid)}
           noDefault
@@ -37,9 +39,11 @@ export function ConfigPage({ plugin }: PluginConfigPageProps<AppPluginMeta<AppSe
       </Field>
       <Field
         label="Traces table"
+        htmlFor="grog-traces-table"
         description="Table the OpenTelemetry ClickHouse exporter writes spans to, optionally prefixed with a database."
       >
         <Input
+          id="grog-traces-table"
           value={tracesTable}
           onChange={(event) => setTracesTable(event.currentTarget.value)}
           width={40}

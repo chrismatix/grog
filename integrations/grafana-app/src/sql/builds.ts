@@ -2,6 +2,7 @@ import type { Filters } from "../filters";
 import { phases } from "../phases";
 import { quote, settings } from "./client";
 import {
+  archExpression,
   branchExpression,
   bucketExpression,
   isCurrent,
@@ -58,7 +59,7 @@ export const breakdownDimensions = {
   },
   arch: {
     label: "Arch",
-    expression: `replaceOne(ResourceAttributes['host.arch'], 'linux/', '')`,
+    expression: archExpression,
   },
 } as const;
 
@@ -106,7 +107,7 @@ export function buildsQuery(filters: Filters, status: string, limit: number): st
   SpanAttributes['grog.tag.github.repository'] AS repository,
   SpanAttributes['grog.tag.github.run_id'] AS run_id,
   SpanAttributes['grog.tag.github.run_attempt'] AS run_attempt,
-  replaceOne(ResourceAttributes['host.arch'], 'linux/', '') AS arch,
+  ${archExpression} AS arch,
   toUInt32OrZero(SpanAttributes['grog.total_targets']) AS targets,
   ${executedTargets} AS executed,
   toUInt32OrZero(SpanAttributes['grog.failure_count']) AS failures,
@@ -123,7 +124,7 @@ export function filterValuesQuery(range: string): string {
   return `SELECT
   groupUniqArray(SpanAttributes['grog.tag.github.workflow']) AS workflows,
   groupUniqArray(SpanAttributes['grog.tag.github.job']) AS jobs,
-  groupUniqArray(replaceOne(ResourceAttributes['host.arch'], 'linux/', '')) AS arches
+  groupUniqArray(${archExpression}) AS arches
 FROM ${settings.tracesTable}
 WHERE ServiceName = 'grog' AND ParentSpanId = '' AND Timestamp > now() - INTERVAL ${range}`;
 }
@@ -153,7 +154,7 @@ export function buildRootQuery(traceId: string, startMs: number, durationMs: num
   toUnixTimestamp64Milli(Timestamp) AS start_ms,
   intDiv(Duration, 1000000) AS duration_ms,
   toJSONString(SpanAttributes) AS attributes,
-  replaceOne(ResourceAttributes['host.arch'], 'linux/', '') AS arch
+  ${archExpression} AS arch
 FROM ${settings.tracesTable}
 WHERE ${traceWindow(traceId, startMs, durationMs)} AND ParentSpanId = ''`;
 }
@@ -176,6 +177,8 @@ export function previousBuildQuery(
   workflow: string,
   job: string,
   branch: string,
+  command: string,
+  arch: string,
 ): string {
   return `SELECT
   TraceId AS trace_id,
@@ -188,6 +191,8 @@ WHERE ServiceName = 'grog'
   AND SpanAttributes['grog.tag.github.workflow'] = ${quote(workflow)}
   AND SpanAttributes['grog.tag.github.job'] = ${quote(job)}
   AND ${branchExpression} = ${quote(branch)}
+  AND SpanName = ${quote(command)}
+  AND ${archExpression} = ${quote(arch)}
 ORDER BY Timestamp DESC
 LIMIT 1`;
 }

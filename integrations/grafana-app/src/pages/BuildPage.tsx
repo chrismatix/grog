@@ -38,7 +38,7 @@ export function BuildPage({ build }: { build: BuildReference }) {
 
   const previous = useSql(
     workflow && job && branch
-      ? previousBuildQuery(build.startMs, workflow, job, branch)
+      ? previousBuildQuery(build.startMs, workflow, job, branch, command, arch)
       : undefined,
   );
   const jobSpans = useSql(runId ? buildJobQuery(runId, runAttempt, job, build.startMs) : undefined);
