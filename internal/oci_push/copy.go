@@ -29,9 +29,10 @@ type Options struct {
 	InitialBackoff time.Duration
 }
 
-// Copy ships an image from source to destination. Returns (skipped, nil) when
-// the destination already holds the same manifest digest as the source.
-func Copy(ctx context.Context, source, destination string, opts Options) (bool, error) {
+// Copy ships an image from source to destination and returns the manifest
+// digest the destination now serves. skipped is true when the destination
+// already held that digest.
+func Copy(ctx context.Context, source, destination string, opts Options) (digest string, skipped bool, err error) {
 	if opts.MaxAttempts <= 0 {
 		opts.MaxAttempts = 3
 	}
@@ -41,39 +42,42 @@ func Copy(ctx context.Context, source, destination string, opts Options) (bool, 
 
 	srcRef, err := parseRef(source, opts.SourceInsecure)
 	if err != nil {
-		return false, fmt.Errorf("parse source %q: %w", source, err)
+		return "", false, fmt.Errorf("parse source %q: %w", source, err)
 	}
 	dstRef, err := parseRef(destination, opts.DestinationInsecure)
 	if err != nil {
-		return false, fmt.Errorf("parse destination %q: %w", destination, err)
+		return "", false, fmt.Errorf("parse destination %q: %w", destination, err)
 	}
 
 	srcDesc, err := remote.Get(srcRef, remoteOptions(ctx)...)
 	if err != nil {
-		return false, fmt.Errorf("fetch source manifest %q: %w", source, err)
+		return "", false, fmt.Errorf("fetch source manifest %q: %w", source, err)
 	}
 
 	sourceManifest, err := sourceFor(srcDesc)
 	if err != nil {
-		return false, fmt.Errorf("read source %q: %w", source, err)
+		return "", false, fmt.Errorf("read source %q: %w", source, err)
 	}
 
 	dstDesc, err := remote.Head(dstRef, remoteOptions(ctx)...)
 	if err == nil && dstDesc != nil && dstDesc.Digest == srcDesc.Digest {
-		return true, nil
+		return srcDesc.Digest.String(), true, nil
 	}
 
 	if err := retryTransient(ctx, opts, func() error {
 		return remote.Push(dstRef, sourceManifest, remoteOptions(ctx)...)
 	}); err != nil {
-		return false, wrapInsecureHint(destination, opts.DestinationInsecure, err)
+		return "", false, wrapInsecureHint(destination, opts.DestinationInsecure, err)
 	}
 
 	// The write landed, so a read-back that fails or lags gets the same
 	// patience the write itself got before the push is called a failure.
-	return false, retryTransient(ctx, opts, func() error {
+	if err := retryTransient(ctx, opts, func() error {
 		return verifyDestination(ctx, dstRef, srcDesc.Digest, destination)
-	})
+	}); err != nil {
+		return "", false, err
+	}
+	return srcDesc.Digest.String(), false, nil
 }
 
 // retryTransient runs attempt until it succeeds, fails for a reason not worth

@@ -81,7 +81,7 @@ func TestCopyPreservesMultiPlatformIndex(t *testing.T) {
 	sourceDigest := mustDigest(t, sourceIndex)
 
 	destination := destinationHost + "/grog/destination:1"
-	skipped, err := Copy(context.Background(), source, destination, Options{
+	digest, skipped, err := Copy(context.Background(), source, destination, Options{
 		SourceInsecure:      true,
 		DestinationInsecure: true,
 	})
@@ -90,6 +90,9 @@ func TestCopyPreservesMultiPlatformIndex(t *testing.T) {
 	}
 	if skipped {
 		t.Fatal("Copy reported a skip against an empty destination")
+	}
+	if digest != sourceDigest.String() {
+		t.Errorf("Copy returned digest %s, want %s", digest, sourceDigest)
 	}
 
 	if got := headDigest(t, destination); got != sourceDigest {
@@ -142,16 +145,19 @@ func TestCopySkipsWhenDestinationIsCurrent(t *testing.T) {
 
 	destination := destinationHost + "/grog/destination:1"
 	opts := Options{SourceInsecure: true, DestinationInsecure: true}
-	if _, err := Copy(context.Background(), source, destination, opts); err != nil {
+	if _, _, err := Copy(context.Background(), source, destination, opts); err != nil {
 		t.Fatalf("first Copy: %v", err)
 	}
 
-	skipped, err := Copy(context.Background(), source, destination, opts)
+	digest, skipped, err := Copy(context.Background(), source, destination, opts)
 	if err != nil {
 		t.Fatalf("second Copy: %v", err)
 	}
 	if !skipped {
 		t.Error("second Copy re-pushed an already current destination")
+	}
+	if want := mustDigest(t, sourceIndex).String(); digest != want {
+		t.Errorf("skipped Copy returned digest %s, want %s", digest, want)
 	}
 }
 
@@ -171,7 +177,7 @@ func TestCopyUpdatesStaleDestination(t *testing.T) {
 	}
 	freshDigest := mustDigest(t, fresh)
 
-	skipped, err := Copy(context.Background(), source, destination, Options{
+	_, skipped, err := Copy(context.Background(), source, destination, Options{
 		SourceInsecure:      true,
 		DestinationInsecure: true,
 	})

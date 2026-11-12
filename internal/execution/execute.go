@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/chrismatix/grog/internal/caching"
@@ -54,6 +55,9 @@ type Executor struct {
 	asyncDrained     bool
 	rerunGroup       singleflight.Group
 	resourceManager  *ResourceManager
+	// targetResults maps each completed target's label to its
+	// *gen.TargetResult, whether it was built or restored from the cache.
+	targetResults sync.Map
 }
 
 func NewExecutor(
@@ -408,6 +412,7 @@ func (e *Executor) getTaskFunc(
 		// - The target does not have no-cache set (!target.SkipsCache)
 		// - The cache is enabled (enableCache)
 		if target.HasCacheHit && !isTainted && !target.SkipsCache() && e.enableCache {
+			e.targetResults.Store(target.Label, targetResult)
 			if e.loadOutputsMode == config.LoadOutputsMinimal {
 				// Important: Set the output hash so that descendants can compute their change hashes
 				target.OutputHash = targetResult.OutputHash
@@ -665,6 +670,7 @@ func (e *Executor) OnTargetComplete(ctx context.Context, target *model.Target, u
 		return fmt.Errorf("prepared target result for %s is nil", target.Label)
 	}
 	targetResult = preparedTarget.TargetResult
+	e.targetResults.Store(target.Label, targetResult)
 
 	target.OutputsLoaded = true
 	target.OutputHash = targetResult.OutputHash

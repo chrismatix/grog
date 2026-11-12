@@ -44,13 +44,14 @@ type Handler interface {
 // ImagePusher is the optional capability oci output handlers implement to
 // ship a cached image to a user-facing registry. The handler reads its own
 // cache state to resolve a source ref and copies it daemon-free to the
-// destination. Driven by target.OciPush entries after Write/Load.
+// destination. Driven by target.OciPush entries after Write/Load. digest is
+// the manifest digest the destination serves once the push is done.
 type ImagePusher interface {
-	PushImage(ctx context.Context, image *gen.OCIImageOutput, destination string, tracker *worker.ProgressTracker) (skipped bool, err error)
+	PushImage(ctx context.Context, image *gen.OCIImageOutput, destination string, tracker *worker.ProgressTracker) (digest string, skipped bool, err error)
 
 	// PushLocalImage ships an image that exists only in the local docker
 	// daemon, for targets that never stage their oci outputs to the cache.
-	PushLocalImage(ctx context.Context, localTag, destination string, tracker *worker.ProgressTracker) (skipped bool, err error)
+	PushLocalImage(ctx context.Context, localTag, destination string, tracker *worker.ProgressTracker) (digest string, skipped bool, err error)
 }
 
 type HandlerType string

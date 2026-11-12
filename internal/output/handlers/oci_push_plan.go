@@ -13,7 +13,7 @@ import (
 // The image is sourced either from the cache (NewOciPushPlan) or straight from
 // the local docker daemon (NewLocalOciPushPlan).
 type OciPushPlan struct {
-	push        func(context.Context, *worker.ProgressTracker) (bool, error)
+	push        func(context.Context, *worker.ProgressTracker) (string, bool, error)
 	destination string
 	targetLabel string
 	reporter    *PushReporter
@@ -21,7 +21,7 @@ type OciPushPlan struct {
 
 func NewOciPushPlan(pusher ImagePusher, image *gen.OCIImageOutput, destination, targetLabel string, reporter *PushReporter) *OciPushPlan {
 	return &OciPushPlan{
-		push: func(ctx context.Context, tracker *worker.ProgressTracker) (bool, error) {
+		push: func(ctx context.Context, tracker *worker.ProgressTracker) (string, bool, error) {
 			return pusher.PushImage(ctx, image, destination, tracker)
 		},
 		destination: destination,
@@ -35,7 +35,7 @@ func NewOciPushPlan(pusher ImagePusher, image *gen.OCIImageOutput, destination, 
 // is no cached copy for the daemon-free path to read.
 func NewLocalOciPushPlan(pusher ImagePusher, localTag, destination, targetLabel string, reporter *PushReporter) *OciPushPlan {
 	return &OciPushPlan{
-		push: func(ctx context.Context, tracker *worker.ProgressTracker) (bool, error) {
+		push: func(ctx context.Context, tracker *worker.ProgressTracker) (string, bool, error) {
 			return pusher.PushLocalImage(ctx, localTag, destination, tracker)
 		},
 		destination: destination,
@@ -55,10 +55,11 @@ func (p *OciPushPlan) Execute(ctx context.Context, tracker *worker.ProgressTrack
 
 	tracker.SetStatus(fmt.Sprintf("%s: pushing %s", p.targetLabel, p.destination))
 
-	skipped, err := p.push(ctx, tracker)
+	digest, skipped, err := p.push(ctx, tracker)
 	p.reporter.Record(PushReport{
 		TargetLabel: p.targetLabel,
 		Destination: p.destination,
+		Digest:      digest,
 		Skipped:     skipped,
 		Err:         err,
 	})

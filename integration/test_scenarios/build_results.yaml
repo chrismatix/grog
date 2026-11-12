@@ -1,0 +1,36 @@
+name: build results
+repo: build_results
+cases:
+  - name: build_results_reset
+    setup_command: "rm -rf output*.txt dist results_*.json"
+
+  - name: build_results_fresh_build
+    grog_args:
+      - build
+      - --results=results_fresh.json
+
+  # Remove the outputs so the cached build has to report them from the cache alone.
+  - name: build_results_clear_outputs
+    setup_command: "rm -rf output*.txt dist"
+
+  - name: build_results_cached_build
+    grog_args:
+      - build
+      - --load-outputs=minimal
+      - --results=results_cached.json
+
+  # Apart from the cache_hit flag a full cache hit must report exactly what
+  # the fresh build reported, otherwise diffing two results files is meaningless.
+  - name: build_results_assert_cached_entries_match_fresh_entries
+    setup_command: |
+      set -e
+      cat results_fresh.json
+      [ "$(grep -c '"cache_hit": false' results_fresh.json)" = 3 ]
+      [ "$(grep -c '"cache_hit": true' results_cached.json)" = 3 ]
+      grep -q '"//:aggregator"' results_fresh.json
+      grep -q '"kind": "dir"' results_fresh.json
+      [ "$(grep -c '"kind": "file"' results_fresh.json)" = 2 ]
+      sed 's/"cache_hit": true/"cache_hit": false/' results_cached.json | diff results_fresh.json -
+
+  - name: build_results_cleanup
+    setup_command: "rm -rf output*.txt dist results_*.json"

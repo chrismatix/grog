@@ -1,0 +1,24 @@
+targets:
+  - name: file_target
+    inputs:
+      - input.txt
+    outputs:
+      - output.txt
+    command: cp input.txt output.txt
+
+  - name: dir_target
+    dependencies:
+      - :file_target
+    outputs:
+      - dir::dist/
+      - output_copy.txt
+    command: |
+      rm -rf dist
+      mkdir dist
+      cp output.txt dist/copy.txt
+      cp output.txt output_copy.txt
+
+  # No outputs of its own, so its output hash is its change hash.
+  - name: aggregator
+    dependencies:
+      - :dir_target

@@ -1,0 +1,6 @@
+INFO: 1 package loaded, 3 targets configured.
+INFO: Selected 3 targets.
+INFO: //:aggregator  DONE (cached)
+INFO: //:dir_target  DONE (cached)
+INFO: //:file_target DONE (cached)
+INFO: Build completed successfully. 3 targets completed (3 cache hits).

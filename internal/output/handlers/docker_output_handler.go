@@ -236,15 +236,15 @@ func (d *DockerOutputHandler) Load(
 // PushImage copies the cached image from the loopback proxy to the destination
 // registry. The proxy is started on demand by Write/Load and stays up until
 // the registry's Close. Source is always loopback (insecure HTTP).
-func (d *DockerOutputHandler) PushImage(ctx context.Context, image *gen.OCIImageOutput, destination string, _ *worker.ProgressTracker) (bool, error) {
+func (d *DockerOutputHandler) PushImage(ctx context.Context, image *gen.OCIImageOutput, destination string, _ *worker.ProgressTracker) (string, bool, error) {
 	proxy, err := d.ensureProxy(ctx)
 	if err != nil {
-		return false, err
+		return "", false, err
 	}
 	manifestDigest := image.GetManifestDigest().GetHash()
 	imageID := image.GetImageId()
 	if manifestDigest == "" || imageID == "" {
-		return false, fmt.Errorf("cache write did not populate image identity for push to %s", destination)
+		return "", false, fmt.Errorf("cache write did not populate image identity for push to %s", destination)
 	}
 	src := fmt.Sprintf("%s/%s@%s", proxy.Addr(), loopbackRepoName(imageID), manifestDigest)
 	return oci_push.Copy(ctx, src, destination, oci_push.Options{
@@ -255,12 +255,13 @@ func (d *DockerOutputHandler) PushImage(ctx context.Context, image *gen.OCIImage
 	})
 }
 
-func (d *DockerOutputHandler) PushLocalImage(ctx context.Context, localTag, destination string, tracker *worker.ProgressTracker) (bool, error) {
+func (d *DockerOutputHandler) PushLocalImage(ctx context.Context, localTag, destination string, tracker *worker.ProgressTracker) (string, bool, error) {
 	cli, err := d.ensureClient()
 	if err != nil {
-		return false, err
+		return "", false, err
 	}
-	return false, pushImageFromDaemon(ctx, cli, localTag, destination, tracker)
+	digest, err := pushImageFromDaemon(ctx, cli, localTag, destination, tracker)
+	return digest, false, err
 }
 
 // dockerImageWritePlan defers the actual `docker push` to the cache-write phase.

@@ -9,9 +9,11 @@ import (
 )
 
 // PushReport is the outcome of one push. Skipped means the HEAD probe matched.
+// Digest is the manifest digest the destination serves, empty on failure.
 type PushReport struct {
 	TargetLabel string
 	Destination string
+	Digest      string
 	Skipped     bool
 	Err         error
 }

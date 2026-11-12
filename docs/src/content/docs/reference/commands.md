@@ -105,12 +105,14 @@ grog build [flags]
   grog build                      # Build all targets in the current package and subpackages
   grog build //path/to/package:target  # Build a specific target
   grog build //path/to/package/...     # Build all targets in a package and subpackages
+  grog build --results build.json //path/to/package:target  # Also write hashes and digests as JSON
 ```
 
 ### Options
 
 ```text
-  -h, --help   help for build
+  -h, --help             help for build
+      --results string   Write the change hash, output hash, output digests and pushes of every selected target to this JSON file
 ```
 
 ### Options inherited from parent commands

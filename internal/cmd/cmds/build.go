@@ -2,6 +2,7 @@ package cmds
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -48,13 +49,18 @@ func dependencyInferrer() *loading.DependencyInferrer {
 	return inferrer
 }
 
+var buildOptions struct {
+	resultsFile string
+}
+
 var BuildCmd = &cobra.Command{
 	Use:   "build",
 	Short: "Loads the user configuration and executes build targets.",
 	Long:  `Loads the user configuration, checks which targets need to be rebuilt based on file hashes, builds the dependency graph, and executes targets.`,
 	Example: `  grog build                      # Build all targets in the current package and subpackages
   grog build //path/to/package:target  # Build a specific target
-  grog build //path/to/package/...     # Build all targets in a package and subpackages`,
+  grog build //path/to/package/...     # Build all targets in a package and subpackages
+  grog build --results build.json //path/to/package:target  # Also write hashes and digests as JSON`,
 	Args:              cobra.ArbitraryArgs, // Optional argument for target pattern
 	ValidArgsFunction: completions.BuildTargetPatternCompletion,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -85,6 +91,11 @@ var BuildCmd = &cobra.Command{
 }
 
 func AddBuildCmd(rootCmd *cobra.Command) {
+	BuildCmd.Flags().StringVar(
+		&buildOptions.resultsFile,
+		"results",
+		"",
+		"Write the change hash, output hash, output digests and pushes of every selected target to this JSON file")
 	rootCmd.AddCommand(BuildCmd)
 }
 
@@ -227,7 +238,24 @@ func RunBuildAndAfter(
 
 	logElapsedTime(logger, graph, executor, startTime)
 
+	// Only written for a successful build, so every selected target has an entry.
+	if buildOptions.resultsFile != "" && buildOK {
+		if err := writeBuildResults(buildOptions.resultsFile, executor.Results(completionMap)); err != nil {
+			logger.Fatalf("could not write build results: %v", err)
+		}
+	}
+
 	exitOnBuildFailure(logger, graph, goal, completionMap, executionErr, afterBuildErr, pushHadFailures)
+}
+
+// writeBuildResults writes the `--results` file.
+func writeBuildResults(resultsFile string, results map[string]execution.TargetBuildResult) error {
+	// Map keys marshal in sorted order, which keeps the file diffable.
+	resultsJSON, err := json.MarshalIndent(results, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(resultsFile, append(resultsJSON, '\n'), 0644)
 }
 
 // buildCommandName returns the command name recorded in the build trace.

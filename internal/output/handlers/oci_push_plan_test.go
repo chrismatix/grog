@@ -17,6 +17,7 @@ import (
 type fakeImagePusher struct {
 	calls      []pushCall
 	localCalls []pushCall
+	digest     string
 	skipped    bool
 	err        error
 }
@@ -27,14 +28,14 @@ type pushCall struct {
 	localTag    string
 }
 
-func (f *fakeImagePusher) PushImage(_ context.Context, image *gen.OCIImageOutput, dest string, _ *worker.ProgressTracker) (bool, error) {
+func (f *fakeImagePusher) PushImage(_ context.Context, image *gen.OCIImageOutput, dest string, _ *worker.ProgressTracker) (string, bool, error) {
 	f.calls = append(f.calls, pushCall{destination: dest, imageID: image.GetImageId()})
-	return f.skipped, f.err
+	return f.digest, f.skipped, f.err
 }
 
-func (f *fakeImagePusher) PushLocalImage(_ context.Context, localTag, dest string, _ *worker.ProgressTracker) (bool, error) {
+func (f *fakeImagePusher) PushLocalImage(_ context.Context, localTag, dest string, _ *worker.ProgressTracker) (string, bool, error) {
 	f.localCalls = append(f.localCalls, pushCall{destination: dest, localTag: localTag})
-	return f.skipped, f.err
+	return f.digest, f.skipped, f.err
 }
 
 func newTestProgress(t *testing.T) *worker.ProgressTracker {
@@ -51,7 +52,7 @@ func _newTarget(_ *testing.T) model.Target {
 }
 
 func TestOciPushPlan_Pushed(t *testing.T) {
-	pusher := &fakeImagePusher{}
+	pusher := &fakeImagePusher{digest: "sha256:manifest"}
 	reporter := NewPushReporter(nil)
 
 	if err := newTestPlan(pusher, reporter, "repo/image:1").Execute(context.Background(), newTestProgress(t)); err != nil {
@@ -60,8 +61,8 @@ func TestOciPushPlan_Pushed(t *testing.T) {
 	if len(pusher.calls) != 1 {
 		t.Fatalf("PushImage called %d times, want 1", len(pusher.calls))
 	}
-	if r := reporter.Reports(); len(r) != 1 || r[0].Skipped || r[0].Err != nil {
-		t.Errorf("expected one pushed report, got %+v", r)
+	if r := reporter.Reports(); len(r) != 1 || r[0].Skipped || r[0].Err != nil || r[0].Digest != "sha256:manifest" {
+		t.Errorf("expected one pushed report carrying the digest, got %+v", r)
 	}
 }
 

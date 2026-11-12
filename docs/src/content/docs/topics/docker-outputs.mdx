@@ -367,6 +367,71 @@ just like `docker push` does. In CI, run your registry's normal login step
 (`gcloud auth configure-docker`, `aws ecr get-login-password | docker login`,
 `docker login ghcr.io`, etc.) before `grog build --push`.
 
+## Releasing only what changed
+
+`grog changes` predicts what a commit affects by looking at inputs. Whether an
+image really differs from the one you released is only known once it is built.
+`grog build --results <file>` writes that answer to a JSON file. The file has
+one entry for every selected target and each of its dependencies, whether the
+target was built or restored from the cache.
+
+```shell
+grog build --load-outputs=minimal --push --results build.json //services/...
+```
+
+```json
+{
+  "//services/api:build_api_image": {
+    "change_hash": "ea6ea927c2b225086dc1256eb29435da",
+    "output_hash": "01c6680413b7d8ebd3bd588e0f0d877e",
+    "cache_hit": true,
+    "outputs": [{ "kind": "oci", "name": "api-service", "digest": "sha256:4f2a…" }],
+    "pushed": [
+      {
+        "destination": "us-east1-docker.pkg.dev/proj/api:abc123",
+        "digest": "sha256:9c1e…"
+      }
+    ]
+  }
+}
+```
+
+- `change_hash` identifies the target definition and its inputs.
+- `output_hash` identifies what the target produced. For an `oci::` output it is derived from the image ID.
+- `cache_hit` tells you whether the target was restored from the cache.
+- `outputs` holds one digest per output. For an `oci::` output this is the image ID.
+- `pushed` holds the manifest digest that each `oci_push` destination serves after the build. It is empty without `--push`.
+
+Apart from `cache_hit`, a fully cached build writes the same entries as the
+build that produced the cache. That makes two results files comparable, and a
+release job can deploy only what changed.
+
+1. Run the build above on every release. Cache hits are cheap, and `--load-outputs=minimal` skips loading images that nobody needs locally.
+2. Compare each `output_hash` with the results file of the last successful release.
+3. Deploy the targets whose hash differs.
+4. Store the new file as the baseline once the release has succeeded.
+
+```shell
+# Print the targets whose outputs differ from the last successful release
+jq -r --slurpfile baseline last-release.json \
+  'to_entries[] | select(.value.output_hash != $baseline[0][.key].output_hash) | .key' \
+  build.json
+```
+
+Grog does not store the baseline. You replace it only after a successful
+release, so a failed or skipped release is picked up by the next one.
+
+The file is written only when the build succeeds. Targets tagged `no-cache`
+report their hashes but an empty `outputs` list.
+
+<Aside type="caution">
+  An image ID covers the image config, and the config records when the image was created. A rebuilt
+  image therefore gets a new ID and a new `output_hash` even when its layers are identical. Cache
+  hits are not affected, because they reuse the recorded image. To keep IDs stable across rebuilds,
+  pin the timestamp by setting `SOURCE_DATE_EPOCH` for the image build. See the [BuildKit guide on
+  reproducible builds](https://github.com/moby/buildkit/blob/master/docs/build-repro.md).
+</Aside>
+
 ## Multi-platform Docker Images
 
 For building multi-platform Docker images, see the [Multi-platform Builds](/topics/multi-platform-builds) guide.

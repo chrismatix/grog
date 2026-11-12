@@ -30,14 +30,14 @@ func (f *fakeOciHandler) Load(context.Context, model.Target, *gen.Output, *worke
 	return nil
 }
 
-func (f *fakeOciHandler) PushImage(_ context.Context, _ *gen.OCIImageOutput, destination string, _ *worker.ProgressTracker) (bool, error) {
+func (f *fakeOciHandler) PushImage(_ context.Context, _ *gen.OCIImageOutput, destination string, _ *worker.ProgressTracker) (string, bool, error) {
 	f.pushed = append(f.pushed, destination)
-	return false, nil
+	return "", false, nil
 }
 
-func (f *fakeOciHandler) PushLocalImage(_ context.Context, _ string, destination string, _ *worker.ProgressTracker) (bool, error) {
+func (f *fakeOciHandler) PushLocalImage(_ context.Context, _ string, destination string, _ *worker.ProgressTracker) (string, bool, error) {
 	f.localPushed = append(f.localPushed, destination)
-	return false, nil
+	return "", false, nil
 }
 
 // nonPushingHandler is a Handler that lacks the ImagePusher capability.
