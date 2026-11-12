@@ -14,7 +14,8 @@ on:
 
 jobs:
   podman-interop:
-    runs-on: ubuntu-latest
+    # ubuntu-26.04 runners fail to resolve the apt mirrors, so podman-docker never installs.
+    runs-on: ubuntu-24.04
 
     permissions:
       contents: "read"
