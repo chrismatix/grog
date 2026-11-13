@@ -166,8 +166,14 @@ dependant is the common way to get one. The root project is not a member: it has
 Each member's synthesized `:_uv_package` covers `pyproject.toml` and its module tree, minus `**/.venv/**` and `**/__pycache__/**`. With `[tool.uv.build-backend]`
 the modules are known exactly (`module-root`, default `src`, and `module-name`, which may be a list). Any other
 build backend may package more than one directory, so the inputs are every `.py` and `.pyi` file in the package
-plus the full tree of a `src/<name>` or `<name>` directory matching the normalised project name. Package data
+plus the full trees of `src/<name>` and `<name>`, where `<name>` is the normalised project name. Package data
 outside that tree is not covered — register a filegroup with your own `inputs` for those packages.
+
+A member's fingerprint covers every third-party package it uses, directly or through other packages, including
+extras and dev groups. Grog hashes the name, version, source and artifact hashes of each one, so a `numpy` bump
+changes the fingerprint of the members that use `numpy` and no others. The walk stops at other members, because an
+edge already carries their changes. Dev groups have no edges, so Grog walks through a member listed in one.
+Markers are ignored, and every locked version of a package counts.
 
 Default `inputs`: `uv.lock`, `pyproject.toml`, and every member's `pyproject.toml`, which decides its layout, with `**/.venv/**` and `**/__pycache__/**` excluded.
 
@@ -653,7 +659,15 @@ It's only an error once something depends on it.
 [`grog changes`](/reference/commands) loads the graph at the current revision, so inferred edges are always current.
 
 Adding a dependency usually edits a manifest that's already an input of the dependant target, so the change is detected normally and `--dependents=transitive` propagates it.
-For manifests that aren't any target's input, such as a root workspace file adding or removing members, Grog falls back to a conservative rule: if any file matched by a resolver's `inputs` changed, every target registered with that resolver counts as changed.
+Lockfiles and workspace manifests are resolver inputs instead.
+When one of them changes, `builtin::go` and `builtin::uv` resolve both the working tree and the `--since` revision and compare the two reports.
+A package counts as changed when it is new or when its edges, inputs or fingerprint differ.
+A `uv.lock` edit that adds a dependency to one member therefore marks only that member.
+`grog explain-changes` prints the reason next to the file, as in `uv.lock (fingerprint changed)`.
+
+Every other resolver marks all of its targets as changed when one of its inputs changes.
+Grog can't rerun a command resolver at an old revision, and the other built-ins don't fingerprint external dependencies yet, so comparing their reports would miss a lockfile-only bump.
+`builtin::go` and `builtin::uv` fall back to this rule when the old revision fails to resolve.
 
 ## Limitations
 

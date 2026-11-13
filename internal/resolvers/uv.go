@@ -2,7 +2,9 @@ package resolvers
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -33,14 +35,26 @@ func (lock uvLock) memberDirectories() map[string]string {
 }
 
 type uvLockPackage struct {
-	Name   string `toml:"name"`
-	Source struct {
+	Name    string `toml:"name"`
+	Version string `toml:"version"`
+	Source  struct {
 		Editable  string `toml:"editable"`
 		Directory string `toml:"directory"`
 		Virtual   string `toml:"virtual"`
+		Registry  string `toml:"registry"`
+		Git       string `toml:"git"`
+		URL       string `toml:"url"`
+		Path      string `toml:"path"`
 	} `toml:"source"`
+	Sdist struct {
+		Hash string `toml:"hash"`
+	} `toml:"sdist"`
+	Wheels []struct {
+		Hash string `toml:"hash"`
+	} `toml:"wheels"`
 	Dependencies         []uvLockDependency            `toml:"dependencies"`
 	OptionalDependencies map[string][]uvLockDependency `toml:"optional-dependencies"`
+	DevDependencies      map[string][]uvLockDependency `toml:"dev-dependencies"`
 }
 
 type uvLockDependency struct {
@@ -104,9 +118,73 @@ func uvDependencies(resolverContext context.Context, workspaceDirectory string) 
 		}
 		slices.Sort(reportedPackage.Dependencies)
 		reportedPackage.Dependencies = slices.Compact(reportedPackage.Dependencies)
+		if fingerprint := uvThirdPartyFingerprint(lock, lockPackage); fingerprint != "" {
+			reportedPackage.Fingerprint = map[string]string{"lock": fingerprint}
+		}
 		document.Packages[directory] = reportedPackage
 	}
 	return document, nil
+}
+
+// uvThirdPartyFingerprint hashes every non-member package the member reaches
+// in the lock, dev groups included. A name locked more than once (a resolution
+// fork) contributes every entry, since markers are not evaluated.
+func uvThirdPartyFingerprint(lock uvLock, member uvLockPackage) string {
+	entriesByName := make(map[string][]uvLockPackage)
+	for _, lockPackage := range lock.Packages {
+		entriesByName[lockPackage.Name] = append(entriesByName[lockPackage.Name], lockPackage)
+	}
+	// Regular dependencies stop at members, whose fingerprints and grog edges
+	// cover them. Dev groups have no edges, so the walk goes through members
+	// reached from one, keyed apart so stopping at a member never blocks that.
+	type walkStep struct {
+		name           string
+		throughMembers bool
+	}
+	visited := make(map[walkStep]bool)
+	var pending []walkStep
+	visit := func(dependencies []uvLockDependency, throughMembers bool) {
+		for _, dependency := range dependencies {
+			step := walkStep{dependency.Name, throughMembers}
+			if !visited[step] {
+				visited[step] = true
+				pending = append(pending, step)
+			}
+		}
+	}
+	regularDependencies := func(entry uvLockPackage) []uvLockDependency {
+		return slices.Concat(append([][]uvLockDependency{entry.Dependencies}, slices.Collect(maps.Values(entry.OptionalDependencies))...)...)
+	}
+	visit(regularDependencies(member), false)
+	visit(slices.Concat(slices.Collect(maps.Values(member.DevDependencies))...), true)
+	reached := make(map[string]bool)
+	for len(pending) > 0 {
+		step := pending[len(pending)-1]
+		pending = pending[:len(pending)-1]
+		isMember := slices.Contains(lock.Manifest.Members, step.name)
+		if isMember && !step.throughMembers {
+			continue
+		}
+		if !isMember {
+			reached[step.name] = true
+		}
+		for _, entry := range entriesByName[step.name] {
+			visit(regularDependencies(entry), step.throughMembers)
+		}
+	}
+	if len(reached) == 0 {
+		return ""
+	}
+	hasher := sha256.New()
+	for _, name := range slices.Sorted(maps.Keys(reached)) {
+		for _, entry := range entriesByName[name] {
+			_, _ = fmt.Fprintf(hasher, "%s\x00%s\x00%v\x00%s\x00", entry.Name, entry.Version, entry.Source, entry.Sdist.Hash)
+			for _, wheel := range entry.Wheels {
+				_, _ = fmt.Fprintf(hasher, "%s\x00", wheel.Hash)
+			}
+		}
+	}
+	return fmt.Sprintf("%x", hasher.Sum(nil))
 }
 
 // uvInputs is the package's manifest plus its module tree. [tool.uv.build-backend]
@@ -153,12 +231,11 @@ func uvInputs(memberDirectory string) []string {
 			moduleDirectories = append(moduleDirectories, path.Join(moduleRoot, strings.ReplaceAll(moduleName, ".", "/")))
 		}
 	} else {
+		// Both layouts are listed whether or not they exist, so the output is a
+		// function of the declared inputs alone, which the resolver cache and
+		// `grog changes` rely on.
 		inputs = append(inputs, "**/*.py", "**/*.pyi")
-		for _, candidate := range []string{path.Join("src", normalizedName), normalizedName} {
-			if info, statError := os.Stat(filepath.Join(memberDirectory, filepath.FromSlash(candidate))); statError == nil && info.IsDir() {
-				moduleDirectories = append(moduleDirectories, candidate)
-			}
-		}
+		moduleDirectories = []string{path.Join("src", normalizedName), normalizedName}
 	}
 	for _, moduleDirectory := range moduleDirectories {
 		inputs = append(inputs, path.Join(moduleDirectory, "**/*"))

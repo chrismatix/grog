@@ -18,3 +18,17 @@ cases:
     grog_args: [build, "//..."]
   - name: uv_builtin_restore
     setup_command: "mv uv.lock.backup uv.lock; mv proto_init.backup lib/proto/demo_proto/__init__.py"
+  # grog changes resolves the lock at both revisions and marks only the
+  # members whose report differs, not every target behind //:uv.
+  - name: uv_builtin_changes_third_party_bump
+    setup_command: ../../scripts/setup_uv_changes_repo.sh bump
+    temp_dir: true
+    grog_args: [changes, --since=HEAD, --dependents=transitive]
+  - name: uv_builtin_changes_edge_added
+    setup_command: ../../scripts/setup_uv_changes_repo.sh edge
+    temp_dir: true
+    grog_args: [changes, --since=HEAD, --dependents=transitive]
+  - name: uv_builtin_explain_changes_edge_added
+    setup_command: ../../scripts/setup_uv_changes_repo.sh edge
+    temp_dir: true
+    grog_args: [explain-changes, --since=HEAD]
