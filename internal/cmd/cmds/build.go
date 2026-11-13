@@ -238,9 +238,9 @@ func RunBuildAndAfter(
 
 	logElapsedTime(logger, graph, executor, startTime)
 
-	// Only written for a successful build, so every selected target has an entry.
-	if buildOptions.resultsFile != "" && buildOK {
-		if err := writeBuildResults(buildOptions.resultsFile, executor.Results(completionMap)); err != nil {
+	// Only written when the build and every push succeeded, so no entry is partial.
+	if buildOK && !pushHadFailures {
+		if err := writeBuildResults(executor, completionMap); err != nil {
 			logger.Fatalf("could not write build results: %v", err)
 		}
 	}
@@ -248,14 +248,17 @@ func RunBuildAndAfter(
 	exitOnBuildFailure(logger, graph, goal, completionMap, executionErr, afterBuildErr, pushHadFailures)
 }
 
-// writeBuildResults writes the `--results` file.
-func writeBuildResults(resultsFile string, results map[string]execution.TargetBuildResult) error {
+// writeBuildResults writes the `--results` file if the flag is set.
+func writeBuildResults(executor *execution.Executor, completionMap dag.CompletionMap) error {
+	if buildOptions.resultsFile == "" {
+		return nil
+	}
 	// Map keys marshal in sorted order, which keeps the file diffable.
-	resultsJSON, err := json.MarshalIndent(results, "", "  ")
+	resultsJSON, err := json.MarshalIndent(executor.Results(completionMap), "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(resultsFile, append(resultsJSON, '\n'), 0644)
+	return os.WriteFile(buildOptions.resultsFile, append(resultsJSON, '\n'), 0644)
 }
 
 // buildCommandName returns the command name recorded in the build trace.

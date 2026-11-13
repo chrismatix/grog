@@ -2,7 +2,6 @@ package execution
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -72,11 +71,11 @@ func TestResultsMatchBetweenFreshBuildAndFullCacheHit(t *testing.T) {
 				require.NoError(t, graph.AddEdge(producer, consumer))
 				require.NoError(t, graph.AddEdge(consumer, aggregator))
 
-				ctx := context.Background()
+				buildContext := context.Background()
 				executor := NewExecutor(
 					caching.NewTargetResultCache(cacheBackend),
 					caching.NewTaintStore(),
-					output.NewRegistry(ctx, caching.NewCas(cacheBackend)),
+					output.NewRegistry(buildContext, caching.NewCas(cacheBackend)),
 					nil,
 					graph,
 					true,
@@ -84,7 +83,7 @@ func TestResultsMatchBetweenFreshBuildAndFullCacheHit(t *testing.T) {
 					true,
 					loadOutputsMode,
 				)
-				completionMap, err := executor.Execute(ctx)
+				completionMap, err := executor.Execute(buildContext)
 				require.NoError(t, err)
 				require.Empty(t, completionMap.GetErrors())
 				return executor.Results(completionMap)
@@ -111,7 +110,7 @@ func TestResultsMatchBetweenFreshBuildAndFullCacheHit(t *testing.T) {
 	}
 }
 
-func TestResultsReportOciImageIDsAndSuccessfulPushes(t *testing.T) {
+func TestResultsReportOciImageIDsAndPushes(t *testing.T) {
 	target := &model.Target{
 		Label:      label.TL("services/api", "image"),
 		ChangeHash: "change-hash",
@@ -124,7 +123,6 @@ func TestResultsReportOciImageIDsAndSuccessfulPushes(t *testing.T) {
 	for _, report := range []handlers.PushReport{
 		{TargetLabel: "//services/api:image", Destination: "registry/api:abc123", Digest: "sha256:manifest"},
 		{TargetLabel: "//services/api:image", Destination: "registry/api:latest", Digest: "sha256:manifest", Skipped: true},
-		{TargetLabel: "//services/api:image", Destination: "registry/api:broken", Err: errors.New("503")},
 	} {
 		pusher.Reporter().Record(report)
 	}

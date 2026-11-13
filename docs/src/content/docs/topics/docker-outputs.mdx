@@ -421,7 +421,7 @@ jq -r --slurpfile baseline last-release.json \
 Grog does not store the baseline. You replace it only after a successful
 release, so a failed or skipped release is picked up by the next one.
 
-The file is written only when the build succeeds. Targets tagged `no-cache`
+The file is written only when the build and every push succeed. Targets tagged `no-cache`
 report their hashes but an empty `outputs` list.
 
 <Aside type="caution">

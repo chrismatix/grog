@@ -34,13 +34,10 @@ type PushResult struct {
 
 // Results reports the hashes, output digests and pushes of every target in the
 // completion map, keyed by label. Pushes run as async cache writes, so call it
-// only after WaitForAsyncWrites.
+// only after WaitForAsyncWrites, and only when none of them failed.
 func (e *Executor) Results(completionMap dag.CompletionMap) map[string]TargetBuildResult {
 	pushedByLabel := make(map[string][]PushResult)
 	for _, report := range e.pusher.Reporter().Reports() {
-		if report.Err != nil {
-			continue
-		}
 		pushedByLabel[report.TargetLabel] = append(pushedByLabel[report.TargetLabel], PushResult{
 			Destination: report.Destination,
 			Digest:      report.Digest,
