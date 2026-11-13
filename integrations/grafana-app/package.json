@@ -1,0 +1,41 @@
+{
+  "name": "grog-grafana-app",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "author": "Christoph Proeschel",
+  "type": "module",
+  "scripts": {
+    "build": "webpack -c ./.config/webpack/webpack.config.mjs --env production",
+    "dev": "webpack -w -c ./.config/webpack/webpack.config.mjs --env development",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dagrejs/dagre": "3.1.1",
+    "@emotion/css": "11.13.5",
+    "@grafana/data": "13.1.0",
+    "@grafana/runtime": "13.1.0",
+    "@grafana/schema": "13.1.0",
+    "@grafana/ui": "13.1.0",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@grafana/tsconfig": "2.2.0",
+    "@swc/core": "1.15.43",
+    "@types/node": "26.1.0",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3",
+    "copy-webpack-plugin": "14.0.0",
+    "css-loader": "7.1.4",
+    "sass-loader": "17.0.0",
+    "style-loader": "4.0.0",
+    "swc-loader": "0.2.7",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "webpack": "5.108.4",
+    "webpack-cli": "7.2.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

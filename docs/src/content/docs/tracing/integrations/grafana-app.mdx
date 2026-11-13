@@ -1,0 +1,21 @@
+---
+title: Grafana app
+description: Analyze CI regressions, cache misses and flaky targets from Grog's OpenTelemetry traces in ClickHouse with a Grafana app.
+---
+
+The [Grog CI Grafana app](https://github.com/chrismatix/grog/tree/main/integrations/grafana-app) turns [OpenTelemetry traces](/tracing/#opentelemetry-export) stored in ClickHouse into CI dashboards: build health trends, target regressions, cache misses that should have hit, flaky targets, per-build dependency graphs and critical paths, and GitHub Actions job timings.
+
+## Setup
+
+1. Send each CI build's trace to an OpenTelemetry collector that writes to ClickHouse with the ClickHouse exporter:
+
+```bash
+grog traces export --format=otel --limit 1 |
+  curl --fail --header "Content-Type: application/json" --data-binary @- "$OTLP_ENDPOINT/v1/traces"
+```
+
+2. Build the plugin from `integrations/grafana-app` and install it in Grafana 12 or later. It is unsigned, so set `GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=chrismatix-grog-app`.
+
+3. Enable the app under **Administration → Plugins → Grog CI** and pick your ClickHouse datasource.
+
+Dependency edges, the critical path and the `grog.tag.github.*` attributes need grog v0.49.0 or later. The app's [README](https://github.com/chrismatix/grog/tree/main/integrations/grafana-app#readme) covers the optional GitHub job-span exporter behind the **CI jobs** tab.

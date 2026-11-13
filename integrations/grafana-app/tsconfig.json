@@ -1,0 +1,7 @@
+{
+  "extends": "./.config/tsconfig.json",
+  "compilerOptions": {
+    // Unsets the baseUrl the managed .config/tsconfig.json sets; TS 7 rejects it.
+    "baseUrl": null
+  }
+}
