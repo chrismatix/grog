@@ -304,7 +304,7 @@ func (d *DirectoryOutputHandler) writeDirectoryRecursive(
 			}
 			dir.Symlinks = append(dir.Symlinks, &gen.SymlinkNode{
 				Name:   entry.Name(),
-				Target: target,
+				Target: filepath.ToSlash(target),
 			})
 
 		case entry.IsDir():
@@ -592,6 +592,7 @@ func (d *DirectoryOutputHandler) downloadFile(ctx context.Context, digest, local
 	if err != nil {
 		return fmt.Errorf("failed to create file %s: %w", localPath, err)
 	}
+	defer func() { _ = file.Close() }()
 	reader := io.Reader(fileReader)
 	if progress != nil {
 		reader = progress.WrapReader(fileReader)
@@ -608,6 +609,9 @@ func (d *DirectoryOutputHandler) downloadFile(ctx context.Context, digest, local
 	err = file.Chmod(mode)
 	if err != nil {
 		return fmt.Errorf("failed to chmod file %s: %w", localPath, err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("failed to close file %s: %w", localPath, err)
 	}
 	return nil
 }

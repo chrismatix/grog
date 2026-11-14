@@ -533,7 +533,7 @@ func resolvedEnvironmentVariablesFilePath() string {
 	if !filepath.IsAbs(environmentVariablesFilePath) {
 		environmentVariablesFilePath = filepath.Join(config.Global.WorkspaceRoot, environmentVariablesFilePath)
 	}
-	return filepath.Clean(environmentVariablesFilePath)
+	return filepath.ToSlash(filepath.Clean(environmentVariablesFilePath))
 }
 
 func (collector *starlarkPackageCollector) dependencyResolverBuiltin(thread *starlark.Thread, function *starlark.Builtin, arguments starlark.Tuple, keywordArguments []starlark.Tuple) (starlark.Value, error) {

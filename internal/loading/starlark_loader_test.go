@@ -176,7 +176,7 @@ func TestStarlarkLoader_GrogEnvFile(t *testing.T) {
 			t.Fatal("expected loader to match BUILD.star")
 		}
 
-		expectedPath := filepath.Join(tmpDir, "env.vars")
+		expectedPath := filepath.ToSlash(filepath.Join(tmpDir, "env.vars"))
 		if len(pkg.Targets) != 1 {
 			t.Fatalf("expected 1 target, got %d", len(pkg.Targets))
 		}
@@ -212,7 +212,7 @@ func TestStarlarkLoader_GrogEnvFile(t *testing.T) {
 		if len(pkg.Targets) != 1 {
 			t.Fatalf("expected 1 target, got %d", len(pkg.Targets))
 		}
-		if pkg.Targets[0].Command != absoluteEnvPath {
+		if pkg.Targets[0].Command != filepath.ToSlash(absoluteEnvPath) {
 			t.Errorf("GROG_ENV_FILE = %q, want %q", pkg.Targets[0].Command, absoluteEnvPath)
 		}
 	})
@@ -294,7 +294,7 @@ target(name = "arch", command = GROG_ARCH)
 		if targetsByName["arch"].Command != "amd64" {
 			t.Errorf("GROG_ARCH = %q, want %q", targetsByName["arch"].Command, "amd64")
 		}
-		expectedPath := filepath.Join(tmpDir, "env.vars")
+		expectedPath := filepath.ToSlash(filepath.Join(tmpDir, "env.vars"))
 		if targetsByName["env_file"].Command != expectedPath {
 			t.Errorf("GROG_ENV_FILE = %q, want %q", targetsByName["env_file"].Command, expectedPath)
 		}
@@ -328,7 +328,7 @@ target(name = "hash", command = GROG_GIT_HASH)
 		for _, target := range pkg.Targets {
 			targetsByName[target.Name] = target
 		}
-		if got := targetsByName["ws"].Command; got != tmpDir {
+		if got := targetsByName["ws"].Command; got != filepath.ToSlash(tmpDir) {
 			t.Errorf("GROG_WORKSPACE_ROOT = %q, want %q", got, tmpDir)
 		}
 		// Git hash can be empty (not in a git repo) or a real hash; either way
@@ -378,7 +378,7 @@ create_target()
 			t.Fatalf("Load() returned error: %v", err)
 		}
 
-		expectedPath := filepath.Join(tmpDir, "env.vars")
+		expectedPath := filepath.ToSlash(filepath.Join(tmpDir, "env.vars"))
 		if len(pkg.Targets) != 1 {
 			t.Fatalf("expected 1 target, got %d", len(pkg.Targets))
 		}

@@ -1,0 +1,15 @@
+resources:
+  - name: service
+    up: |
+      printf 'SERVICE_VALUE=ready\n' >> "$GROG_RESOURCE_EXPORTS_FILE"
+      touch started.txt
+    down: touch stopped.txt
+targets:
+  - name: app
+    command: go build -o app.exe app.go
+    inputs: [app.go]
+    bin_output: app.exe
+  - name: timeout
+    command: sleep 30; touch leaked.txt
+    timeout: 1s
+    tags: [manual]

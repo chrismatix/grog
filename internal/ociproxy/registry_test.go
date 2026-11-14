@@ -632,7 +632,7 @@ func (writer *faultyStagedWriter) Write(content []byte) (int, error) {
 
 func (writer *faultyStagedWriter) Commit(ctx context.Context, path, key string) error {
 	if writer.backend.commitError != nil {
-		return writer.backend.commitError
+		return errors.Join(writer.backend.commitError, writer.inner.Cancel(ctx))
 	}
 	return writer.inner.Commit(ctx, path, key)
 }

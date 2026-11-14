@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/spf13/cobra"
@@ -20,6 +22,7 @@ import (
 	"github.com/chrismatix/grog/internal/loading"
 	"github.com/chrismatix/grog/internal/model"
 	"github.com/chrismatix/grog/internal/selection"
+	"github.com/chrismatix/grog/internal/shell"
 	"github.com/chrismatix/grog/internal/worker"
 )
 
@@ -302,6 +305,10 @@ func newBinaryRunCommand(ctx context.Context, runTarget *model.Target, userComma
 		filepath.Join(runTarget.Label.Package, runTarget.BinOutput.Identifier),
 	)
 	runCommand := exec.CommandContext(ctx, binOutputPath, userCommandArgs...)
+	if runtime.GOOS == "windows" && !strings.EqualFold(filepath.Ext(binOutputPath), ".exe") {
+		arguments := append([]string{"-c", `exec "$0" "$@"`, filepath.ToSlash(binOutputPath)}, userCommandArgs...)
+		runCommand = shell.Command(ctx, arguments...)
+	}
 	runCommand.Env = execution.GetExtendedTargetEnv(ctx, runTarget)
 	runCommand.Stdout = os.Stdout
 	runCommand.Stderr = os.Stderr
