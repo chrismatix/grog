@@ -108,7 +108,7 @@ export function CachePage({ filters }: { filters: Filters }) {
 
       <Panel
         title="Repeated executions"
-        help="A successful execution whose change hash already executed successfully should have been a cache hit. Usual causes: a no-cache tag, outputs that never reach the shared cache, or eviction."
+        help="A successful execution that starts after its change hash already passed once should have been a cache hit. Usual causes: a no-cache tag, outputs that never reach the shared cache, or eviction."
         state={repeats}
         empty="Every execution in this range had new inputs."
       >

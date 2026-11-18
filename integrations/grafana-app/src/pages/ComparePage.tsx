@@ -1,5 +1,5 @@
 import { css } from "@emotion/css";
-import type { GrafanaTheme2 } from "@grafana/data";
+import { type GrafanaTheme2, locationUtil } from "@grafana/data";
 import { PluginPage } from "@grafana/runtime";
 import { RadioButtonGroup, TextLink, useStyles2 } from "@grafana/ui";
 import { useMemo, useState } from "react";
@@ -141,7 +141,7 @@ export function ComparePage({ base, head }: { base: BuildReference; head: BuildR
     <PluginPage
       pageNav={{
         text: "Compare builds",
-        parentItem: { text: "Builds", url: appUrl("builds") },
+        parentItem: { text: "Builds", url: locationUtil.assureBaseUrl(appUrl("builds")) },
       }}
     >
       <SqlStatus state={{ rows: [], loading, error }} />

@@ -15,7 +15,7 @@ import { DataTable } from "../components/DataTable";
 import { Panel } from "../components/Panel";
 import { findStepChange, Sparkline } from "../components/Sparkline";
 import { type Filters, rangeLabel } from "../filters";
-import { formatDay } from "../links";
+import { formatDay, formatTime } from "../links";
 import { minimumExecutions, targetsQuery, targetTrendsQuery } from "../sql/targets";
 import { useSql } from "../useSql";
 
@@ -55,11 +55,13 @@ export function RegressionsPage({
     );
   }, [trends.rows]);
 
+  const hourly = filters.range === "1 DAY";
+
   return (
     <AppPage page="regressions" filters={filters}>
       <Panel
         title={direction === "slower" ? "Targets that got slower" : "Targets that got faster"}
-        help={`Median command time over the last ${rangeLabel(filters.range)} against the ${rangeLabel(filters.range)} before, for targets that executed at least ${minimumExecutions} times in both. Ranked by added time: the change in median times the number of executions.`}
+        help={`Median command time over the last ${rangeLabel(filters.range)} against the ${rangeLabel(filters.range)} before, for targets that passed at least ${minimumExecutions} times in both. Ranked by added time: the change in median times the number of passing executions.`}
         actions={
           <RadioButtonGroup
             size="sm"
@@ -77,6 +79,7 @@ export function RegressionsPage({
         empty={`No target executed at least ${minimumExecutions} times in both periods and got ${direction}.`}
       >
         <DataTable
+          key={direction}
           rows={targets.rows}
           rowKey={(row) => String(row.label)}
           sortedBy={direction === "slower" ? "Added time" : undefined}
@@ -84,7 +87,7 @@ export function RegressionsPage({
             targetColumn(),
             {
               label: "Trend",
-              title: `Daily median command time over both periods; the dashed line marks the detected change`,
+              title: `${hourly ? "Hourly" : "Daily"} median command time over both periods; the dashed line marks the detected change`,
               render: (row) => {
                 const entry = series.get(String(row.label));
                 return entry ? <Sparkline values={entry.values} markIndex={entry.step} /> : null;
@@ -92,16 +95,16 @@ export function RegressionsPage({
             },
             {
               label: "Changed around",
-              title: "The day that best splits the daily medians into a before and after level",
+              title: `The ${hourly ? "hour" : "day"} that best splits the ${hourly ? "hourly" : "daily"} medians into a before and after level`,
               sortValue: (row) => series.get(String(row.label))?.changedAt ?? Number.NaN,
               render: (row) => {
                 const changedAt = series.get(String(row.label))?.changedAt;
-                return changedAt ? formatDay(changedAt) : "—";
+                return changedAt ? (hourly ? formatTime(changedAt) : formatDay(changedAt)) : "—";
               },
             },
             medianColumn(),
             changeColumn(),
-            countColumn("Executions", "executed_runs"),
+            countColumn("Passing runs", "passed_runs"),
             criticalShareColumn(),
             addedTimeColumn(),
           ]}

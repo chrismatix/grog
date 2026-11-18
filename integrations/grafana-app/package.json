@@ -2,7 +2,7 @@
   "name": "grog-grafana-app",
   "version": "0.0.0",
   "private": true,
-  "license": "Apache-2.0",
+  "license": "MIT",
   "author": "Christoph Proeschel",
   "type": "module",
   "scripts": {

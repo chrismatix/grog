@@ -18,43 +18,35 @@ function cached(sql: string | undefined): Row[] | undefined {
   return entry && Date.now() - entry.fetchedAt < cacheLifetimeMs ? entry.rows : undefined;
 }
 
+function initialState(sql: string | undefined): SqlState & { sql?: string } {
+  const rows = cached(sql);
+  return rows ? { sql, rows, loading: false } : { sql, rows: [], loading: !!sql };
+}
+
 export function useSql(sql: string | undefined): SqlState {
-  const [state, setState] = useState<SqlState>(() => {
-    const rows = cached(sql);
-    return rows ? { rows, loading: false } : { rows: [], loading: !!sql };
-  });
+  const [state, setState] = useState(() => initialState(sql));
   useEffect(() => {
-    if (!sql) {
-      setState({ rows: [], loading: false });
-      return;
-    }
-    const rows = cached(sql);
-    if (rows) {
-      setState({ rows, loading: false });
+    setState(initialState(sql));
+    if (!sql || cached(sql)) {
       return;
     }
     let cancelled = false;
-    setState((previous) => ({ ...previous, loading: true, error: undefined }));
     runSql(sql).then(
       (fetched) => {
         cache.set(sql, { rows: fetched, fetchedAt: Date.now() });
         if (!cancelled) {
-          setState({ rows: fetched, loading: false });
+          setState({ sql, rows: fetched, loading: false });
         }
       },
-      (error: { message?: string; data?: { message?: string } }) =>
-        !cancelled &&
-        setState({
-          rows: [],
-          loading: false,
-          error: error.data?.message ?? error.message ?? String(error),
-        }),
+      (error: Error) =>
+        !cancelled && setState({ sql, rows: [], loading: false, error: error.message }),
     );
     return () => {
       cancelled = true;
     };
   }, [sql]);
-  return state;
+  // Until the effect catches up, never hand out rows that belong to the previous query.
+  return state.sql === sql ? state : initialState(sql);
 }
 
 export function SqlStatus({ state }: { state: SqlState }) {

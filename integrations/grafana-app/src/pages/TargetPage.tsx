@@ -1,5 +1,5 @@
 import { css } from "@emotion/css";
-import type { GrafanaTheme2 } from "@grafana/data";
+import { type GrafanaTheme2, locationUtil } from "@grafana/data";
 import { PluginPage } from "@grafana/runtime";
 import { TextLink, useStyles2 } from "@grafana/ui";
 import { useMemo } from "react";
@@ -80,6 +80,9 @@ export function TargetPage({ label, filters }: { label: string; filters: Filters
   const runs = useMemo(() => allRuns.filter((run) => run.isCurrent), [allRuns]);
   const previousExecuted = allRuns.filter((run) => !run.isCurrent && run.executed);
   const executedRuns = runs.filter((run) => run.executed);
+  // Failures stop early or time out, so command medians count only passing executions.
+  const passedRuns = executedRuns.filter((run) => !run.failed);
+  const previousPassed = previousExecuted.filter((run) => !run.failed);
   const recentRuns = useMemo(() => runs.slice(-50).reverse(), [runs]);
   const latest = runs.at(-1);
   const dependents = useSql(
@@ -106,15 +109,15 @@ export function TargetPage({ label, filters }: { label: string; filters: Filters
       .reverse();
   }, [runs]);
   const flakyHashes = hashes.filter(
-    (hash) => hash.failures > 0 && hash.failures < hash.runs,
+    (hash) => hash.failures > 0 && hash.executed > hash.failures,
   ).length;
 
   const median = quantile(
-    executedRuns.map((run) => run.commandMs),
+    passedRuns.map((run) => run.commandMs),
     0.5,
   );
   const previousMedian = quantile(
-    previousExecuted.map((run) => run.commandMs),
+    previousPassed.map((run) => run.commandMs),
     0.5,
   );
   const hitRate = runs.length ? (runs.length - executedRuns.length) / runs.length : Number.NaN;
@@ -128,7 +131,7 @@ export function TargetPage({ label, filters }: { label: string; filters: Filters
     <PluginPage
       pageNav={{
         text: label,
-        parentItem: { text: "Targets", url: appUrl("targets") },
+        parentItem: { text: "Targets", url: locationUtil.assureBaseUrl(appUrl("targets")) },
       }}
     >
       <FilterBar filters={filters} />
@@ -156,9 +159,9 @@ export function TargetPage({ label, filters }: { label: string; filters: Filters
               },
               {
                 label: "Median command",
-                value: formatDuration(executedRuns.length ? median : Number.NaN),
+                value: formatDuration(passedRuns.length ? median : Number.NaN),
                 current: median,
-                comparison: previousExecuted.length
+                comparison: previousPassed.length
                   ? {
                       previous: previousMedian,
                       kind: "relative",
@@ -169,9 +172,9 @@ export function TargetPage({ label, filters }: { label: string; filters: Filters
               {
                 label: "p95 command",
                 value: formatDuration(
-                  executedRuns.length
+                  passedRuns.length
                     ? quantile(
-                        executedRuns.map((run) => run.commandMs),
+                        passedRuns.map((run) => run.commandMs),
                         0.95,
                       )
                     : Number.NaN,
@@ -250,7 +253,7 @@ export function TargetPage({ label, filters }: { label: string; filters: Filters
                   label: "Executed",
                   numeric: true,
                   sortValue: (hash) => hash.executed,
-                  className: (hash) => (hash.executed > 1 ? styles.warning : ""),
+                  className: (hash) => (hash.executed - hash.failures > 1 ? styles.warning : ""),
                   render: (hash) => hash.executed,
                 },
                 {
@@ -259,7 +262,7 @@ export function TargetPage({ label, filters }: { label: string; filters: Filters
                   sortValue: (hash) => hash.failures,
                   className: (hash) => (hash.failures > 0 ? styles.error : ""),
                   render: (hash) =>
-                    `${hash.failures}${hash.failures > 0 && hash.failures < hash.runs ? " · flaky" : ""}`,
+                    `${hash.failures}${hash.failures > 0 && hash.executed > hash.failures ? " · flaky" : ""}`,
                 },
                 {
                   label: "Median command",

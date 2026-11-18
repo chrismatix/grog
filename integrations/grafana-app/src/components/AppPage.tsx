@@ -1,5 +1,5 @@
 import { css } from "@emotion/css";
-import type { GrafanaTheme2, IconName } from "@grafana/data";
+import { type GrafanaTheme2, type IconName, locationUtil } from "@grafana/data";
 import { locationService, PluginPage } from "@grafana/runtime";
 import {
   Button,
@@ -47,7 +47,7 @@ export function AppPage({
             key={entry.page}
             label={entry.label}
             icon={entry.icon}
-            href={appUrl(entry.page)}
+            href={locationUtil.assureBaseUrl(appUrl(entry.page))}
             active={entry.page === page}
           />
         ))}

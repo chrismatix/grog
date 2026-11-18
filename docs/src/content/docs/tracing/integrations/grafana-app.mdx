@@ -7,14 +7,17 @@ The [Grog CI Grafana app](https://github.com/chrismatix/grog/tree/main/integrati
 
 ## Setup
 
-1. Send each CI build's trace to an OpenTelemetry collector that writes to ClickHouse with the ClickHouse exporter:
+1. [Enable traces](/tracing/#enabling-traces) and, after each CI build, send its trace to an OpenTelemetry collector that writes to ClickHouse with the ClickHouse exporter. Run the step even when the build fails, so failures reach the dashboards. `grog traces export` needs the [`grog-full`](/get-started/#1-install-grog) build.
 
-```bash
-grog traces export --format=otel --limit 1 |
-  curl --fail --header "Content-Type: application/json" --data-binary @- "$OTLP_ENDPOINT/v1/traces"
+```yaml
+- name: Export grog trace
+  if: always()
+  run: |
+    grog traces export --format=otel --limit 1 |
+      curl --fail --header "Content-Type: application/json" --data-binary @- "$OTLP_ENDPOINT/v1/traces"
 ```
 
-2. Build the plugin from `integrations/grafana-app` and install it in Grafana 12 or later. It is unsigned, so set `GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=chrismatix-grog-app`.
+2. Build the plugin from `integrations/grafana-app` and install it in Grafana 12.3 or later. It is unsigned, so set `GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=chrismatix-grog-app`.
 
 3. Enable the app under **Administration → Plugins → Grog CI** and pick your ClickHouse datasource.
 

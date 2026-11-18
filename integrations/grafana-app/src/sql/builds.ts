@@ -179,6 +179,7 @@ export function previousBuildQuery(
   branch: string,
   command: string,
   arch: string,
+  requestedPatterns: string,
 ): string {
   return `SELECT
   TraceId AS trace_id,
@@ -193,6 +194,7 @@ WHERE ServiceName = 'grog'
   AND ${branchExpression} = ${quote(branch)}
   AND SpanName = ${quote(command)}
   AND ${archExpression} = ${quote(arch)}
+  AND SpanAttributes['grog.requested_patterns'] = ${quote(requestedPatterns)}
 ORDER BY Timestamp DESC
 LIMIT 1`;
 }
