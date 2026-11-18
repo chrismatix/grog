@@ -3,6 +3,7 @@ package analysis
 import (
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -121,7 +122,18 @@ func sharedKeyConflicts(graph *dag.DirectedTargetGraph, recordsByKey map[string]
 }
 
 func cleanOutputPath(target *model.Target, output string) string {
-	return filepath.Clean(filepath.Join(target.Label.Package, output))
+	outputPath := filepath.ToSlash(filepath.Clean(filepath.Join(target.Label.Package, output)))
+	if runtime.GOOS != "windows" {
+		return outputPath
+	}
+	// Win32 ignores letter case and trailing dots and spaces in path components.
+	components := strings.Split(strings.ToLower(outputPath), "/")
+	for index, component := range components {
+		if component != "." && component != ".." {
+			components[index] = strings.TrimRight(component, ". ")
+		}
+	}
+	return strings.Join(components, "/")
 }
 
 func pathWithin(path, dir string) bool {
@@ -129,7 +141,7 @@ func pathWithin(path, dir string) bool {
 		return true
 	}
 
-	dirWithSeparator := dir + string(filepath.Separator)
+	dirWithSeparator := dir + "/"
 	return strings.HasPrefix(path, dirWithSeparator)
 }
 

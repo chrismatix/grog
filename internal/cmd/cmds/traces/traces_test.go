@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -53,6 +54,9 @@ func outputModes(t *testing.T, test func(t *testing.T, terminal bool)) {
 			name = "styled"
 		}
 		t.Run(name, func(t *testing.T) {
+			if terminal && runtime.GOOS == "windows" {
+				t.Skip("pseudo-terminals require Unix")
+			}
 			test(t, terminal)
 		})
 	}

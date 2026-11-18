@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/chrismatix/grog/internal/config"
@@ -35,7 +38,28 @@ func NewCommand(commandContext context.Context, script string, arguments ...stri
 		cleanup()
 		return nil, nil, fmt.Errorf("failed to close command script file: %w", operationError)
 	}
-	command := exec.CommandContext(commandContext, "sh", append([]string{scriptFile.Name()}, arguments...)...)
+	return Command(commandContext, append([]string{scriptFile.Name()}, arguments...)...), cleanup, nil
+}
+
+// Command runs a POSIX shell, using Git for Windows when sh is not on PATH.
+func Command(commandContext context.Context, arguments ...string) *exec.Cmd {
+	shellPath, lookupError := exec.LookPath("sh")
+	if lookupError != nil && runtime.GOOS == "windows" {
+		if gitPath, gitError := exec.LookPath("git"); gitError == nil {
+			shellPath, lookupError = exec.LookPath(filepath.Join(filepath.Dir(gitPath), "..", "bin", "sh.exe"))
+		}
+	}
+	if lookupError != nil {
+		command := exec.CommandContext(commandContext, "sh", arguments...)
+		command.Err = fmt.Errorf("POSIX shell required; install Git for Windows and add Git to PATH: %w", lookupError)
+		return command
+	}
+	command := exec.CommandContext(commandContext, shellPath, arguments...)
 	command.WaitDelay = time.Second
-	return command, cleanup, nil
+	if runtime.GOOS == "windows" {
+		command.Cancel = func() error {
+			return exec.Command("taskkill", "/F", "/T", "/PID", strconv.Itoa(command.Process.Pid)).Run()
+		}
+	}
+	return command
 }

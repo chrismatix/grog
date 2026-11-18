@@ -92,12 +92,12 @@ func configureRoot() bool {
 	// Set up Viper
 	viper.SetConfigType("toml")
 	viper.SetEnvPrefix("GROG")
-	viper.AddConfigPath("$HOME/.grog")                     // optionally look for config in the home directory
+	// Without a home directory, fall back to ./.grog as the old $HOME lookup did.
+	homeDirectory, _ := os.UserHomeDir()
+	viper.AddConfigPath(filepath.Join(homeDirectory, ".grog"))
+	viper.SetDefault("root", filepath.Join(homeDirectory, ".grog"))
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_")) // allow FLAG-NAME to map to ENV VAR_NAME
 	viper.AutomaticEnv()                                   // read in environment variables that match
-
-	// Set default global root directory
-	viper.SetDefault("root", filepath.Join(os.Getenv("HOME"), ".grog"))
 
 	// Options:
 	// color

@@ -158,7 +158,7 @@ func resolveDependencyTarget(
 // and do not point outside the package.
 func checkInputPathsRelative(target *model.Target) (errs []error) {
 	for _, input := range target.Inputs {
-		if path.IsAbs(input) {
+		if path.IsAbs(input) || filepath.IsAbs(input) {
 			errs = append(errs, fmt.Errorf(
 				"input %s for target %s is not relative",
 				input,
@@ -214,7 +214,7 @@ func checkOutputsAreWithinRepository(target *model.Target) (errs []error) {
 	workspaceRoot := config.Global.WorkspaceRoot
 
 	for _, output := range target.FileOutputs() {
-		if path.IsAbs(output) {
+		if path.IsAbs(output) || filepath.IsAbs(output) {
 			errs = append(errs, fmt.Errorf(
 				"output %s for target %s is not relative",
 				output,

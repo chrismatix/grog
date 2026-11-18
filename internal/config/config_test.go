@@ -132,7 +132,7 @@ func TestGetCurrentPackageAndWorkspaceRoot(t *testing.T) {
 	}
 
 	t.Chdir(packageDirectory)
-	if currentPackage, err := workspaceConfig.GetCurrentPackage(); err != nil || currentPackage != filepath.Join("foo", "bar") {
+	if currentPackage, err := workspaceConfig.GetCurrentPackage(); err != nil || currentPackage != "foo/bar" {
 		t.Fatalf("expected foo/bar, got %q (err: %v)", currentPackage, err)
 	}
 	if foundRoot := MustFindWorkspaceRoot(); foundRoot != workspaceRoot {

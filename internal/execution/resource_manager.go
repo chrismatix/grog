@@ -8,6 +8,7 @@ import (
 	"io"
 	"maps"
 	"os"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -226,7 +227,7 @@ func (m *ResourceManager) start(ctx context.Context, resource *model.Resource, d
 	defer func() { _ = os.Remove(exportsFilePath) }()
 
 	baseEnvironment := append(m.resourceEnv(resource), dependencyExports...)
-	upEnvironment := append(append([]string{}, baseEnvironment...), "GROG_RESOURCE_EXPORTS_FILE="+exportsFilePath)
+	upEnvironment := append(append([]string{}, baseEnvironment...), "GROG_RESOURCE_EXPORTS_FILE="+filepath.ToSlash(exportsFilePath))
 
 	output, upErr := m.runHookCommand(startContext, resource, resource.Up, upEnvironment)
 	resolvedExports, exportsErr := m.resolveExports(resource, exportsFilePath)
@@ -402,6 +403,6 @@ func (m *ResourceManager) resourceEnv(resource *model.Resource) []string {
 		"GROG_ARCH="+config.Global.Arch,
 		"GROG_PLATFORM="+config.Global.GetPlatform(),
 		"GROG_PACKAGE="+resource.Label.Package,
-		"GROG_WORKSPACE_ROOT="+config.Global.WorkspaceRoot,
+		"GROG_WORKSPACE_ROOT="+filepath.ToSlash(config.Global.WorkspaceRoot),
 	)
 }

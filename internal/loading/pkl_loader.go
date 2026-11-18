@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 
 	"github.com/chrismatix/grog/internal/config"
@@ -32,7 +33,7 @@ func (pl *PklLoader) getEvaluator(ctx context.Context) (pkl.Evaluator, error) {
 	pl.evaluatorOnce.Do(func() {
 		if hasPklProjectFile() {
 			pl.evaluator, pl.evaluatorErr = pkl.NewProjectEvaluator(ctx,
-				&url.URL{Scheme: "file", Path: config.Global.WorkspaceRoot},
+				pklFileSource(config.Global.WorkspaceRoot).Uri,
 				pkl.PreconfiguredOptions,
 				withEnv(LoaderEnv()),
 				withEnv(config.Global.EnvironmentVariables),
@@ -83,7 +84,7 @@ func (pl *PklLoader) Load(ctx context.Context, filePath string) (PackageDTO, boo
 				evalErr = fmt.Errorf("panic occurred while evaluating module: %v", r)
 			}
 		}()
-		evalErr = evaluator.EvaluateModule(ctx, pkl.FileSource(filePath), &pkg)
+		evalErr = evaluator.EvaluateModule(ctx, pklFileSource(filePath), &pkg)
 	}()
 
 	if evalErr != nil {
@@ -91,4 +92,11 @@ func (pl *PklLoader) Load(ctx context.Context, filePath string) (PackageDTO, boo
 	}
 
 	return pkg, true, nil
+}
+
+func pklFileSource(filePath string) *pkl.ModuleSource {
+	if runtime.GOOS != "windows" {
+		return pkl.FileSource(filePath)
+	}
+	return &pkl.ModuleSource{Uri: &url.URL{Scheme: "file", Path: "/" + filepath.ToSlash(filePath)}}
 }
