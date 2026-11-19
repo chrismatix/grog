@@ -107,10 +107,12 @@ ORDER BY position`;
 }
 
 // The job span whose run, attempt and job key match the build and that was running when it started.
+// Concurrent matrix legs share all of those, so the runner name decides when the build recorded one.
 export function buildJobQuery(
   runId: string,
   runAttempt: string,
   job: string,
+  runnerName: string,
   buildStartMs: number,
 ): string {
   const window = `Timestamp BETWEEN fromUnixTimestamp64Milli(${buildStartMs}) - INTERVAL 1 DAY AND fromUnixTimestamp64Milli(${buildStartMs}) + INTERVAL 1 DAY`;
@@ -133,6 +135,7 @@ WHERE ServiceName = 'github-actions'
       AND SpanAttributes['github.run_id'] = ${quote(runId)}
       AND SpanAttributes['github.run_attempt'] = ${quote(runAttempt)}
       AND SpanAttributes['github.job'] = ${quote(job)}
+      ${runnerName ? `AND SpanAttributes['github.runner_name'] = ${quote(runnerName)}` : ""}
       AND Timestamp <= fromUnixTimestamp64Milli(${buildStartMs})
       AND toUnixTimestamp64Milli(Timestamp) + intDiv(Duration, 1000000) >= ${buildStartMs}
     ORDER BY Timestamp DESC

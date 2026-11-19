@@ -49,7 +49,10 @@ export function BuildPage({ build }: { build: BuildReference }) {
         )
       : undefined,
   );
-  const jobSpans = useSql(runId ? buildJobQuery(runId, runAttempt, job, build.startMs) : undefined);
+  const runnerName = attributes["grog.tag.github.runner_name"] ?? "";
+  const jobSpans = useSql(
+    runId ? buildJobQuery(runId, runAttempt, job, runnerName, build.startMs) : undefined,
+  );
 
   const executed = spans.filter((span) => isExecuted(span) || criticalPath.includes(span.label));
   const hasEdges = spans.some((span) => span.dependencies.length > 0);
