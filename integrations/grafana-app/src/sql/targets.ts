@@ -92,7 +92,8 @@ ORDER BY timestamp`;
 }
 
 // Successful executions that started after the same inputs had already finished once
-// successfully: the cache should have hit. Concurrent runs of one hash cannot share a cache.
+// successfully: the cache should have hit. Strictly after, so a sub-millisecond run
+// (command_ms = 0) never repeats itself; concurrent runs of one hash cannot share a cache.
 export function repeatedExecutionsQuery(filters: Filters, limit: number): string {
   return `WITH ${targetSpansCte(filters, "current")},
 passed AS (
@@ -107,8 +108,8 @@ by_hash AS (
     label,
     change_hash,
     count() AS executions,
-    countIf(timestamp >= first_finish) AS repeat_executions,
-    sumIf(command_ms, timestamp >= first_finish) AS repeat_ms,
+    countIf(timestamp > first_finish) AS repeat_executions,
+    sumIf(command_ms, timestamp > first_finish) AS repeat_ms,
     argMax(tags, timestamp) AS hash_tags,
     max(timestamp) AS last_seen
   FROM passed
