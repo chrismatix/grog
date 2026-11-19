@@ -1,5 +1,5 @@
 import { css } from "@emotion/css";
-import type { GrafanaTheme2 } from "@grafana/data";
+import { type GrafanaTheme2, locationUtil } from "@grafana/data";
 import { locationService } from "@grafana/runtime";
 import { Button, Checkbox, LinkButton, RadioButtonGroup, TextLink, useStyles2 } from "@grafana/ui";
 import { useState } from "react";
@@ -67,7 +67,7 @@ export function BuildsPage({
               icon="exchange-alt"
               variant="secondary"
               disabled={!head}
-              href={head ? compareUrl(base, head) : undefined}
+              href={head ? locationUtil.assureBaseUrl(compareUrl(base, head)) : undefined}
             >
               Compare
             </LinkButton>

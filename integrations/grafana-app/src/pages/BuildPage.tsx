@@ -1,5 +1,5 @@
 import { css } from "@emotion/css";
-import type { GrafanaTheme2 } from "@grafana/data";
+import { type GrafanaTheme2, locationUtil } from "@grafana/data";
 import { PluginPage } from "@grafana/runtime";
 import { Alert, LinkButton, TextLink, useStyles2 } from "@grafana/ui";
 import { useMemo } from "react";
@@ -38,7 +38,15 @@ export function BuildPage({ build }: { build: BuildReference }) {
 
   const previous = useSql(
     workflow && job && branch
-      ? previousBuildQuery(build.startMs, workflow, job, branch, command, arch)
+      ? previousBuildQuery(
+          build.startMs,
+          workflow,
+          job,
+          branch,
+          command,
+          arch,
+          attributes["grog.requested_patterns"] ?? "",
+        )
       : undefined,
   );
   const jobSpans = useSql(runId ? buildJobQuery(runId, runAttempt, job, build.startMs) : undefined);
@@ -62,7 +70,7 @@ export function BuildPage({ build }: { build: BuildReference }) {
     <PluginPage
       pageNav={{
         text: `${command} · ${formatTime(build.startMs)}`,
-        parentItem: { text: "Builds", url: appUrl("builds") },
+        parentItem: { text: "Builds", url: locationUtil.assureBaseUrl(appUrl("builds")) },
       }}
     >
       <SqlStatus state={{ rows: [], loading, error }} />
@@ -97,13 +105,15 @@ export function BuildPage({ build }: { build: BuildReference }) {
               }
               href={
                 previousBuild
-                  ? compareUrl(
-                      {
-                        traceId: String(previousBuild.trace_id),
-                        startMs: Number(previousBuild.start_ms),
-                        durationMs: Number(previousBuild.duration_ms),
-                      },
-                      build,
+                  ? locationUtil.assureBaseUrl(
+                      compareUrl(
+                        {
+                          traceId: String(previousBuild.trace_id),
+                          startMs: Number(previousBuild.start_ms),
+                          durationMs: Number(previousBuild.duration_ms),
+                        },
+                        build,
+                      ),
                     )
                   : undefined
               }

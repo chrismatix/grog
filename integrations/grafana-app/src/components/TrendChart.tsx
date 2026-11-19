@@ -26,10 +26,8 @@ export function TrendChart({
     const times = rows.map((row) => Number(row.bucket_ms));
     return {
       state: LoadingState.Done,
-      timeRange: makeTimeRange(
-        dateTime(times[0] ?? Date.now()),
-        dateTime(times.at(-1) ?? Date.now()),
-      ),
+      // Ends now rather than at the last bucket's start, so a single bucket still has a width.
+      timeRange: makeTimeRange(dateTime(times[0] ?? Date.now()), dateTime(Date.now())),
       series: [
         createDataFrame({
           fields: [

@@ -156,93 +156,97 @@ export function DependencyGraph({
           critical path
         </span>
       </div>
-      <div className={styles.canvas}>
-        <svg
-          width={(size.width ?? 0) * zoom}
-          height={(size.height ?? 0) * zoom}
-          viewBox={`0 0 ${size.width} ${size.height}`}
-        >
-          <defs>
-            <marker
-              id="grog-arrow"
-              viewBox="0 0 10 10"
-              refX="10"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto"
-            >
-              <path d="M0,0 L10,5 L0,10 z" fill={theme.colors.text.disabled} />
-            </marker>
-          </defs>
-          {graph.edges().map((edge) => {
-            const points = graph.edge(edge).points ?? [];
-            const highlighted = isOnCriticalPath(edge.v, edge.w);
-            return (
-              <polyline
-                key={`${edge.v}->${edge.w}`}
-                points={points
-                  .map((point: { x: number; y: number }) => `${point.x},${point.y}`)
-                  .join(" ")}
-                fill="none"
-                stroke={
-                  highlighted
-                    ? theme.visualization.getColorByName("orange")
-                    : theme.colors.border.medium
-                }
-                strokeWidth={highlighted ? 3 : 1}
-                markerEnd="url(#grog-arrow)"
-              />
-            );
-          })}
-          {graph.nodes().map((label) => {
-            const node = graph.node(label);
-            const span = spansByLabel.get(label);
-            if (!node || !span) {
-              return null;
-            }
-            const hit = span.cacheResult === "CACHE_HIT" && !span.failed;
-            return (
-              <g
-                key={label}
-                transform={`translate(${node.x - nodeWidth / 2},${node.y - nodeHeight / 2})`}
-                className={styles.node}
-                onClick={() => locationService.push(targetUrl(label))}
+      {graph.nodeCount() === 0 ? (
+        <p className={styles.legend}>Every target was a cache hit; show all targets to see them.</p>
+      ) : (
+        <div className={styles.canvas}>
+          <svg
+            width={(size.width ?? 0) * zoom}
+            height={(size.height ?? 0) * zoom}
+            viewBox={`0 0 ${size.width} ${size.height}`}
+          >
+            <defs>
+              <marker
+                id="grog-arrow"
+                viewBox="0 0 10 10"
+                refX="10"
+                refY="5"
+                markerWidth="6"
+                markerHeight="6"
+                orient="auto"
               >
-                <title>{`${label}\n${span.cacheResult}${span.failed ? " · FAILED" : ""}\ncommand ${formatDuration(span.commandMs)} · total ${formatDuration(span.durationMs)}`}</title>
-                <rect
-                  width={nodeWidth}
-                  height={nodeHeight}
-                  rx={4}
-                  fill={colorFor(span)}
+                <path d="M0,0 L10,5 L0,10 z" fill={theme.colors.text.disabled} />
+              </marker>
+            </defs>
+            {graph.edges().map((edge) => {
+              const points = graph.edge(edge).points ?? [];
+              const highlighted = isOnCriticalPath(edge.v, edge.w);
+              return (
+                <polyline
+                  key={`${edge.v}->${edge.w}`}
+                  points={points
+                    .map((point: { x: number; y: number }) => `${point.x},${point.y}`)
+                    .join(" ")}
+                  fill="none"
                   stroke={
-                    critical.has(label)
+                    highlighted
                       ? theme.visualization.getColorByName("orange")
-                      : theme.colors.border.weak
+                      : theme.colors.border.medium
                   }
-                  strokeWidth={critical.has(label) ? 3 : 1}
+                  strokeWidth={highlighted ? 3 : 1}
+                  markerEnd="url(#grog-arrow)"
                 />
-                <text
-                  x={8}
-                  y={18}
-                  className={styles.label}
-                  fill={hit ? theme.colors.text.primary : "#fff"}
+              );
+            })}
+            {graph.nodes().map((label) => {
+              const node = graph.node(label);
+              const span = spansByLabel.get(label);
+              if (!node || !span) {
+                return null;
+              }
+              const hit = span.cacheResult === "CACHE_HIT" && !span.failed;
+              return (
+                <g
+                  key={label}
+                  transform={`translate(${node.x - nodeWidth / 2},${node.y - nodeHeight / 2})`}
+                  className={styles.node}
+                  onClick={() => locationService.push(targetUrl(label))}
                 >
-                  {label.length > 40 ? `…${label.slice(-39)}` : label}
-                </text>
-                <text
-                  x={8}
-                  y={35}
-                  className={styles.detail}
-                  fill={hit ? theme.colors.text.secondary : "#fff"}
-                >
-                  {hit ? "cache hit" : `command ${formatDuration(span.commandMs)}`}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
-      </div>
+                  <title>{`${label}\n${span.cacheResult}${span.failed ? " · FAILED" : ""}\ncommand ${formatDuration(span.commandMs)} · total ${formatDuration(span.durationMs)}`}</title>
+                  <rect
+                    width={nodeWidth}
+                    height={nodeHeight}
+                    rx={4}
+                    fill={colorFor(span)}
+                    stroke={
+                      critical.has(label)
+                        ? theme.visualization.getColorByName("orange")
+                        : theme.colors.border.weak
+                    }
+                    strokeWidth={critical.has(label) ? 3 : 1}
+                  />
+                  <text
+                    x={8}
+                    y={18}
+                    className={styles.label}
+                    fill={hit ? theme.colors.text.primary : "#fff"}
+                  >
+                    {label.length > 40 ? `…${label.slice(-39)}` : label}
+                  </text>
+                  <text
+                    x={8}
+                    y={35}
+                    className={styles.detail}
+                    fill={hit ? theme.colors.text.secondary : "#fff"}
+                  >
+                    {hit ? "cache hit" : `command ${formatDuration(span.commandMs)}`}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { getBackendSrv, toDataQueryResponse } from "@grafana/runtime";
+import { type FetchError, getBackendSrv, toDataQueryResponse } from "@grafana/runtime";
 
 export interface AppSettings {
   datasourceUid?: string;
@@ -13,21 +13,31 @@ export const settings = { datasourceUid: "", tracesTable: defaultTracesTable };
 export type Row = Record<string, unknown>;
 
 export async function runSql(rawSql: string): Promise<Row[]> {
-  const results = await getBackendSrv().post("/api/ds/query", {
-    queries: [
+  // A failing query rejects with HTTP 400 and its error inside data.results, not in a message.
+  const response = await getBackendSrv()
+    .post(
+      "/api/ds/query",
       {
-        refId: "A",
-        datasource: { uid: settings.datasourceUid },
-        rawSql,
-        format: 1,
-        queryType: "table",
-        editorType: "sql",
+        queries: [
+          {
+            refId: "A",
+            datasource: { uid: settings.datasourceUid },
+            rawSql,
+            format: 1,
+            queryType: "table",
+            editorType: "sql",
+          },
+        ],
       },
-    ],
-  });
-  const { data, error } = toDataQueryResponse({ data: results });
+      { showErrorAlert: false },
+    )
+    .then(
+      (results) => ({ data: results }),
+      (failure: FetchError) => failure,
+    );
+  const { data, error } = toDataQueryResponse(response);
   if (error) {
-    throw new Error(error.message);
+    throw new Error(error.message ?? "Query failed");
   }
   const frame = data[0];
   if (!frame) {

@@ -24,8 +24,8 @@ export function targetsQuery(
   const having = ["runs > 0"];
   if (order === "slower" || order === "faster") {
     having.push(
-      `executed_runs >= ${minimumExecutions}`,
-      `previous_executed_runs >= ${minimumExecutions}`,
+      `passed_runs >= ${minimumExecutions}`,
+      `previous_passed_runs >= ${minimumExecutions}`,
       order === "slower" ? "impact_ms > 0" : "impact_ms < 0",
     );
   }
@@ -35,17 +35,19 @@ SELECT
   argMax(tags, timestamp) AS latest_tags,
   countIf(is_current) AS runs,
   countIf(is_current AND executed) AS executed_runs,
-  countIf(NOT is_current AND executed) AS previous_executed_runs,
   1 - executed_runs / greatest(runs, 1) AS hit_rate,
-  quantileIf(0.5)(command_ms, is_current AND executed) AS p50_ms,
-  quantileIf(0.5)(command_ms, NOT is_current AND executed) AS previous_p50_ms,
-  quantileIf(0.95)(command_ms, is_current AND executed) AS p95_ms,
+  -- Failures stop early or time out, so command medians count only passing executions.
+  countIf(is_current AND executed AND NOT failed) AS passed_runs,
+  countIf(NOT is_current AND executed AND NOT failed) AS previous_passed_runs,
+  quantileIf(0.5)(command_ms, is_current AND executed AND NOT failed) AS p50_ms,
+  quantileIf(0.5)(command_ms, NOT is_current AND executed AND NOT failed) AS previous_p50_ms,
+  quantileIf(0.95)(command_ms, is_current AND executed AND NOT failed) AS p95_ms,
   sumIf(command_ms, is_current AND executed) AS total_ms,
   sumIf(command_ms, is_current AND on_critical_path) AS critical_ms,
   countIf(is_current AND on_critical_path) AS critical_path_runs,
   (SELECT countIf(is_current AND has_critical_path) FROM roots) AS builds_with_critical_path,
   countIf(is_current AND failed) AS failures,
-  (p50_ms - previous_p50_ms) * executed_runs AS impact_ms
+  (p50_ms - previous_p50_ms) * passed_runs AS impact_ms
 FROM spans
 ${search ? `WHERE positionCaseInsensitive(label, ${quote(search)}) > 0` : ""}
 GROUP BY label
@@ -61,7 +63,7 @@ SELECT
   ${bucketExpression(filters.range, "timestamp")} AS bucket_ms,
   quantile(0.5)(command_ms) AS p50_ms
 FROM spans
-WHERE executed AND label IN (${labels.map(quote).join(", ") || "''"})
+WHERE executed AND NOT failed AND label IN (${labels.map(quote).join(", ") || "''"})
 GROUP BY label, bucket_ms
 ORDER BY bucket_ms`;
 }
@@ -89,19 +91,28 @@ WHERE label = ${quote(label)}
 ORDER BY timestamp`;
 }
 
-// Successful executions of inputs that already executed successfully: the cache should have hit.
+// Successful executions that started after the same inputs had already finished once
+// successfully: the cache should have hit. Strictly after, so a sub-millisecond run
+// (command_ms = 0) never repeats itself; concurrent runs of one hash cannot share a cache.
 export function repeatedExecutionsQuery(filters: Filters, limit: number): string {
   return `WITH ${targetSpansCte(filters, "current")},
+passed AS (
+  SELECT
+    *,
+    min(timestamp + toIntervalMillisecond(command_ms)) OVER (PARTITION BY label, change_hash) AS first_finish
+  FROM spans
+  WHERE executed AND NOT failed
+),
 by_hash AS (
   SELECT
     label,
     change_hash,
     count() AS executions,
-    sum(command_ms) - argMin(command_ms, timestamp) AS repeat_ms,
+    countIf(timestamp > first_finish) AS repeat_executions,
+    sumIf(command_ms, timestamp > first_finish) AS repeat_ms,
     argMax(tags, timestamp) AS hash_tags,
     max(timestamp) AS last_seen
-  FROM spans
-  WHERE executed AND NOT failed
+  FROM passed
   GROUP BY label, change_hash
 )
 SELECT
@@ -109,11 +120,11 @@ SELECT
   argMax(hash_tags, last_seen) AS latest_tags,
   sum(executions) AS total_executions,
   count() AS input_hashes,
-  total_executions - input_hashes AS repeats,
+  sum(repeat_executions) AS repeats,
   sum(repeat_ms) AS total_repeat_ms,
   sum(sum(repeat_ms)) OVER () AS all_repeat_ms,
-  sum(sum(executions) - count()) OVER () AS all_repeats,
-  sum(sum(executions)) OVER () AS all_executions
+  sum(sum(repeat_executions)) OVER () AS all_repeats,
+  (SELECT sum(executions) FROM by_hash) AS all_executions
 FROM by_hash
 GROUP BY label
 HAVING repeats > 0

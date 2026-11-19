@@ -15,7 +15,7 @@ export function ConfigPage({ plugin }: PluginConfigPageProps<AppPluginMeta<AppSe
   const save = async () => {
     await getBackendSrv().post(`/api/plugins/${pluginId}/settings`, {
       enabled: true,
-      pinned: true,
+      pinned: plugin.meta.pinned,
       jsonData: { datasourceUid, tracesTable },
     });
     window.location.reload();

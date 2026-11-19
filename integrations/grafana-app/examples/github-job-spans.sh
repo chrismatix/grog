@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Prints the running GitHub Actions job and its finished steps as OTLP/JSON spans.
+# Fails when the job is not among the first 100 jobs of the run attempt.
 set -euo pipefail
 
 trace_id=$(od -An -tx1 -N16 /dev/urandom | tr -d ' \n')
@@ -9,7 +10,7 @@ curl --fail --silent --show-error \
 	--header "Authorization: Bearer ${GITHUB_TOKEN}" \
 	--header "Accept: application/vnd.github+json" \
 	"${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}/jobs?per_page=100" |
-	jq --compact-output \
+	jq --compact-output --exit-status \
 		--arg runner "${RUNNER_NAME}" \
 		--arg trace_id "${trace_id}" \
 		--arg root_span_id "${root_span_id}" \

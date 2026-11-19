@@ -142,7 +142,7 @@ export function repeatsColumn(): Column<Row> {
   return countColumn(
     "Repeats",
     "repeats",
-    "Successful executions of inputs that had already executed successfully",
+    "Successful executions that started after the same inputs had already passed",
   );
 }
 
