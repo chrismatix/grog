@@ -66,9 +66,10 @@ func TestCommands(t *testing.T) {
 
 	exportPath := filepath.Join(t.TempDir(), "traces.jsonl")
 	tests := []struct {
-		name      string
-		arguments []string
-		expected  []string
+		name       string
+		arguments  []string
+		expected   []string
+		unexpected []string
 	}{
 		{
 			name:      "list",
@@ -103,8 +104,9 @@ func TestCommands(t *testing.T) {
 			arguments: []string{"export", "--format=otel", "--output=" + exportPath},
 		},
 		{
-			name:      "export no match",
-			arguments: []string{"export", "--output=", "--since=2999-01-01"},
+			name:       "export no match",
+			arguments:  []string{"export", "--output=", "--since=2999-01-01"},
+			unexpected: []string{"No traces"},
 		},
 		{
 			name:      "pull",
@@ -130,6 +132,11 @@ func TestCommands(t *testing.T) {
 			for _, expected := range test.expected {
 				if !strings.Contains(output, expected) {
 					t.Errorf("expected output to contain %q, got %q", expected, output)
+				}
+			}
+			for _, unexpected := range test.unexpected {
+				if strings.Contains(output, unexpected) {
+					t.Errorf("expected output not to contain %q, got %q", unexpected, output)
 				}
 			}
 		})

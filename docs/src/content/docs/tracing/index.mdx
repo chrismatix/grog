@@ -70,7 +70,7 @@ Attach `key=value` tags to a build with `--trace-tag` (or the `GROG_TRACE_TAG` e
 grog build //... --trace-tag=job=lint --trace-tag=shard=2
 ```
 
-On GitHub Actions, grog also records the run context as `github.*` tags: `repository`, `workflow`, `job`, `run_id`, `run_attempt`, `event_name`, `ref_name` and `head_ref`. A `--trace-tag` with the same key wins.
+On GitHub Actions, grog also records the run context as `github.*` tags: `repository`, `workflow`, `job`, `run_id`, `run_attempt`, `event_name`, `ref_name`, `head_ref` and `runner_name`. A `--trace-tag` with the same key wins.
 
 ### Phase timing
 

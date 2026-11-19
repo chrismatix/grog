@@ -115,6 +115,14 @@ func TestTraceCollector_Finalize(t *testing.T) {
 	if spanA.OutputWriteMillis != 100 {
 		t.Errorf("expected 100ms output write for A, got %d", spanA.OutputWriteMillis)
 	}
+	// The span covers the queue wait, so it starts when the target was queued.
+	queuedAt := targetA.StartTime.Add(-targetA.QueueWait).UnixMilli()
+	if spanA.StartTimeUnixMillis != queuedAt {
+		t.Errorf("expected A to start at %d, got %d", queuedAt, spanA.StartTimeUnixMillis)
+	}
+	if spanA.EndTimeUnixMillis != queuedAt+spanA.TotalDurationMillis {
+		t.Errorf("expected A to end at %d, got %d", queuedAt+spanA.TotalDurationMillis, spanA.EndTimeUnixMillis)
+	}
 	if spanA.ChangeHash != "hash-a" {
 		t.Errorf("expected hash-a, got %s", spanA.ChangeHash)
 	}
@@ -146,11 +154,11 @@ func TestTraceCollector_FailedTarget(t *testing.T) {
 	graph := dag.NewDirectedGraphFromTargets(target)
 
 	completionMap := dag.CompletionMap{
+		// The graph walker leaves CacheResult unset (CacheHit) for failures.
 		target.Label: dag.Completion{
-			IsSuccess:   false,
-			NodeType:    model.TargetNode,
-			CacheResult: dag.CacheMiss,
-			Err:         fmt.Errorf("target failed: %w", &execution.CommandError{TargetLabel: target.Label, ExitCode: 3}),
+			IsSuccess: false,
+			NodeType:  model.TargetNode,
+			Err:       fmt.Errorf("target failed: %w", &execution.CommandError{TargetLabel: target.Label, ExitCode: 3}),
 		},
 	}
 
@@ -167,6 +175,9 @@ func TestTraceCollector_FailedTarget(t *testing.T) {
 	}
 	if trace.Spans[0].Status != "FAILURE" {
 		t.Errorf("expected FAILURE status, got %s", trace.Spans[0].Status)
+	}
+	if trace.Spans[0].CacheResult != "CACHE_MISS" {
+		t.Errorf("expected CACHE_MISS, got %s", trace.Spans[0].CacheResult)
 	}
 	if trace.Spans[0].ExitCode != 3 {
 		t.Errorf("expected exit code 3, got %d", trace.Spans[0].ExitCode)
@@ -190,8 +201,9 @@ func TestCollectBuildTags(t *testing.T) {
 				"GITHUB_RUN_ID":   "123",
 				"GITHUB_JOB":      "test",
 				"GITHUB_HEAD_REF": "feature-branch",
+				"RUNNER_NAME":     "runner-2",
 			},
-			expected: `{"github.head_ref":"feature-branch","github.job":"test","github.run_id":"123"}`,
+			expected: `{"github.head_ref":"feature-branch","github.job":"test","github.run_id":"123","github.runner_name":"runner-2"}`,
 		},
 		{
 			name:        "trace tags override github context",

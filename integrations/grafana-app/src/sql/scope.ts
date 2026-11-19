@@ -81,7 +81,8 @@ export function rootsCte(filters: Filters, period: Period): string {
 )`;
 }
 
-// Filtered builds plus their target spans; failed targets report CACHE_HIT, so they count as executed.
+// Filtered builds plus their target spans. Older grog versions export failed targets as CACHE_HIT,
+// so a failure always counts as executed.
 export function targetSpansCte(filters: Filters, period: Period): string {
   return `${rootsCte(filters, period)},
 spans AS (

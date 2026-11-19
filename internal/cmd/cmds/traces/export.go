@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/chrismatix/grog/internal/cmd/flagtypes"
+	"github.com/chrismatix/grog/internal/config"
 	"github.com/chrismatix/grog/internal/console"
 	"github.com/chrismatix/grog/internal/tracing"
 )
@@ -26,6 +27,10 @@ var exportCmd = &cobra.Command{
   grog traces export --format=otel --output traces.json`,
 	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
+		// Logs default to stdout and would corrupt traces piped from it.
+		if exportOutput == "" && config.Global.LogOutputPath == "" {
+			config.Global.LogOutputPath = "stderr"
+		}
 		ctx, logger := console.SetupCommand()
 		store := getStore(ctx, logger)
 		defer store.Close()

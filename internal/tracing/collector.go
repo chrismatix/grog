@@ -53,6 +53,8 @@ var githubContextVariables = []string{
 	"GITHUB_EVENT_NAME",
 	"GITHUB_REF_NAME",
 	"GITHUB_HEAD_REF",
+	// Tells concurrent legs of one matrix job apart.
+	"RUNNER_NAME",
 }
 
 // collectBuildTags merges the GitHub Actions context with --trace-tag values
@@ -190,11 +192,13 @@ func (c *TraceCollector) buildSpan(target *model.Target, completion *dag.Complet
 		span.Status = "CANCELLED"
 	}
 
-	// Cache result
-	switch completion.CacheResult {
-	case dag.CacheHit:
+	// Cache result. A failed completion carries the zero CacheResult, which is CacheHit.
+	switch {
+	case !completion.IsSuccess:
+		span.CacheResult = "CACHE_MISS"
+	case completion.CacheResult == dag.CacheHit:
 		span.CacheResult = "CACHE_HIT"
-	case dag.CacheSkip:
+	case completion.CacheResult == dag.CacheSkip:
 		span.CacheResult = "CACHE_SKIP"
 	default:
 		span.CacheResult = "CACHE_MISS"
@@ -209,12 +213,14 @@ func (c *TraceCollector) buildSpan(target *model.Target, completion *dag.Complet
 
 	// Timing
 	if !target.StartTime.IsZero() {
-		span.StartTimeUnixMillis = target.StartTime.UnixMilli()
+		// StartTime is taken after the queue wait, but the duration includes it.
+		queuedAt := target.StartTime.Add(-target.QueueWait)
+		span.StartTimeUnixMillis = queuedAt.UnixMilli()
 
 		totalDuration := target.QueueWait + target.HashDuration + target.CacheCheckTime +
 			target.ExecutionTime + target.OutputWriteTime + target.OutputLoadTime +
 			target.CacheWriteTime + target.DepLoadTime
-		endTime := target.StartTime.Add(totalDuration)
+		endTime := queuedAt.Add(totalDuration)
 
 		span.EndTimeUnixMillis = endTime.UnixMilli()
 		span.TotalDurationMillis = totalDuration.Milliseconds()
