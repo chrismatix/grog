@@ -1,0 +1,14 @@
+amends "@grog/package.pkl"
+
+targets {
+  // Filegroup every generated target depends on, so template and staging
+  // script edits re-run them.
+  new {
+    name = "python"
+    inputs {
+      "python.pkl"
+      "python.star"
+      "uv_image_stage.py"
+    }
+  }
+}

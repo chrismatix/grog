@@ -2,6 +2,6 @@ amends "pkl:Project"
 
 dependencies {
   ["grog"] {
-    uri = "package://github.com/chrismatix/grog/releases/download/v0.21.0/grog@0.21.0"
+    uri = "package://grog.build/releases/v0.48.0/grog@0.48.0"
   }
 }
